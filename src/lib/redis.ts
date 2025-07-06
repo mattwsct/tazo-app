@@ -1,16 +1,19 @@
 import { Redis } from '@upstash/redis'
 import type { RedisData } from '@/types'
 
-// Check if Redis environment variables are available
-const hasRedisConfig = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+// Use Redis.fromEnv() for better Vercel integration
+// This automatically reads UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+let redis: Redis | null = null
 
-// Create Redis client only if environment variables are available
-export const redis = hasRedisConfig 
-  ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-    })
-  : null
+try {
+  redis = Redis.fromEnv()
+} catch (error) {
+  console.warn('Redis environment variables not found, using in-memory fallback')
+  redis = null
+}
+
+// Export the redis instance for direct use
+export { redis }
 
 // In-memory fallback storage when Redis is not available
 const memoryStorage: Record<string, any> = {}

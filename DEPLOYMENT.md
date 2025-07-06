@@ -82,6 +82,11 @@ Visit these URLs to verify everything works:
 - Click "Connect"
 - Verify heart rate updates in real-time
 
+### 4. **Test Redis Integration**
+- Visit `/api/redis-test` to verify Redis connection
+- This endpoint uses `Redis.fromEnv()` as recommended by Vercel
+- Should return "Redis connection successful" if configured correctly
+
 ## 📊 Data Persistence
 
 ### ✅ What Survives Redeploys
