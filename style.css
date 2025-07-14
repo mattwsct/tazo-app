@@ -1,0 +1,102 @@
+body {
+  margin: 0;
+  background: transparent;
+  font-family: 'Montserrat', sans-serif;
+  color: white;
+  text-shadow: 1px 1px 2px black;
+}
+
+#overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  text-align: right;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s cubic-bezier(0.4,0,0.2,1);
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 4px 14px 14px 14px;
+  border-radius: 12px;
+  backdrop-filter: blur(2px);
+}
+
+#overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#overlay > * {
+  position: relative;
+  z-index: 1;
+}
+
+#time {
+  font-size: 40px;
+  font-weight: 600;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+#location {
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 2px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+#location img.flag {
+  height: 1.2em;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+#weather {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 2px;
+  gap: 4px;
+}
+
+#weather .temp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+#weather img {
+  height: 1.25em;
+  filter: drop-shadow(1px 1px 2px black);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  margin-right: 2px;
+}
+
+#weather img.loaded {
+  opacity: 1;
+}
+
+#weather .desc {
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 0px;
+}
+
+.hidden {
+  display: none;
+}
+
+#speed {
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+ 
