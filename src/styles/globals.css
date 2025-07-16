@@ -130,9 +130,7 @@ body.overlay-page {
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }
 
-#weather > div:last-child {
-  font-size: 1.25rem;
-}
+/* Removed - this was incorrectly shrinking temperature when description was hidden */
 
 #speed {
   font-size: 1.25rem;

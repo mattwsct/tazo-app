@@ -1,12 +1,34 @@
 import { kv } from '@vercel/kv';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyAdminToken, checkRateLimit, getClientIP } from '@/lib/auth';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const clientIP = getClientIP(request);
+    
+    // Rate limiting: 30 weather updates per minute per IP
+    if (!checkRateLimit(`save-weather:${clientIP}`, 30, 60000)) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please slow down.' }, 
+        { status: 429 }
+      );
+    }
+    
+    // Verify admin authentication
+    const isAuthenticated = await verifyAdminToken(request);
+    if (!isAuthenticated) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
     const weather = await request.json();
     
-    if (!weather.temp || !weather.icon || !weather.desc) {
-      return NextResponse.json({ error: 'Missing weather data' }, { status: 400 });
+    // Validate weather data structure
+    if (!weather || typeof weather !== 'object' || 
+        !weather.temp || !weather.icon || !weather.desc ||
+        typeof weather.temp !== 'number' || 
+        typeof weather.icon !== 'string' || 
+        typeof weather.desc !== 'string') {
+      return NextResponse.json({ error: 'Invalid weather data structure' }, { status: 400 });
     }
     
     await kv.set('current_weather', weather);

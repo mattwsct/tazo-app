@@ -16,6 +16,7 @@ interface OverlaySettings {
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [settings, setSettings] = useState<OverlaySettings>({
     showLocation: true,
     showWeather: true,
@@ -35,8 +36,10 @@ export default function AdminPage() {
   // Check for existing session on load
   useEffect(() => {
     const savedAuth = localStorage.getItem('admin_authenticated');
-    if (savedAuth === 'true') {
+    const savedToken = localStorage.getItem('admin_token');
+    if (savedAuth === 'true' && savedToken) {
       setIsAuthenticated(true);
+      setAuthToken(savedToken);
     }
   }, []);
 
@@ -189,11 +192,19 @@ export default function AdminPage() {
       });
       
       if (response.ok) {
-        setIsAuthenticated(true);
-        localStorage.setItem('admin_authenticated', 'true');
-        setPassword(''); // Clear password field
+        const result = await response.json();
+        if (result.token) {
+          setIsAuthenticated(true);
+          setAuthToken(result.token);
+          localStorage.setItem('admin_authenticated', 'true');
+          localStorage.setItem('admin_token', result.token);
+          setPassword(''); // Clear password field
+        } else {
+          alert('Login failed - no token received');
+        }
       } else {
-        alert('Incorrect password');
+        const error = await response.json();
+        alert(error.error || 'Incorrect password');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -203,7 +214,9 @@ export default function AdminPage() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setAuthToken(null);
     localStorage.removeItem('admin_authenticated');
+    localStorage.removeItem('admin_token');
   };
 
   const saveSettings = async (newSettings = settings, showAlert = true) => {
@@ -212,7 +225,10 @@ export default function AdminPage() {
     try {
       const response = await fetch('/api/save-settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
         body: JSON.stringify(newSettings),
       });
       
