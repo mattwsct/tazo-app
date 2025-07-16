@@ -63,20 +63,16 @@ html, body {
   font-weight: 600;
   margin: 4px 0;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-#weather .weather-text {
-  display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 4px;
 }
 
 #weather .weather-temp {
   font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 #weather .weather-desc {
@@ -89,11 +85,10 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  order: -1;
 }
 
 #weather img {
-  height: 3.58rem;
+  height: 1.87rem;
   width: auto;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }
