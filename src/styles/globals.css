@@ -1,4 +1,4 @@
-/* Clean, simple CSS for OBS overlay */
+/* === BASE STYLES === */
 * {
   box-sizing: border-box;
 }
@@ -16,27 +16,9 @@ body.overlay-page {
   overflow: hidden;
 }
 
-/* Toast animation */
-@keyframes slideInUp {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+/* === STREAMING OVERLAY DESIGN SYSTEM === */
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
+/* Base overlay container */
 #overlay {
   position: fixed;
   top: 0;
@@ -44,6 +26,8 @@ body.overlay-page {
   right: 0;
   bottom: 0;
   padding: 5px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
   color: white;
   text-shadow: 1px 1px 2px black;
   opacity: 0;
@@ -52,27 +36,107 @@ body.overlay-page {
   z-index: 50;
 }
 
-/* Main info card in top-right */
-#overlay .main-info {
-  text-align: right;
-  background: linear-gradient(135deg, 
-    rgba(30, 20, 60, 0.7) 0%, 
-    rgba(20, 30, 50, 0.7) 50%, 
-    rgba(40, 20, 80, 0.7) 100%);
-  background-size: 200% 200%;
-  animation: gradientShift 8s ease-in-out infinite;
-  backdrop-filter: blur(12px);
-  border-radius: 12px;
-  padding: 5px 15px 8px 15px;
-  min-width: 200px;
-}
-
 #overlay.show {
   opacity: 1;
   pointer-events: auto;
 }
 
-#time {
+/* === UNIFIED STREAM ELEMENT STYLING === */
+
+/* Base stream element - all overlay cards inherit from this */
+.stream-element {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 12px 16px;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* === STREAM VITALS (Heart Rate) === */
+.stream-vitals {
+  background: linear-gradient(135deg, 
+    rgba(220, 38, 127, 0.3) 0%, 
+    rgba(239, 68, 68, 0.4) 50%, 
+    rgba(200, 50, 50, 0.35) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 12px 16px 10px 16px; /* More top padding, less bottom padding */
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 100px;
+  font-weight: 600;
+}
+
+.vitals-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vitals-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.2rem;
+  padding-bottom: 3px; /* Add space underneath the heart */
+  transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1); /* Slower transition for smoother changes */
+}
+
+.vitals-icon.beating {
+  animation: heartbeat 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.vitals-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.vitals-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.vitals-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0.9;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: -1px;
+}
+
+/* === STREAM INFO (Main Info Card) === */
+.stream-info {
+  text-align: right;
+  background: linear-gradient(135deg, 
+    rgba(30, 20, 60, 0.7) 0%, 
+    rgba(20, 30, 50, 0.7) 50%, 
+    rgba(40, 20, 80, 0.7) 100%);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 5px 15px 8px 15px;
+  color: white;
+  text-shadow: 1px 1px 2px black;
+  min-width: 200px;
+  font-weight: 600;
+}
+
+/* Stream info elements */
+.stream-time {
   font-size: 2.5rem;
   font-weight: 600;
   margin: 4px 0;
@@ -82,20 +146,20 @@ body.overlay-page {
   gap: 12px;
 }
 
-#time img {
+.stream-time img {
   height: 2rem;
   width: auto;
   border-radius: 6px;
 }
 
-#location {
+.stream-location {
   font-size: 1.5rem;
   font-weight: 600;
   margin: 4px 0;
   text-align: right;
 }
 
-#weather {
+.stream-weather {
   font-size: 1.5rem;
   font-weight: 600;
   margin: 4px 0;
@@ -105,18 +169,18 @@ body.overlay-page {
   gap: 4px;
 }
 
-#weather .weather-temp {
+.stream-weather .weather-temp {
   font-size: 1.5rem;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-#weather .weather-desc {
+.stream-weather .weather-desc {
   font-size: 1.25rem;
 }
 
-#weather .weather-icon-container {
+.stream-weather .weather-icon-container {
   background: rgba(255, 255, 255, 0.9);
   border-radius: 50%;
   display: flex;
@@ -124,27 +188,24 @@ body.overlay-page {
   justify-content: center;
 }
 
-#weather img {
+.stream-weather img {
   height: 1.87rem;
   width: auto;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }
 
-#weather > div:last-child {
-  font-size: 1.25rem;
-}
-
-#speed {
+.stream-speed {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 4px 0;
 }
 
+/* === UTILITY CLASSES === */
 .hidden {
   display: none !important;
 }
 
-/* Corner positioning helpers for future elements */
+/* Corner positioning for stream elements */
 .corner-top-left {
   position: absolute;
   top: 10px;
@@ -169,25 +230,62 @@ body.overlay-page {
   right: 10px;
 }
 
-/* Gradient animation keyframes */
-@keyframes gradientShift {
-  0% {
-    background-position: 0% 50%;
+/* === ANIMATIONS === */
+
+/* Realistic heartbeat animation - smoother and less jarring */
+@keyframes heartbeat {
+  0% { 
+    transform: scale(1); 
+    filter: brightness(1);
   }
-  50% {
-    background-position: 100% 50%;
+  8% { 
+    transform: scale(1.12); 
+    filter: brightness(1.08);
   }
-  100% {
-    background-position: 0% 50%;
+  16% { 
+    transform: scale(1); 
+    filter: brightness(1);
+  }
+  24% { 
+    transform: scale(1.08); 
+    filter: brightness(1.04);
+  }
+  32% { 
+    transform: scale(1); 
+    filter: brightness(1);
+  }
+  100% { 
+    transform: scale(1); 
+    filter: brightness(1);
   }
 }
 
-/* Common styling for overlay cards */
-.overlay-card {
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(12px);
-  border-radius: 12px;
-  padding: 8px 12px;
-  color: white;
-  text-shadow: 1px 1px 2px black;
+/* Fade in animation for overlay elements */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stream-element {
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* === LEGACY SUPPORT (for gradual migration) === */
+
+/* Remove old styles that are no longer needed */
+#overlay .main-info,
+.overlay-card,
+.heart-rate,
+.heart-rate-content,
+.heart-icon,
+.heart-rate-text,
+.bpm-value,
+.bpm-label {
+  /* Legacy styles removed - use new stream-* classes */
 }

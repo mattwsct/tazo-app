@@ -13,6 +13,9 @@ NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_pull_key_here
 # LocationIQ API Key (required for location names)
 NEXT_PUBLIC_LOCATIONIQ_KEY=your_locationiq_api_key_here
 
+# Pulsoid API Token (optional - for heart rate display)
+NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_access_token_here
+
 # Vercel KV Database (required for settings storage)
 KV_REST_API_URL=your_vercel_kv_rest_api_url
 KV_REST_API_TOKEN=your_vercel_kv_rest_api_token
@@ -43,8 +46,26 @@ npm run dev
 - 🌤️ **Weather**: Real-time temperature and conditions 
 - 🚗 **Speed**: Vehicle speed display (shows when moving > 10 km/h)
 - ⏰ **Time**: Local time based on current timezone
+- ❤️ **Heart Rate**: Auto-displaying BPM with realistic heartbeat animation (via Pulsoid)
 - ⚙️ **Admin Panel**: Real-time settings control with auto-save
 - 📡 **Real-time Updates**: Server-sent events for instant setting changes
+- 🎨 **Unified Design**: Consistent streaming overlay styling with excellent readability
+
+## Overlay Design
+
+The overlay features a **unified design system** optimized for streaming:
+
+- **Minimal Appearance**: Clean, professional look perfect for IRL/coding/gaming streams
+- **Excellent Readability**: Strong text shadows and semi-transparent backgrounds work on any background
+- **Consistent Styling**: All elements follow the same design language with subtle variations
+- **No Interactivity**: Designed specifically for OBS browser sources (no hover effects)
+- **Automatic Elements**: Heart rate display appears/disappears automatically based on data availability
+
+### Stream Elements
+
+- **Stream Vitals** (top-left): Heart rate monitor with smooth tempo transitions
+- **Stream Info** (top-right): Time, location, weather, and speed display
+- **Future Elements**: Designed for easy expansion (stream stats, alerts, etc.)
 
 ## Deploy on Vercel
 
@@ -52,6 +73,23 @@ npm run dev
 2. Add all environment variables from `.env.local` to your Vercel project settings
 3. Set up [Vercel KV](https://vercel.com/docs/storage/vercel-kv) for settings storage
 4. Update `KV_REST_API_URL` and `KV_REST_API_TOKEN` in environment variables
+
+## Pulsoid Heart Rate Setup
+
+1. Create account at [Pulsoid.net](https://pulsoid.net)
+2. Request API access token:
+   - **For personal use**: Use [Manual Token Issuing](https://docs.pulsoid.net/access-token-management/manual-token-issuing)
+   - **For applications**: Use [OAuth2 flow](https://docs.pulsoid.net/access-token-management/oauth2-authorization-code-grant)
+3. Add your token to `.env.local` as `NEXT_PUBLIC_PULSOID_TOKEN`
+4. Connect your heart rate monitor (Polar H10, Apple Watch, etc.) to Pulsoid app
+5. Heart rate display will **automatically appear** when data is received and disappear when disconnected
+
+### Heart Rate Features
+
+- **Auto Show/Hide**: Appears automatically when heart rate data is available
+- **Smooth Transitions**: BPM changes smoothly over 2 seconds instead of jumping
+- **Realistic Animation**: Heart beats in sync with your actual BPM with double-beat pattern
+- **Auto-timeout**: Disappears automatically if no data received for 30 seconds
 
 ## Security Notes
 

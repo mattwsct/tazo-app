@@ -31,6 +31,7 @@ const DATA_REFRESH_INTERVAL = 30000; // 30 seconds - faster fallback syncing
 // === API Keys (from .env.local, must be prefixed with NEXT_PUBLIC_) ===
 const RTIRL_PULL_KEY = process.env.NEXT_PUBLIC_RTIRL_PULL_KEY;
 const LOCATIONIQ_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
+const PULSOID_TOKEN = process.env.NEXT_PUBLIC_PULSOID_TOKEN;
 
 // === TypeScript Interfaces ===
 interface RTIRLWeather {
@@ -56,6 +57,20 @@ interface RTIRLPayload {
   speed?: number;
   weather?: RTIRLWeather;
   location?: RTIRLLocation;
+}
+
+// Pulsoid heart rate interfaces
+interface PulsoidHeartRateData {
+  measured_at: number;
+  data: {
+    heart_rate: number;
+  };
+}
+
+interface HeartRateState {
+  bpm: number;
+  lastUpdate: number;
+  isConnected: boolean;
 }
 
 // OverlaySettings interface now imported from @/types/settings
@@ -333,6 +348,17 @@ export default function Home() {
   const [firstLocationChecked, setFirstLocationChecked] = useState(false);
   const [firstTimezoneChecked, setFirstTimezoneChecked] = useState(false);
 
+  // Heart rate state
+  const [heartRate, setHeartRate] = useState<HeartRateState>({
+    bpm: 0,
+    lastUpdate: 0,
+    isConnected: false,
+  });
+  const [smoothHeartRate, setSmoothHeartRate] = useState(0);
+  const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
+  const heartRateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const animationUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+
   // Settings state
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
 
@@ -356,7 +382,8 @@ export default function Home() {
     (settings.showTime && validTimezone) ||
     (settings.showLocation && validLocation) ||
     (settings.showWeather && validWeather) ||
-    (settings.showSpeed && speedVisible)
+    (settings.showSpeed && speedVisible) ||
+    (heartRate.isConnected && heartRate.bpm > 0)
   );
 
   // Overlay fade-in logic
@@ -611,6 +638,141 @@ export default function Home() {
       document.body.removeChild(script);
     };
     // eslint-disable-next-line
+  }, []);
+
+  // Smooth heart rate tempo transitions
+  useEffect(() => {
+    if (heartRate.bpm > 0 && heartRate.isConnected) {
+      // Clear any existing timeout since we have fresh data
+      if (heartRateTimeout.current) {
+        clearTimeout(heartRateTimeout.current);
+        heartRateTimeout.current = null;
+      }
+      
+      // Smoothly transition to new BPM over 2 seconds
+      const currentBpm = smoothHeartRate || heartRate.bpm;
+      const targetBpm = heartRate.bpm;
+      const steps = 20; // Number of transition steps
+      const stepSize = (targetBpm - currentBpm) / steps;
+      const stepDuration = 100; // ms per step (2 seconds total)
+      
+      let step = 0;
+      const transitionInterval = setInterval(() => {
+        step++;
+        const newBpm = currentBpm + (stepSize * step);
+        setSmoothHeartRate(newBpm);
+        
+        if (step >= steps) {
+          clearInterval(transitionInterval);
+          setSmoothHeartRate(targetBpm);
+        }
+      }, stepDuration);
+      
+      // Update animation BPM with a delay to prevent abrupt changes
+      if (animationUpdateTimeout.current) {
+        clearTimeout(animationUpdateTimeout.current);
+      }
+      
+      // Only update animation speed if the change is significant (>5 BPM difference)
+      const bpmDifference = Math.abs(targetBpm - stableAnimationBpm);
+      if (bpmDifference > 5 || stableAnimationBpm === 0) {
+        animationUpdateTimeout.current = setTimeout(() => {
+          setStableAnimationBpm(targetBpm);
+        }, 1000); // 1 second delay before updating animation speed
+      }
+      
+      // Set timeout to hide heart rate if no new data after 30 seconds
+      heartRateTimeout.current = setTimeout(() => {
+        setHeartRate(prev => ({ ...prev, isConnected: false, bpm: 0 }));
+        setSmoothHeartRate(0);
+        setStableAnimationBpm(0);
+      }, 30000);
+      
+      return () => {
+        clearInterval(transitionInterval);
+      };
+    }
+  }, [heartRate.bpm, heartRate.isConnected, smoothHeartRate, stableAnimationBpm]);
+
+  // Pulsoid heart rate integration
+  useEffect(() => {
+    let pulsoidSocket: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+    
+    function connectPulsoid() {
+      if (!PULSOID_TOKEN) {
+        console.log('Pulsoid token not provided, skipping heart rate integration');
+        return;
+      }
+      
+      try {
+        const wsUrl = `wss://dev.pulsoid.net/api/v1/data/real_time?access_token=${PULSOID_TOKEN}`;
+        pulsoidSocket = new WebSocket(wsUrl);
+        
+        pulsoidSocket.onopen = () => {
+          console.log('Pulsoid connected');
+          setHeartRate(prev => ({ ...prev, isConnected: true }));
+          reconnectAttempts = 0;
+        };
+        
+        pulsoidSocket.onmessage = (event) => {
+          try {
+            const data: PulsoidHeartRateData = JSON.parse(event.data);
+            if (data.data && typeof data.data.heart_rate === 'number') {
+              setHeartRate({
+                bpm: data.data.heart_rate,
+                lastUpdate: data.measured_at,
+                isConnected: true,
+              });
+            }
+          } catch (error) {
+            console.log('Failed to parse Pulsoid data:', error);
+          }
+        };
+        
+        pulsoidSocket.onclose = () => {
+          console.log('Pulsoid connection closed');
+          setHeartRate(prev => ({ ...prev, isConnected: false }));
+          
+          // Auto-reconnect with exponential backoff
+          if (reconnectAttempts < maxReconnectAttempts) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+            console.log(`Reconnecting to Pulsoid in ${delay}ms (attempt ${reconnectAttempts + 1})`);
+            reconnectTimeout = setTimeout(() => {
+              reconnectAttempts++;
+              connectPulsoid();
+            }, delay);
+          }
+        };
+        
+        pulsoidSocket.onerror = (error) => {
+          console.log('Pulsoid WebSocket error:', error);
+        };
+        
+      } catch (error) {
+        console.log('Failed to connect to Pulsoid:', error);
+      }
+    }
+    
+    // Start connection
+    connectPulsoid();
+    
+    return () => {
+      if (pulsoidSocket) {
+        pulsoidSocket.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (heartRateTimeout.current) {
+        clearTimeout(heartRateTimeout.current);
+      }
+      if (animationUpdateTimeout.current) {
+        clearTimeout(animationUpdateTimeout.current);
+      }
+    };
   }, []);
 
   // Main data update logic - handles location updates only on 100m+ movement (max once per minute)
@@ -943,12 +1105,31 @@ export default function Home() {
       id="overlay" 
       className={showOverlay && hasVisibleElements ? 'show' : ''}
     >
-      {/* Main info card in top-right corner */}
-      <div className="main-info corner-top-right">
+      {/* Stream Vitals - Heart Rate Monitor */}
+      {heartRate.isConnected && heartRate.bpm > 0 && (
+        <div className="stream-vitals corner-top-left">
+          <div className="vitals-content">
+            <div 
+              className="vitals-icon beating"
+              style={{
+                animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s'
+              }}
+            >
+              ❤️
+            </div>
+            <div className="vitals-text">
+              <span className="vitals-value">{Math.round(smoothHeartRate || heartRate.bpm)}</span>
+              <span className="vitals-label">BPM</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stream Info - Live Status Display */}
+      <div className="stream-info corner-top-right">
         {settings.showTime && (
           <div 
-            id="time" 
-            className={ !validTimezone ? 'hidden' : '' }
+            className={`stream-time ${!validTimezone ? 'hidden' : ''}`}
           >
             <span>{time}</span>
             {location && location.countryCode && settings.showLocation && (
@@ -964,16 +1145,14 @@ export default function Home() {
         )}
         {settings.showLocation && (
           <div 
-            id="location" 
-            className={ !validLocation ? 'hidden' : '' }
+            className={`stream-location ${!validLocation ? 'hidden' : ''}`}
           >
             {location && location.label}
           </div>
         )}
         {settings.showWeather && (
           <div 
-            id="weather" 
-            className={ !validWeather ? 'hidden' : '' }
+            className={`stream-weather ${!validWeather ? 'hidden' : ''}`}
           >
             {weather && (
               <>
@@ -1007,17 +1186,20 @@ export default function Home() {
         )}
         {settings.showSpeed && (
           <div 
-            id="speed" 
-            className={ speedVisible ? '' : 'hidden' }
+            className={`stream-speed ${speedVisible ? '' : 'hidden'}`}
           >
             {(speed * 3.6).toFixed(1)} km/h
           </div>
         )}
       </div>
 
-      {/* Future corner elements will go here */}
-      {/* Bottom-left: Kick.com subgoal */}
-      {/* Top-right: Pulsoid heartrate (separate from main info) */}
+      {/* 
+        === FUTURE STREAM ELEMENTS ===
+        Bottom-left: Stream Stats (followers, donations, etc.)
+        Bottom-right: Chat Alerts or Recent Events
+        Additional stream elements can use the unified .stream-element base class
+        or specialized classes like .stream-stats, .stream-alerts, etc.
+      */}
     </div>
   );
 } 

@@ -380,7 +380,12 @@ export default function AdminPage() {
                   icon: '🌤️', 
                   desc: 'Show temperature and conditions'
                 },
-                { key: 'showSpeed', label: 'Speed Display', icon: '🚗', desc: 'Show speed when moving >10 km/h' }
+                { 
+                  key: 'showSpeed', 
+                  label: 'Speed Display', 
+                  icon: '🚗', 
+                  desc: 'Show speed when moving >10 km/h' 
+                }
               ].map(({ key, label, icon, desc }) => (
                 <div key={key} style={{
                   background: '#262626',
