@@ -1,42 +1,64 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    font-family: 'Montserrat', sans-serif;
+  }
+  
+  body {
+    @apply m-0 bg-transparent text-white;
+    text-shadow: 1px 1px 2px black;
   }
 }
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
+@layer components {
+  #overlay {
+    @apply fixed top-2.5 right-2.5 text-right bg-black/30 backdrop-blur-sm rounded-xl p-4 opacity-0 pointer-events-none transition-opacity duration-800 ease-out;
+  }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  #overlay.show {
+    @apply opacity-100 pointer-events-auto;
+  }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
+  #overlay > * {
+    @apply relative z-10 text-white;
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+  #time {
+    @apply text-4xl font-semibold my-0.5 text-white;
+  }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+  #location {
+    @apply text-2xl font-semibold mt-0.5 mb-1.5 flex justify-end items-center gap-2 text-white;
+  }
+
+  #location img.flag {
+    @apply h-5 rounded ml-1;
+  }
+
+  #weather {
+    @apply flex flex-col items-end text-2xl font-semibold mt-0.5 gap-1 text-white;
+  }
+
+  #weather .temp {
+    @apply flex items-center gap-2.5 text-white;
+  }
+
+  #weather img {
+    @apply h-5 drop-shadow-md opacity-0 transition-opacity duration-300 ease-in-out mr-0.5;
+  }
+
+  #weather img.loaded {
+    @apply opacity-100;
+  }
+
+  #weather .desc {
+    @apply text-xl font-semibold text-white;
+  }
+
+  #speed {
+    @apply text-xl font-semibold mt-1 text-white;
   }
 }

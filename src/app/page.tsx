@@ -1,5 +1,18 @@
 "use client";
+
+// Add global declaration at the very top
+declare global {
+  interface Window {
+    RealtimeIRL?: {
+      forPullKey: (key: string) => {
+        addListener: (cb: (p: unknown) => void) => void;
+      };
+    };
+  }
+}
+
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 
 // === Configurable Constants ===
 const SPEED_THRESHOLD_KMH = 10;
@@ -8,7 +21,6 @@ const WEATHER_UPDATE_INTERVAL = 300000; // 5 min
 const LOCATION_UPDATE_INTERVAL = 300000; // 5 min
 const TIMEZONE_UPDATE_INTERVAL = 600000; // 10 min
 const COORDINATE_DEBOUNCE_DEGREES = 0.001; // ~100m base
-const TIMEZONE_DEBOUNCE_DEGREES = 0.1; // ~10km for timezone (less frequent)
 const OVERLAY_FADE_TIMEOUT_MS = 10000; // 10 seconds to force fade-in if data not ready
 
 // === API Keys (from .env.local, must be prefixed with NEXT_PUBLIC_) ===
@@ -16,6 +28,35 @@ const RTIRL_PULL_KEY = process.env.NEXT_PUBLIC_RTIRL_PULL_KEY;
 const OPENWEATHER_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_KEY;
 const LOCATIONIQ_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
 const TIMEZONEDB_KEY = process.env.NEXT_PUBLIC_TIMEZONEDB_KEY;
+
+// === TypeScript Interfaces ===
+interface RTIRLWeather {
+  temp: number;
+  icon: string;
+  desc: string;
+}
+
+interface RTIRLLocation {
+  country?: string;
+  countryCode?: string;
+  quarter?: string;
+  city_district?: string;
+  name?: string;
+  city?: string;
+  state?: string;
+  displayName?: string;
+  timezone?: string;
+  lat?: number;
+  lon?: number;
+  latitude?: number;
+  longitude?: number;
+}
+
+interface RTIRLPayload {
+  speed?: number;
+  weather?: RTIRLWeather;
+  location?: RTIRLLocation;
+}
 
 // === Utility Functions ===
 function capitalizeWords(str: string) {
@@ -65,7 +106,7 @@ function shortenLocalPart(localPart: string, fallbackLevels: string[]) {
   return localPart;
 }
 
-function getGeneralLocation(location: any) {
+function getGeneralLocation(location: RTIRLLocation) {
   if (!location) return '';
   const shortenedCountry = shortenCountryName(location.country || '', location.countryCode || '');
   let localPart = shortenLocalPart(location.quarter || '', [location.city_district || location.name || location.city || location.state || '']);
@@ -126,7 +167,7 @@ async function fetchWeatherFromOpenWeather(lat: number, lon: number) {
         desc: data.weather[0].description,
       };
     }
-  } catch (err) {
+  } catch {
     // ignore
   }
   return null;
@@ -150,7 +191,7 @@ async function fetchLocationFromLocationIQ(lat: number, lon: number) {
         displayName: data.display_name,
       };
     }
-  } catch (err) {
+  } catch {
     // ignore
   }
   return null;
@@ -164,7 +205,7 @@ async function fetchTimezoneFromTimezoneDB(lat: number, lon: number) {
     if (data.status === 'OK') {
       return data.zoneName;
     }
-  } catch (err) {
+  } catch {
     // ignore
   }
   return null;
@@ -186,7 +227,6 @@ export default function Home() {
   const [firstWeatherChecked, setFirstWeatherChecked] = useState(false);
   const [firstLocationChecked, setFirstLocationChecked] = useState(false);
   const [firstTimezoneChecked, setFirstTimezoneChecked] = useState(false);
-  const [overlayForced, setOverlayForced] = useState(false);
 
   // Refs for timers and last coords
   const speedHideTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -224,7 +264,6 @@ export default function Home() {
       const timeout = setTimeout(() => {
         setShowOverlay(true);
         overlayShown.current = true;
-        setOverlayForced(true);
       }, OVERLAY_FADE_TIMEOUT_MS);
       return () => clearTimeout(timeout);
     }
@@ -284,31 +323,41 @@ export default function Home() {
 
   // RTIRL integration and main data update logic
   useEffect(() => {
-    // Dynamically load RTIRL script
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
     script.async = true;
     document.body.appendChild(script);
     script.onload = () => {
-      if (typeof window !== 'undefined' && (window as any).RealtimeIRL && RTIRL_PULL_KEY) {
-        (window as any).RealtimeIRL.forPullKey(RTIRL_PULL_KEY).addListener((p: any) => {
-          if (!p) return;
+      if (
+        typeof window !== 'undefined' &&
+        window.RealtimeIRL &&
+        RTIRL_PULL_KEY
+      ) {
+        window.RealtimeIRL.forPullKey(RTIRL_PULL_KEY).addListener((p: unknown) => {
+          if (!p || typeof p !== 'object') return;
+          const payload = p as RTIRLPayload;
           // Speed
-          setSpeed(typeof p.speed === 'number' ? p.speed : 0);
+          setSpeed(typeof payload.speed === 'number' ? payload.speed : 0);
           // Weather
-          if (p.weather?.temp && p.weather?.icon && p.weather?.desc) {
+          if (
+            payload.weather &&
+            typeof payload.weather === 'object' &&
+            typeof payload.weather.temp === 'number' &&
+            payload.weather.icon &&
+            payload.weather.desc
+          ) {
             setWeather({
-              temp: Math.round(p.weather.temp),
-              icon: p.weather.icon,
-              desc: p.weather.desc,
+              temp: Math.round(payload.weather.temp),
+              icon: payload.weather.icon,
+              desc: payload.weather.desc,
             });
             setValidWeather(true);
             setFirstWeatherChecked(true);
             lastWeatherUpdate.current = Date.now();
           }
           // Location
-          if (p.location) {
-            const loc = p.location;
+          if (payload.location && typeof payload.location === 'object') {
+            const loc = payload.location;
             const label = getGeneralLocation(loc);
             const countryCode = loc.countryCode ? loc.countryCode.toLowerCase() : '';
             if (label && countryCode) {
@@ -319,15 +368,20 @@ export default function Home() {
             }
           }
           // Timezone
-          if (p.location?.timezone && p.location.timezone !== timezone) {
+          if (
+            payload.location &&
+            typeof payload.location === 'object' &&
+            payload.location.timezone &&
+            payload.location.timezone !== timezone
+          ) {
             try {
               formatter.current = new Intl.DateTimeFormat('en-US', {
                 hour: 'numeric',
                 minute: '2-digit',
                 hour12: true,
-                timeZone: p.location.timezone,
+                timeZone: payload.location.timezone,
               });
-              setTimezone(p.location.timezone);
+              setTimezone(payload.location.timezone);
               setValidTimezone(true);
               setFirstTimezoneChecked(true);
               lastTimezoneUpdate.current = Date.now();
@@ -337,13 +391,16 @@ export default function Home() {
             }
           }
           // Coordinates
-          let lat = null, lon = null;
-          if (typeof p.location?.lat === 'number' && typeof p.location?.lon === 'number') {
-            lat = p.location.lat;
-            lon = p.location.lon;
-          } else if (typeof p.location?.latitude === 'number' && typeof p.location?.longitude === 'number') {
-            lat = p.location.latitude;
-            lon = p.location.longitude;
+          let lat: number | null = null;
+          let lon: number | null = null;
+          if (payload.location) {
+            if (hasLatLon(payload.location)) {
+              lat = payload.location.lat;
+              lon = payload.location.lon;
+            } else if (hasLatitudeLongitude(payload.location)) {
+              lat = payload.location.latitude;
+              lon = payload.location.longitude;
+            }
           }
           if (lat !== null && lon !== null) {
             updateFromCoordinates(lat, lon);
@@ -451,44 +508,98 @@ export default function Home() {
     setValidWeather(false);
     setValidLocation(false);
     setValidTimezone(false);
-    setOverlayForced(false);
   }, []);
+
+  // Type guards for coordinates
+  function hasLatLon(obj: unknown): obj is { lat: number; lon: number } {
+    return (
+      typeof obj === 'object' &&
+      obj !== null &&
+      typeof (obj as { lat?: unknown }).lat === 'number' &&
+      typeof (obj as { lon?: unknown }).lon === 'number'
+    );
+  }
+
+  function hasLatitudeLongitude(obj: unknown): obj is { latitude: number; longitude: number } {
+    return (
+      typeof obj === 'object' &&
+      obj !== null &&
+      typeof (obj as { latitude?: unknown }).latitude === 'number' &&
+      typeof (obj as { longitude?: unknown }).longitude === 'number'
+    );
+  }
 
   // Render
   return (
-    <div id="overlay" className={showOverlay ? 'show' : ''}>
-      <div id="time" className={!validTimezone ? 'hidden' : ''}>{time}</div>
-      <div id="location" className={!validLocation ? 'hidden' : ''}>
+    <div 
+      id="overlay" 
+      className={`fixed top-2.5 right-2.5 text-right bg-black/30 backdrop-blur-sm rounded-xl p-4 transition-opacity duration-800 ease-out ${
+        showOverlay ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
+    >
+      <div 
+        id="time" 
+        className={`text-4xl font-semibold my-0.5 text-white ${
+          !validTimezone ? 'hidden' : ''
+        }`}
+      >
+        {time}
+      </div>
+      <div 
+        id="location" 
+        className={`text-2xl font-semibold mt-0.5 mb-1.5 flex justify-end items-center gap-2 text-white ${
+          !validLocation ? 'hidden' : ''
+        }`}
+      >
         {location && (
           <>
             <span>{location.label}</span>
             {location.countryCode && (
-              <img
-                className="flag"
+              <Image
+                className="h-5 rounded ml-1"
                 src={`https://flagcdn.com/${location.countryCode}.svg`}
                 alt={`Country: ${location.label}`}
+                width={24}
+                height={16}
+                unoptimized
+                style={{ height: '1.25em', width: 'auto', borderRadius: 4, marginLeft: 4 }}
               />
             )}
           </>
         )}
       </div>
-      <div id="weather" className={!validWeather ? 'hidden' : ''}>
+      <div 
+        id="weather" 
+        className={`flex flex-col items-end text-2xl font-semibold mt-0.5 gap-1 text-white ${
+          !validWeather ? 'hidden' : ''
+        }`}
+      >
         {weather && (
           <>
-            <div className="temp">
-              <img
-                className="loaded"
+            <div className="flex items-center gap-2.5 text-white">
+              <Image
+                className="h-5 drop-shadow-md opacity-100 transition-opacity duration-300 ease-in-out mr-0.5"
                 src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
                 alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                style={{ opacity: 1 }}
+                width={24}
+                height={24}
+                unoptimized
+                style={{ height: '1.25em', width: 'auto', marginRight: 2, filter: 'drop-shadow(1px 1px 2px black)' }}
               />
               {weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F
             </div>
-            <div className="desc">{capitalizeWords(weather.desc)}</div>
+            <div className="text-xl font-semibold text-white">
+              {capitalizeWords(weather.desc)}
+            </div>
           </>
         )}
       </div>
-      <div id="speed" className={speedVisible ? '' : 'hidden'}>
+      <div 
+        id="speed" 
+        className={`text-xl font-semibold mt-1 text-white ${
+          speedVisible ? '' : 'hidden'
+        }`}
+      >
         {(speed * 3.6).toFixed(1)} km/h
       </div>
     </div>

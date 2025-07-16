@@ -1,20 +1,16 @@
-import '../styles/globals.css';
-import { ReactNode } from 'react';
+import "../styles/globals.css";
+import { ReactNode } from "react";
+import { Montserrat } from "next/font/google";
+
+const montserrat = Montserrat({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
 
 export const metadata = {
-  title: 'IRL Stream Overlay',
+  title: "IRL Stream Overlay",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        {/* Google Fonts */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={montserrat.className}>
       <body>{children}</body>
     </html>
   );
