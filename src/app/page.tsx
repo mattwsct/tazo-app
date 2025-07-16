@@ -272,13 +272,49 @@ export default function Home() {
   // Time update logic
   useEffect(() => {
     if (!timezone || !formatter.current) return;
+    
     function updateTime() {
       const now = new Date();
       setTime(formatter.current!.format(now));
     }
+    
+    // Update immediately
     updateTime();
-    const interval = setInterval(updateTime, 60000);
-    return () => clearInterval(interval);
+    
+    function setupNextSync() {
+      const now = new Date();
+      const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+      
+      // Set timeout to sync with the next minute boundary
+      const syncTimeout = setTimeout(() => {
+        updateTime();
+        
+        // Set regular interval for the next hour, then re-sync
+        let updateCount = 0;
+        const interval = setInterval(() => {
+          updateTime();
+          updateCount++;
+          
+          // Re-sync every hour (60 updates) to prevent drift
+          if (updateCount >= 60) {
+            clearInterval(interval);
+            setupNextSync(); // Recursively set up next sync cycle
+          }
+        }, 60000);
+        
+        // Store interval for cleanup
+        return interval;
+      }, msUntilNextMinute);
+      
+      return syncTimeout;
+    }
+    
+    const timeout = setupNextSync();
+    
+    return () => {
+      clearTimeout(timeout);
+      // Note: intervals are cleaned up in the recursive function
+    };
   }, [timezone]);
 
   // Speed display logic
