@@ -14,13 +14,13 @@ html, body {
 
 #overlay {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  top: 10px;
+  right: 10px;
   text-align: right;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(12px);
   border-radius: 12px;
-  padding: 24px;
+  padding: 5px 15px 10px 15px;
   min-width: 200px;
   color: white;
   text-shadow: 1px 1px 2px black;
@@ -39,22 +39,23 @@ html, body {
   font-size: 2.5rem;
   font-weight: 600;
   margin: 4px 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+#time img {
+  height: 2rem;
+  width: auto;
+  border-radius: 6px;
 }
 
 #location {
   font-size: 1.5rem;
   font-weight: 600;
   margin: 4px 0;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-}
-
-#location img {
-  height: 1.5rem;
-  width: auto;
-  border-radius: 4px;
+  text-align: right;
 }
 
 #weather {
@@ -74,7 +75,7 @@ html, body {
 }
 
 #weather img {
-  height: 1.5rem;
+  height: 1.87rem;
   width: auto;
 }
 

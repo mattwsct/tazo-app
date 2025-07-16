@@ -566,26 +566,22 @@ export default function Home() {
         id="time" 
         className={ !validTimezone ? 'hidden' : '' }
       >
-        {time}
+        <span>{time}</span>
+        {location && location.countryCode && (
+          <Image
+            src={`https://flagcdn.com/${location.countryCode}.svg`}
+            alt={`Country: ${location.label}`}
+            width={32}
+            height={20}
+            unoptimized
+          />
+        )}
       </div>
       <div 
         id="location" 
         className={ !validLocation ? 'hidden' : '' }
       >
-        {location && (
-          <>
-            <span>{location.label}</span>
-            {location.countryCode && (
-              <Image
-                src={`https://flagcdn.com/${location.countryCode}.svg`}
-                alt={`Country: ${location.label}`}
-                width={24}
-                height={16}
-                unoptimized
-              />
-            )}
-          </>
-        )}
+        {location && location.label}
       </div>
       <div 
         id="weather" 
@@ -595,7 +591,7 @@ export default function Home() {
           <>
             <div>
               <Image
-                src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
+                src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
                 alt={`Weather: ${capitalizeWords(weather.desc)}`}
                 width={24}
                 height={24}
