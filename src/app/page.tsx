@@ -589,18 +589,22 @@ export default function Home() {
       >
         {weather && (
           <>
-            <div>
+            <div className="weather-text">
+              <div className="weather-temp">
+                {weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F
+              </div>
+              <div className="weather-desc">
+                {capitalizeWords(weather.desc)}
+              </div>
+            </div>
+            <div className="weather-icon-container">
               <Image
-                src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
+                src={`https://openweathermap.org/img/wn/${weather.icon}@4x.png`}
                 alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                width={24}
-                height={24}
+                width={48}
+                height={48}
                 unoptimized
               />
-              {weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F
-            </div>
-            <div>
-              {capitalizeWords(weather.desc)}
             </div>
           </>
         )}

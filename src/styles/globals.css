@@ -63,20 +63,39 @@ html, body {
   font-weight: 600;
   margin: 4px 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
-#weather > div:first-child {
+#weather .weather-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+#weather .weather-temp {
+  font-size: 1.5rem;
+}
+
+#weather .weather-desc {
+  font-size: 1.25rem;
+}
+
+#weather .weather-icon-container {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  order: -1;
 }
 
 #weather img {
-  height: 1.87rem;
+  height: 3.58rem;
   width: auto;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }
 
 #weather > div:last-child {
