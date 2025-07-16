@@ -224,6 +224,14 @@ async function fetchTimezoneFromTimezoneDB(lat: number, lon: number) {
 
 // === Main React Component ===
 export default function Home() {
+  // Add overlay-page class to body for page-specific CSS
+  useEffect(() => {
+    document.body.classList.add('overlay-page');
+    return () => {
+      document.body.classList.remove('overlay-page');
+    };
+  }, []);
+
   // Overlay state
   const [showOverlay, setShowOverlay] = useState(false);
   const [time, setTime] = useState('Loading...');
@@ -423,14 +431,22 @@ export default function Home() {
             payload.weather.icon &&
             payload.weather.desc
           ) {
-            setWeather({
+            const weatherData = {
               temp: Math.round(payload.weather.temp),
               icon: payload.weather.icon,
               desc: payload.weather.desc,
-            });
+            };
+            setWeather(weatherData);
             setValidWeather(true);
             setFirstWeatherChecked(true);
             lastWeatherUpdate.current = Date.now();
+            
+            // Save weather data to KV
+            fetch('/api/save-weather', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(weatherData)
+            }).catch(err => console.error('Failed to save weather data:', err));
           }
           // Location
           if (payload.location && typeof payload.location === 'object') {
@@ -463,6 +479,13 @@ export default function Home() {
               setValidTimezone(true);
               setFirstTimezoneChecked(true);
               lastTimezoneUpdate.current = Date.now();
+              
+              // Save timezone to KV
+              fetch('/api/save-timezone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timezone: payload.location.timezone })
+              }).catch(err => console.error('Failed to save timezone from RTIRL:', err));
             } catch {
               setValidTimezone(false);
               setFirstTimezoneChecked(true);
@@ -481,6 +504,13 @@ export default function Home() {
             }
           }
           if (lat !== null && lon !== null) {
+            // Save GPS coordinates to KV
+            fetch('/api/save-gps', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lat, lon })
+            }).catch(err => console.error('Failed to save GPS coordinates:', err));
+            
             updateFromCoordinates(lat, lon);
           }
         });
@@ -521,6 +551,13 @@ export default function Home() {
         setValidWeather(true);
         setFirstWeatherChecked(true);
         lastWeatherUpdate.current = now;
+        
+        // Save weather data to KV
+        fetch('/api/save-weather', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(w)
+        }).catch(err => console.error('Failed to save weather data:', err));
       }
     }
     if (now - lastLocationUpdate.current > LOCATION_UPDATE_INTERVAL) {
@@ -544,6 +581,13 @@ export default function Home() {
             setValidTimezone(true);
             setFirstTimezoneChecked(true);
             lastTimezoneUpdate.current = now;
+            
+            // Save timezone to KV
+            fetch('/api/save-timezone', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ timezone: loc.timezone })
+            }).catch(err => console.error('Failed to save timezone from LocationIQ:', err));
           } catch {
             setValidTimezone(false);
             setFirstTimezoneChecked(true);
@@ -565,6 +609,13 @@ export default function Home() {
           setValidTimezone(true);
           setFirstTimezoneChecked(true);
           lastTimezoneUpdate.current = now;
+          
+          // Save timezone to KV
+          fetch('/api/save-timezone', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timezone: tz })
+          }).catch(err => console.error('Failed to save timezone from TimezoneDB:', err));
         } catch {
           setValidTimezone(false);
           setFirstTimezoneChecked(true);
@@ -590,46 +641,189 @@ export default function Home() {
     setValidTimezone(false);
   }, []);
 
-  // Initial load from KV
+  // Initial load from KV with periodic refresh
   useEffect(() => {
-    async function loadSavedLocation() {
-      const res = await fetch('/api/get-location');
-      if (res.ok) {
-        const data = await res.json();
-        if (data) {
-          console.log('Loaded saved location:', data);
-          setLocation(data);
-          setValidLocation(true);
+    async function loadSavedData() {
+      try {
+        // Load location
+        const locationRes = await fetch('/api/get-location');
+        if (locationRes.ok) {
+          const locationData = await locationRes.json();
+          if (locationData) {
+            console.log('Loaded saved location:', locationData);
+            setLocation(locationData);
+            setValidLocation(true);
+            setFirstLocationChecked(true);
+          }
         }
+        
+        // Load weather
+        const weatherRes = await fetch('/api/get-weather');
+        if (weatherRes.ok) {
+          const weatherData = await weatherRes.json();
+          if (weatherData) {
+            console.log('Loaded saved weather:', weatherData);
+            setWeather(weatherData);
+            setValidWeather(true);
+            setFirstWeatherChecked(true);
+          }
+        }
+        
+                 // Load settings (fallback if SSE fails)
+        const settingsRes = await fetch('/api/get-settings');
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          if (settingsData) {
+            console.log('Loaded saved settings:', settingsData);
+            setSettings(settingsData);
+          }
+        }
+        
+        // Load timezone from KV storage
+        const timezoneRes = await fetch('/api/get-timezone');
+        if (timezoneRes.ok) {
+          const savedTimezone = await timezoneRes.json();
+          if (savedTimezone && typeof savedTimezone === 'string') {
+            try {
+              console.log('Loaded saved timezone from KV:', savedTimezone);
+              formatter.current = new Intl.DateTimeFormat('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: savedTimezone,
+              });
+              setTimezone(savedTimezone);
+              setValidTimezone(true);
+              setFirstTimezoneChecked(true);
+            } catch (error) {
+              console.error('Failed to set saved timezone:', error);
+              // Fall through to browser timezone fallback
+            }
+          }
+        }
+        
+        // Ensure timezone is set (fallback to browser timezone)
+        if (!timezone) {
+          try {
+            const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            console.log('Setting browser timezone as fallback:', browserTimezone);
+            formatter.current = new Intl.DateTimeFormat('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+              timeZone: browserTimezone,
+            });
+            setTimezone(browserTimezone);
+            setValidTimezone(true);
+            setFirstTimezoneChecked(true);
+            
+            // Save browser timezone to KV for future use
+            fetch('/api/save-timezone', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ timezone: browserTimezone })
+            }).catch(err => console.error('Failed to save browser timezone:', err));
+          } catch (error) {
+            console.error('Failed to set browser timezone:', error);
+            setFirstTimezoneChecked(true);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load saved data:', error);
       }
     }
-    loadSavedLocation();
-  }, []);
+    
+    // Load immediately
+    loadSavedData();
+    
+    // Set up periodic refresh to handle dev server restarts (less frequent since we have SSE)
+    const refreshInterval = setInterval(() => {
+      console.log('Periodic data refresh (fallback)...');
+      loadSavedData();
+    }, 60000); // Refresh every 60 seconds (less frequent)
+    
+         return () => {
+       clearInterval(refreshInterval);
+     };
+   }, [timezone]); // Include timezone dependency
 
-  // Settings real-time updates via Server-Sent Events with auto-reconnection
+  // Settings real-time updates via Server-Sent Events with aggressive auto-reconnection
   useEffect(() => {
     let eventSource: EventSource | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
     let reconnectAttempts = 0;
-    const maxReconnectAttempts = 5;
+         let isPolling = false;
+     let pollingInterval: NodeJS.Timeout | null = null;
+    
+    function startPolling() {
+      if (isPolling) return;
+      isPolling = true;
+      console.log('Starting polling fallback for settings...');
+      
+      pollingInterval = setInterval(() => {
+        fetch('/api/get-settings')
+          .then(res => res.json())
+          .then(data => {
+            console.log('Polling: Settings loaded:', data);
+            setSettings(data);
+            
+            // Try to reconnect SSE every 10 polling cycles (50 seconds)
+            if (reconnectAttempts % 10 === 0) {
+              console.log('Attempting to restore SSE connection...');
+              stopPolling();
+              reconnectAttempts = 0;
+              connectSSE();
+            }
+          })
+          .catch(err => console.error('Polling: Failed to load settings:', err));
+      }, 5000); // Poll every 5 seconds
+    }
+    
+    function stopPolling() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+      isPolling = false;
+    }
     
     function connectSSE() {
       console.log('Setting up SSE connection for settings...');
+      
+      // Close existing connection
+      if (eventSource) {
+        eventSource.close();
+      }
+      
       eventSource = new EventSource('/api/settings-stream');
       
       eventSource.onopen = () => {
         console.log('SSE connection opened');
         reconnectAttempts = 0; // Reset on successful connection
+        stopPolling(); // Stop polling when SSE is working
       };
       
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
           if (data.type === 'heartbeat') {
             console.log('SSE heartbeat received');
             return; // Ignore heartbeat messages
           }
-          console.log('Received settings update via SSE:', data);
+          
+          if (data.type === 'settings_update') {
+            const latency = Date.now() - (data.timestamp || 0);
+            console.log(`Settings update received via SSE (${latency}ms latency):`, data);
+            
+            // Extract just the settings (remove metadata)
+            const { timestamp: _timestamp, type: _type, ...settingsOnly } = data;
+            setSettings(settingsOnly);
+            return;
+          }
+          
+          // Legacy format (without timestamp/type)
+          console.log('Received settings update via SSE (legacy format):', data);
           setSettings(data);
         } catch (error) {
           console.error('Failed to parse settings update:', error);
@@ -639,34 +833,21 @@ export default function Home() {
       eventSource.onerror = (error) => {
         console.error('Settings stream error:', error, 'ReadyState:', eventSource?.readyState);
         
-        if (eventSource?.readyState === EventSource.CLOSED) {
-          console.log('SSE connection closed');
+        if (eventSource?.readyState === EventSource.CLOSED || eventSource?.readyState === EventSource.CONNECTING) {
+          console.log('SSE connection closed or failed to connect');
           
-          // Attempt to reconnect if we haven't exceeded max attempts
-          if (reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++;
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000); // Exponential backoff, max 10s
-            console.log(`Attempting to reconnect SSE in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
-            
-            reconnectTimeout = setTimeout(() => {
-              connectSSE();
-            }, delay);
-          } else {
-            console.log('Max reconnection attempts reached, falling back to polling...');
-            // Start polling as fallback
-            const pollInterval = setInterval(() => {
-              fetch('/api/get-settings')
-                .then(res => res.json())
-                .then(data => {
-                  console.log('Polling: Settings loaded:', data);
-                  setSettings(data);
-                })
-                .catch(err => console.error('Polling: Failed to load settings:', err));
-            }, 5000); // Poll every 5 seconds
-            
-            // Store interval for cleanup
-            reconnectTimeout = pollInterval as any;
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttempts - 1, 5)), 30000); // Cap at 30s
+          console.log(`Attempting to reconnect SSE in ${delay}ms (attempt ${reconnectAttempts})`);
+          
+          // Always try to reconnect, but start polling as backup after a few attempts
+          if (reconnectAttempts >= 3 && !isPolling) {
+            startPolling();
           }
+          
+          reconnectTimeout = setTimeout(() => {
+            connectSSE();
+          }, delay);
         }
       };
     }
@@ -675,13 +856,14 @@ export default function Home() {
     connectSSE();
     
     return () => {
-      console.log('Cleaning up SSE connection');
+      console.log('Cleaning up SSE connection and polling');
       if (eventSource) {
         eventSource.close();
       }
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
       }
+      stopPolling();
     };
   }, []);
 

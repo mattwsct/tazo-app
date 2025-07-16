@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 interface OverlaySettings {
   showLocation: boolean;
@@ -18,9 +19,12 @@ export default function AdminPage() {
     showSpeed: true,
     showTime: true,
   });
-  const [isSaving, setIsSaving] = useState(false);
   const [currentTimezone, setCurrentTimezone] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ label: string; countryCode: string } | null>(null);
+  const [currentWeather, setCurrentWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [showSaveToast, setShowSaveToast] = useState(false);
+  const [saveToastMessage, setSaveToastMessage] = useState('');
 
   // Check for existing session on load
   useEffect(() => {
@@ -67,6 +71,109 @@ export default function AdminPage() {
     }
   }, [isAuthenticated]);
 
+  // Load current weather when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetch('/api/get-weather')
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            console.log('Loaded current weather:', data);
+            setCurrentWeather(data);
+          }
+        })
+        .catch(err => console.error('Failed to load current weather:', err));
+    }
+  }, [isAuthenticated]);
+
+  // Manual location capture function
+  const getManualLocation = async () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by this browser');
+      return;
+    }
+
+    setIsGettingLocation(true);
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          
+          // Save GPS coordinates to KV
+          await fetch('/api/save-gps', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: latitude, lon: longitude })
+          });
+
+          // Get location name from coordinates (using the overlay's method)
+          // This will trigger location name lookup and weather update
+          const locationResponse = await fetch(`https://us1.locationiq.com/v1/reverse.php?key=${process.env.NEXT_PUBLIC_LOCATIONIQ_KEY}&lat=${latitude}&lon=${longitude}&format=json&accept-language=en`);
+          
+          if (locationResponse.ok) {
+            const data = await locationResponse.json();
+            if (data.address) {
+              const city = data.address.city || data.address.town || data.address.municipality || data.address.suburb;
+              const countryCode = data.address.country_code ? data.address.country_code.toLowerCase() : '';
+              const label = city ? `${city}, ${data.address.country}` : data.address.country;
+              
+              if (label && countryCode) {
+                // Save formatted location
+                await fetch('/api/save-location', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ label, countryCode })
+                });
+                
+                setCurrentLocation({ label, countryCode });
+                
+                // Get weather for this location
+                const weatherResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${process.env.NEXT_PUBLIC_OPENWEATHER_KEY}&units=metric`);
+                
+                if (weatherResponse.ok) {
+                  const weatherData = await weatherResponse.json();
+                  if (weatherData.cod === 200 && weatherData.weather && weatherData.weather[0] && weatherData.main) {
+                    const weather = {
+                      temp: Math.round(weatherData.main.temp),
+                      icon: weatherData.weather[0].icon,
+                      desc: weatherData.weather[0].description,
+                    };
+                    setCurrentWeather(weather);
+                    
+                    // Save weather to KV
+                    await fetch('/api/save-weather', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(weather)
+                    });
+                  }
+                }
+              }
+            }
+          }
+          
+          alert('Location updated successfully!');
+        } catch (error) {
+          console.error('Error processing location:', error);
+          alert('Failed to process location');
+        } finally {
+          setIsGettingLocation(false);
+        }
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        alert('Failed to get location: ' + error.message);
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
   const handleLogin = async () => {
     try {
       const response = await fetch('/api/admin-login', {
@@ -94,24 +201,38 @@ export default function AdminPage() {
   };
 
   const saveSettings = async (newSettings = settings, showAlert = true) => {
-    if (!showAlert) setIsSaving(true);
+    const startTime = Date.now();
+    
     try {
-      await fetch('/api/save-settings', {
+      const response = await fetch('/api/save-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
       });
+      
+      const result = await response.json();
+      const clientTime = Date.now() - startTime;
+      
+      console.log(`Settings save complete - Client: ${clientTime}ms, Server: ${result.saveTime || 'unknown'}ms`);
+      
       if (showAlert) {
-        alert('Settings saved!');
+        alert(`Settings saved! (${clientTime}ms)`);
+      } else {
+        // Show toast notification for auto-saves
+        setSaveToastMessage(`Saved (${clientTime}ms)`);
+        setShowSaveToast(true);
+        setTimeout(() => setShowSaveToast(false), 2000);
       }
     } catch (error) {
+      const clientTime = Date.now() - startTime;
+      console.error(`Settings save failed after ${clientTime}ms:`, error);
+      
       if (showAlert) {
         alert('Failed to save settings');
-      }
-      console.error('Failed to save settings:', error);
-    } finally {
-      if (!showAlert) {
-        setTimeout(() => setIsSaving(false), 500); // Show saving indicator briefly
+      } else {
+        setSaveToastMessage('Save failed');
+        setShowSaveToast(true);
+        setTimeout(() => setShowSaveToast(false), 3000);
       }
     }
   };
@@ -196,22 +317,23 @@ export default function AdminPage() {
       overflowX: 'hidden'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Header */}
+        {/* Mobile-First Header */}
         <div style={{
-          display: 'flex',
-          flexDirection: window.innerWidth < 768 ? 'column' : 'row',
-          justifyContent: 'space-between',
-          alignItems: window.innerWidth < 768 ? 'stretch' : 'center',
-          gap: '16px',
-          marginBottom: '32px',
-          padding: '24px',
+          marginBottom: '24px',
           background: 'rgba(255, 255, 255, 0.1)',
-          borderRadius: '16px',
+          borderRadius: '20px',
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          overflow: 'hidden'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          {/* Title Section */}
+          <div style={{
+            padding: '20px 20px 16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px'
+          }}>
             <div style={{
               width: '48px',
               height: '48px',
@@ -220,21 +342,23 @@ export default function AdminPage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '24px'
+              fontSize: '24px',
+              flexShrink: 0
             }}>
               ⚡
             </div>
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <h1 style={{ 
-                fontSize: window.innerWidth < 768 ? '24px' : '32px', 
+                fontSize: '28px', 
                 fontWeight: '700', 
                 margin: 0,
                 background: 'linear-gradient(45deg, #ffffff, #e2e8f0)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text'
+                backgroundClip: 'text',
+                lineHeight: '1.2'
               }}>
-                Overlay Control Center
+                Control Center
               </h1>
               <p style={{ 
                 margin: '4px 0 0 0', 
@@ -242,55 +366,38 @@ export default function AdminPage() {
                 opacity: 0.8,
                 fontWeight: '400'
               }}>
-                Real-time streaming overlay management
+                Real-time overlay management
               </p>
             </div>
-            {isSaving && (
-              <div style={{ 
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 12px',
-                background: 'rgba(34, 197, 94, 0.2)',
-                borderRadius: '20px',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
-                fontSize: '12px',
-                fontWeight: '600'
-              }}>
-                <div style={{
-                  width: '8px',
-                  height: '8px',
-                  background: '#22c55e',
-                  borderRadius: '50%',
-                  animation: 'pulse 2s infinite'
-                }} />
-                Auto-saved
-              </div>
-            )}
+
           </div>
-          <div style={{ 
-            display: 'flex', 
-            gap: '12px',
-            flexDirection: window.innerWidth < 768 ? 'column' : 'row',
-            width: window.innerWidth < 768 ? '100%' : 'auto'
+          
+          {/* Action Buttons */}
+          <div style={{
+            padding: '0 20px 20px 20px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '12px'
           }}>
             <button
               onClick={() => window.open('/overlay', '_blank')}
               style={{
                 background: 'linear-gradient(45deg, #22c55e, #16a34a)',
                 color: 'white',
-                padding: '12px 20px',
-                borderRadius: '10px',
+                padding: '14px 16px',
+                borderRadius: '12px',
                 border: 'none',
                 fontSize: '14px',
                 fontWeight: '600',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '8px',
                 boxShadow: '0 4px 16px rgba(34, 197, 94, 0.3)',
                 transition: 'all 0.2s ease',
-                minHeight: '44px'
+                minHeight: '48px',
+                position: 'relative'
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
@@ -301,26 +408,68 @@ export default function AdminPage() {
                 e.currentTarget.style.boxShadow = '0 4px 16px rgba(34, 197, 94, 0.3)';
               }}
             >
-              <span>🚀</span>
-              Open Overlay
+              <span style={{ fontSize: '16px' }}>🚀</span>
+              <span>Open Overlay</span>
             </button>
+            
+            <button
+              onClick={getManualLocation}
+              disabled={isGettingLocation}
+              style={{
+                background: isGettingLocation 
+                  ? 'linear-gradient(45deg, #94a3b8, #64748b)' 
+                  : 'linear-gradient(45deg, #3b82f6, #1d4ed8)',
+                color: 'white',
+                padding: '14px 16px',
+                borderRadius: '12px',
+                border: 'none',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: isGettingLocation ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 16px rgba(59, 130, 246, 0.3)',
+                transition: 'all 0.2s ease',
+                minHeight: '48px',
+                opacity: isGettingLocation ? 0.7 : 1
+              }}
+              onMouseEnter={(e) => {
+                if (!isGettingLocation) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isGettingLocation) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(59, 130, 246, 0.3)';
+                }
+              }}
+            >
+              <span style={{ fontSize: '16px' }}>{isGettingLocation ? '⏳' : '📍'}</span>
+              <span>{isGettingLocation ? 'Getting...' : 'Update Location'}</span>
+            </button>
+            
             <button
               onClick={handleLogout}
               style={{
                 background: 'linear-gradient(45deg, #dc2626, #b91c1c)',
                 color: 'white',
-                padding: '12px 20px',
-                borderRadius: '10px',
+                padding: '14px 16px',
+                borderRadius: '12px',
                 border: 'none',
                 fontSize: '14px',
                 fontWeight: '600',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '8px',
                 boxShadow: '0 4px 16px rgba(220, 38, 38, 0.3)',
                 transition: 'all 0.2s ease',
-                minHeight: '44px'
+                minHeight: '48px'
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
@@ -331,39 +480,36 @@ export default function AdminPage() {
                 e.currentTarget.style.boxShadow = '0 4px 16px rgba(220, 38, 38, 0.3)';
               }}
             >
-              <span>👋</span>
-              Logout
+              <span style={{ fontSize: '16px' }}>👋</span>
+              <span>Logout</span>
             </button>
           </div>
         </div>
 
-        {/* Settings Grid */}
+        {/* Settings Section */}
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: window.innerWidth < 768 ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '20px',
-          marginBottom: '32px'
+          background: 'rgba(255, 255, 255, 0.1)',
+          borderRadius: '20px',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          overflow: 'hidden'
         }}>
-          {/* Display Settings */}
+          {/* Settings Header */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            padding: '28px',
-            borderRadius: '16px',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+            padding: '24px 20px 16px 20px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
           }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
-              marginBottom: '24px'
+              gap: '12px'
             }}>
               <div style={{
                 width: '40px',
                 height: '40px',
                 background: 'linear-gradient(45deg, #3b82f6, #1d4ed8)',
-                borderRadius: '10px',
+                borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -371,20 +517,37 @@ export default function AdminPage() {
               }}>
                 ⚙️
               </div>
-              <h2 style={{ 
-                fontSize: '22px', 
-                fontWeight: '700', 
-                margin: 0,
-                background: 'linear-gradient(45deg, #ffffff, #e2e8f0)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text'
-              }}>
-                Display Settings
-              </h2>
+              <div>
+                <h2 style={{ 
+                  fontSize: '22px', 
+                  fontWeight: '700', 
+                  margin: 0,
+                  background: 'linear-gradient(45deg, #ffffff, #e2e8f0)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text'
+                }}>
+                  Display Settings
+                </h2>
+                <p style={{
+                  margin: '2px 0 0 0',
+                  fontSize: '13px',
+                  opacity: 0.7
+                }}>
+                  Configure what appears on your streaming overlay
+                </p>
+              </div>
             </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          </div>
+          
+          {/* Settings Controls */}
+          <div style={{
+            padding: '20px'
+          }}>
+            <div style={{ 
+              display: 'grid',
+              gap: '16px'
+            }}>
               {[
                 { 
                   key: 'showTime', 
@@ -402,28 +565,40 @@ export default function AdminPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span>{currentLocation.label}</span>
                       {currentLocation.countryCode && (
-                        <img
+                        <Image
                           src={`https://flagcdn.com/${currentLocation.countryCode}.svg`}
                           alt={`Country: ${currentLocation.label}`}
+                          width={16}
+                          height={11}
                           style={{
-                            width: '16px',
-                            height: '11px',
                             borderRadius: '1px',
                             border: '1px solid rgba(255, 255, 255, 0.2)'
                           }}
+                          unoptimized
                         />
                       )}
                     </div>
                   ) : 'No location data'
                 },
-                { key: 'showWeather', label: 'Weather Display', icon: '🌤️', desc: 'Show temperature and conditions' },
+                { 
+                  key: 'showWeather', 
+                  label: 'Weather Display', 
+                  icon: '🌤️', 
+                  desc: 'Show temperature and conditions',
+                  extra: currentWeather ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>{currentWeather.temp}°C</span>
+                      <span style={{ textTransform: 'capitalize' }}>{currentWeather.desc}</span>
+                    </div>
+                  ) : 'No weather data'
+                },
                 { key: 'showSpeed', label: 'Speed Display', icon: '🚗', desc: 'Show speed when moving >10 km/h' }
               ].map(({ key, label, icon, desc, extra }) => (
                 <div key={key} style={{
-                  padding: '16px',
                   background: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '12px',
+                  borderRadius: '16px',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
+                  padding: '20px',
                   transition: 'all 0.2s ease'
                 }}>
                   <label style={{ 
@@ -435,25 +610,36 @@ export default function AdminPage() {
                   }}>
                     <div style={{
                       position: 'relative',
-                      width: '48px',
-                      height: '28px',
-                      background: settings[key as keyof OverlaySettings] ? '#22c55e' : 'rgba(255, 255, 255, 0.2)',
-                      borderRadius: '14px',
+                      width: '52px',
+                      height: '32px',
+                      background: settings[key as keyof OverlaySettings] 
+                        ? 'linear-gradient(45deg, #22c55e, #16a34a)' 
+                        : 'rgba(255, 255, 255, 0.2)',
+                      borderRadius: '16px',
                       transition: 'all 0.3s ease',
                       cursor: 'pointer',
-                      flexShrink: 0
+                      flexShrink: 0,
+                      boxShadow: settings[key as keyof OverlaySettings] 
+                        ? '0 4px 12px rgba(34, 197, 94, 0.3)' 
+                        : '0 2px 8px rgba(0, 0, 0, 0.1)'
                     }}>
                       <div style={{
                         position: 'absolute',
                         top: '2px',
                         left: settings[key as keyof OverlaySettings] ? '22px' : '2px',
-                        width: '24px',
-                        height: '24px',
+                        width: '28px',
+                        height: '28px',
                         background: 'white',
                         borderRadius: '50%',
                         transition: 'all 0.3s ease',
-                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-                      }} />
+                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '14px'
+                      }}>
+                        {settings[key as keyof OverlaySettings] ? '✓' : ''}
+                      </div>
                       <input
                         type="checkbox"
                         checked={settings[key as keyof OverlaySettings]}
@@ -463,20 +649,22 @@ export default function AdminPage() {
                           position: 'absolute', 
                           width: '100%', 
                           height: '100%',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          margin: 0
                         }}
                       />
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
-                        marginBottom: '4px'
+                        gap: '10px',
+                        marginBottom: '6px',
+                        flexWrap: 'wrap'
                       }}>
-                        <span style={{ fontSize: '18px' }}>{icon}</span>
+                        <span style={{ fontSize: '20px' }}>{icon}</span>
                         <span style={{ 
-                          fontSize: '16px', 
+                          fontSize: '18px', 
                           fontWeight: '600',
                           color: 'white'
                         }}>
@@ -484,17 +672,20 @@ export default function AdminPage() {
                         </span>
                       </div>
                       <p style={{
-                        margin: 0,
-                        fontSize: '13px',
-                        opacity: 0.7,
+                        margin: '0 0 8px 0',
+                        fontSize: '14px',
+                        opacity: 0.8,
                         lineHeight: '1.4'
                       }}>
                         {desc}
                       </p>
                       {extra && (
                         <div style={{
-                          marginTop: '6px',
-                          fontSize: '12px',
+                          padding: '8px 12px',
+                          background: 'rgba(34, 197, 94, 0.1)',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(34, 197, 94, 0.2)',
+                          fontSize: '13px',
                           color: '#22c55e',
                           fontWeight: '500'
                         }}>
@@ -509,60 +700,40 @@ export default function AdminPage() {
           </div>
         </div>
 
-
-
-        {/* Current Settings Debug */}
-        <div style={{
-          background: 'rgba(0, 0, 0, 0.2)',
-          padding: '20px',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)'
-        }}>
+        {/* Toast Notification */}
+        {showSaveToast && (
           <div style={{
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            zIndex: 1000,
+            background: 'rgba(0, 0, 0, 0.9)',
+            color: 'white',
+            padding: '12px 20px',
+            borderRadius: '12px',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+            fontSize: '14px',
+            fontWeight: '600',
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            marginBottom: '16px'
+            gap: '8px',
+            animation: 'slideInUp 0.3s ease-out',
+            transform: showSaveToast ? 'translateY(0)' : 'translateY(100%)',
+            transition: 'transform 0.3s ease-out'
           }}>
             <div style={{
-              width: '32px',
-              height: '32px',
-              background: 'linear-gradient(45deg, #8b5cf6, #7c3aed)',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px'
-            }}>
-              🔧
-            </div>
-            <h3 style={{ 
-              fontSize: '18px', 
-              fontWeight: '600', 
-              margin: 0,
-              opacity: 0.9
-            }}>
-              Current Configuration
-            </h3>
+              width: '8px',
+              height: '8px',
+              background: saveToastMessage.includes('failed') ? '#ef4444' : '#22c55e',
+              borderRadius: '50%',
+              flexShrink: 0
+            }} />
+            {saveToastMessage}
           </div>
-          
-          <div style={{
-            background: 'rgba(0, 0, 0, 0.3)',
-            padding: '16px',
-            borderRadius: '8px',
-            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace'
-          }}>
-            <pre style={{
-              fontSize: '13px',
-              color: '#e2e8f0',
-              overflow: 'auto',
-              margin: 0,
-              lineHeight: '1.5'
-            }}>
-              {JSON.stringify(settings, null, 2)}
-            </pre>
-          </div>
-        </div>
+        )}
+
       </div>
     </div>
   );

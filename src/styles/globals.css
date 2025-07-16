@@ -6,10 +6,35 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: transparent !important;
   font-family: 'Montserrat', sans-serif;
+}
+
+/* Overlay page specific styles */
+body.overlay-page {
+  background: transparent !important;
   height: 100vh;
   overflow: hidden;
+}
+
+/* Toast animation */
+@keyframes slideInUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 #overlay {
