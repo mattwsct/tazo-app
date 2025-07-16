@@ -1,4 +1,4 @@
-import Head from 'next/head';
+"use client";
 import { useEffect, useRef, useState } from 'react';
 
 // === Configurable Constants ===
@@ -456,46 +456,41 @@ export default function Home() {
 
   // Render
   return (
-    <>
-      <Head>
-        <title>IRL Stream Overlay</title>
-      </Head>
-      <div id="overlay" className={showOverlay ? 'show' : ''}>
-        <div id="time" className={!validTimezone ? 'hidden' : ''}>{time}</div>
-        <div id="location" className={!validLocation ? 'hidden' : ''}>
-          {location && (
-            <>
-              <span>{location.label}</span>
-              {location.countryCode && (
-                <img
-                  className="flag"
-                  src={`https://flagcdn.com/${location.countryCode}.svg`}
-                  alt={`Country: ${location.label}`}
-                />
-              )}
-            </>
-          )}
-        </div>
-        <div id="weather" className={!validWeather ? 'hidden' : ''}>
-          {weather && (
-            <>
-              <div className="temp">
-                <img
-                  className="loaded"
-                  src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
-                  alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                  style={{ opacity: 1 }}
-                />
-                {weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F
-              </div>
-              <div className="desc">{capitalizeWords(weather.desc)}</div>
-            </>
-          )}
-        </div>
-        <div id="speed" className={speedVisible ? '' : 'hidden'}>
-          {(speed * 3.6).toFixed(1)} km/h
-        </div>
+    <div id="overlay" className={showOverlay ? 'show' : ''}>
+      <div id="time" className={!validTimezone ? 'hidden' : ''}>{time}</div>
+      <div id="location" className={!validLocation ? 'hidden' : ''}>
+        {location && (
+          <>
+            <span>{location.label}</span>
+            {location.countryCode && (
+              <img
+                className="flag"
+                src={`https://flagcdn.com/${location.countryCode}.svg`}
+                alt={`Country: ${location.label}`}
+              />
+            )}
+          </>
+        )}
       </div>
-    </>
+      <div id="weather" className={!validWeather ? 'hidden' : ''}>
+        {weather && (
+          <>
+            <div className="temp">
+              <img
+                className="loaded"
+                src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
+                alt={`Weather: ${capitalizeWords(weather.desc)}`}
+                style={{ opacity: 1 }}
+              />
+              {weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F
+            </div>
+            <div className="desc">{capitalizeWords(weather.desc)}</div>
+          </>
+        )}
+      </div>
+      <div id="speed" className={speedVisible ? '' : 'hidden'}>
+        {(speed * 3.6).toFixed(1)} km/h
+      </div>
+    </div>
   );
-}
+} 
