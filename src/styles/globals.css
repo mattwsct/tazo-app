@@ -66,28 +66,29 @@ body.overlay-page {
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
-  padding: 12px 16px 10px 16px; /* More top padding, less bottom padding */
+  padding: 12px 18px; /* Symmetric padding for better vertical centering */
   color: white;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  min-width: 100px;
+  min-width: 120px;
   font-weight: 600;
 }
 
 .vitals-content {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  min-height: 3rem; /* Ensure consistent container height */
 }
 
 .vitals-icon {
-  font-size: 1.8rem;
+  font-size: 2.4rem; /* Increased from 1.8rem for better visibility */
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.2rem;
-  padding-bottom: 3px; /* Add space underneath the heart */
+  height: 3rem; /* Fixed height instead of min-height */
+  margin-top: -2px; /* Slight upward adjustment for better centering */
   transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1); /* Slower transition for smoother changes */
 }
 
@@ -103,20 +104,20 @@ body.overlay-page {
 }
 
 .vitals-value {
-  font-size: 1.4rem;
+  font-size: 1.8rem; /* Increased from 1.4rem to match location/weather prominence */
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
 }
 
 .vitals-label {
-  font-size: 0.7rem;
+  font-size: 0.85rem; /* Increased from 0.7rem for better readability */
   font-weight: 500;
   opacity: 0.9;
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-top: -1px;
+  margin-top: -1px; /* Adjusted for better alignment with centered heart */
 }
 
 /* === STREAM INFO (Main Info Card) === */
