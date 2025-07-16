@@ -510,6 +510,22 @@ export default function Home() {
     setValidTimezone(false);
   }, []);
 
+  // Initial load from KV
+  useEffect(() => {
+    async function loadSavedLocation() {
+      const res = await fetch('/api/get-location');
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          console.log('Loaded saved location:', data);
+          setLocation(data);
+          setValidLocation(true);
+        }
+      }
+    }
+    loadSavedLocation();
+  }, []);
+
   // Type guards for coordinates
   function hasLatLon(obj: unknown): obj is { lat: number; lon: number } {
     return (
@@ -528,6 +544,17 @@ export default function Home() {
       typeof (obj as { longitude?: unknown }).longitude === 'number'
     );
   }
+
+  // Save location to API route
+  useEffect(() => {
+    if (location && validLocation) {
+      fetch('/api/save-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(location),
+      }).then(() => console.log('Location saved successfully to API')).catch((err) => console.error('Failed to save location:', err));
+    }
+  }, [location, validLocation]);
 
   // Render
   return (
