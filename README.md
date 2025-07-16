@@ -1,6 +1,6 @@
 # Tazo Streaming Overlay
 
-A real-time streaming overlay for OBS with admin panel, built with Next.js 15. Displays location, weather, speed, and time data from RealtimeIRL API.
+A real-time streaming overlay for OBS with admin panel, built with Next.js 15. Displays location, weather, speed, and time data from RealtimeIRL and Open-Meteo APIs.
 
 ## Environment Variables
 
@@ -10,14 +10,8 @@ Create a `.env.local` file in the root directory with the following variables:
 # RealtimeIRL API Key (required)
 NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_pull_key_here
 
-# OpenWeather API Key (required)
-NEXT_PUBLIC_OPENWEATHER_KEY=your_openweather_api_key_here
-
-# LocationIQ API Key (required)
+# LocationIQ API Key (required for location names)
 NEXT_PUBLIC_LOCATIONIQ_KEY=your_locationiq_api_key_here
-
-# TimezoneDB API Key (required)
-NEXT_PUBLIC_TIMEZONEDB_KEY=your_timezonedb_api_key_here
 
 # Vercel KV Database (required for settings storage)
 KV_REST_API_URL=your_vercel_kv_rest_api_url
@@ -25,6 +19,10 @@ KV_REST_API_TOKEN=your_vercel_kv_rest_api_token
 
 # Admin Panel Password (defaults to 'admin123' if not set)
 ADMIN_PASSWORD=your_secure_admin_password_here
+
+# API Protection (required for security)
+API_SECRET=your_secure_random_api_secret_here
+NEXT_PUBLIC_API_SECRET=your_secure_random_api_secret_here
 ```
 
 ## Getting Started

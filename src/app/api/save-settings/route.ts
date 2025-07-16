@@ -21,21 +21,39 @@ async function handlePOST(request: NextRequest) {
     const startTime = Date.now();
     
     // Save to KV and broadcast simultaneously for better performance
-    const [kvResult] = await Promise.allSettled([
+    const [kvResult, broadcastResult] = await Promise.allSettled([
       kv.set('overlay_settings', settings),
       broadcastSettings(settings) // Broadcast immediately, don't wait for KV
     ]);
     
     const saveTime = Date.now() - startTime;
-    console.log(`Settings saved and broadcasted in ${saveTime}ms:`, settings);
+    console.log(`Settings processed in ${saveTime}ms:`, settings);
     
-    if (kvResult.status === 'rejected') {
-      console.error('KV save failed:', kvResult.reason);
-      // Still return success if broadcast worked, KV failure is non-critical for real-time updates
+    // Check results
+    const kvSuccess = kvResult.status === 'fulfilled';
+    const broadcastSuccess = broadcastResult.status === 'fulfilled' && 
+                            broadcastResult.value?.success;
+    
+    if (!kvSuccess) {
+      console.error('🚨 KV save failed:', kvResult.reason);
+    }
+    
+    if (!broadcastSuccess) {
+      console.error('🚨 Broadcast failed:', broadcastResult.status === 'rejected' ? 
+        broadcastResult.reason : broadcastResult.value);
+    }
+    
+    // Log broadcast details if successful
+    if (broadcastSuccess) {
+      const details = broadcastResult.value;
+      console.log(`📡 Broadcast: ${details.successCount} sent, ${details.failureCount} failed, ${details.activeConnections} active`);
     }
     
     return NextResponse.json({ 
-      success: true, 
+      success: kvSuccess || broadcastSuccess, // Success if either works
+      kvSaved: kvSuccess,
+      broadcastSent: broadcastSuccess,
+      broadcastDetails: broadcastSuccess ? broadcastResult.value : null,
       saveTime,
       timestamp: Date.now()
     });

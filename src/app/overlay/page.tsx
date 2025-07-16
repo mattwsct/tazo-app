@@ -14,14 +14,14 @@ declare global {
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 
 // === Configurable Constants ===
 const SPEED_THRESHOLD_KMH = 10;
 const SPEED_HIDE_DELAY_MS = 10000;
-const WEATHER_UPDATE_INTERVAL = 600000; // 10 min - reduced from 5 min to save API calls
-const LOCATION_UPDATE_INTERVAL = 300000; // 5 min
-const TIMEZONE_UPDATE_INTERVAL = 600000; // 10 min
-const COORDINATE_DEBOUNCE_DEGREES = 0.001; // ~100m base
+const WEATHER_TIMEZONE_UPDATE_INTERVAL = 300000; // 5 min - combined weather+timezone from same API call
+const LOCATION_UPDATE_INTERVAL = 60000; // 1 min max - but also triggers on 100m movement
+const LOCATION_DISTANCE_THRESHOLD = 100; // 100 meters - triggers location update when moved this far
 const OVERLAY_FADE_TIMEOUT_MS = 10000; // 10 seconds to force fade-in if data not ready
 
 // === Cost Optimization Constants ===
@@ -30,9 +30,7 @@ const DATA_REFRESH_INTERVAL = 300000; // 5 minutes - reduced from 2 minutes
 
 // === API Keys (from .env.local, must be prefixed with NEXT_PUBLIC_) ===
 const RTIRL_PULL_KEY = process.env.NEXT_PUBLIC_RTIRL_PULL_KEY;
-const OPENWEATHER_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_KEY;
 const LOCATIONIQ_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
-const TIMEZONEDB_KEY = process.env.NEXT_PUBLIC_TIMEZONEDB_KEY;
 
 // === TypeScript Interfaces ===
 interface RTIRLWeather {
@@ -60,15 +58,7 @@ interface RTIRLPayload {
   location?: RTIRLLocation;
 }
 
-interface OverlaySettings {
-  showLocation: boolean;
-  showWeather: boolean;
-  showWeatherIcon: boolean;
-  showWeatherCondition: boolean;
-  weatherIconPosition: 'left' | 'right';
-  showSpeed: boolean;
-  showTime: boolean;
-}
+// OverlaySettings interface now imported from @/types/settings
 
 // === Utility Functions ===
 function capitalizeWords(str: string) {
@@ -133,15 +123,21 @@ function formatLocation(location: RTIRLLocation) {
   return shortenedCountry;
 }
 
-function distanceMoved(lat1: number, lon1: number, lat2: number, lon2: number) {
-  return Math.sqrt(Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2));
+function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
 
 // === Rate Limiting ===
 const RATE_LIMITS = {
-  openweather: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 60 },
+  openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 600 }, // 600/min free tier
   locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 },
-  timezonedb: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 1 },
 };
 function checkRateLimit(api: keyof typeof RATE_LIMITS) {
   const limit = RATE_LIMITS[api];
@@ -156,23 +152,6 @@ function checkRateLimit(api: keyof typeof RATE_LIMITS) {
 }
 
 // === API Fetch Functions ===
-async function fetchWeatherFromOpenWeather(lat: number, lon: number) {
-  if (!OPENWEATHER_KEY || !checkRateLimit('openweather')) return null;
-  try {
-    const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_KEY}&units=metric`);
-    const data = await response.json();
-    if (data.cod === 200 && data.weather && data.weather[0] && data.main) {
-      return {
-        temp: Math.round(data.main.temp),
-        icon: data.weather[0].icon,
-        desc: data.weather[0].description,
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
 
 async function fetchLocationFromLocationIQ(lat: number, lon: number) {
   if (!LOCATIONIQ_KEY || !checkRateLimit('locationiq')) return null;
@@ -216,19 +195,132 @@ async function fetchLocationFromLocationIQ(lat: number, lon: number) {
   return null;
 }
 
-async function fetchTimezoneFromTimezoneDB(lat: number, lon: number) {
-  if (!TIMEZONEDB_KEY || !checkRateLimit('timezonedb')) return null;
+
+
+// === Open-Meteo API Functions (Free tier, no API key required!) ===
+
+// Combined function: fetch both weather and timezone in a single API call
+async function fetchWeatherAndTimezoneFromOpenMeteo(lat: number, lon: number) {
+  console.log(`[WEATHER DEBUG] fetchWeatherAndTimezoneFromOpenMeteo called with: ${lat}, ${lon}`);
+  
+  if (!checkRateLimit('openmeteo')) {
+    console.log('[WEATHER DEBUG] Rate limit exceeded for Open-Meteo');
+    return null;
+  }
+  
   try {
-    const response = await fetch(`https://api.timezonedb.com/v2.1/get-time-zone?key=${TIMEZONEDB_KEY}&format=json&by=position&lat=${lat}&lng=${lon}`);
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto&forecast_days=1`;
+    console.log('[WEATHER DEBUG] Making API request to:', url);
+    
+    const response = await fetch(url);
+    console.log('[WEATHER DEBUG] API response status:', response.status);
+    
     const data = await response.json();
-    if (data.status === 'OK') {
-      return data.zoneName;
+    console.log('[WEATHER DEBUG] Raw API data:', JSON.stringify(data, null, 2));
+    
+    let weather = null;
+    let timezone = null;
+    
+    // Extract weather data
+    if (data.current && typeof data.current.temperature_2m === 'number' && typeof data.current.weather_code === 'number') {
+      weather = {
+        temp: Math.round(data.current.temperature_2m),
+        icon: mapWMOToOpenWeatherIcon(data.current.weather_code),
+        desc: mapWMOToDescription(data.current.weather_code),
+      };
+      console.log('[WEATHER DEBUG] Parsed weather data:', weather);
+    } else {
+      console.log('[WEATHER DEBUG] Failed to parse weather data from:', data.current);
     }
-  } catch {
-    // ignore
+    
+    // Extract timezone data
+    if (data.timezone) {
+      timezone = data.timezone;
+      console.log('[WEATHER DEBUG] Parsed timezone:', timezone);
+    } else {
+      console.log('[WEATHER DEBUG] No timezone in response');
+    }
+    
+    const result = { weather, timezone };
+    console.log('[WEATHER DEBUG] Returning result:', result);
+    return result;
+  } catch (error) {
+    console.log('[WEATHER DEBUG] Open-Meteo combined fetch failed:', error);
   }
   return null;
 }
+
+// WMO Weather Code to OpenWeather icon mapping
+function mapWMOToOpenWeatherIcon(wmoCode: number): string {
+  const iconMap: Record<number, string> = {
+    0: '01d',    // Clear sky
+    1: '02d',    // Mainly clear
+    2: '03d',    // Partly cloudy
+    3: '04d',    // Overcast
+    45: '50d',   // Fog
+    48: '50d',   // Depositing rime fog
+    51: '09d',   // Light drizzle
+    53: '09d',   // Moderate drizzle
+    55: '09d',   // Dense drizzle
+    56: '13d',   // Light freezing drizzle
+    57: '13d',   // Dense freezing drizzle
+    61: '10d',   // Slight rain
+    63: '10d',   // Moderate rain
+    65: '10d',   // Heavy rain
+    66: '13d',   // Light freezing rain
+    67: '13d',   // Heavy freezing rain
+    71: '13d',   // Slight snow fall
+    73: '13d',   // Moderate snow fall
+    75: '13d',   // Heavy snow fall
+    77: '13d',   // Snow grains
+    80: '09d',   // Slight rain showers
+    81: '09d',   // Moderate rain showers
+    82: '09d',   // Violent rain showers
+    85: '13d',   // Slight snow showers
+    86: '13d',   // Heavy snow showers
+    95: '11d',   // Thunderstorm
+    96: '11d',   // Thunderstorm with slight hail
+    99: '11d',   // Thunderstorm with heavy hail
+  };
+  return iconMap[wmoCode] || '01d';
+}
+
+// WMO Weather Code to description mapping
+function mapWMOToDescription(wmoCode: number): string {
+  const descMap: Record<number, string> = {
+    0: 'clear sky',
+    1: 'mainly clear',
+    2: 'partly cloudy',
+    3: 'overcast',
+    45: 'fog',
+    48: 'depositing rime fog',
+    51: 'light drizzle',
+    53: 'moderate drizzle',
+    55: 'dense drizzle',
+    56: 'light freezing drizzle',
+    57: 'dense freezing drizzle',
+    61: 'slight rain',
+    63: 'moderate rain',
+    65: 'heavy rain',
+    66: 'light freezing rain',
+    67: 'heavy freezing rain',
+    71: 'slight snow fall',
+    73: 'moderate snow fall',
+    75: 'heavy snow fall',
+    77: 'snow grains',
+    80: 'slight rain showers',
+    81: 'moderate rain showers',
+    82: 'violent rain showers',
+    85: 'slight snow showers',
+    86: 'heavy snow showers',
+    95: 'thunderstorm',
+    96: 'thunderstorm with slight hail',
+    99: 'thunderstorm with heavy hail',
+  };
+  return descMap[wmoCode] || 'unknown';
+}
+
+
 
 // === Main React Component ===
 export default function Home() {
@@ -257,15 +349,7 @@ export default function Home() {
   const [firstTimezoneChecked, setFirstTimezoneChecked] = useState(false);
 
   // Settings state
-  const [settings, setSettings] = useState<OverlaySettings>({
-    showLocation: true,
-    showWeather: true,
-    showWeatherIcon: true,
-    showWeatherCondition: true,
-    weatherIconPosition: 'left',
-    showSpeed: true,
-    showTime: true,
-  });
+  const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
 
   // Refs for timers and last coords
   const speedHideTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -397,25 +481,62 @@ export default function Home() {
     };
   }, [speed, speedVisible]);
 
-  // Weather refresh timer
+  // Weather and timezone refresh timer - every 5 minutes using latest GPS (combined API call)
   useEffect(() => {
-    if (weatherRefreshTimer.current) clearInterval(weatherRefreshTimer.current);
-    weatherRefreshTimer.current = setInterval(async () => {
+    async function doWeatherUpdate() {
+      console.log('[WEATHER DEBUG] Timer triggered, checking for coordinates...');
       if (lastWeatherCoords.current) {
         const [lat, lon] = lastWeatherCoords.current;
-        const w = await fetchWeatherFromOpenWeather(lat, lon);
-        if (w) {
-          setWeather(w);
-          setValidWeather(true);
-          setFirstWeatherChecked(true);
-          lastWeatherUpdate.current = Date.now();
+        console.log(`[WEATHER DEBUG] Making API call with coordinates: ${lat}, ${lon}`);
+        
+        // Single combined API call gets both weather and timezone data
+        const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
+        console.log('[WEATHER DEBUG] API response:', result);
+        
+        if (result) {
+          // Update weather if available
+          if (result.weather) {
+            console.log('[WEATHER DEBUG] Setting weather data:', result.weather);
+            setWeather(result.weather);
+            setValidWeather(true);
+            setFirstWeatherChecked(true);
+            lastWeatherUpdate.current = Date.now();
+          } else {
+            console.log('[WEATHER DEBUG] No weather data in API response');
+          }
+          
+          // Update timezone if available and different
+          if (result.timezone && result.timezone !== timezone) {
+            try {
+              formatter.current = new Intl.DateTimeFormat('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: result.timezone,
+              });
+              setTimezone(result.timezone);
+              setValidTimezone(true);
+              setFirstTimezoneChecked(true);
+              lastTimezoneUpdate.current = Date.now();
+            } catch {
+              setValidTimezone(false);
+              setFirstTimezoneChecked(true);
+            }
+          }
+        } else {
+          console.log('[WEATHER DEBUG] API call failed or returned null');
         }
+      } else {
+        console.log('[WEATHER DEBUG] No coordinates available for weather update');
       }
-    }, WEATHER_UPDATE_INTERVAL);
+    }
+    
+    if (weatherRefreshTimer.current) clearInterval(weatherRefreshTimer.current);
+    weatherRefreshTimer.current = setInterval(doWeatherUpdate, WEATHER_TIMEZONE_UPDATE_INTERVAL);
     return () => {
       if (weatherRefreshTimer.current) clearInterval(weatherRefreshTimer.current);
     };
-  }, []);
+  }, [timezone]);
 
   // RTIRL integration and main data update logic
   useEffect(() => {
@@ -517,85 +638,104 @@ export default function Home() {
     // eslint-disable-next-line
   }, []);
 
-  // Main data update logic
+  // Main data update logic - handles location updates only on 100m+ movement (max once per minute)
   async function updateFromCoordinates(lat: number, lon: number) {
+    console.log(`[WEATHER DEBUG] Received coordinates: ${lat}, ${lon}`);
+    
     if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      console.log('[WEATHER DEBUG] Invalid coordinates, ignoring');
       return;
     }
-    const kmh = speed * 3.6;
-    const debounceDegrees = kmh > 100 ? COORDINATE_DEBOUNCE_DEGREES * 10 : COORDINATE_DEBOUNCE_DEGREES;
-    if (lastAPICoords.current && distanceMoved(lat, lon, lastAPICoords.current[0], lastAPICoords.current[1]) < debounceDegrees) {
-      return;
-    }
-    lastAPICoords.current = [lat, lon];
+    
+    // Store coordinates for timer-based weather/timezone updates (always)
+    const hadCoords = lastWeatherCoords.current !== null;
     lastWeatherCoords.current = [lat, lon];
-    const now = Date.now();
-    const coordKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-    if (
-      currentCoords.current === coordKey &&
-      now - lastWeatherUpdate.current < WEATHER_UPDATE_INTERVAL &&
-      now - lastLocationUpdate.current < LOCATION_UPDATE_INTERVAL
-    ) {
-      return;
-    }
-    currentCoords.current = coordKey;
-    if (now - lastWeatherUpdate.current > WEATHER_UPDATE_INTERVAL) {
-      const w = await fetchWeatherFromOpenWeather(lat, lon);
-      if (w) {
-        setWeather(w);
-        setValidWeather(true);
-        setFirstWeatherChecked(true);
-        lastWeatherUpdate.current = now;
+    console.log(`[WEATHER DEBUG] Stored coordinates for weather updates: ${lat}, ${lon}`);
+    
+    // If this is the first time we're getting coordinates, do immediate weather update
+    if (!hadCoords && !firstWeatherChecked) {
+      console.log('[WEATHER DEBUG] First coordinates received, doing immediate weather update');
+      try {
+        const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
+        console.log('[WEATHER DEBUG] Immediate weather response:', result);
         
-        // Note: No longer saving weather to KV - we fetch fresh from APIs using GPS
-      }
-    }
-    if (now - lastLocationUpdate.current > LOCATION_UPDATE_INTERVAL) {
-      const loc = await fetchLocationFromLocationIQ(lat, lon);
-      if (loc) {
-        setRawLocation(loc);
-        const label = formatLocation(loc);
-        setLocation({ label, countryCode: loc.countryCode || '' });
-        setValidLocation(true);
-        setFirstLocationChecked(true);
-        lastLocationUpdate.current = now;
-        if (loc.timezone && loc.timezone !== timezone) {
+        if (result && result.weather) {
+          console.log('[WEATHER DEBUG] Setting initial weather data:', result.weather);
+          setWeather(result.weather);
+          setValidWeather(true);
+          setFirstWeatherChecked(true);
+          lastWeatherUpdate.current = Date.now();
+        }
+        
+        if (result && result.timezone && result.timezone !== timezone) {
           try {
             formatter.current = new Intl.DateTimeFormat('en-US', {
               hour: 'numeric',
               minute: '2-digit',
               hour12: true,
-              timeZone: loc.timezone,
+              timeZone: result.timezone,
             });
-            setTimezone(loc.timezone);
+            setTimezone(result.timezone);
             setValidTimezone(true);
             setFirstTimezoneChecked(true);
-            lastTimezoneUpdate.current = now;
-            
-            // Note: No longer saving timezone to KV - we determine fresh from GPS coordinates
+            lastTimezoneUpdate.current = Date.now();
           } catch {
             setValidTimezone(false);
             setFirstTimezoneChecked(true);
           }
         }
+      } catch (error) {
+        console.log('[WEATHER DEBUG] Immediate weather update failed:', error);
       }
     }
-    if (now - lastTimezoneUpdate.current > TIMEZONE_UPDATE_INTERVAL || lastTimezoneUpdate.current === 0) {
-      const tz = await fetchTimezoneFromTimezoneDB(lat, lon);
-      if (tz && tz !== timezone) {
+    
+    // Check location update: only on 100m+ movement AND respecting 1-minute rate limit
+    const now = Date.now();
+    let shouldUpdateLocation = false;
+    
+    if (lastAPICoords.current) {
+      const distanceMoved = distanceInMeters(lat, lon, lastAPICoords.current[0], lastAPICoords.current[1]);
+      const timeSinceLastUpdate = now - lastLocationUpdate.current;
+      
+      // Update only if: moved 100m+ AND at least 1 minute since last update
+      shouldUpdateLocation = distanceMoved >= LOCATION_DISTANCE_THRESHOLD && timeSinceLastUpdate >= LOCATION_UPDATE_INTERVAL;
+    } else {
+      // First update (no rate limit needed)
+      shouldUpdateLocation = true;
+    }
+    
+    if (!shouldUpdateLocation) {
+      return;
+    }
+    
+    lastAPICoords.current = [lat, lon];
+    
+    const coordKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+    currentCoords.current = coordKey;
+    
+    // Update location name from LocationIQ
+    const loc = await fetchLocationFromLocationIQ(lat, lon);
+    if (loc) {
+      setRawLocation(loc);
+      const label = formatLocation(loc);
+      setLocation({ label, countryCode: loc.countryCode || '' });
+      setValidLocation(true);
+      setFirstLocationChecked(true);
+      lastLocationUpdate.current = now;
+      
+      // If LocationIQ provides timezone info, use it as a fallback
+      if (loc.timezone && loc.timezone !== timezone) {
         try {
           formatter.current = new Intl.DateTimeFormat('en-US', {
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,
-            timeZone: tz,
+            timeZone: loc.timezone,
           });
-          setTimezone(tz);
+          setTimezone(loc.timezone);
           setValidTimezone(true);
           setFirstTimezoneChecked(true);
           lastTimezoneUpdate.current = now;
-          
-          // Note: No longer saving timezone to KV - we determine fresh from GPS coordinates
         } catch {
           setValidTimezone(false);
           setFirstTimezoneChecked(true);
@@ -835,6 +975,16 @@ export default function Home() {
   }
 
   // Note: No longer saving location to KV - we fetch fresh from APIs using GPS coordinates
+
+  // Debug logging for weather conditions
+  useEffect(() => {
+    console.log('[WEATHER DEBUG] Render conditions changed:', {
+      showWeather: settings.showWeather,
+      validWeather: validWeather,
+      weather: weather,
+      settings: settings
+    });
+  }, [settings.showWeather, validWeather, weather, settings]);
 
   // Render
   return (

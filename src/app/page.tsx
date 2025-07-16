@@ -1,35 +1,13 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import { authenticatedFetch } from '@/lib/client-auth';
-
-interface OverlaySettings {
-  showLocation: boolean;
-  showWeather: boolean;
-  showWeatherIcon: boolean;
-  showWeatherCondition: boolean;
-  weatherIconPosition: 'left' | 'right';
-  showSpeed: boolean;
-  showTime: boolean;
-}
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [settings, setSettings] = useState<OverlaySettings>({
-    showLocation: true,
-    showWeather: true,
-    showWeatherIcon: true,
-    showWeatherCondition: true,
-    weatherIconPosition: 'left' as 'left' | 'right',
-    showSpeed: true,
-    showTime: true,
-  });
-  const [currentTimezone, setCurrentTimezone] = useState<string | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<{ label: string; countryCode: string } | null>(null);
-  const [currentWeather, setCurrentWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState('');
 
@@ -53,130 +31,6 @@ export default function AdminPage() {
         .catch(err => console.error('Failed to load current settings:', err));
     }
   }, [isAuthenticated]);
-
-  // Load current location when authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      authenticatedFetch('/api/get-location')
-        .then(res => res.json())
-        .then(data => {
-          if (data) {
-            console.log('Loaded current location:', data);
-            setCurrentLocation(data);
-          }
-        })
-        .catch(err => console.error('Failed to load current location:', err));
-    }
-  }, [isAuthenticated]);
-
-  // Load current timezone (simplified for admin display)
-  useEffect(() => {
-    if (isAuthenticated) {
-      // Get timezone from browser
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      setCurrentTimezone(timezone);
-    }
-  }, [isAuthenticated]);
-
-  // Load current weather when authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      authenticatedFetch('/api/get-weather')
-        .then(res => res.json())
-        .then(data => {
-          if (data) {
-            console.log('Loaded current weather:', data);
-            setCurrentWeather(data);
-          }
-        })
-        .catch(err => console.error('Failed to load current weather:', err));
-    }
-  }, [isAuthenticated]);
-
-  // Manual location capture function
-  const getManualLocation = async () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by this browser');
-      return;
-    }
-
-    setIsGettingLocation(true);
-    
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          
-          // Save GPS coordinates to KV
-          await authenticatedFetch('/api/save-gps', {
-            method: 'POST',
-            body: JSON.stringify({ lat: latitude, lon: longitude })
-          });
-
-          // Get location name from coordinates (using the overlay's method)
-          // This will trigger location name lookup and weather update
-          const locationResponse = await fetch(`https://us1.locationiq.com/v1/reverse.php?key=${process.env.NEXT_PUBLIC_LOCATIONIQ_KEY}&lat=${latitude}&lon=${longitude}&format=json&accept-language=en`);
-          
-          if (locationResponse.ok) {
-            const data = await locationResponse.json();
-            if (data.address) {
-              const city = data.address.city || data.address.town || data.address.municipality || data.address.suburb;
-              const countryCode = data.address.country_code ? data.address.country_code.toLowerCase() : '';
-              const label = city ? `${city}, ${data.address.country}` : data.address.country;
-              
-              if (label && countryCode) {
-                // Save formatted location
-                await authenticatedFetch('/api/save-location', {
-                  method: 'POST',
-                  body: JSON.stringify({ label, countryCode })
-                });
-                
-                setCurrentLocation({ label, countryCode });
-                
-                // Get weather for this location
-                const weatherResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${process.env.NEXT_PUBLIC_OPENWEATHER_KEY}&units=metric`);
-                
-                if (weatherResponse.ok) {
-                  const weatherData = await weatherResponse.json();
-                  if (weatherData.cod === 200 && weatherData.weather && weatherData.weather[0] && weatherData.main) {
-                    const weather = {
-                      temp: Math.round(weatherData.main.temp),
-                      icon: weatherData.weather[0].icon,
-                      desc: weatherData.weather[0].description,
-                    };
-                    setCurrentWeather(weather);
-                    
-                    // Save weather to KV
-                    await authenticatedFetch('/api/save-weather', {
-                      method: 'POST',
-                      body: JSON.stringify(weather)
-                    });
-                  }
-                }
-              }
-            }
-          }
-          
-          alert('Location updated successfully!');
-        } catch (error) {
-          console.error('Error processing location:', error);
-          alert('Failed to process location');
-        } finally {
-          setIsGettingLocation(false);
-        }
-      },
-      (error) => {
-        console.error('Geolocation error:', error);
-        alert('Failed to get location: ' + error.message);
-        setIsGettingLocation(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
-    );
-  };
 
   const handleLogin = async () => {
     try {
@@ -369,7 +223,6 @@ export default function AdminPage() {
                 Real-time overlay management
               </p>
             </div>
-
           </div>
           
           {/* Action Buttons */}
@@ -410,46 +263,6 @@ export default function AdminPage() {
             >
               <span style={{ fontSize: '16px' }}>🚀</span>
               <span>Open Overlay</span>
-            </button>
-            
-            <button
-              onClick={getManualLocation}
-              disabled={isGettingLocation}
-              style={{
-                background: isGettingLocation 
-                  ? 'linear-gradient(45deg, #94a3b8, #64748b)' 
-                  : 'linear-gradient(45deg, #3b82f6, #1d4ed8)',
-                color: 'white',
-                padding: '14px 16px',
-                borderRadius: '12px',
-                border: 'none',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: isGettingLocation ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 16px rgba(59, 130, 246, 0.3)',
-                transition: 'all 0.2s ease',
-                minHeight: '48px',
-                opacity: isGettingLocation ? 0.7 : 1
-              }}
-              onMouseEnter={(e) => {
-                if (!isGettingLocation) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.4)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isGettingLocation) {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(59, 130, 246, 0.3)';
-                }
-              }}
-            >
-              <span style={{ fontSize: '16px' }}>{isGettingLocation ? '⏳' : '📍'}</span>
-              <span>{isGettingLocation ? 'Getting...' : 'Update Location'}</span>
             </button>
             
             <button
@@ -553,47 +366,22 @@ export default function AdminPage() {
                   key: 'showTime', 
                   label: 'Time Display', 
                   icon: '🕐', 
-                  desc: 'Show current local time',
-                  extra: currentTimezone ? `Timezone: ${currentTimezone}` : null
+                  desc: 'Show current local time'
                 },
                 { 
                   key: 'showLocation', 
                   label: 'Location Display', 
                   icon: '📍', 
-                  desc: 'Show current city and country',
-                  extra: currentLocation ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>{currentLocation.label}</span>
-                      {currentLocation.countryCode && (
-                        <Image
-                          src={`https://flagcdn.com/${currentLocation.countryCode}.svg`}
-                          alt={`Country: ${currentLocation.label}`}
-                          width={16}
-                          height={11}
-                          style={{
-                            borderRadius: '1px',
-                            border: '1px solid rgba(255, 255, 255, 0.2)'
-                          }}
-                          unoptimized
-                        />
-                      )}
-                    </div>
-                  ) : 'No location data'
+                  desc: 'Show current city and country'
                 },
                 { 
                   key: 'showWeather', 
                   label: 'Weather Display', 
                   icon: '🌤️', 
-                  desc: 'Show temperature and conditions',
-                  extra: currentWeather ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>{currentWeather.temp}°C</span>
-                      <span style={{ textTransform: 'capitalize' }}>{currentWeather.desc}</span>
-                    </div>
-                  ) : 'No weather data'
+                  desc: 'Show temperature and conditions'
                 },
                 { key: 'showSpeed', label: 'Speed Display', icon: '🚗', desc: 'Show speed when moving >10 km/h' }
-              ].map(({ key, label, icon, desc, extra }) => (
+              ].map(({ key, label, icon, desc }) => (
                 <div key={key} style={{
                   background: '#262626',
                   borderRadius: '12px',
@@ -672,34 +460,17 @@ export default function AdminPage() {
                         </span>
                       </div>
                       <p style={{
-                        margin: '0 0 8px 0',
+                        margin: '0',
                         fontSize: '14px',
                         opacity: 0.8,
                         lineHeight: '1.4'
                       }}>
                         {desc}
                       </p>
-                      {extra && (
-                        <div style={{
-                          padding: '8px 12px',
-                          background: 'rgba(34, 197, 94, 0.1)',
-                          borderRadius: '10px',
-                          border: '1px solid rgba(34, 197, 94, 0.2)',
-                          fontSize: '13px',
-                          color: '#22c55e',
-                          fontWeight: '500'
-                        }}>
-                          {extra}
-                        </div>
-                      )}
-                      
-                      {/* Weather Sub-Controls - only show for weather setting */}
-
                     </div>
                   </label>
                 </div>
               ))}
-
             </div>
 
             {/* Weather Sub-Controls - Separate Section */}
@@ -877,7 +648,6 @@ export default function AdminPage() {
                 )}
               </div>
             )}
-
           </div>
         </div>
 
@@ -914,7 +684,6 @@ export default function AdminPage() {
             {saveToastMessage}
           </div>
         )}
-
       </div>
     </div>
   );

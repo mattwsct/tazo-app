@@ -1,27 +1,11 @@
 // Settings validation utility to prevent malicious entries
 
-export interface OverlaySettings {
-  showLocation: boolean;
-  showWeather: boolean;
-  showWeatherIcon: boolean;
-  showWeatherCondition: boolean;
-  weatherIconPosition: 'left' | 'right';
-  showSpeed: boolean;
-  showTime: boolean;
-}
-
-// Define valid settings schema
-const VALID_SETTINGS_SCHEMA: Record<keyof OverlaySettings, 'boolean' | 'string'> = {
-  showLocation: 'boolean',
-  showWeather: 'boolean',
-  showWeatherIcon: 'boolean',
-  showWeatherCondition: 'boolean',
-  weatherIconPosition: 'string',
-  showSpeed: 'boolean',
-  showTime: 'boolean',
-};
-
-const VALID_WEATHER_ICON_POSITIONS = ['left', 'right'] as const;
+import { 
+  OverlaySettings, 
+  VALID_SETTINGS_SCHEMA, 
+  VALID_WEATHER_ICON_POSITIONS,
+  DEFAULT_OVERLAY_SETTINGS 
+} from '@/types/settings';
 
 /**
  * Validates and sanitizes settings object
@@ -42,18 +26,18 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     
     if (value !== undefined) {
       if (expectedType === 'boolean' && typeof value === 'boolean') {
-        (cleanSettings as any)[key] = value;
+        (cleanSettings as Record<string, unknown>)[key] = value;
       } else if (expectedType === 'string' && typeof value === 'string') {
         // Special validation for weatherIconPosition
         if (key === 'weatherIconPosition') {
-          if (VALID_WEATHER_ICON_POSITIONS.includes(value as any)) {
+          if (VALID_WEATHER_ICON_POSITIONS.includes(value as 'left' | 'right')) {
             cleanSettings.weatherIconPosition = value as 'left' | 'right';
           } else {
             console.warn(`Invalid weatherIconPosition: ${value}, defaulting to 'left'`);
             cleanSettings.weatherIconPosition = 'left';
           }
         } else {
-          (cleanSettings as any)[key] = value;
+          (cleanSettings as Record<string, unknown>)[key] = value;
         }
       } else {
         console.warn(`Invalid type for ${key}: expected ${expectedType}, got ${typeof value}`);
@@ -75,13 +59,13 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
 
   // Ensure all required settings are present with defaults
   const completeSettings: OverlaySettings = {
-    showLocation: cleanSettings.showLocation ?? true,
-    showWeather: cleanSettings.showWeather ?? true,
-    showWeatherIcon: cleanSettings.showWeatherIcon ?? true,
-    showWeatherCondition: cleanSettings.showWeatherCondition ?? true,
-    weatherIconPosition: cleanSettings.weatherIconPosition ?? 'left',
-    showSpeed: cleanSettings.showSpeed ?? true,
-    showTime: cleanSettings.showTime ?? true,
+    showLocation: cleanSettings.showLocation ?? DEFAULT_OVERLAY_SETTINGS.showLocation,
+    showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
+    showWeatherIcon: cleanSettings.showWeatherIcon ?? DEFAULT_OVERLAY_SETTINGS.showWeatherIcon,
+    showWeatherCondition: cleanSettings.showWeatherCondition ?? DEFAULT_OVERLAY_SETTINGS.showWeatherCondition,
+    weatherIconPosition: cleanSettings.weatherIconPosition ?? DEFAULT_OVERLAY_SETTINGS.weatherIconPosition,
+    showSpeed: cleanSettings.showSpeed ?? DEFAULT_OVERLAY_SETTINGS.showSpeed,
+    showTime: cleanSettings.showTime ?? DEFAULT_OVERLAY_SETTINGS.showTime,
   };
 
   return completeSettings;

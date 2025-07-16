@@ -1,6 +1,7 @@
 import { kv } from '@vercel/kv';
 import { NextRequest } from 'next/server';
 import { addConnection, removeConnection } from '@/lib/settings-broadcast';
+import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 
 async function handleGET(request: NextRequest) {
   const encoder = new TextEncoder();
@@ -8,53 +9,43 @@ async function handleGET(request: NextRequest) {
   const stream = new ReadableStream({
     start(controller) {
       console.log('[SSE] New connection established');
-      addConnection(controller);
-      console.log('[SSE] Connection added to broadcast pool');
+      const connectionId = addConnection(controller);
+      console.log(`[SSE] Connection ${connectionId} added to broadcast pool`);
       
       // Send initial settings
       kv.get('overlay_settings').then(settings => {
-        const data = JSON.stringify(settings || {
-          showLocation: true,
-          showWeather: true,
-          showWeatherIcon: true,
-          showWeatherCondition: true,
-          weatherIconPosition: 'left',
-          showSpeed: true,
-          showTime: true,
-        });
-        console.log('SSE: Sending initial settings:', data);
+        const initialSettings = settings || DEFAULT_OVERLAY_SETTINGS;
+        const data = JSON.stringify(initialSettings);
+        console.log(`[SSE] Sending initial settings to ${connectionId}:`, initialSettings);
         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       }).catch(error => {
-        console.error('SSE: Failed to load initial settings:', error);
+        console.error(`[SSE] Failed to load initial settings for ${connectionId}:`, error);
         // Send default settings if KV fails
-        const defaultData = JSON.stringify({
-          showLocation: true,
-          showWeather: true,
-          showWeatherIcon: true,
-          showWeatherCondition: true,
-          weatherIconPosition: 'left',
-          showSpeed: true,
-          showTime: true,
-        });
+        const defaultData = JSON.stringify(DEFAULT_OVERLAY_SETTINGS);
         controller.enqueue(encoder.encode(`data: ${defaultData}\n\n`));
       });
       
-      // Keep connection alive with heartbeat
+      // Keep connection alive with more frequent heartbeat
       const heartbeat = setInterval(() => {
         try {
-          controller.enqueue(encoder.encode(`data: {"type":"heartbeat"}\n\n`));
-        } catch {
+          const heartbeatData = {
+            type: 'heartbeat',
+            timestamp: Date.now()
+          };
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(heartbeatData)}\n\n`));
+        } catch (error) {
+          console.log(`[SSE] Heartbeat failed for ${connectionId}, cleaning up:`, error);
           clearInterval(heartbeat);
-          removeConnection(controller);
+          removeConnection(connectionId);
         }
-      }, 60000); // 60 second heartbeat - reduced frequency to save costs
+      }, 30000); // 30 second heartbeat - more frequent for better reliability
       
       // Clean up on close
       request.signal.addEventListener('abort', () => {
-        console.log('[SSE] Connection closed, cleaning up');
+        console.log(`[SSE] Connection ${connectionId} closed, cleaning up`);
         clearInterval(heartbeat);
-        removeConnection(controller);
-        console.log('[SSE] Connection removed from broadcast pool');
+        removeConnection(connectionId);
+        console.log(`[SSE] Connection ${connectionId} removed from broadcast pool`);
         try {
           controller.close();
         } catch {
