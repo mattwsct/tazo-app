@@ -560,36 +560,28 @@ export default function Home() {
   return (
     <div 
       id="overlay" 
-      className={`fixed top-2.5 right-2.5 text-right bg-black/30 backdrop-blur-sm rounded-xl p-4 transition-opacity duration-800 ease-out ${
-        showOverlay ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-      }`}
+      className={showOverlay ? 'show' : ''}
     >
       <div 
         id="time" 
-        className={`text-4xl font-semibold my-0.5 text-white ${
-          !validTimezone ? 'hidden' : ''
-        }`}
+        className={ !validTimezone ? 'hidden' : '' }
       >
         {time}
       </div>
       <div 
         id="location" 
-        className={`text-2xl font-semibold mt-0.5 mb-1.5 flex justify-end items-center gap-2 text-white ${
-          !validLocation ? 'hidden' : ''
-        }`}
+        className={ !validLocation ? 'hidden' : '' }
       >
         {location && (
           <>
             <span>{location.label}</span>
             {location.countryCode && (
               <Image
-                className="h-5 rounded ml-1"
                 src={`https://flagcdn.com/${location.countryCode}.svg`}
                 alt={`Country: ${location.label}`}
                 width={24}
                 height={16}
                 unoptimized
-                style={{ height: '1.25em', width: 'auto', borderRadius: 4, marginLeft: 4 }}
               />
             )}
           </>
@@ -597,25 +589,21 @@ export default function Home() {
       </div>
       <div 
         id="weather" 
-        className={`flex flex-col items-end text-2xl font-semibold mt-0.5 gap-1 text-white ${
-          !validWeather ? 'hidden' : ''
-        }`}
+        className={ !validWeather ? 'hidden' : '' }
       >
         {weather && (
           <>
-            <div className="flex items-center gap-2.5 text-white">
+            <div>
               <Image
-                className="h-5 drop-shadow-md opacity-100 transition-opacity duration-300 ease-in-out mr-0.5"
                 src={`https://openweathermap.org/img/wn/${weather.icon}.png`}
                 alt={`Weather: ${capitalizeWords(weather.desc)}`}
                 width={24}
                 height={24}
                 unoptimized
-                style={{ height: '1.25em', width: 'auto', marginRight: 2, filter: 'drop-shadow(1px 1px 2px black)' }}
               />
               {weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F
             </div>
-            <div className="text-xl font-semibold text-white">
+            <div>
               {capitalizeWords(weather.desc)}
             </div>
           </>
@@ -623,9 +611,7 @@ export default function Home() {
       </div>
       <div 
         id="speed" 
-        className={`text-xl font-semibold mt-1 text-white ${
-          speedVisible ? '' : 'hidden'
-        }`}
+        className={ speedVisible ? '' : 'hidden' }
       >
         {(speed * 3.6).toFixed(1)} km/h
       </div>

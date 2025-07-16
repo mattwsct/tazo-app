@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "Remove-Item -Recurse -Force .next"
   },
   "dependencies": {
     "@vercel/kv": "^3.0.0",
@@ -21,7 +22,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.4.1",
-    "tailwindcss": "^4.1.11",
     "typescript": "^5"
   }
 }

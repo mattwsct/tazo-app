@@ -1,64 +1,93 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  html {
-    font-family: 'Montserrat', sans-serif;
-  }
-  
-  body {
-    @apply m-0 bg-transparent text-white;
-    text-shadow: 1px 1px 2px black;
-  }
+/* Clean, simple CSS for OBS overlay */
+* {
+  box-sizing: border-box;
 }
 
-@layer components {
-  #overlay {
-    @apply fixed top-2.5 right-2.5 text-right bg-black/30 backdrop-blur-sm rounded-xl p-4 opacity-0 pointer-events-none transition-opacity duration-800 ease-out;
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  font-family: 'Montserrat', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
 
-  #overlay.show {
-    @apply opacity-100 pointer-events-auto;
-  }
+#overlay {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  text-align: right;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 200px;
+  color: white;
+  text-shadow: 1px 1px 2px black;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease-in-out;
+  z-index: 50;
+}
 
-  #overlay > * {
-    @apply relative z-10 text-white;
-  }
+#overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
 
-  #time {
-    @apply text-4xl font-semibold my-0.5 text-white;
-  }
+#time {
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin: 4px 0;
+}
 
-  #location {
-    @apply text-2xl font-semibold mt-0.5 mb-1.5 flex justify-end items-center gap-2 text-white;
-  }
+#location {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 4px 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
 
-  #location img.flag {
-    @apply h-5 rounded ml-1;
-  }
+#location img {
+  height: 1.5rem;
+  width: auto;
+  border-radius: 4px;
+}
 
-  #weather {
-    @apply flex flex-col items-end text-2xl font-semibold mt-0.5 gap-1 text-white;
-  }
+#weather {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 4px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
 
-  #weather .temp {
-    @apply flex items-center gap-2.5 text-white;
-  }
+#weather > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-  #weather img {
-    @apply h-5 drop-shadow-md opacity-0 transition-opacity duration-300 ease-in-out mr-0.5;
-  }
+#weather img {
+  height: 1.5rem;
+  width: auto;
+}
 
-  #weather img.loaded {
-    @apply opacity-100;
-  }
+#weather > div:last-child {
+  font-size: 1.25rem;
+}
 
-  #weather .desc {
-    @apply text-xl font-semibold text-white;
-  }
+#speed {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 4px 0;
+}
 
-  #speed {
-    @apply text-xl font-semibold mt-1 text-white;
-  }
+.hidden {
+  display: none !important;
 }
