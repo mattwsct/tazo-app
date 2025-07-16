@@ -6,6 +6,9 @@ import Image from 'next/image';
 interface OverlaySettings {
   showLocation: boolean;
   showWeather: boolean;
+  showWeatherIcon: boolean;
+  showWeatherCondition: boolean;
+  weatherIconPosition: 'left' | 'right';
   showSpeed: boolean;
   showTime: boolean;
 }
@@ -16,6 +19,9 @@ export default function AdminPage() {
   const [settings, setSettings] = useState<OverlaySettings>({
     showLocation: true,
     showWeather: true,
+    showWeatherIcon: true,
+    showWeatherCondition: true,
+    weatherIconPosition: 'left' as 'left' | 'right',
     showSpeed: true,
     showTime: true,
   });
@@ -247,18 +253,19 @@ export default function AdminPage() {
     return (
       <div style={{
         minHeight: '100vh',
-        backgroundColor: '#111',
+        backgroundColor: '#0a0a0a',
         color: 'white',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: 'Montserrat, sans-serif'
+        fontFamily: 'system-ui, -apple-system, sans-serif'
       }}>
         <div style={{
-          backgroundColor: '#222',
+          backgroundColor: '#1a1a1a',
           padding: '32px',
-          borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          borderRadius: '12px',
+          border: '1px solid #333',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
           maxWidth: '400px',
           width: '100%'
         }}>
@@ -309,10 +316,10 @@ export default function AdminPage() {
 
   return (
     <div style={{
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      color: 'white',
+      background: '#0a0a0a',
+      color: '#e2e8f0',
       padding: '16px',
-      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
       minHeight: '100vh',
       overflowX: 'hidden'
     }}>
@@ -320,11 +327,10 @@ export default function AdminPage() {
         {/* Mobile-First Header */}
         <div style={{
           marginBottom: '24px',
-          background: 'rgba(255, 255, 255, 0.1)',
-          borderRadius: '20px',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          background: '#1a1a1a',
+          borderRadius: '16px',
+          border: '1px solid #333',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
           overflow: 'hidden'
         }}>
           {/* Title Section */}
@@ -352,10 +358,7 @@ export default function AdminPage() {
                 fontSize: '28px', 
                 fontWeight: '700', 
                 margin: 0,
-                background: 'linear-gradient(45deg, #ffffff, #e2e8f0)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
+                color: '#ffffff',
                 lineHeight: '1.2'
               }}>
                 Control Center
@@ -382,11 +385,11 @@ export default function AdminPage() {
             <button
               onClick={() => window.open('/overlay', '_blank')}
               style={{
-                background: 'linear-gradient(45deg, #22c55e, #16a34a)',
+                background: 'linear-gradient(45deg, #10b981, #059669)',
                 color: 'white',
                 padding: '14px 16px',
                 borderRadius: '12px',
-                border: 'none',
+                border: '1px solid #065f46',
                 fontSize: '14px',
                 fontWeight: '600',
                 cursor: 'pointer',
@@ -394,7 +397,7 @@ export default function AdminPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                boxShadow: '0 4px 16px rgba(34, 197, 94, 0.3)',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
                 transition: 'all 0.2s ease',
                 minHeight: '48px',
                 position: 'relative'
@@ -488,11 +491,10 @@ export default function AdminPage() {
 
         {/* Settings Section */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.1)',
-          borderRadius: '20px',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          background: '#1a1a1a',
+          borderRadius: '16px',
+          border: '1px solid #333',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
           overflow: 'hidden'
         }}>
           {/* Settings Header */}
@@ -508,12 +510,13 @@ export default function AdminPage() {
               <div style={{
                 width: '40px',
                 height: '40px',
-                background: 'linear-gradient(45deg, #3b82f6, #1d4ed8)',
+                background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
                 borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '18px'
+                fontSize: '18px',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
               }}>
                 ⚙️
               </div>
@@ -595,9 +598,9 @@ export default function AdminPage() {
                 { key: 'showSpeed', label: 'Speed Display', icon: '🚗', desc: 'Show speed when moving >10 km/h' }
               ].map(({ key, label, icon, desc, extra }) => (
                 <div key={key} style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '16px',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: '#262626',
+                  borderRadius: '12px',
+                  border: '1px solid #404040',
                   padding: '20px',
                   transition: 'all 0.2s ease'
                 }}>
@@ -612,7 +615,7 @@ export default function AdminPage() {
                       position: 'relative',
                       width: '52px',
                       height: '32px',
-                      background: settings[key as keyof OverlaySettings] 
+                      background: (settings[key as keyof OverlaySettings] as boolean)
                         ? 'linear-gradient(45deg, #22c55e, #16a34a)' 
                         : 'rgba(255, 255, 255, 0.2)',
                       borderRadius: '16px',
@@ -638,11 +641,11 @@ export default function AdminPage() {
                         justifyContent: 'center',
                         fontSize: '14px'
                       }}>
-                        {settings[key as keyof OverlaySettings] ? '✓' : ''}
+                        {(settings[key as keyof OverlaySettings] as boolean) ? '✓' : ''}
                       </div>
                       <input
                         type="checkbox"
-                        checked={settings[key as keyof OverlaySettings]}
+                        checked={settings[key as keyof OverlaySettings] as boolean}
                         onChange={(e) => updateSetting(key as keyof OverlaySettings, e.target.checked)}
                         style={{ 
                           opacity: 0, 
@@ -692,11 +695,192 @@ export default function AdminPage() {
                           {extra}
                         </div>
                       )}
+                      
+                      {/* Weather Sub-Controls - only show for weather setting */}
+
                     </div>
                   </label>
                 </div>
               ))}
+
             </div>
+
+            {/* Weather Sub-Controls - Separate Section */}
+            {settings.showWeather && (
+              <div style={{
+                background: '#262626',
+                borderRadius: '12px',
+                border: '1px solid #404040',
+                padding: '20px',
+                marginTop: '20px',
+                transition: 'all 0.2s ease'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginBottom: '16px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>🌤️</span>
+                  <div>
+                    <h3 style={{ 
+                      fontSize: '18px', 
+                      fontWeight: '600', 
+                      margin: 0,
+                      color: '#e2e8f0'
+                    }}>
+                      Weather Options
+                    </h3>
+                    <p style={{ 
+                      fontSize: '14px', 
+                      color: '#94a3b8', 
+                      margin: 0 
+                    }}>
+                      Customize weather display details
+                    </p>
+                  </div>
+                </div>
+
+                {/* Weather Condition Toggle */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <span style={{ fontSize: '15px', fontWeight: '500', color: '#e2e8f0' }}>Show Weather Condition</span>
+                  <div style={{
+                    position: 'relative',
+                    width: '52px',
+                    height: '32px',
+                    background: settings.showWeatherCondition 
+                      ? 'linear-gradient(45deg, #22c55e, #16a34a)' 
+                      : 'rgba(255, 255, 255, 0.2)',
+                    borderRadius: '16px',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    boxShadow: settings.showWeatherCondition 
+                      ? '0 4px 12px rgba(34, 197, 94, 0.3)' 
+                      : '0 2px 8px rgba(0, 0, 0, 0.1)'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      top: '2px',
+                      left: settings.showWeatherCondition ? '22px' : '2px',
+                      width: '28px',
+                      height: '28px',
+                      background: 'white',
+                      borderRadius: '50%',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px'
+                    }}>
+                      {settings.showWeatherCondition ? '✓' : ''}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showWeatherCondition}
+                      onChange={(e) => updateSetting('showWeatherCondition', e.target.checked)}
+                      style={{
+                        opacity: 0,
+                        position: 'absolute',
+                        width: '100%',
+                        height: '100%',
+                        cursor: 'pointer',
+                        margin: 0
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Weather Icon Toggle */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <span style={{ fontSize: '15px', fontWeight: '500', color: '#e2e8f0' }}>Show Weather Icon</span>
+                  <div style={{
+                    position: 'relative',
+                    width: '52px',
+                    height: '32px',
+                    background: settings.showWeatherIcon 
+                      ? 'linear-gradient(45deg, #22c55e, #16a34a)' 
+                      : 'rgba(255, 255, 255, 0.2)',
+                    borderRadius: '16px',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    boxShadow: settings.showWeatherIcon 
+                      ? '0 4px 12px rgba(34, 197, 94, 0.3)' 
+                      : '0 2px 8px rgba(0, 0, 0, 0.1)'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      top: '2px',
+                      left: settings.showWeatherIcon ? '22px' : '2px',
+                      width: '28px',
+                      height: '28px',
+                      background: 'white',
+                      borderRadius: '50%',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px'
+                    }}>
+                      {settings.showWeatherIcon ? '✓' : ''}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.showWeatherIcon}
+                      onChange={(e) => updateSetting('showWeatherIcon', e.target.checked)}
+                      style={{
+                        opacity: 0,
+                        position: 'absolute',
+                        width: '100%',
+                        height: '100%',
+                        cursor: 'pointer',
+                        margin: 0
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Weather Icon Position Dropdown */}
+                {settings.showWeatherIcon && (
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ fontSize: '15px', fontWeight: '500', color: '#e2e8f0' }}>Icon Position</span>
+                    <select
+                      value={settings.weatherIconPosition}
+                      onChange={(e) => updateSetting('weatherIconPosition', e.target.value as 'left' | 'right')}
+                      style={{
+                        background: '#333',
+                        border: '1px solid #555',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        color: '#e2e8f0',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        minWidth: '140px'
+                      }}
+                    >
+                      <option value="left" style={{ background: '#1a1a1a', color: '#e2e8f0' }}>Icon on left</option>
+                      <option value="right" style={{ background: '#1a1a1a', color: '#e2e8f0' }}>Icon on right</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
 

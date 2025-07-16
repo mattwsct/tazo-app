@@ -17,11 +17,15 @@ import Image from 'next/image';
 // === Configurable Constants ===
 const SPEED_THRESHOLD_KMH = 10;
 const SPEED_HIDE_DELAY_MS = 10000;
-const WEATHER_UPDATE_INTERVAL = 300000; // 5 min
+const WEATHER_UPDATE_INTERVAL = 600000; // 10 min - reduced from 5 min to save API calls
 const LOCATION_UPDATE_INTERVAL = 300000; // 5 min
 const TIMEZONE_UPDATE_INTERVAL = 600000; // 10 min
 const COORDINATE_DEBOUNCE_DEGREES = 0.001; // ~100m base
 const OVERLAY_FADE_TIMEOUT_MS = 10000; // 10 seconds to force fade-in if data not ready
+
+// === Cost Optimization Constants ===
+const DATA_REFRESH_INTERVAL = 300000; // 5 minutes - reduced from 2 minutes
+
 
 // === API Keys (from .env.local, must be prefixed with NEXT_PUBLIC_) ===
 const RTIRL_PULL_KEY = process.env.NEXT_PUBLIC_RTIRL_PULL_KEY;
@@ -58,6 +62,9 @@ interface RTIRLPayload {
 interface OverlaySettings {
   showLocation: boolean;
   showWeather: boolean;
+  showWeatherIcon: boolean;
+  showWeatherCondition: boolean;
+  weatherIconPosition: 'left' | 'right';
   showSpeed: boolean;
   showTime: boolean;
 }
@@ -252,6 +259,9 @@ export default function Home() {
   const [settings, setSettings] = useState<OverlaySettings>({
     showLocation: true,
     showWeather: true,
+    showWeatherIcon: true,
+    showWeatherCondition: true,
+    weatherIconPosition: 'left',
     showSpeed: true,
     showTime: true,
   });
@@ -267,7 +277,7 @@ export default function Home() {
   const currentCoords = useRef<string | null>(null);
   const weatherRefreshTimer = useRef<NodeJS.Timeout | null>(null);
   const overlayShown = useRef(false);
-
+  
   // Time formatter
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
 
@@ -441,12 +451,7 @@ export default function Home() {
             setFirstWeatherChecked(true);
             lastWeatherUpdate.current = Date.now();
             
-            // Save weather data to KV
-            fetch('/api/save-weather', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(weatherData)
-            }).catch(err => console.error('Failed to save weather data:', err));
+            // Note: No longer saving weather to KV - we fetch fresh from APIs using GPS
           }
           // Location
           if (payload.location && typeof payload.location === 'object') {
@@ -480,12 +485,7 @@ export default function Home() {
               setFirstTimezoneChecked(true);
               lastTimezoneUpdate.current = Date.now();
               
-              // Save timezone to KV
-              fetch('/api/save-timezone', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezone: payload.location.timezone })
-              }).catch(err => console.error('Failed to save timezone from RTIRL:', err));
+              // Note: No longer saving timezone to KV - we determine fresh from GPS coordinates
             } catch {
               setValidTimezone(false);
               setFirstTimezoneChecked(true);
@@ -504,13 +504,7 @@ export default function Home() {
             }
           }
           if (lat !== null && lon !== null) {
-            // Save GPS coordinates to KV
-            fetch('/api/save-gps', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lat, lon })
-            }).catch(err => console.error('Failed to save GPS coordinates:', err));
-            
+            // GPS is now purely real-time - no KV saving needed
             updateFromCoordinates(lat, lon);
           }
         });
@@ -552,12 +546,7 @@ export default function Home() {
         setFirstWeatherChecked(true);
         lastWeatherUpdate.current = now;
         
-        // Save weather data to KV
-        fetch('/api/save-weather', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(w)
-        }).catch(err => console.error('Failed to save weather data:', err));
+        // Note: No longer saving weather to KV - we fetch fresh from APIs using GPS
       }
     }
     if (now - lastLocationUpdate.current > LOCATION_UPDATE_INTERVAL) {
@@ -582,12 +571,7 @@ export default function Home() {
             setFirstTimezoneChecked(true);
             lastTimezoneUpdate.current = now;
             
-            // Save timezone to KV
-            fetch('/api/save-timezone', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ timezone: loc.timezone })
-            }).catch(err => console.error('Failed to save timezone from LocationIQ:', err));
+            // Note: No longer saving timezone to KV - we determine fresh from GPS coordinates
           } catch {
             setValidTimezone(false);
             setFirstTimezoneChecked(true);
@@ -610,12 +594,7 @@ export default function Home() {
           setFirstTimezoneChecked(true);
           lastTimezoneUpdate.current = now;
           
-          // Save timezone to KV
-          fetch('/api/save-timezone', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ timezone: tz })
-          }).catch(err => console.error('Failed to save timezone from TimezoneDB:', err));
+          // Note: No longer saving timezone to KV - we determine fresh from GPS coordinates
         } catch {
           setValidTimezone(false);
           setFirstTimezoneChecked(true);
@@ -645,62 +624,8 @@ export default function Home() {
   useEffect(() => {
     async function loadSavedData() {
       try {
-        // Load location
-        const locationRes = await fetch('/api/get-location');
-        if (locationRes.ok) {
-          const locationData = await locationRes.json();
-          if (locationData) {
-            console.log('Loaded saved location:', locationData);
-            setLocation(locationData);
-            setValidLocation(true);
-            setFirstLocationChecked(true);
-          }
-        }
-        
-        // Load weather
-        const weatherRes = await fetch('/api/get-weather');
-        if (weatherRes.ok) {
-          const weatherData = await weatherRes.json();
-          if (weatherData) {
-            console.log('Loaded saved weather:', weatherData);
-            setWeather(weatherData);
-            setValidWeather(true);
-            setFirstWeatherChecked(true);
-          }
-        }
-        
-                 // Load settings (fallback if SSE fails)
-        const settingsRes = await fetch('/api/get-settings');
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json();
-          if (settingsData) {
-            console.log('Loaded saved settings:', settingsData);
-            setSettings(settingsData);
-          }
-        }
-        
-        // Load timezone from KV storage
-        const timezoneRes = await fetch('/api/get-timezone');
-        if (timezoneRes.ok) {
-          const savedTimezone = await timezoneRes.json();
-          if (savedTimezone && typeof savedTimezone === 'string') {
-            try {
-              console.log('Loaded saved timezone from KV:', savedTimezone);
-              formatter.current = new Intl.DateTimeFormat('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-                timeZone: savedTimezone,
-              });
-              setTimezone(savedTimezone);
-              setValidTimezone(true);
-              setFirstTimezoneChecked(true);
-            } catch (error) {
-              console.error('Failed to set saved timezone:', error);
-              // Fall through to browser timezone fallback
-            }
-          }
-        }
+        // Note: Settings are now loaded via SSE as primary method
+        // This is only a fallback for timezone setup
         
         // Ensure timezone is set (fallback to browser timezone)
         if (!timezone) {
@@ -733,14 +658,14 @@ export default function Home() {
       }
     }
     
-    // Load immediately
+    // Load timezone setup immediately
     loadSavedData();
     
-    // Set up periodic refresh to handle dev server restarts (less frequent since we have SSE)
+    // Set up periodic refresh for timezone only (settings handled by SSE)
     const refreshInterval = setInterval(() => {
-      console.log('Periodic data refresh (fallback)...');
+      console.log('Periodic timezone refresh (fallback)...');
       loadSavedData();
-    }, 60000); // Refresh every 60 seconds (less frequent)
+    }, DATA_REFRESH_INTERVAL); // Refresh every 5 minutes to reduce costs
     
          return () => {
        clearInterval(refreshInterval);
@@ -790,6 +715,15 @@ export default function Home() {
     function connectSSE() {
       console.log('Setting up SSE connection for settings...');
       
+      // Load settings immediately as fallback while SSE connects
+      fetch('/api/get-settings')
+        .then(res => res.json())
+        .then(data => {
+          console.log('Pre-SSE: Loaded initial settings:', data);
+          setSettings(data);
+        })
+        .catch(err => console.error('Pre-SSE: Failed to load initial settings:', err));
+      
       // Close existing connection
       if (eventSource) {
         eventSource.close();
@@ -808,25 +742,28 @@ export default function Home() {
           const data = JSON.parse(event.data);
           
           if (data.type === 'heartbeat') {
-            console.log('SSE heartbeat received');
+            console.log('[OVERLAY SSE] Heartbeat received');
             return; // Ignore heartbeat messages
           }
           
           if (data.type === 'settings_update') {
             const latency = Date.now() - (data.timestamp || 0);
-            console.log(`Settings update received via SSE (${latency}ms latency):`, data);
+            console.log(`[OVERLAY SSE] Settings update received (${latency}ms latency):`, data);
             
             // Extract just the settings (remove metadata)
-            const { timestamp: _timestamp, type: _type, ...settingsOnly } = data;
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { timestamp, type, ...settingsOnly } = data;
             setSettings(settingsOnly);
+            console.log('[OVERLAY SSE] Settings state updated:', settingsOnly);
             return;
           }
           
           // Legacy format (without timestamp/type)
-          console.log('Received settings update via SSE (legacy format):', data);
+          console.log('[OVERLAY SSE] Settings update received (legacy format):', data);
           setSettings(data);
+          console.log('[OVERLAY SSE] Settings state updated (legacy):', data);
         } catch (error) {
-          console.error('Failed to parse settings update:', error);
+          console.error('[OVERLAY SSE] Failed to parse settings update:', error);
         }
       };
       
@@ -897,16 +834,7 @@ export default function Home() {
     );
   }
 
-  // Save location to API route
-  useEffect(() => {
-    if (location && validLocation) {
-      fetch('/api/save-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(location),
-      }).then(() => console.log('Location saved successfully to API')).catch((err) => console.error('Failed to save location:', err));
-    }
-  }, [location, validLocation]);
+  // Note: No longer saving location to KV - we fetch fresh from APIs using GPS coordinates
 
   // Render
   return (
@@ -914,65 +842,81 @@ export default function Home() {
       id="overlay" 
       className={showOverlay && hasVisibleElements ? 'show' : ''}
     >
-      {settings.showTime && (
-        <div 
-          id="time" 
-          className={ !validTimezone ? 'hidden' : '' }
-        >
-          <span>{time}</span>
-          {location && location.countryCode && settings.showLocation && (
-            <Image
-              src={`https://flagcdn.com/${location.countryCode}.svg`}
-              alt={`Country: ${location.label}`}
-              width={32}
-              height={20}
-              unoptimized
-            />
-          )}
-        </div>
-      )}
-      {settings.showLocation && (
-        <div 
-          id="location" 
-          className={ !validLocation ? 'hidden' : '' }
-        >
-          {location && location.label}
-        </div>
-      )}
-      {settings.showWeather && (
-        <div 
-          id="weather" 
-          className={ !validWeather ? 'hidden' : '' }
-        >
-          {weather && (
-            <>
-              <div className="weather-temp">
-                {weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F
-                <div className="weather-icon-container">
-                  <Image
-                    src={`https://openweathermap.org/img/wn/${weather.icon}@4x.png`}
-                    alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                    width={30}
-                    height={30}
-                    unoptimized
-                  />
+      {/* Main info card in top-right corner */}
+      <div className="main-info corner-top-right">
+        {settings.showTime && (
+          <div 
+            id="time" 
+            className={ !validTimezone ? 'hidden' : '' }
+          >
+            <span>{time}</span>
+            {location && location.countryCode && settings.showLocation && (
+              <Image
+                src={`https://flagcdn.com/${location.countryCode}.svg`}
+                alt={`Country: ${location.label}`}
+                width={32}
+                height={20}
+                unoptimized
+              />
+            )}
+          </div>
+        )}
+        {settings.showLocation && (
+          <div 
+            id="location" 
+            className={ !validLocation ? 'hidden' : '' }
+          >
+            {location && location.label}
+          </div>
+        )}
+        {settings.showWeather && (
+          <div 
+            id="weather" 
+            className={ !validWeather ? 'hidden' : '' }
+          >
+            {weather && (
+              <>
+                <div className="weather-temp" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  flexDirection: settings.weatherIconPosition === 'left' ? 'row-reverse' : 'row'
+                }}>
+                  <span>{weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F</span>
+                  {settings.showWeatherIcon && (
+                    <div className="weather-icon-container">
+                      <Image
+                        src={`https://openweathermap.org/img/wn/${weather.icon}@4x.png`}
+                        alt={`Weather: ${capitalizeWords(weather.desc)}`}
+                        width={30}
+                        height={30}
+                        unoptimized
+                      />
+                    </div>
+                  )}
                 </div>
-              </div>
-              <div className="weather-desc">
-                {capitalizeWords(weather.desc)}
-              </div>
-            </>
-          )}
-        </div>
-      )}
-      {settings.showSpeed && (
-        <div 
-          id="speed" 
-          className={ speedVisible ? '' : 'hidden' }
-        >
-          {(speed * 3.6).toFixed(1)} km/h
-        </div>
-      )}
+                {settings.showWeatherCondition && (
+                  <div className="weather-desc">
+                    {capitalizeWords(weather.desc)}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        {settings.showSpeed && (
+          <div 
+            id="speed" 
+            className={ speedVisible ? '' : 'hidden' }
+          >
+            {(speed * 3.6).toFixed(1)} km/h
+          </div>
+        )}
+      </div>
+
+      {/* Future corner elements will go here */}
+      {/* Bottom-left: Kick.com subgoal */}
+      {/* Top-right: Pulsoid heartrate (separate from main info) */}
     </div>
   );
 } 

@@ -39,20 +39,32 @@ body.overlay-page {
 
 #overlay {
   position: fixed;
-  top: 10px;
-  right: 10px;
-  text-align: right;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(12px);
-  border-radius: 12px;
-  padding: 5px 15px 8px 15px;
-  min-width: 200px;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 5px;
   color: white;
   text-shadow: 1px 1px 2px black;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.5s ease-in-out;
   z-index: 50;
+}
+
+/* Main info card in top-right */
+#overlay .main-info {
+  text-align: right;
+  background: linear-gradient(135deg, 
+    rgba(30, 20, 60, 0.7) 0%, 
+    rgba(20, 30, 50, 0.7) 50%, 
+    rgba(40, 20, 80, 0.7) 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease-in-out infinite;
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 5px 15px 8px 15px;
+  min-width: 200px;
 }
 
 #overlay.show {
@@ -130,4 +142,52 @@ body.overlay-page {
 
 .hidden {
   display: none !important;
+}
+
+/* Corner positioning helpers for future elements */
+.corner-top-left {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+
+.corner-top-right {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.corner-bottom-left {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+}
+
+.corner-bottom-right {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+}
+
+/* Gradient animation keyframes */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Common styling for overlay cards */
+.overlay-card {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: white;
+  text-shadow: 1px 1px 2px black;
 }

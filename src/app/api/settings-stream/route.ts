@@ -7,13 +7,18 @@ export async function GET(request: NextRequest) {
   
   const stream = new ReadableStream({
     start(controller) {
+      console.log('[SSE] New connection established');
       addConnection(controller);
+      console.log('[SSE] Connection added to broadcast pool');
       
       // Send initial settings
       kv.get('overlay_settings').then(settings => {
         const data = JSON.stringify(settings || {
           showLocation: true,
           showWeather: true,
+          showWeatherIcon: true,
+          showWeatherCondition: true,
+          weatherIconPosition: 'left',
           showSpeed: true,
           showTime: true,
         });
@@ -25,6 +30,9 @@ export async function GET(request: NextRequest) {
         const defaultData = JSON.stringify({
           showLocation: true,
           showWeather: true,
+          showWeatherIcon: true,
+          showWeatherCondition: true,
+          weatherIconPosition: 'left',
           showSpeed: true,
           showTime: true,
         });
@@ -39,12 +47,14 @@ export async function GET(request: NextRequest) {
           clearInterval(heartbeat);
           removeConnection(controller);
         }
-      }, 30000); // 30 second heartbeat
+      }, 60000); // 60 second heartbeat - reduced frequency to save costs
       
       // Clean up on close
       request.signal.addEventListener('abort', () => {
+        console.log('[SSE] Connection closed, cleaning up');
         clearInterval(heartbeat);
         removeConnection(controller);
+        console.log('[SSE] Connection removed from broadcast pool');
         try {
           controller.close();
         } catch {

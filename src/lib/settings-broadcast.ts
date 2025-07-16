@@ -12,6 +12,9 @@ export function removeConnection(controller: ReadableStreamDefaultController) {
 interface OverlaySettings {
   showLocation: boolean;
   showWeather: boolean;
+  showWeatherIcon: boolean;
+  showWeatherCondition: boolean;
+  weatherIconPosition: 'left' | 'right';
   showSpeed: boolean;
   showTime: boolean;
 }
@@ -26,7 +29,12 @@ export async function broadcastSettings(settings: OverlaySettings) {
   };
   const data = JSON.stringify(broadcastData);
   
-  console.log(`Broadcasting to ${connections.size} connected clients:`, broadcastData);
+  console.log(`[BROADCAST] Starting broadcast to ${connections.size} connected clients:`, broadcastData);
+  
+  if (connections.size === 0) {
+    console.warn(`[BROADCAST] No active SSE connections! Settings update will be lost unless overlay polls.`);
+    return;
+  }
   
   let successCount = 0;
   let failureCount = 0;
@@ -35,13 +43,14 @@ export async function broadcastSettings(settings: OverlaySettings) {
     try {
       controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       successCount++;
-    } catch {
+      console.log(`[BROADCAST] Successfully sent to connection`);
+    } catch (error) {
       // Connection closed, remove it
       connections.delete(controller);
       failureCount++;
-      console.log('Removed dead SSE connection');
+      console.log(`[BROADCAST] Removed dead SSE connection:`, error);
     }
   });
   
-  console.log(`Broadcast complete: ${successCount} successful, ${failureCount} failed, ${connections.size} active connections`);
+  console.log(`[BROADCAST] Complete: ${successCount} successful, ${failureCount} failed, ${connections.size} remaining active connections`);
 } 
