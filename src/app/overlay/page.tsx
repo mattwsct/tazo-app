@@ -25,7 +25,7 @@ const LOCATION_DISTANCE_THRESHOLD = 100; // 100 meters - triggers location updat
 const OVERLAY_FADE_TIMEOUT_MS = 10000; // 10 seconds to force fade-in if data not ready
 
 // === Cost Optimization Constants ===
-const DATA_REFRESH_INTERVAL = 300000; // 5 minutes - reduced from 2 minutes
+const DATA_REFRESH_INTERVAL = 30000; // 30 seconds - faster fallback syncing
 
 
 // === API Keys (from .env.local, must be prefixed with NEXT_PUBLIC_) ===
@@ -201,22 +201,15 @@ async function fetchLocationFromLocationIQ(lat: number, lon: number) {
 
 // Combined function: fetch both weather and timezone in a single API call
 async function fetchWeatherAndTimezoneFromOpenMeteo(lat: number, lon: number) {
-  console.log(`[WEATHER DEBUG] fetchWeatherAndTimezoneFromOpenMeteo called with: ${lat}, ${lon}`);
-  
   if (!checkRateLimit('openmeteo')) {
-    console.log('[WEATHER DEBUG] Rate limit exceeded for Open-Meteo');
     return null;
   }
   
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto&forecast_days=1`;
-    console.log('[WEATHER DEBUG] Making API request to:', url);
     
     const response = await fetch(url);
-    console.log('[WEATHER DEBUG] API response status:', response.status);
-    
     const data = await response.json();
-    console.log('[WEATHER DEBUG] Raw API data:', JSON.stringify(data, null, 2));
     
     let weather = null;
     let timezone = null;
@@ -228,24 +221,16 @@ async function fetchWeatherAndTimezoneFromOpenMeteo(lat: number, lon: number) {
         icon: mapWMOToOpenWeatherIcon(data.current.weather_code),
         desc: mapWMOToDescription(data.current.weather_code),
       };
-      console.log('[WEATHER DEBUG] Parsed weather data:', weather);
-    } else {
-      console.log('[WEATHER DEBUG] Failed to parse weather data from:', data.current);
     }
     
     // Extract timezone data
     if (data.timezone) {
       timezone = data.timezone;
-      console.log('[WEATHER DEBUG] Parsed timezone:', timezone);
-    } else {
-      console.log('[WEATHER DEBUG] No timezone in response');
     }
     
-    const result = { weather, timezone };
-    console.log('[WEATHER DEBUG] Returning result:', result);
-    return result;
+    return { weather, timezone };
   } catch (error) {
-    console.log('[WEATHER DEBUG] Open-Meteo combined fetch failed:', error);
+    console.log('Open-Meteo combined fetch failed:', error);
   }
   return null;
 }
@@ -484,25 +469,19 @@ export default function Home() {
   // Weather and timezone refresh timer - every 5 minutes using latest GPS (combined API call)
   useEffect(() => {
     async function doWeatherUpdate() {
-      console.log('[WEATHER DEBUG] Timer triggered, checking for coordinates...');
       if (lastWeatherCoords.current) {
         const [lat, lon] = lastWeatherCoords.current;
-        console.log(`[WEATHER DEBUG] Making API call with coordinates: ${lat}, ${lon}`);
         
         // Single combined API call gets both weather and timezone data
         const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
-        console.log('[WEATHER DEBUG] API response:', result);
         
         if (result) {
           // Update weather if available
           if (result.weather) {
-            console.log('[WEATHER DEBUG] Setting weather data:', result.weather);
             setWeather(result.weather);
             setValidWeather(true);
             setFirstWeatherChecked(true);
             lastWeatherUpdate.current = Date.now();
-          } else {
-            console.log('[WEATHER DEBUG] No weather data in API response');
           }
           
           // Update timezone if available and different
@@ -523,11 +502,7 @@ export default function Home() {
               setFirstTimezoneChecked(true);
             }
           }
-        } else {
-          console.log('[WEATHER DEBUG] API call failed or returned null');
         }
-      } else {
-        console.log('[WEATHER DEBUG] No coordinates available for weather update');
       }
     }
     
@@ -640,27 +615,21 @@ export default function Home() {
 
   // Main data update logic - handles location updates only on 100m+ movement (max once per minute)
   async function updateFromCoordinates(lat: number, lon: number) {
-    console.log(`[WEATHER DEBUG] Received coordinates: ${lat}, ${lon}`);
     
     if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-      console.log('[WEATHER DEBUG] Invalid coordinates, ignoring');
       return;
     }
     
     // Store coordinates for timer-based weather/timezone updates (always)
     const hadCoords = lastWeatherCoords.current !== null;
     lastWeatherCoords.current = [lat, lon];
-    console.log(`[WEATHER DEBUG] Stored coordinates for weather updates: ${lat}, ${lon}`);
     
     // If this is the first time we're getting coordinates, do immediate weather update
     if (!hadCoords && !firstWeatherChecked) {
-      console.log('[WEATHER DEBUG] First coordinates received, doing immediate weather update');
       try {
         const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
-        console.log('[WEATHER DEBUG] Immediate weather response:', result);
         
         if (result && result.weather) {
-          console.log('[WEATHER DEBUG] Setting initial weather data:', result.weather);
           setWeather(result.weather);
           setValidWeather(true);
           setFirstWeatherChecked(true);
@@ -685,7 +654,7 @@ export default function Home() {
           }
         }
       } catch (error) {
-        console.log('[WEATHER DEBUG] Immediate weather update failed:', error);
+        console.log('Immediate weather update failed:', error);
       }
     }
     
@@ -772,7 +741,6 @@ export default function Home() {
         if (!timezone) {
           try {
             const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            console.log('Setting browser timezone as fallback:', browserTimezone);
             formatter.current = new Intl.DateTimeFormat('en-US', {
               hour: 'numeric',
               minute: '2-digit',
@@ -782,12 +750,6 @@ export default function Home() {
             setTimezone(browserTimezone);
             setValidTimezone(true);
             setFirstTimezoneChecked(true);
-            
-            // Save browser timezone to KV for future use
-            authenticatedFetch('/api/save-timezone', {
-              method: 'POST',
-              body: JSON.stringify({ timezone: browserTimezone })
-            }).catch(err => console.error('Failed to save browser timezone:', err));
           } catch (error) {
             console.error('Failed to set browser timezone:', error);
             setFirstTimezoneChecked(true);
@@ -803,9 +765,8 @@ export default function Home() {
     
     // Set up periodic refresh for timezone only (settings handled by SSE)
     const refreshInterval = setInterval(() => {
-      console.log('Periodic timezone refresh (fallback)...');
       loadSavedData();
-    }, DATA_REFRESH_INTERVAL); // Refresh every 5 minutes to reduce costs
+    }, DATA_REFRESH_INTERVAL); // Refresh every 30 seconds for faster fallback syncing
     
          return () => {
        clearInterval(refreshInterval);
@@ -975,16 +936,6 @@ export default function Home() {
   }
 
   // Note: No longer saving location to KV - we fetch fresh from APIs using GPS coordinates
-
-  // Debug logging for weather conditions
-  useEffect(() => {
-    console.log('[WEATHER DEBUG] Render conditions changed:', {
-      showWeather: settings.showWeather,
-      validWeather: validWeather,
-      weather: weather,
-      settings: settings
-    });
-  }, [settings.showWeather, validWeather, weather, settings]);
 
   // Render
   return (
