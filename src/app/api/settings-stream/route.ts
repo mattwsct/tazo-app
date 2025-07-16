@@ -2,7 +2,7 @@ import { kv } from '@vercel/kv';
 import { NextRequest } from 'next/server';
 import { addConnection, removeConnection } from '@/lib/settings-broadcast';
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   const encoder = new TextEncoder();
   
   const stream = new ReadableStream({
@@ -73,4 +73,40 @@ export async function GET(request: NextRequest) {
       'Access-Control-Allow-Headers': 'Cache-Control',
     },
   });
-} 
+}
+
+// Custom auth wrapper for streaming responses
+async function GET_WITH_AUTH(request: NextRequest) {
+  // Skip auth for OPTIONS requests (CORS preflight)
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 200 });
+  }
+
+  // Import auth function locally to avoid circular dependencies
+  const { validateApiSecret } = await import('@/lib/api-auth');
+  
+  // Check for authentication in headers first
+  let isAuthenticated = validateApiSecret(request);
+  
+  // If no header auth, check URL parameter (for EventSource compatibility)
+  if (!isAuthenticated) {
+    const url = new URL(request.url);
+    const secretParam = url.searchParams.get('secret');
+    const API_SECRET = process.env.API_SECRET || 'fallback-dev-secret-change-in-production';
+    isAuthenticated = secretParam === API_SECRET;
+  }
+  
+  if (!isAuthenticated) {
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized: Invalid or missing API secret' }),
+      { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
+  return handleGET(request);
+}
+
+export { GET_WITH_AUTH as GET }; 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { authenticatedFetch } from '@/lib/client-auth';
 
 interface OverlaySettings {
   showLocation: boolean;
@@ -43,7 +44,7 @@ export default function AdminPage() {
   // Load current settings when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      fetch('/api/get-settings')
+      authenticatedFetch('/api/get-settings')
         .then(res => res.json())
         .then(data => {
           console.log('Loaded current settings:', data);
@@ -56,7 +57,7 @@ export default function AdminPage() {
   // Load current location when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      fetch('/api/get-location')
+      authenticatedFetch('/api/get-location')
         .then(res => res.json())
         .then(data => {
           if (data) {
@@ -80,7 +81,7 @@ export default function AdminPage() {
   // Load current weather when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      fetch('/api/get-weather')
+      authenticatedFetch('/api/get-weather')
         .then(res => res.json())
         .then(data => {
           if (data) {
@@ -107,9 +108,8 @@ export default function AdminPage() {
           const { latitude, longitude } = position.coords;
           
           // Save GPS coordinates to KV
-          await fetch('/api/save-gps', {
+          await authenticatedFetch('/api/save-gps', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: latitude, lon: longitude })
           });
 
@@ -126,9 +126,8 @@ export default function AdminPage() {
               
               if (label && countryCode) {
                 // Save formatted location
-                await fetch('/api/save-location', {
+                await authenticatedFetch('/api/save-location', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ label, countryCode })
                 });
                 
@@ -148,9 +147,8 @@ export default function AdminPage() {
                     setCurrentWeather(weather);
                     
                     // Save weather to KV
-                    await fetch('/api/save-weather', {
+                    await authenticatedFetch('/api/save-weather', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify(weather)
                     });
                   }
@@ -210,9 +208,8 @@ export default function AdminPage() {
     const startTime = Date.now();
     
     try {
-      const response = await fetch('/api/save-settings', {
+      const response = await authenticatedFetch('/api/save-settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
       });
       

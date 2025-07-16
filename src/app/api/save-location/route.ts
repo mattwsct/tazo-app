@@ -1,7 +1,8 @@
 import { kv } from '@vercel/kv';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { withApiAuth } from '@/lib/api-auth';
 
-export async function POST(request: Request) {
+async function handlePOST(request: NextRequest) {
   try {
     const { label, countryCode } = await request.json();
     if (!label || !countryCode) {
@@ -13,4 +14,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Failed to save location' }, { status: 500 });
   }
-} 
+}
+
+// Export protected route
+export const POST = withApiAuth(handlePOST); 

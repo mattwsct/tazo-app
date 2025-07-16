@@ -13,6 +13,7 @@ declare global {
 
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
 
 // === Configurable Constants ===
 const SPEED_THRESHOLD_KMH = 10;
@@ -643,9 +644,8 @@ export default function Home() {
             setFirstTimezoneChecked(true);
             
             // Save browser timezone to KV for future use
-            fetch('/api/save-timezone', {
+            authenticatedFetch('/api/save-timezone', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ timezone: browserTimezone })
             }).catch(err => console.error('Failed to save browser timezone:', err));
           } catch (error) {
@@ -686,7 +686,7 @@ export default function Home() {
       console.log('Starting polling fallback for settings...');
       
       pollingInterval = setInterval(() => {
-        fetch('/api/get-settings')
+        authenticatedFetch('/api/get-settings')
           .then(res => res.json())
           .then(data => {
             console.log('Polling: Settings loaded:', data);
@@ -715,21 +715,21 @@ export default function Home() {
     function connectSSE() {
       console.log('Setting up SSE connection for settings...');
       
-      // Load settings immediately as fallback while SSE connects
-      fetch('/api/get-settings')
-        .then(res => res.json())
-        .then(data => {
-          console.log('Pre-SSE: Loaded initial settings:', data);
-          setSettings(data);
-        })
-        .catch(err => console.error('Pre-SSE: Failed to load initial settings:', err));
+              // Load settings immediately as fallback while SSE connects
+        authenticatedFetch('/api/get-settings')
+          .then(res => res.json())
+          .then(data => {
+            console.log('Pre-SSE: Loaded initial settings:', data);
+            setSettings(data);
+          })
+          .catch(err => console.error('Pre-SSE: Failed to load initial settings:', err));
       
       // Close existing connection
       if (eventSource) {
         eventSource.close();
       }
       
-      eventSource = new EventSource('/api/settings-stream');
+              eventSource = createAuthenticatedEventSource('/api/settings-stream');
       
       eventSource.onopen = () => {
         console.log('SSE connection opened');

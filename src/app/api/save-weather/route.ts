@@ -1,7 +1,8 @@
 import { kv } from '@vercel/kv';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { withApiAuth } from '@/lib/api-auth';
 
-export async function POST(request: Request) {
+async function handlePOST(request: NextRequest) {
   try {
     const weather = await request.json();
     
@@ -17,4 +18,7 @@ export async function POST(request: Request) {
     console.error('Failed to save weather:', error);
     return NextResponse.json({ error: 'Failed to save weather' }, { status: 500 });
   }
-} 
+}
+
+// Export protected route
+export const POST = withApiAuth(handlePOST); 

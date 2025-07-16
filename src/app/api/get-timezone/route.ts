@@ -1,7 +1,8 @@
 import { kv } from '@vercel/kv';
 import { NextResponse } from 'next/server';
+import { withApiAuthGet } from '@/lib/api-auth';
 
-export async function GET() {
+async function handleGET() {
   try {
     const timezone = await kv.get('overlay_timezone');
     console.log('Timezone loaded from KV:', timezone);
@@ -11,4 +12,7 @@ export async function GET() {
     console.error('Failed to load timezone:', error);
     return NextResponse.json(null);
   }
-} 
+}
+
+// Export protected route
+export const GET = withApiAuthGet(handleGET); 

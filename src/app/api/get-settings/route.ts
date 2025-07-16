@@ -1,7 +1,8 @@
 import { kv } from '@vercel/kv';
 import { NextResponse } from 'next/server';
+import { withApiAuthGet } from '@/lib/api-auth';
 
-export async function GET() {
+async function handleGET() {
   try {
     const settings = await kv.get('overlay_settings');
     console.log('Loaded overlay settings:', settings);
@@ -14,4 +15,7 @@ export async function GET() {
   } catch {
     return NextResponse.json({ error: 'Failed to load settings' }, { status: 500 });
   }
-} 
+}
+
+// Export protected route
+export const GET = withApiAuthGet(handleGET); 

@@ -1,7 +1,8 @@
 import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
+import { withApiAuth } from '@/lib/api-auth';
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const { timezone } = await request.json();
     
@@ -17,4 +18,7 @@ export async function POST(request: NextRequest) {
     console.error('Failed to save timezone:', error);
     return NextResponse.json({ error: 'Failed to save timezone' }, { status: 500 });
   }
-} 
+}
+
+// Export protected route
+export const POST = withApiAuth(handlePOST); 

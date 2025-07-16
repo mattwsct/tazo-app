@@ -1,8 +1,9 @@
 import { kv } from '@vercel/kv';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { broadcastSettings } from '@/lib/settings-broadcast';
+import { withApiAuth } from '@/lib/api-auth';
 
-export async function POST(request: Request) {
+async function handlePOST(request: NextRequest) {
   try {
     const settings = await request.json();
     const startTime = Date.now();
@@ -30,4 +31,7 @@ export async function POST(request: Request) {
     console.error('Settings save error:', error);
     return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 });
   }
-} 
+}
+
+// Export protected route
+export const POST = withApiAuth(handlePOST); 
