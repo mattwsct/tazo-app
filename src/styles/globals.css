@@ -38,7 +38,7 @@ html, body {
 #time {
   font-size: 2.5rem;
   font-weight: 600;
-  margin: 4px 0;
+  margin: 4px 0 -4px 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
