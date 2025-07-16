@@ -2,10 +2,22 @@ import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import { broadcastSettings } from '@/lib/settings-broadcast';
 import { withApiAuth } from '@/lib/api-auth';
+import { validateAndSanitizeSettings, detectMaliciousKeys } from '@/lib/settings-validator';
 
 async function handlePOST(request: NextRequest) {
   try {
-    const settings = await request.json();
+    const rawSettings = await request.json();
+    
+    // Detect and log any malicious keys
+    const maliciousKeys = detectMaliciousKeys(rawSettings);
+    if (maliciousKeys.length > 0) {
+      console.warn('🚨 SECURITY ALERT: Malicious settings keys detected:', maliciousKeys);
+      console.warn('🚨 Raw payload:', rawSettings);
+      // Continue processing but only save validated settings
+    }
+    
+    // Validate and sanitize the settings
+    const settings = validateAndSanitizeSettings(rawSettings);
     const startTime = Date.now();
     
     // Save to KV and broadcast simultaneously for better performance
