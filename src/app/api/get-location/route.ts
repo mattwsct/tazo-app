@@ -6,7 +6,7 @@ export async function GET() {
     const location = await kv.get('current_location');
     console.log('Loaded location from KV:', location);
     return NextResponse.json(location);
-  } catch (error) {
+  } catch {
     return NextResponse.json(null, { status: 500 });
   }
 } 

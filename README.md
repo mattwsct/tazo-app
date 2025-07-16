@@ -1,40 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# Tazo Streaming Overlay
+
+A real-time streaming overlay for OBS with admin panel, built with Next.js 15. Displays location, weather, speed, and time data from RealtimeIRL API.
+
+## Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```env
+# RealtimeIRL API Key (required)
+NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_pull_key_here
+
+# OpenWeather API Key (required)
+NEXT_PUBLIC_OPENWEATHER_KEY=your_openweather_api_key_here
+
+# LocationIQ API Key (required)
+NEXT_PUBLIC_LOCATIONIQ_KEY=your_locationiq_api_key_here
+
+# TimezoneDB API Key (required)
+NEXT_PUBLIC_TIMEZONEDB_KEY=your_timezonedb_api_key_here
+
+# Vercel KV Database (required for settings storage)
+KV_REST_API_URL=your_vercel_kv_rest_api_url
+KV_REST_API_TOKEN=your_vercel_kv_rest_api_token
+
+# Admin Panel Password (defaults to 'admin123' if not set)
+ADMIN_PASSWORD=your_secure_admin_password_here
+```
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Usage
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+- **Admin Panel**: [http://localhost:3000](http://localhost:3000) - Configure overlay settings (password protected)
+- **Overlay**: [http://localhost:3000/overlay](http://localhost:3000/overlay) - Add as browser source in OBS
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+## Features
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
-
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- 🌍 **Location Display**: City-level location with country flags
+- 🌤️ **Weather**: Real-time temperature and conditions 
+- 🚗 **Speed**: Vehicle speed display (shows when moving > 10 km/h)
+- ⏰ **Time**: Local time based on current timezone
+- ⚙️ **Admin Panel**: Real-time settings control with auto-save
+- 📡 **Real-time Updates**: Server-sent events for instant setting changes
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Deploy to [Vercel Platform](https://vercel.com/new)
+2. Add all environment variables from `.env.local` to your Vercel project settings
+3. Set up [Vercel KV](https://vercel.com/docs/storage/vercel-kv) for settings storage
+4. Update `KV_REST_API_URL` and `KV_REST_API_TOKEN` in environment variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+## Security Notes
+
+- Change `ADMIN_PASSWORD` from the default for production
+- Consider using stronger authentication for sensitive deployments
+- The password is stored in localStorage for session persistence

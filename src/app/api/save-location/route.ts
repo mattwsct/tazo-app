@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     await kv.set('current_location', { label, countryCode });
     console.log('Saved location to KV:', { label, countryCode });
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to save location' }, { status: 500 });
   }
 } 
