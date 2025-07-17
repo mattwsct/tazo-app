@@ -31,7 +31,7 @@ export default function MapboxMinimap({ lat, lon, isVisible }: MapboxMinimapProp
         overflow: "hidden",
         position: "relative",
         background: "#f8fafc",
-        border: "2px solid #e2e8f0",
+        border: "2px solid rgba(255, 255, 255, 0.9)",
         boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
       }}
     >
