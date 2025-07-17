@@ -47,6 +47,7 @@ npm run dev
 - 🚗 **Speed**: Vehicle speed display (shows when moving > 10 km/h)
 - ⏰ **Time**: Local time based on current timezone
 - ❤️ **Heart Rate**: Auto-displaying BPM with realistic heartbeat animation (via Pulsoid)
+- 🗺️ **GPS Minimap**: Circular minimap showing current location (auto-updating)
 - ⚙️ **Admin Panel**: Real-time settings control with auto-save
 - 📡 **Real-time Updates**: Server-sent events for instant setting changes
 - 🎨 **Unified Design**: Consistent streaming overlay styling with excellent readability
@@ -64,8 +65,9 @@ The overlay features a **unified design system** optimized for streaming:
 ### Stream Elements
 
 - **Stream Vitals** (top-left): Heart rate monitor with smooth tempo transitions
-- **Stream Info** (top-right): Time, location, weather, and speed display
-- **Future Elements**: Designed for easy expansion (stream stats, alerts, etc.)
+- **Stream Info** (top-right): Time, location, weather display
+- **Stream Movement** (below stream info): GPS minimap + speed display with smart auto-toggle
+- **Future Elements**: Bottom corners available for expansion (stream stats, alerts, etc.)
 
 ## Deploy on Vercel
 
@@ -90,6 +92,29 @@ The overlay features a **unified design system** optimized for streaming:
 - **Smooth Transitions**: BPM changes smoothly over 2 seconds instead of jumping
 - **Realistic Animation**: Heart beats in sync with your actual BPM with double-beat pattern
 - **Auto-timeout**: Disappears automatically if no data received for 30 seconds
+
+## GPS Minimap & Movement Features
+
+The movement section combines GPS visualization with speed tracking:
+
+- **English Labels**: Uses CartoDB Voyager tiles with English street names worldwide
+- **Smart Auto-Toggle**: Two modes via admin panel:
+  - **Manual Toggle**: Show/hide minimap independently 
+  - **Speed-Based Auto**: Show minimap + speed together when moving >10 km/h
+- **Circular Design**: 80px circular minimap with red center dot
+- **Real-time Updates**: Updates immediately when you move to new locations
+- **Linked Display**: Speed and map appear/disappear together in auto mode
+- **Admin Controls**: Toggle minimap and auto-show behavior from admin panel
+- **Auto-timeout**: Disappears if no GPS data for 2 minutes
+
+### Movement Section Technical Details
+
+- **Tile Source**: CartoDB Voyager (English labels globally)
+- **Zoom Level**: 15 (good street-level detail)
+- **Update Frequency**: Updates with every GPS coordinate change  
+- **Position**: Below main info card (top-right area)
+- **Size**: 80x80px circular minimap + speed display
+- **Languages**: English street names in Japan and worldwide
 
 ## Security Notes
 

@@ -13,12 +13,12 @@ declare global {
 
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 
 // === Configurable Constants ===
-const SPEED_THRESHOLD_KMH = 10;
-const SPEED_HIDE_DELAY_MS = 10000;
 const WEATHER_TIMEZONE_UPDATE_INTERVAL = 300000; // 5 min - combined weather+timezone from same API call
 const LOCATION_UPDATE_INTERVAL = 60000; // 1 min max - but also triggers on 100m movement
 const LOCATION_DISTANCE_THRESHOLD = 100; // 100 meters - triggers location update when moved this far
@@ -32,6 +32,12 @@ const DATA_REFRESH_INTERVAL = 30000; // 30 seconds - faster fallback syncing
 const RTIRL_PULL_KEY = process.env.NEXT_PUBLIC_RTIRL_PULL_KEY;
 const LOCATIONIQ_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
 const PULSOID_TOKEN = process.env.NEXT_PUBLIC_PULSOID_TOKEN;
+const MAPBOX_ACCESS_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+
+// Set Mapbox access token
+if (MAPBOX_ACCESS_TOKEN) {
+  mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+}
 
 // === TypeScript Interfaces ===
 interface RTIRLWeather {
@@ -78,6 +84,168 @@ interface HeartRateState {
 // === Utility Functions ===
 function capitalizeWords(str: string) {
   return str.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Mapbox GL Map Component for 3D Minimap
+function MapboxMinimap({ lat, lon, isVisible }: { lat: number; lon: number; isVisible: boolean }) {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapContainer.current || !MAPBOX_ACCESS_TOKEN || !isVisible) return;
+
+    // Suppress WebGL warnings in development
+    const originalWarn = console.warn;
+    const originalError = console.error;
+    
+    console.warn = (...args) => {
+      const message = args[0];
+      if (typeof message === 'string' && (
+        message.includes('WEBGL_debug_renderer_info') ||
+        message.includes('Alpha-premult and y-flip') ||
+        message.includes('texSubImage') ||
+        message.includes('WebGL warning') ||
+        message.includes('drawElementsInstanced') ||
+        message.includes('Tex image TEXTURE_2D')
+      )) {
+        return; // Suppress WebGL warnings
+      }
+      originalWarn.apply(console, args);
+    };
+    
+    console.error = (...args) => {
+      const message = args[0];
+      if (typeof message === 'string' && (
+        message.includes('Cross-Origin Request Blocked') ||
+        message.includes('events.mapbox.com') ||
+        message.includes('CORS request did not succeed') ||
+        message.includes('featureNamespace') ||
+        message.includes('NetworkError when attempting to fetch')
+      )) {
+        return; // Suppress CORS errors from Mapbox telemetry
+      }
+      originalError.apply(console, args);
+    };
+
+    // Initialize map
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/streets-v12', // Streets style supports composite source
+      center: [lon, lat],
+      zoom: 13, // Zoomed out for wider area view
+      pitch: 45, // 3D tilt
+      bearing: 0,
+      interactive: false, // Disable interaction for overlay
+      attributionControl: false,
+      logoPosition: 'bottom-left',
+      collectResourceTiming: false, // Disable telemetry to reduce CORS errors
+      transformRequest: (url) => {
+        // Block telemetry requests to reduce console errors
+        if (url.includes('events.mapbox.com')) {
+          return { url: '' };
+        }
+        return { url };
+      }
+    });
+
+    map.current.on('style.load', () => {
+      if (!map.current) return;
+
+      // Add 3D buildings layer
+      const layers = map.current.getStyle().layers;
+      
+      // Find the first symbol layer to insert buildings before it
+      let firstSymbolId;
+      for (const layer of layers) {
+        if (layer.type === 'symbol') {
+          firstSymbolId = layer.id;
+          break;
+        }
+      }
+
+      map.current.addLayer({
+        id: '3d-buildings',
+        source: 'composite',
+        'source-layer': 'building',
+        filter: ['==', 'extrude', 'true'],
+        type: 'fill-extrusion',
+        minzoom: 12, // Show buildings at lower zoom levels
+        paint: {
+          'fill-extrusion-color': [
+            'interpolate',
+            ['linear'],
+            ['get', 'height'],
+            0, '#666',
+            50, '#888',
+            100, '#aaa'
+          ],
+          'fill-extrusion-height': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            12, 0,
+            12.5, ['*', ['get', 'height'], 0.8],
+            16, ['get', 'height']
+          ],
+          'fill-extrusion-base': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            12, 0,
+            12.5, ['*', ['get', 'min_height'], 0.8],
+            16, ['get', 'min_height']
+          ],
+          'fill-extrusion-opacity': 0.9
+        }
+      }, firstSymbolId);
+      
+      // Add custom center marker
+      const el = document.createElement('div');
+      el.style.width = '12px';
+      el.style.height = '12px';
+      el.style.backgroundColor = '#22c55e';
+      el.style.border = '3px solid rgba(255, 255, 255, 0.9)';
+      el.style.borderRadius = '50%';
+      el.style.boxShadow = '0 0 20px rgba(34, 197, 94, 0.8), 0 0 40px rgba(34, 197, 94, 0.4), 0 2px 8px rgba(0, 0, 0, 0.4)';
+
+      new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([lon, lat])
+        .addTo(map.current);
+    });
+
+    return () => {
+      // Restore original console methods
+      console.warn = originalWarn;
+      console.error = originalError;
+      
+      if (map.current) {
+        map.current.remove();
+      }
+    };
+  }, [lat, lon, isVisible]);
+
+  // Update map center when coordinates change
+  useEffect(() => {
+    if (map.current && isVisible) {
+      map.current.easeTo({
+        center: [lon, lat],
+        zoom: 13, // Consistent zoom level for wider view
+        duration: 1000
+      });
+    }
+  }, [lat, lon, isVisible]);
+
+  return (
+    <div 
+      ref={mapContainer} 
+      style={{ 
+        width: '100%', 
+        height: '100%', 
+        borderRadius: '50%',
+        overflow: 'hidden'
+      }} 
+    />
+  );
 }
 
 const COUNTRY_SHORTENINGS: Record<string, string> = {
@@ -320,7 +488,51 @@ function mapWMOToDescription(wmoCode: number): string {
   return descMap[wmoCode] || 'unknown';
 }
 
-
+// Heart rate color calculation
+function getHeartRateColors(bpm: number) {
+  if (bpm <= 0) {
+    return {
+      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.4) 0%, rgba(30, 30, 40, 0.4) 100%)',
+      description: 'Disconnected'
+    };
+  } else if (bpm <= 60) {
+    // Resting: Dark blue/gray
+    return {
+      background: 'linear-gradient(135deg, rgba(30, 40, 60, 0.4) 0%, rgba(40, 50, 70, 0.4) 100%)',
+      description: 'Resting'
+    };
+  } else if (bpm <= 100) {
+    // Normal: Dark with slight warmth
+    return {
+      background: 'linear-gradient(135deg, rgba(40, 40, 60, 0.4) 0%, rgba(60, 50, 70, 0.4) 100%)',
+      description: 'Normal'
+    };
+  } else if (bpm <= 120) {
+    // Elevated: Starting to show red tones
+    return {
+      background: 'linear-gradient(135deg, rgba(60, 40, 50, 0.4) 0%, rgba(80, 50, 60, 0.4) 100%)',
+      description: 'Elevated'
+    };
+  } else if (bpm <= 140) {
+    // High: More noticeable red
+    return {
+      background: 'linear-gradient(135deg, rgba(80, 40, 40, 0.4) 0%, rgba(100, 50, 50, 0.4) 100%)',
+      description: 'High'
+    };
+  } else if (bpm <= 160) {
+    // Very High: Strong red tones
+    return {
+      background: 'linear-gradient(135deg, rgba(100, 35, 35, 0.4) 0%, rgba(120, 45, 45, 0.4) 100%)',
+      description: 'Very High'
+    };
+  } else {
+    // Maximum: Intense red
+    return {
+      background: 'linear-gradient(135deg, rgba(120, 30, 30, 0.4) 0%, rgba(140, 40, 40, 0.4) 100%)',
+      description: 'Maximum'
+    };
+  }
+}
 
 // === Main React Component ===
 export default function Home() {
@@ -338,8 +550,6 @@ export default function Home() {
   const [location, setLocation] = useState<{ label: string; countryCode: string } | null>(null);
   const [rawLocation, setRawLocation] = useState<RTIRLLocation | null>(null);
   const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
-  const [speed, setSpeed] = useState(0);
-  const [speedVisible, setSpeedVisible] = useState(false);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [validWeather, setValidWeather] = useState(false);
   const [validLocation, setValidLocation] = useState(false);
@@ -358,13 +568,15 @@ export default function Home() {
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
   const heartRateTimeout = useRef<NodeJS.Timeout | null>(null);
   const animationUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const minimapTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Settings state
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
 
+  // Minimap state
+  const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
+
   // Refs for timers and last coords
-  const speedHideTimeout = useRef<NodeJS.Timeout | null>(null);
-  const speedShowCount = useRef(0); // Count consecutive speed readings above threshold
   const lastAPICoords = useRef<[number, number] | null>(null);
   const lastWeatherCoords = useRef<[number, number] | null>(null);
   const lastWeatherUpdate = useRef(0);
@@ -377,13 +589,18 @@ export default function Home() {
   // Time formatter
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
 
+  // Determine if minimap should be visible based on settings
+  const shouldShowMinimap = () => {
+    return settings.showMinimap && mapCoords && MAPBOX_ACCESS_TOKEN;
+  };
+
   // Check if any overlay elements should be visible
   const hasVisibleElements = (
     (settings.showTime && validTimezone) ||
     (settings.showLocation && validLocation) ||
     (settings.showWeather && validWeather) ||
-    (settings.showSpeed && speedVisible) ||
-    (heartRate.isConnected && heartRate.bpm > 0)
+    (heartRate.isConnected && heartRate.bpm > 0) ||
+    shouldShowMinimap()
   );
 
   // Overlay fade-in logic
@@ -461,38 +678,6 @@ export default function Home() {
     };
   }, [timezone]);
 
-  // Speed display logic
-  useEffect(() => {
-    const kmh = speed * 3.6;
-    if (kmh >= SPEED_THRESHOLD_KMH) {
-      // Increment counter for consecutive speed readings above threshold
-      speedShowCount.current++;
-      
-      // Only show speed after 3 consecutive readings above threshold
-      if (speedShowCount.current >= 3) {
-        setSpeedVisible(true);
-        if (speedHideTimeout.current) {
-          clearTimeout(speedHideTimeout.current);
-          speedHideTimeout.current = null;
-        }
-      }
-    } else {
-      // Reset counter when speed drops below threshold
-      speedShowCount.current = 0;
-      
-      // Start hide timer if speed is currently visible
-      if (speedVisible) {
-        if (speedHideTimeout.current) clearTimeout(speedHideTimeout.current);
-        speedHideTimeout.current = setTimeout(() => {
-          setSpeedVisible(false);
-        }, SPEED_HIDE_DELAY_MS);
-      }
-    }
-    return () => {
-      if (speedHideTimeout.current) clearTimeout(speedHideTimeout.current);
-    };
-  }, [speed, speedVisible]);
-
   // Weather and timezone refresh timer - every 5 minutes using latest GPS (combined API call)
   useEffect(() => {
     async function doWeatherUpdate() {
@@ -555,8 +740,6 @@ export default function Home() {
         window.RealtimeIRL.forPullKey(RTIRL_PULL_KEY).addListener((p: unknown) => {
           if (!p || typeof p !== 'object') return;
           const payload = p as RTIRLPayload;
-          // Speed
-          setSpeed(typeof payload.speed === 'number' ? payload.speed : 0);
           // Weather
           if (
             payload.weather &&
@@ -630,6 +813,19 @@ export default function Home() {
           if (lat !== null && lon !== null) {
             // GPS is now purely real-time - no KV saving needed
             updateFromCoordinates(lat, lon);
+            
+            // Update minimap coordinates for Mapbox
+            setMapCoords([lat, lon]);
+            
+            // Clear any existing timeout since we have fresh GPS data
+            if (minimapTimeout.current) {
+              clearTimeout(minimapTimeout.current);
+            }
+            
+            // Set timeout to hide minimap if no new GPS data after 2 minutes
+            minimapTimeout.current = setTimeout(() => {
+              setMapCoords(null);
+            }, 120000); // 2 minutes
           }
         });
       }
@@ -772,6 +968,9 @@ export default function Home() {
       if (animationUpdateTimeout.current) {
         clearTimeout(animationUpdateTimeout.current);
       }
+      if (minimapTimeout.current) {
+        clearTimeout(minimapTimeout.current);
+      }
     };
   }, []);
 
@@ -881,8 +1080,6 @@ export default function Home() {
     setLocation(null);
     setRawLocation(null);
     setWeather(null);
-    setSpeed(0);
-    setSpeedVisible(false);
     setShowOverlay(false);
     setFirstWeatherChecked(false);
     setFirstLocationChecked(false);
@@ -1107,7 +1304,12 @@ export default function Home() {
     >
       {/* Stream Vitals - Heart Rate Monitor */}
       {heartRate.isConnected && heartRate.bpm > 0 && (
-        <div className="stream-vitals corner-top-left">
+        <div 
+          className="stream-vitals corner-top-left"
+          style={{
+            background: getHeartRateColors(Math.round(smoothHeartRate || heartRate.bpm)).background
+          }}
+        >
           <div className="vitals-content">
             <div 
               className="vitals-icon beating"
@@ -1125,80 +1327,88 @@ export default function Home() {
         </div>
       )}
 
-      {/* Stream Info - Live Status Display */}
-      <div className="stream-info corner-top-right">
-        {settings.showTime && (
-          <div 
-            className={`stream-time ${!validTimezone ? 'hidden' : ''}`}
-          >
-            <span>{time}</span>
-            {location && location.countryCode && settings.showLocation && (
-              <Image
-                src={`https://flagcdn.com/${location.countryCode}.svg`}
-                alt={`Country: ${location.label}`}
-                width={32}
-                height={20}
-                unoptimized
-              />
-            )}
-          </div>
-        )}
-        {settings.showLocation && (
-          <div 
-            className={`stream-location ${!validLocation ? 'hidden' : ''}`}
-          >
-            {location && location.label}
-          </div>
-        )}
-        {settings.showWeather && (
-          <div 
-            className={`stream-weather ${!validWeather ? 'hidden' : ''}`}
-          >
-            {weather && (
-              <>
-                <div className="weather-temp" style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  flexDirection: settings.weatherIconPosition === 'left' ? 'row-reverse' : 'row'
-                }}>
-                  <span>{weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F</span>
-                  {settings.showWeatherIcon && (
-                    <div className="weather-icon-container">
-                      <Image
-                        src={`https://openweathermap.org/img/wn/${weather.icon}@4x.png`}
-                        alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                        width={30}
-                        height={30}
-                        unoptimized
-                      />
+      {/* Stream Info and Movement Container */}
+      <div className="stream-container" style={{ position: 'absolute', top: '10px', right: '10px' }}>
+        {/* Stream Info - Live Status Display */}
+        <div className="stream-info">
+          {settings.showTime && (
+            <div 
+              className={`stream-time ${!validTimezone ? 'hidden' : ''}`}
+            >
+              <span>{time}</span>
+              {location && location.countryCode && settings.showLocation && (
+                <Image
+                  src={`https://flagcdn.com/${location.countryCode}.svg`}
+                  alt={`Country: ${location.label}`}
+                  width={32}
+                  height={20}
+                  unoptimized
+                />
+              )}
+            </div>
+          )}
+          {settings.showLocation && (
+            <div 
+              className={`stream-location ${!validLocation ? 'hidden' : ''}`}
+            >
+              {location && location.label}
+            </div>
+          )}
+          {settings.showWeather && (
+            <div 
+              className={`stream-weather ${!validWeather ? 'hidden' : ''}`}
+            >
+              {weather && (
+                <>
+                  <div className="weather-temp" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    flexDirection: settings.weatherIconPosition === 'left' ? 'row-reverse' : 'row'
+                  }}>
+                    <span>{weather.temp}°C / {Math.round(weather.temp * 9 / 5 + 32)}°F</span>
+                    {settings.showWeatherIcon && (
+                      <div className="weather-icon-container">
+                        <Image
+                          src={`https://openweathermap.org/img/wn/${weather.icon}@4x.png`}
+                          alt={`Weather: ${capitalizeWords(weather.desc)}`}
+                          width={30}
+                          height={30}
+                          unoptimized
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {settings.showWeatherCondition && (
+                    <div className="weather-desc">
+                      {capitalizeWords(weather.desc)}
                     </div>
                   )}
-                </div>
-                {settings.showWeatherCondition && (
-                  <div className="weather-desc">
-                    {capitalizeWords(weather.desc)}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-        {settings.showSpeed && (
-          <div 
-            className={`stream-speed ${speedVisible ? '' : 'hidden'}`}
-          >
-            {(speed * 3.6).toFixed(1)} km/h
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Stream Movement - GPS Minimap */}
+        {shouldShowMinimap() && (
+          <div className="stream-movement">
+            <MapboxMinimap lat={mapCoords![0]} lon={mapCoords![1]} isVisible={true} />
           </div>
         )}
       </div>
 
       {/* 
         === FUTURE STREAM ELEMENTS ===
-        Bottom-left: Stream Stats (followers, donations, etc.)
-        Bottom-right: Chat Alerts or Recent Events
+        Bottom-left/Bottom-right: Chat Alerts, Stream Stats, or Recent Events
         Additional stream elements can use the unified .stream-element base class
         or specialized classes like .stream-stats, .stream-alerts, etc.
+        
+        Current Layout:
+        Top-left: Heart Rate (auto-show)
+        Top-right: Time, Location, Weather
+        Top-right-below: GPS Minimap (manual toggle)
+        Bottom corners: Available for future features
       */}
     </div>
   );

@@ -381,10 +381,10 @@ export default function AdminPage() {
                   desc: 'Show temperature and conditions'
                 },
                 { 
-                  key: 'showSpeed', 
-                  label: 'Speed Display', 
-                  icon: '🚗', 
-                  desc: 'Show speed when moving >10 km/h' 
+                  key: 'showMinimap', 
+                  label: 'GPS Minimap', 
+                  icon: '🗺️', 
+                  desc: 'Show circular minimap with current location' 
                 }
               ].map(({ key, label, icon, desc }) => (
                 <div key={key} style={{

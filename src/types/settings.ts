@@ -1,35 +1,35 @@
 // Centralized settings types and constants
 
 export interface OverlaySettings {
+  showTime: boolean;
   showLocation: boolean;
   showWeather: boolean;
   showWeatherIcon: boolean;
   showWeatherCondition: boolean;
   weatherIconPosition: 'left' | 'right';
-  showSpeed: boolean;
-  showTime: boolean;
+  showMinimap: boolean;
 }
 
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
+  showTime: true,
   showLocation: true,
   showWeather: true,
   showWeatherIcon: true,
   showWeatherCondition: true,
-  weatherIconPosition: 'left',
-  showSpeed: true,
-  showTime: true,
+  weatherIconPosition: 'right',
+  showMinimap: false,
 };
 
 // Valid settings schema for validation
-export const VALID_SETTINGS_SCHEMA: Record<keyof OverlaySettings, 'boolean' | 'string'> = {
+export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'> = {
+  showTime: 'boolean',
   showLocation: 'boolean',
   showWeather: 'boolean',
   showWeatherIcon: 'boolean',
   showWeatherCondition: 'boolean',
   weatherIconPosition: 'string',
-  showSpeed: 'boolean',
-  showTime: 'boolean',
+  showMinimap: 'boolean',
 };
 
 export const VALID_WEATHER_ICON_POSITIONS = ['left', 'right'] as const;

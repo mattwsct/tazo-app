@@ -14,7 +14,9 @@
     "monitor:sse": "node scripts/monitor-sse.js"
   },
   "dependencies": {
+    "@types/mapbox-gl": "^3.4.1",
     "@vercel/kv": "^3.0.0",
+    "mapbox-gl": "^3.13.0",
     "next": "15.4.1",
     "react": "19.1.0",
     "react-dom": "19.1.0"

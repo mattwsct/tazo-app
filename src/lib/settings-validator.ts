@@ -1,11 +1,9 @@
 // Settings validation utility to prevent malicious entries
 
-import { 
-  OverlaySettings, 
-  VALID_SETTINGS_SCHEMA, 
-  VALID_WEATHER_ICON_POSITIONS,
-  DEFAULT_OVERLAY_SETTINGS 
-} from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, SETTINGS_CONFIG } from '@/types/settings';
+
+// Valid weather icon positions
+const VALID_WEATHER_ICON_POSITIONS: ('left' | 'right')[] = ['left', 'right'];
 
 /**
  * Validates and sanitizes settings object
@@ -20,8 +18,8 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
   const cleanSettings: Partial<OverlaySettings> = {};
   const rejectedKeys: string[] = [];
 
-  // Validate each known setting
-  for (const [key, expectedType] of Object.entries(VALID_SETTINGS_SCHEMA)) {
+  // Validate each field according to schema
+  for (const [key, expectedType] of Object.entries(SETTINGS_CONFIG)) {
     const value = settings[key];
     
     if (value !== undefined) {
@@ -33,8 +31,8 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
           if (VALID_WEATHER_ICON_POSITIONS.includes(value as 'left' | 'right')) {
             cleanSettings.weatherIconPosition = value as 'left' | 'right';
           } else {
-            console.warn(`Invalid weatherIconPosition: ${value}, defaulting to 'left'`);
-            cleanSettings.weatherIconPosition = 'left';
+            console.warn(`Invalid weatherIconPosition: ${value}, defaulting to 'right'`);
+            cleanSettings.weatherIconPosition = 'right';
           }
         } else {
           (cleanSettings as Record<string, unknown>)[key] = value;
@@ -48,7 +46,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
 
   // Log any rejected keys (potential malicious entries)
   for (const key of Object.keys(settings)) {
-    if (!(key in VALID_SETTINGS_SCHEMA)) {
+    if (!(key in SETTINGS_CONFIG)) {
       rejectedKeys.push(key);
     }
   }
@@ -59,14 +57,13 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
 
   // Ensure all required settings are present with defaults
   const completeSettings: OverlaySettings = {
+    showTime: cleanSettings.showTime ?? DEFAULT_OVERLAY_SETTINGS.showTime,
     showLocation: cleanSettings.showLocation ?? DEFAULT_OVERLAY_SETTINGS.showLocation,
     showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
     showWeatherIcon: cleanSettings.showWeatherIcon ?? DEFAULT_OVERLAY_SETTINGS.showWeatherIcon,
     showWeatherCondition: cleanSettings.showWeatherCondition ?? DEFAULT_OVERLAY_SETTINGS.showWeatherCondition,
     weatherIconPosition: cleanSettings.weatherIconPosition ?? DEFAULT_OVERLAY_SETTINGS.weatherIconPosition,
-    showSpeed: cleanSettings.showSpeed ?? DEFAULT_OVERLAY_SETTINGS.showSpeed,
-    showTime: cleanSettings.showTime ?? DEFAULT_OVERLAY_SETTINGS.showTime,
-
+    showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
   };
 
   return completeSettings;
@@ -84,7 +81,7 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const settingsObj = settings as Record<string, unknown>;
 
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in VALID_SETTINGS_SCHEMA)) {
+    if (!(key in SETTINGS_CONFIG)) {
       maliciousKeys.push(key);
     }
   }
