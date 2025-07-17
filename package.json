@@ -14,8 +14,10 @@
     "monitor:sse": "node scripts/monitor-sse.js"
   },
   "dependencies": {
+    "@types/leaflet": "^1.9.20",
     "@types/mapbox-gl": "^3.4.1",
     "@vercel/kv": "^3.0.0",
+    "leaflet": "^1.9.4",
     "mapbox-gl": "^3.13.0",
     "next": "15.4.1",
     "react": "19.1.0",

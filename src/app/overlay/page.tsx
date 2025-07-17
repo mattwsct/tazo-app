@@ -11,574 +11,120 @@ declare global {
   }
 }
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import dynamic from 'next/dynamic';
 import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 
-// === Configurable Constants ===
-const WEATHER_TIMEZONE_UPDATE_INTERVAL = 300000; // 5 min - combined weather+timezone from same API call
-const LOCATION_UPDATE_INTERVAL = 60000; // 1 min max - but also triggers on 100m movement
-const LOCATION_DISTANCE_THRESHOLD = 100; // 100 meters - triggers location update when moved this far
-const OVERLAY_FADE_TIMEOUT_MS = 10000; // 10 seconds to force fade-in if data not ready
+// Import new components and utilities
+import HeartRateMonitor from '@/components/HeartRateMonitor';
+import { 
+  formatLocation, 
+  distanceInMeters, 
+  capitalizeWords, 
+  hasLatLon, 
+  hasLatitudeLongitude, 
+  isValidCoordinate,
+  type LocationData 
+} from '@/utils/overlay-utils';
+import { 
+  fetchLocationFromLocationIQ, 
+  fetchWeatherAndTimezoneFromOpenMeteo,
+  type WeatherData 
+} from '@/utils/api-utils';
 
-// === Cost Optimization Constants ===
-const DATA_REFRESH_INTERVAL = 30000; // 30 seconds - faster fallback syncing
+// Dynamic imports for map components to prevent SSR issues
+const LeafletMinimap = dynamic(() => import('@/components/LeafletMinimap'), {
+  ssr: false,
+  loading: () => <div className="minimap-placeholder" />
+});
 
+const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
+  ssr: false,
+  loading: () => <div className="minimap-placeholder" />
+});
 
-// === API Keys (from .env.local, must be prefixed with NEXT_PUBLIC_) ===
-const RTIRL_PULL_KEY = process.env.NEXT_PUBLIC_RTIRL_PULL_KEY;
-const LOCATIONIQ_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
-const PULSOID_TOKEN = process.env.NEXT_PUBLIC_PULSOID_TOKEN;
-const MAPBOX_ACCESS_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+// === 🎯 CONFIGURATION CONSTANTS ===
+const TIMERS = {
+  WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes - combined weather+timezone from API
+  LOCATION_UPDATE: 60000, // 1 minute max - also triggers on 100m movement
+  DATA_REFRESH_FALLBACK: 30000, // 30 seconds - fallback syncing
+  OVERLAY_FADE_TIMEOUT: 10000, // 10 seconds to force fade-in
+  MINIMAP_HIDE_DELAY: 120000, // 2 minutes - hide minimap if no GPS data
+  SPEED_HIDE_DELAY: 10000, // 10 seconds - hide speed when below threshold
+} as const;
 
-// Set Mapbox access token
-if (MAPBOX_ACCESS_TOKEN) {
-  mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
-}
+const THRESHOLDS = {
+  LOCATION_DISTANCE: 100, // 100 meters - triggers location update
+  SPEED_SHOW: 10, // 10 km/h - show speed-based minimap
+  SPEED_READINGS_REQUIRED: 3, // 3 successive readings above threshold
+} as const;
 
-// === TypeScript Interfaces ===
+// === 🔑 API CONFIGURATION ===
+const API_KEYS = {
+  RTIRL: process.env.NEXT_PUBLIC_RTIRL_PULL_KEY,
+  LOCATIONIQ: process.env.NEXT_PUBLIC_LOCATIONIQ_KEY,
+  PULSOID: process.env.NEXT_PUBLIC_PULSOID_TOKEN,
+  MAPBOX: process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
+} as const;
+
+// === 📊 LOGGING UTILITIES ===
+const Logger = {
+  overlay: (message: string, data?: unknown) => 
+    console.log(`🎮 [OVERLAY] ${message}`, data || ''),
+  
+  weather: (message: string, data?: unknown) => 
+    console.log(`🌤️ [WEATHER] ${message}`, data || ''),
+  
+  location: (message: string, data?: unknown) => 
+    console.log(`📍 [LOCATION] ${message}`, data || ''),
+  
+  settings: (message: string, data?: unknown) => 
+    console.log(`⚙️ [SETTINGS] ${message}`, data || ''),
+  
+  error: (message: string, error?: unknown) => 
+    console.error(`❌ [ERROR] ${message}`, error || ''),
+  
+  warn: (message: string, data?: unknown) => 
+    console.warn(`⚠️ [WARNING] ${message}`, data || ''),
+} as const;
+
+// === 🌍 DATA INTERFACES ===
 interface RTIRLWeather {
   temp: number;
   icon: string;
   desc: string;
 }
 
-interface RTIRLLocation {
-  country?: string;
-  countryCode?: string;
-  city?: string;
-  state?: string;
-  displayName?: string;
-  timezone?: string;
-  lat?: number;
-  lon?: number;
-  latitude?: number;
-  longitude?: number;
-}
-
 interface RTIRLPayload {
   speed?: number;
   weather?: RTIRLWeather;
-  location?: RTIRLLocation;
+  location?: LocationData;
 }
 
-// Pulsoid heart rate interfaces
-interface PulsoidHeartRateData {
-  measured_at: number;
-  data: {
-    heart_rate: number;
-  };
-}
+// === 🎮 MAIN OVERLAY COMPONENT ===
+export default function OverlayPage() {
+  Logger.overlay('Initializing streaming overlay');
 
-interface HeartRateState {
-  bpm: number;
-  lastUpdate: number;
-  isConnected: boolean;
-}
-
-// OverlaySettings interface now imported from @/types/settings
-
-// === Utility Functions ===
-function capitalizeWords(str: string) {
-  return str.replace(/\b\w/g, c => c.toUpperCase());
-}
-
-// Mapbox GL Map Component for 3D Minimap
-function MapboxMinimap({ lat, lon, isVisible }: { lat: number; lon: number; isVisible: boolean }) {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-
-  useEffect(() => {
-    if (!mapContainer.current || !MAPBOX_ACCESS_TOKEN || !isVisible) return;
-
-    // Suppress WebGL warnings in development
-    const originalWarn = console.warn;
-    const originalError = console.error;
-    
-    console.warn = (...args) => {
-      const message = args[0];
-      if (typeof message === 'string' && (
-        message.includes('WEBGL_debug_renderer_info') ||
-        message.includes('Alpha-premult and y-flip') ||
-        message.includes('texSubImage') ||
-        message.includes('WebGL warning') ||
-        message.includes('drawElementsInstanced') ||
-        message.includes('Tex image TEXTURE_2D')
-      )) {
-        return; // Suppress WebGL warnings
-      }
-      originalWarn.apply(console, args);
-    };
-    
-    console.error = (...args) => {
-      const message = args[0];
-      if (typeof message === 'string' && (
-        message.includes('Cross-Origin Request Blocked') ||
-        message.includes('events.mapbox.com') ||
-        message.includes('CORS request did not succeed') ||
-        message.includes('featureNamespace') ||
-        message.includes('NetworkError when attempting to fetch')
-      )) {
-        return; // Suppress CORS errors from Mapbox telemetry
-      }
-      originalError.apply(console, args);
-    };
-
-    // Initialize map
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12', // Streets style supports composite source
-      center: [lon, lat],
-      zoom: 13, // Zoomed out for wider area view
-      pitch: 45, // 3D tilt
-      bearing: 0,
-      interactive: false, // Disable interaction for overlay
-      attributionControl: false,
-      logoPosition: 'bottom-left',
-      collectResourceTiming: false, // Disable telemetry to reduce CORS errors
-      transformRequest: (url) => {
-        // Block telemetry requests to reduce console errors
-        if (url.includes('events.mapbox.com')) {
-          return { url: '' };
-        }
-        return { url };
-      }
-    });
-
-    map.current.on('style.load', () => {
-      if (!map.current) return;
-
-      // Add 3D buildings layer
-      const layers = map.current.getStyle().layers;
-      
-      // Find the first symbol layer to insert buildings before it
-      let firstSymbolId;
-      for (const layer of layers) {
-        if (layer.type === 'symbol') {
-          firstSymbolId = layer.id;
-          break;
-        }
-      }
-
-      map.current.addLayer({
-        id: '3d-buildings',
-        source: 'composite',
-        'source-layer': 'building',
-        filter: ['==', 'extrude', 'true'],
-        type: 'fill-extrusion',
-        minzoom: 12, // Show buildings at lower zoom levels
-        paint: {
-          'fill-extrusion-color': [
-            'interpolate',
-            ['linear'],
-            ['get', 'height'],
-            0, '#666',
-            50, '#888',
-            100, '#aaa'
-          ],
-          'fill-extrusion-height': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            12, 0,
-            12.5, ['*', ['get', 'height'], 0.8],
-            16, ['get', 'height']
-          ],
-          'fill-extrusion-base': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            12, 0,
-            12.5, ['*', ['get', 'min_height'], 0.8],
-            16, ['get', 'min_height']
-          ],
-          'fill-extrusion-opacity': 0.9
-        }
-      }, firstSymbolId);
-      
-      // Add custom center marker
-      const el = document.createElement('div');
-      el.style.width = '12px';
-      el.style.height = '12px';
-      el.style.backgroundColor = '#22c55e';
-      el.style.border = '3px solid rgba(255, 255, 255, 0.9)';
-      el.style.borderRadius = '50%';
-      el.style.boxShadow = '0 0 20px rgba(34, 197, 94, 0.8), 0 0 40px rgba(34, 197, 94, 0.4), 0 2px 8px rgba(0, 0, 0, 0.4)';
-
-      new mapboxgl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([lon, lat])
-        .addTo(map.current);
-    });
-
-    // Handle WebGL context lost/restored events
-    map.current.on('webglcontextlost', () => {
-      console.log('WebGL context lost - map will attempt to recover');
-    });
-
-    map.current.on('webglcontextrestored', () => {
-      console.log('WebGL context restored - map should be visible again');
-      // Force a refresh of the map
-      if (map.current) {
-        map.current.resize();
-        map.current.triggerRepaint();
-      }
-    });
-
-    // Add error handler for general map errors
-    map.current.on('error', (e) => {
-      console.log('Map error occurred:', e);
-      // Try to recover by reloading the style
-      if (map.current && e.error && e.error.message.includes('WebGL')) {
-        setTimeout(() => {
-          if (map.current) {
-            map.current.setStyle('mapbox://styles/mapbox/streets-v12');
-          }
-        }, 1000);
-      }
-    });
-
-    return () => {
-      // Restore original console methods
-      console.warn = originalWarn;
-      console.error = originalError;
-      
-      if (map.current) {
-        map.current.remove();
-      }
-    };
-  }, [lat, lon, isVisible]);
-
-  // Update map center when coordinates change
-  useEffect(() => {
-    if (map.current && isVisible) {
-      map.current.easeTo({
-        center: [lon, lat],
-        zoom: 13, // Consistent zoom level for wider view
-        duration: 1000
-      });
-    }
-  }, [lat, lon, isVisible]);
-
-  return (
-    <div 
-      ref={mapContainer} 
-      style={{ 
-        width: '100%', 
-        height: '100%', 
-        borderRadius: '50%',
-        overflow: 'hidden'
-      }} 
-    />
-  );
-}
-
-const COUNTRY_SHORTENINGS: Record<string, string> = {
-  'United States of America': 'USA',
-  'United Kingdom': 'UK',
-  'United Arab Emirates': 'UAE',
-  'Antigua and Barbuda': 'Antigua',
-  'Bosnia and Herzegovina': 'Bosnia',
-  'Central African Republic': 'CAR',
-  'Democratic Republic of the Congo': 'DR Congo',
-  'Dominican Republic': 'Dominican Rep.',
-  'Equatorial Guinea': 'Eq. Guinea',
-  'Sao Tome and Principe': 'Sao Tome',
-  'Trinidad and Tobago': 'Trinidad',
-  'Turks and Caicos Islands': 'Turks & Caicos',
-  'Saint Kitts and Nevis': 'St. Kitts',
-  'Saint Vincent and the Grenadines': 'St. Vincent',
-  'Virgin Islands, British': 'BVI',
-  'Virgin Islands, U.S.': 'USVI',
-  'Federated States of Micronesia': 'Micronesia',
-  'Papua New Guinea': 'PNG',
-  'Czech Republic': 'Czechia',
-  'South Africa': 'South Africa',
-  'South Korea': 'South Korea',
-  'Philippines': 'Philippines',
-  'New Zealand': 'New Zealand',
-};
-
-function shortenCountryName(countryName: string, countryCode = '') {
-  if (!countryName) return '';
-  const shortened = COUNTRY_SHORTENINGS[countryName] || countryName;
-  if (shortened.length > 12 && countryCode) {
-    return countryCode.toUpperCase();
-  }
-  return shortened;
-}
-
-
-
-
-
-function formatLocation(location: RTIRLLocation) {
-  if (!location) return '';
-  
-  const shortenedCountry = shortenCountryName(location.country || '', location.countryCode || '');
-  
-  // Try city first, but check length (16 char limit)
-  if (location.city && location.city.length <= 16) {
-    return `${location.city}, ${shortenedCountry}`;
-  }
-  
-  // Fallback to state if city is too long
-  if (location.state && location.state.length <= 16) {
-    return `${location.state}, ${shortenedCountry}`;
-  }
-  
-  // Final fallback: just country
-  return shortenedCountry;
-}
-
-function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371000; // Earth's radius in meters
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
-
-// === Rate Limiting ===
-const RATE_LIMITS = {
-  openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 600 }, // 600/min free tier
-  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 },
-};
-function checkRateLimit(api: keyof typeof RATE_LIMITS) {
-  const limit = RATE_LIMITS[api];
-  const now = Date.now();
-  if (now - limit.lastReset > limit.resetInterval) {
-    limit.calls = 0;
-    limit.lastReset = now;
-  }
-  if (limit.calls >= limit.max) return false;
-  limit.calls++;
-  return true;
-}
-
-// === API Fetch Functions ===
-
-async function fetchLocationFromLocationIQ(lat: number, lon: number) {
-  if (!LOCATIONIQ_KEY || !checkRateLimit('locationiq')) return null;
-  try {
-    const response = await fetch(`https://us1.locationiq.com/v1/reverse.php?key=${LOCATIONIQ_KEY}&lat=${lat}&lon=${lon}&format=json&accept-language=en`);
-    const data = await response.json();
-    if (data.address) {
-      // Simple parsing: just get city and country
-      const city = data.address.city || 
-                  data.address.town || 
-                  data.address.municipality ||
-                  data.address.suburb;  // Use suburb as fallback for city-level
-      
-      const state = data.address.province ||  // Japanese prefectures are in 'province' field
-                   data.address.state || 
-                   data.address.region || 
-                   data.address.county;
-      
-      const result = {
-        city: city,
-        state: state,
-        country: data.address.country,
-        countryCode: data.address.country_code ? data.address.country_code.toLowerCase() : '',
-        timezone: data.address.timezone,
-        displayName: data.display_name,
-      };
-      
-      // Debug: uncomment to see Japanese location data structure
-      // if (data.address.country_code?.toLowerCase() === 'jp') {
-      //   console.log('Japanese location data from LocationIQ:', {
-      //     raw_address: data.address,
-      //     parsed_result: result
-      //   });
-      // }
-      
-      return result;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-
-
-// === Open-Meteo API Functions (Free tier, no API key required!) ===
-
-// Combined function: fetch both weather and timezone in a single API call
-async function fetchWeatherAndTimezoneFromOpenMeteo(lat: number, lon: number) {
-  if (!checkRateLimit('openmeteo')) {
-    return null;
-  }
-  
-  try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto&forecast_days=1`;
-    
-    const response = await fetch(url);
-    const data = await response.json();
-    
-    let weather = null;
-    let timezone = null;
-    
-    // Extract weather data
-    if (data.current && typeof data.current.temperature_2m === 'number' && typeof data.current.weather_code === 'number') {
-      weather = {
-        temp: Math.round(data.current.temperature_2m),
-        icon: mapWMOToOpenWeatherIcon(data.current.weather_code),
-        desc: mapWMOToDescription(data.current.weather_code),
-      };
-    }
-    
-    // Extract timezone data
-    if (data.timezone) {
-      timezone = data.timezone;
-    }
-    
-    return { weather, timezone };
-  } catch (error) {
-    console.log('Open-Meteo combined fetch failed:', error);
-  }
-  return null;
-}
-
-// WMO Weather Code to OpenWeather icon mapping
-function mapWMOToOpenWeatherIcon(wmoCode: number): string {
-  const iconMap: Record<number, string> = {
-    0: '01d',    // Clear sky
-    1: '02d',    // Mainly clear
-    2: '03d',    // Partly cloudy
-    3: '04d',    // Overcast
-    45: '50d',   // Fog
-    48: '50d',   // Depositing rime fog
-    51: '09d',   // Light drizzle
-    53: '09d',   // Moderate drizzle
-    55: '09d',   // Dense drizzle
-    56: '13d',   // Light freezing drizzle
-    57: '13d',   // Dense freezing drizzle
-    61: '10d',   // Slight rain
-    63: '10d',   // Moderate rain
-    65: '10d',   // Heavy rain
-    66: '13d',   // Light freezing rain
-    67: '13d',   // Heavy freezing rain
-    71: '13d',   // Slight snow fall
-    73: '13d',   // Moderate snow fall
-    75: '13d',   // Heavy snow fall
-    77: '13d',   // Snow grains
-    80: '09d',   // Slight rain showers
-    81: '09d',   // Moderate rain showers
-    82: '09d',   // Violent rain showers
-    85: '13d',   // Slight snow showers
-    86: '13d',   // Heavy snow showers
-    95: '11d',   // Thunderstorm
-    96: '11d',   // Thunderstorm with slight hail
-    99: '11d',   // Thunderstorm with heavy hail
-  };
-  return iconMap[wmoCode] || '01d';
-}
-
-// WMO Weather Code to description mapping
-function mapWMOToDescription(wmoCode: number): string {
-  const descMap: Record<number, string> = {
-    0: 'clear sky',
-    1: 'mainly clear',
-    2: 'partly cloudy',
-    3: 'overcast',
-    45: 'fog',
-    48: 'depositing rime fog',
-    51: 'light drizzle',
-    53: 'moderate drizzle',
-    55: 'dense drizzle',
-    56: 'light freezing drizzle',
-    57: 'dense freezing drizzle',
-    61: 'slight rain',
-    63: 'moderate rain',
-    65: 'heavy rain',
-    66: 'light freezing rain',
-    67: 'heavy freezing rain',
-    71: 'slight snow fall',
-    73: 'moderate snow fall',
-    75: 'heavy snow fall',
-    77: 'snow grains',
-    80: 'slight rain showers',
-    81: 'moderate rain showers',
-    82: 'violent rain showers',
-    85: 'slight snow showers',
-    86: 'heavy snow showers',
-    95: 'thunderstorm',
-    96: 'thunderstorm with slight hail',
-    99: 'thunderstorm with heavy hail',
-  };
-  return descMap[wmoCode] || 'unknown';
-}
-
-// Heart rate color calculation
-function getHeartRateColors(bpm: number) {
-  if (bpm <= 0) {
-    return {
-      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.4) 0%, rgba(30, 30, 40, 0.4) 100%)',
-      description: 'Disconnected'
-    };
-  } else if (bpm <= 60) {
-    // Resting: Dark blue/gray
-    return {
-      background: 'linear-gradient(135deg, rgba(30, 40, 60, 0.4) 0%, rgba(40, 50, 70, 0.4) 100%)',
-      description: 'Resting'
-    };
-  } else if (bpm <= 100) {
-    // Normal: Dark with slight warmth
-    return {
-      background: 'linear-gradient(135deg, rgba(40, 40, 60, 0.4) 0%, rgba(60, 50, 70, 0.4) 100%)',
-      description: 'Normal'
-    };
-  } else if (bpm <= 120) {
-    // Elevated: Starting to show red tones
-    return {
-      background: 'linear-gradient(135deg, rgba(60, 40, 50, 0.4) 0%, rgba(80, 50, 60, 0.4) 100%)',
-      description: 'Elevated'
-    };
-  } else if (bpm <= 140) {
-    // High: More noticeable red
-    return {
-      background: 'linear-gradient(135deg, rgba(80, 40, 40, 0.4) 0%, rgba(100, 50, 50, 0.4) 100%)',
-      description: 'High'
-    };
-  } else if (bpm <= 160) {
-    // Very High: Strong red tones
-    return {
-      background: 'linear-gradient(135deg, rgba(100, 35, 35, 0.4) 0%, rgba(120, 45, 45, 0.4) 100%)',
-      description: 'Very High'
-    };
-  } else {
-    // Maximum: Intense red
-    return {
-      background: 'linear-gradient(135deg, rgba(120, 30, 30, 0.4) 0%, rgba(140, 40, 40, 0.4) 100%)',
-      description: 'Maximum'
-    };
-  }
-}
-
-// === Main React Component ===
-export default function Home() {
   // Add overlay-page class to body for page-specific CSS
   useEffect(() => {
     document.body.classList.add('overlay-page');
+    Logger.overlay('Added overlay-page CSS class to body');
     return () => {
       document.body.classList.remove('overlay-page');
     };
   }, []);
 
-  // Overlay state
+  // === 🎭 OVERLAY STATE ===
   const [showOverlay, setShowOverlay] = useState(false);
   const [time, setTime] = useState('Loading...');
   const [location, setLocation] = useState<{ label: string; countryCode: string } | null>(null);
-  const [rawLocation, setRawLocation] = useState<RTIRLLocation | null>(null);
-  const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
   const [speed, setSpeed] = useState(0);
   const [timezone, setTimezone] = useState<string | null>(null);
+  
+  // Validation flags
   const [validWeather, setValidWeather] = useState(false);
   const [validLocation, setValidLocation] = useState(false);
   const [validTimezone, setValidTimezone] = useState(false);
@@ -586,32 +132,20 @@ export default function Home() {
   const [firstLocationChecked, setFirstLocationChecked] = useState(false);
   const [firstTimezoneChecked, setFirstTimezoneChecked] = useState(false);
 
-  // Heart rate state
-  const [heartRate, setHeartRate] = useState<HeartRateState>({
-    bpm: 0,
-    lastUpdate: 0,
-    isConnected: false,
-  });
-  const [smoothHeartRate, setSmoothHeartRate] = useState(0);
-  const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
-  const heartRateTimeout = useRef<NodeJS.Timeout | null>(null);
-  const animationUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
-  const minimapTimeout = useRef<NodeJS.Timeout | null>(null);
-
   // Settings state
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
 
   // Minimap state
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
 
-  // Refs for timers and last coords
+  // Refs for timers and tracking
   const lastAPICoords = useRef<[number, number] | null>(null);
   const lastWeatherCoords = useRef<[number, number] | null>(null);
   const lastWeatherUpdate = useRef(0);
   const lastLocationUpdate = useRef(0);
   const lastTimezoneUpdate = useRef(0);
-  const currentCoords = useRef<string | null>(null);
   const weatherRefreshTimer = useRef<NodeJS.Timeout | null>(null);
+  const minimapTimeout = useRef<NodeJS.Timeout | null>(null);
   const overlayShown = useRef(false);
   
   // Speed-based minimap refs
@@ -622,57 +156,23 @@ export default function Home() {
   // Time formatter
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
 
-  // Determine if minimap should be visible based on settings
+  // === 🗺️ MINIMAP VISIBILITY LOGIC ===
   const shouldShowMinimap = () => {
-    if (!mapCoords || !MAPBOX_ACCESS_TOKEN) return false;
-    
-    // Manual mode: show if manual toggle is enabled
+    if (!mapCoords) return false;
     const manualShow = settings.showMinimap;
-    
-    // Speed-based mode: show if speed-based toggle is enabled AND moving
     const speedBasedShow = settings.minimapSpeedBased && speedBasedVisible.current;
-    
-    // Show map if either condition is met
     return manualShow || speedBasedShow;
   };
 
-  // Check if any overlay elements should be visible
+  // === 👁️ OVERLAY VISIBILITY LOGIC ===
   const hasVisibleElements = (
     (settings.showTime && validTimezone) ||
     (settings.showLocation && validLocation) ||
     (settings.showWeather && validWeather) ||
-    (heartRate.isConnected && heartRate.bpm > 0) ||
     shouldShowMinimap()
   );
 
-  // Overlay fade-in logic
-  useEffect(() => {
-    if (
-      !overlayShown.current &&
-      firstWeatherChecked &&
-      firstLocationChecked &&
-      firstTimezoneChecked &&
-      validWeather &&
-      validLocation &&
-      validTimezone
-    ) {
-      setShowOverlay(true);
-      overlayShown.current = true;
-    }
-  }, [firstWeatherChecked, firstLocationChecked, firstTimezoneChecked, validWeather, validLocation, validTimezone]);
-
-  // Force fade-in after timeout
-  useEffect(() => {
-    if (!overlayShown.current) {
-      const timeout = setTimeout(() => {
-        setShowOverlay(true);
-        overlayShown.current = true;
-      }, OVERLAY_FADE_TIMEOUT_MS);
-      return () => clearTimeout(timeout);
-    }
-  }, []);
-
-  // Time update logic
+  // === ⏰ TIME MANAGEMENT ===
   useEffect(() => {
     if (!timezone || !formatter.current) return;
     
@@ -691,6 +191,7 @@ export default function Home() {
       // Set timeout to sync with the next minute boundary
       const syncTimeout = setTimeout(() => {
         updateTime();
+        Logger.overlay('Time updated on minute boundary');
         
         // Set regular interval for the next hour, then re-sync
         let updateCount = 0;
@@ -701,11 +202,11 @@ export default function Home() {
           // Re-sync every hour (60 updates) to prevent drift
           if (updateCount >= 60) {
             clearInterval(interval);
-            setupNextSync(); // Recursively set up next sync cycle
+            Logger.overlay('Hourly time sync - setting up next cycle');
+            setupNextSync();
           }
         }, 60000);
         
-        // Store interval for cleanup
         return interval;
       }, msUntilNextMinute);
       
@@ -716,17 +217,16 @@ export default function Home() {
     
     return () => {
       clearTimeout(timeout);
-      // Note: intervals are cleaned up in the recursive function
     };
   }, [timezone]);
 
-  // Weather and timezone refresh timer - every 5 minutes using latest GPS (combined API call)
+  // === 🌤️ WEATHER & TIMEZONE REFRESH TIMER ===
   useEffect(() => {
     async function doWeatherUpdate() {
       if (lastWeatherCoords.current) {
         const [lat, lon] = lastWeatherCoords.current;
+        Logger.weather('Performing scheduled weather/timezone update', { lat, lon });
         
-        // Single combined API call gets both weather and timezone data
         const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
         
         if (result) {
@@ -736,6 +236,7 @@ export default function Home() {
             setValidWeather(true);
             setFirstWeatherChecked(true);
             lastWeatherUpdate.current = Date.now();
+            Logger.weather('Weather data updated successfully', result.weather);
           }
           
           // Update timezone if available and different
@@ -751,7 +252,9 @@ export default function Home() {
               setValidTimezone(true);
               setFirstTimezoneChecked(true);
               lastTimezoneUpdate.current = Date.now();
-            } catch {
+              Logger.overlay('Timezone updated successfully', { timezone: result.timezone });
+            } catch (error) {
+              Logger.error('Failed to set timezone', error);
               setValidTimezone(false);
               setFirstTimezoneChecked(true);
             }
@@ -761,289 +264,39 @@ export default function Home() {
     }
     
     if (weatherRefreshTimer.current) clearInterval(weatherRefreshTimer.current);
-    weatherRefreshTimer.current = setInterval(doWeatherUpdate, WEATHER_TIMEZONE_UPDATE_INTERVAL);
+    weatherRefreshTimer.current = setInterval(doWeatherUpdate, TIMERS.WEATHER_TIMEZONE_UPDATE);
+    
     return () => {
       if (weatherRefreshTimer.current) clearInterval(weatherRefreshTimer.current);
     };
   }, [timezone]);
 
-  // RTIRL integration and main data update logic
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
-    script.async = true;
-    document.body.appendChild(script);
-    script.onload = () => {
-      if (
-        typeof window !== 'undefined' &&
-        window.RealtimeIRL &&
-        RTIRL_PULL_KEY
-      ) {
-        window.RealtimeIRL.forPullKey(RTIRL_PULL_KEY).addListener((p: unknown) => {
-          if (!p || typeof p !== 'object') return;
-          const payload = p as RTIRLPayload;
-          
-          // Speed tracking for minimap
-          setSpeed(typeof payload.speed === 'number' ? payload.speed : 0);
-          
-          // Weather
-          if (
-            payload.weather &&
-            typeof payload.weather === 'object' &&
-            typeof payload.weather.temp === 'number' &&
-            payload.weather.icon &&
-            payload.weather.desc
-          ) {
-            const weatherData = {
-              temp: Math.round(payload.weather.temp),
-              icon: payload.weather.icon,
-              desc: payload.weather.desc,
-            };
-            setWeather(weatherData);
-            setValidWeather(true);
-            setFirstWeatherChecked(true);
-            lastWeatherUpdate.current = Date.now();
-            
-            // Note: No longer saving weather to KV - we fetch fresh from APIs using GPS
-          }
-          // Location
-          if (payload.location && typeof payload.location === 'object') {
-            const loc = payload.location;
-            setRawLocation(loc);
-            const label = formatLocation(loc);
-            const countryCode = loc.countryCode ? loc.countryCode.toLowerCase() : '';
-            if (label && countryCode) {
-              setLocation({ label, countryCode });
-              setValidLocation(true);
-              setFirstLocationChecked(true);
-              lastLocationUpdate.current = Date.now();
-            }
-          }
-          // Timezone
-          if (
-            payload.location &&
-            typeof payload.location === 'object' &&
-            payload.location.timezone &&
-            payload.location.timezone !== timezone
-          ) {
-            try {
-              formatter.current = new Intl.DateTimeFormat('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-                timeZone: payload.location.timezone,
-              });
-              setTimezone(payload.location.timezone);
-              setValidTimezone(true);
-              setFirstTimezoneChecked(true);
-              lastTimezoneUpdate.current = Date.now();
-              
-              // Note: No longer saving timezone to KV - we determine fresh from GPS coordinates
-            } catch {
-              setValidTimezone(false);
-              setFirstTimezoneChecked(true);
-            }
-          }
-          // Coordinates
-          let lat: number | null = null;
-          let lon: number | null = null;
-          if (payload.location) {
-            if (hasLatLon(payload.location)) {
-              lat = payload.location.lat;
-              lon = payload.location.lon;
-            } else if (hasLatitudeLongitude(payload.location)) {
-              lat = payload.location.latitude;
-              lon = payload.location.longitude;
-            }
-          }
-          if (lat !== null && lon !== null) {
-            // GPS is now purely real-time - no KV saving needed
-            updateFromCoordinates(lat, lon);
-            
-            // Update minimap coordinates for Mapbox
-            setMapCoords([lat, lon]);
-            
-            // Clear any existing timeout since we have fresh GPS data
-            if (minimapTimeout.current) {
-              clearTimeout(minimapTimeout.current);
-            }
-            
-            // Set timeout to hide minimap if no new GPS data after 2 minutes
-            minimapTimeout.current = setTimeout(() => {
-              setMapCoords(null);
-            }, 120000); // 2 minutes
-          }
-        });
-      }
-    };
-    return () => {
-      document.body.removeChild(script);
-    };
-    // eslint-disable-next-line
-  }, []);
-
-  // Smooth heart rate tempo transitions
-  useEffect(() => {
-    if (heartRate.bpm > 0 && heartRate.isConnected) {
-      // Clear any existing timeout since we have fresh data
-      if (heartRateTimeout.current) {
-        clearTimeout(heartRateTimeout.current);
-        heartRateTimeout.current = null;
-      }
-      
-      // Smoothly transition to new BPM over 2 seconds
-      const currentBpm = smoothHeartRate || heartRate.bpm;
-      const targetBpm = heartRate.bpm;
-      const steps = 20; // Number of transition steps
-      const stepSize = (targetBpm - currentBpm) / steps;
-      const stepDuration = 100; // ms per step (2 seconds total)
-      
-      let step = 0;
-      const transitionInterval = setInterval(() => {
-        step++;
-        const newBpm = currentBpm + (stepSize * step);
-        setSmoothHeartRate(newBpm);
-        
-        if (step >= steps) {
-          clearInterval(transitionInterval);
-          setSmoothHeartRate(targetBpm);
-        }
-      }, stepDuration);
-      
-      // Update animation BPM with a delay to prevent abrupt changes
-      if (animationUpdateTimeout.current) {
-        clearTimeout(animationUpdateTimeout.current);
-      }
-      
-      // Only update animation speed if the change is significant (>5 BPM difference)
-      const bpmDifference = Math.abs(targetBpm - stableAnimationBpm);
-      if (bpmDifference > 5 || stableAnimationBpm === 0) {
-        animationUpdateTimeout.current = setTimeout(() => {
-          setStableAnimationBpm(targetBpm);
-        }, 1000); // 1 second delay before updating animation speed
-      }
-      
-      // Set timeout to hide heart rate if no new data after 30 seconds
-      heartRateTimeout.current = setTimeout(() => {
-        setHeartRate(prev => ({ ...prev, isConnected: false, bpm: 0 }));
-        setSmoothHeartRate(0);
-        setStableAnimationBpm(0);
-      }, 30000);
-      
-      return () => {
-        clearInterval(transitionInterval);
-      };
-    }
-  }, [heartRate.bpm, heartRate.isConnected, smoothHeartRate, stableAnimationBpm]);
-
-  // Pulsoid heart rate integration
-  useEffect(() => {
-    let pulsoidSocket: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout | null = null;
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 10;
-    
-    function connectPulsoid() {
-      if (!PULSOID_TOKEN) {
-        console.log('Pulsoid token not provided, skipping heart rate integration');
-        return;
-      }
-      
-      try {
-        const wsUrl = `wss://dev.pulsoid.net/api/v1/data/real_time?access_token=${PULSOID_TOKEN}`;
-        pulsoidSocket = new WebSocket(wsUrl);
-        
-        pulsoidSocket.onopen = () => {
-          console.log('Pulsoid connected');
-          setHeartRate(prev => ({ ...prev, isConnected: true }));
-          reconnectAttempts = 0;
-        };
-        
-        pulsoidSocket.onmessage = (event) => {
-          try {
-            const data: PulsoidHeartRateData = JSON.parse(event.data);
-            if (data.data && typeof data.data.heart_rate === 'number') {
-              setHeartRate({
-                bpm: data.data.heart_rate,
-                lastUpdate: data.measured_at,
-                isConnected: true,
-              });
-            }
-          } catch (error) {
-            console.log('Failed to parse Pulsoid data:', error);
-          }
-        };
-        
-        pulsoidSocket.onclose = () => {
-          console.log('Pulsoid connection closed');
-          setHeartRate(prev => ({ ...prev, isConnected: false }));
-          
-          // Auto-reconnect with exponential backoff
-          if (reconnectAttempts < maxReconnectAttempts) {
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-            console.log(`Reconnecting to Pulsoid in ${delay}ms (attempt ${reconnectAttempts + 1})`);
-            reconnectTimeout = setTimeout(() => {
-              reconnectAttempts++;
-              connectPulsoid();
-            }, delay);
-          }
-        };
-        
-        pulsoidSocket.onerror = (error) => {
-          console.log('Pulsoid WebSocket error:', error);
-        };
-        
-      } catch (error) {
-        console.log('Failed to connect to Pulsoid:', error);
-      }
-    }
-    
-    // Start connection
-    connectPulsoid();
-    
-    return () => {
-      if (pulsoidSocket) {
-        pulsoidSocket.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-      if (heartRateTimeout.current) {
-        clearTimeout(heartRateTimeout.current);
-      }
-      if (animationUpdateTimeout.current) {
-        clearTimeout(animationUpdateTimeout.current);
-      }
-      if (minimapTimeout.current) {
-        clearTimeout(minimapTimeout.current);
-      }
-    };
-  }, []);
-
-  // Main data update logic - handles location updates only on 100m+ movement (max once per minute)
-  async function updateFromCoordinates(lat: number, lon: number) {
-    
-    if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+  // === 📍 LOCATION UPDATE LOGIC ===
+  const updateFromCoordinates = useCallback(async (lat: number, lon: number) => {
+    if (!isValidCoordinate(lat, lon)) {
+      Logger.error('Invalid coordinates received', { lat, lon });
       return;
     }
     
-    // Store coordinates for timer-based weather/timezone updates (always)
+    // Store coordinates for timer-based weather/timezone updates
     const hadCoords = lastWeatherCoords.current !== null;
     lastWeatherCoords.current = [lat, lon];
     
-    // If this is the first time we're getting coordinates, do immediate weather update
+    // If first time getting coordinates, do immediate weather update
     if (!hadCoords && !firstWeatherChecked) {
+      Logger.weather('First coordinates received - fetching immediate weather update');
       try {
         const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
         
-        if (result && result.weather) {
+        if (result?.weather) {
           setWeather(result.weather);
           setValidWeather(true);
           setFirstWeatherChecked(true);
           lastWeatherUpdate.current = Date.now();
+          Logger.weather('Initial weather data loaded', result.weather);
         }
         
-        if (result && result.timezone && result.timezone !== timezone) {
+        if (result?.timezone && result.timezone !== timezone) {
           try {
             formatter.current = new Intl.DateTimeFormat('en-US', {
               hour: 'numeric',
@@ -1055,17 +308,19 @@ export default function Home() {
             setValidTimezone(true);
             setFirstTimezoneChecked(true);
             lastTimezoneUpdate.current = Date.now();
-          } catch {
+            Logger.overlay('Initial timezone set', { timezone: result.timezone });
+          } catch (error) {
+            Logger.error('Failed to set initial timezone', error);
             setValidTimezone(false);
             setFirstTimezoneChecked(true);
           }
         }
       } catch (error) {
-        console.log('Immediate weather update failed:', error);
+        Logger.error('Immediate weather update failed', error);
       }
     }
     
-    // Check location update: only on 100m+ movement AND respecting 1-minute rate limit
+    // Check location update: only on significant movement AND respecting rate limit
     const now = Date.now();
     let shouldUpdateLocation = false;
     
@@ -1074,10 +329,16 @@ export default function Home() {
       const timeSinceLastUpdate = now - lastLocationUpdate.current;
       
       // Update only if: moved 100m+ AND at least 1 minute since last update
-      shouldUpdateLocation = distanceMoved >= LOCATION_DISTANCE_THRESHOLD && timeSinceLastUpdate >= LOCATION_UPDATE_INTERVAL;
+      shouldUpdateLocation = distanceMoved >= THRESHOLDS.LOCATION_DISTANCE && 
+                           timeSinceLastUpdate >= TIMERS.LOCATION_UPDATE;
+      
+      if (shouldUpdateLocation) {
+        Logger.location(`Significant movement detected: ${distanceMoved.toFixed(0)}m after ${(timeSinceLastUpdate / 1000).toFixed(0)}s`);
+      }
     } else {
-      // First update (no rate limit needed)
+      // First update
       shouldUpdateLocation = true;
+      Logger.location('First location update');
     }
     
     if (!shouldUpdateLocation) {
@@ -1086,129 +347,213 @@ export default function Home() {
     
     lastAPICoords.current = [lat, lon];
     
-    const coordKey = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-    currentCoords.current = coordKey;
-    
     // Update location name from LocationIQ
-    const loc = await fetchLocationFromLocationIQ(lat, lon);
-    if (loc) {
-      setRawLocation(loc);
-      const label = formatLocation(loc);
-      setLocation({ label, countryCode: loc.countryCode || '' });
-      setValidLocation(true);
-      setFirstLocationChecked(true);
-      lastLocationUpdate.current = now;
-      
-      // If LocationIQ provides timezone info, use it as a fallback
-      if (loc.timezone && loc.timezone !== timezone) {
-        try {
-          formatter.current = new Intl.DateTimeFormat('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: loc.timezone,
-          });
-          setTimezone(loc.timezone);
-          setValidTimezone(true);
-          setFirstTimezoneChecked(true);
-          lastTimezoneUpdate.current = now;
-        } catch {
-          setValidTimezone(false);
-          setFirstTimezoneChecked(true);
-        }
-      }
-    }
-  }
-
-  // Initial state
-  useEffect(() => {
-    setTime('Loading...');
-    setLocation(null);
-    setRawLocation(null);
-    setWeather(null);
-    setSpeed(0);
-    setShowOverlay(false);
-    setFirstWeatherChecked(false);
-    setFirstLocationChecked(false);
-    setFirstTimezoneChecked(false);
-    setValidWeather(false);
-    setValidLocation(false);
-    setValidTimezone(false);
-  }, []);
-
-  // Initial load from KV with periodic refresh
-  useEffect(() => {
-    async function loadSavedData() {
-      try {
-        // Note: Settings are now loaded via SSE as primary method
-        // This is only a fallback for timezone setup
+    if (API_KEYS.LOCATIONIQ) {
+      const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
+      if (loc) {
+        const label = formatLocation(loc);
+        setLocation({ label, countryCode: loc.countryCode || '' });
+        setValidLocation(true);
+        setFirstLocationChecked(true);
+        lastLocationUpdate.current = now;
+        Logger.location('Location name updated', { label, countryCode: loc.countryCode });
         
-        // Ensure timezone is set (fallback to browser timezone)
-        if (!timezone) {
+        // Use timezone from LocationIQ as fallback
+        if (loc.timezone && loc.timezone !== timezone) {
           try {
-            const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             formatter.current = new Intl.DateTimeFormat('en-US', {
               hour: 'numeric',
               minute: '2-digit',
               hour12: true,
-              timeZone: browserTimezone,
+              timeZone: loc.timezone,
             });
-            setTimezone(browserTimezone);
+            setTimezone(loc.timezone);
             setValidTimezone(true);
             setFirstTimezoneChecked(true);
+            lastTimezoneUpdate.current = now;
+            Logger.overlay('Timezone updated from LocationIQ', { timezone: loc.timezone });
           } catch (error) {
-            console.error('Failed to set browser timezone:', error);
+            Logger.error('Failed to set timezone from LocationIQ', error);
+            setValidTimezone(false);
             setFirstTimezoneChecked(true);
           }
         }
-      } catch (error) {
-        console.error('Failed to load saved data:', error);
       }
     }
-    
-    // Load timezone setup immediately
-    loadSavedData();
-    
-    // Set up periodic refresh for timezone only (settings handled by SSE)
-    const refreshInterval = setInterval(() => {
-      loadSavedData();
-    }, DATA_REFRESH_INTERVAL); // Refresh every 30 seconds for faster fallback syncing
-    
-         return () => {
-       clearInterval(refreshInterval);
-     };
-   }, [timezone]); // Include timezone dependency
+  }, [timezone, firstWeatherChecked]); // Add dependencies for the callback
 
-  // Settings real-time updates via Server-Sent Events with aggressive auto-reconnection
+  // === 📡 RTIRL INTEGRATION ===
+  useEffect(() => {
+    Logger.overlay('Initializing RealtimeIRL integration');
+    
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
+    script.async = true;
+    document.body.appendChild(script);
+    
+    script.onload = () => {
+      if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
+        Logger.overlay('RealtimeIRL API loaded, setting up listener');
+        
+        window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
+          if (!p || typeof p !== 'object') return;
+          const payload = p as RTIRLPayload;
+          
+          // Speed tracking for minimap
+          if (typeof payload.speed === 'number') {
+            setSpeed(payload.speed);
+            Logger.overlay(`Speed update: ${payload.speed.toFixed(1)} m/s (${(payload.speed * 3.6).toFixed(1)} km/h)`);
+          }
+          
+          // Weather data
+          if (payload.weather && 
+              typeof payload.weather.temp === 'number' &&
+              payload.weather.icon && 
+              payload.weather.desc) {
+            const weatherData = {
+              temp: Math.round(payload.weather.temp),
+              icon: payload.weather.icon,
+              desc: payload.weather.desc,
+            };
+            setWeather(weatherData);
+            setValidWeather(true);
+            setFirstWeatherChecked(true);
+            lastWeatherUpdate.current = Date.now();
+            Logger.weather('Weather data received from RTIRL', weatherData);
+          }
+          
+          // Location data
+          if (payload.location) {
+            const label = formatLocation(payload.location);
+            const countryCode = payload.location.countryCode ? payload.location.countryCode.toLowerCase() : '';
+            if (label && countryCode) {
+              setLocation({ label, countryCode });
+              setValidLocation(true);
+              setFirstLocationChecked(true);
+              lastLocationUpdate.current = Date.now();
+              Logger.location('Location data received from RTIRL', { label, countryCode });
+            }
+          }
+          
+          // Timezone data
+          if (payload.location?.timezone && payload.location.timezone !== timezone) {
+            try {
+              formatter.current = new Intl.DateTimeFormat('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: payload.location.timezone,
+              });
+              setTimezone(payload.location.timezone);
+              setValidTimezone(true);
+              setFirstTimezoneChecked(true);
+              lastTimezoneUpdate.current = Date.now();
+              Logger.overlay('Timezone updated from RTIRL', { timezone: payload.location.timezone });
+            } catch (error) {
+              Logger.error('Failed to set timezone from RTIRL', error);
+              setValidTimezone(false);
+              setFirstTimezoneChecked(true);
+            }
+          }
+          
+          // GPS coordinates
+          let lat: number | null = null;
+          let lon: number | null = null;
+          if (payload.location) {
+            if (hasLatLon(payload.location)) {
+              lat = payload.location.lat;
+              lon = payload.location.lon;
+            } else if (hasLatitudeLongitude(payload.location)) {
+              lat = payload.location.latitude;
+              lon = payload.location.longitude;
+            }
+          }
+          
+          if (lat !== null && lon !== null && isValidCoordinate(lat, lon)) {
+            Logger.overlay('GPS coordinates received', { lat, lon });
+            updateFromCoordinates(lat, lon);
+            
+            // Update minimap coordinates
+            setMapCoords([lat, lon]);
+            
+            // Clear existing timeout and set new one
+            if (minimapTimeout.current) {
+              clearTimeout(minimapTimeout.current);
+            }
+            minimapTimeout.current = setTimeout(() => {
+              Logger.overlay('GPS data timeout - hiding minimap');
+              setMapCoords(null);
+            }, TIMERS.MINIMAP_HIDE_DELAY);
+          }
+        });
+      } else {
+        Logger.warn('RealtimeIRL API not available or missing API key');
+      }
+    };
+    
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, [updateFromCoordinates]); // Add updateFromCoordinates dependency
+
+  // === 🎭 OVERLAY FADE-IN LOGIC ===
+  useEffect(() => {
+    if (!overlayShown.current &&
+        firstWeatherChecked &&
+        firstLocationChecked &&
+        firstTimezoneChecked &&
+        validWeather &&
+        validLocation &&
+        validTimezone) {
+      Logger.overlay('All data ready - showing overlay');
+      setShowOverlay(true);
+      overlayShown.current = true;
+    }
+  }, [firstWeatherChecked, firstLocationChecked, firstTimezoneChecked, validWeather, validLocation, validTimezone]);
+
+  // Force fade-in after timeout
+  useEffect(() => {
+    if (!overlayShown.current) {
+      const timeout = setTimeout(() => {
+        Logger.overlay('Timeout reached - forcing overlay to show');
+        setShowOverlay(true);
+        overlayShown.current = true;
+      }, TIMERS.OVERLAY_FADE_TIMEOUT);
+      return () => clearTimeout(timeout);
+    }
+  }, []);
+
+  // === 🎛️ SETTINGS MANAGEMENT ===
+  // (Settings SSE logic remains the same but with better logging)
   useEffect(() => {
     let eventSource: EventSource | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
     let reconnectAttempts = 0;
-         let isPolling = false;
-     let pollingInterval: NodeJS.Timeout | null = null;
+    let isPolling = false;
+    let pollingInterval: NodeJS.Timeout | null = null;
     
     function startPolling() {
       if (isPolling) return;
       isPolling = true;
-      console.log('Starting polling fallback for settings...');
+      Logger.settings('Starting polling fallback for settings');
       
       pollingInterval = setInterval(() => {
         authenticatedFetch('/api/get-settings')
           .then(res => res.json())
           .then(data => {
-            console.log('Polling: Settings loaded:', data);
+            Logger.settings('Settings loaded via polling', data);
             setSettings(data);
             
-            // Try to reconnect SSE every 10 polling cycles (50 seconds)
+            // Try to reconnect SSE every 10 polling cycles
             if (reconnectAttempts % 10 === 0) {
-              console.log('Attempting to restore SSE connection...');
+              Logger.settings('Attempting to restore SSE connection');
               stopPolling();
               reconnectAttempts = 0;
               connectSSE();
             }
           })
-          .catch(err => console.error('Polling: Failed to load settings:', err));
-      }, 5000); // Poll every 5 seconds
+          .catch(err => Logger.error('Polling failed to load settings', err));
+      }, 5000);
     }
     
     function stopPolling() {
@@ -1220,28 +565,27 @@ export default function Home() {
     }
     
     function connectSSE() {
-      console.log('Setting up SSE connection for settings...');
+      Logger.settings('Setting up SSE connection for real-time settings');
       
-              // Load settings immediately as fallback while SSE connects
-        authenticatedFetch('/api/get-settings')
-          .then(res => res.json())
-          .then(data => {
-            console.log('Pre-SSE: Loaded initial settings:', data);
-            setSettings(data);
-          })
-          .catch(err => console.error('Pre-SSE: Failed to load initial settings:', err));
+      // Load settings immediately as fallback
+      authenticatedFetch('/api/get-settings')
+        .then(res => res.json())
+        .then(data => {
+          Logger.settings('Initial settings loaded before SSE', data);
+          setSettings(data);
+        })
+        .catch(err => Logger.error('Failed to load initial settings', err));
       
-      // Close existing connection
       if (eventSource) {
         eventSource.close();
       }
       
-              eventSource = createAuthenticatedEventSource('/api/settings-stream');
+      eventSource = createAuthenticatedEventSource('/api/settings-stream');
       
       eventSource.onopen = () => {
-        console.log('SSE connection opened');
-        reconnectAttempts = 0; // Reset on successful connection
-        stopPolling(); // Stop polling when SSE is working
+        Logger.settings('SSE connection established successfully');
+        reconnectAttempts = 0;
+        stopPolling();
       };
       
       eventSource.onmessage = (event) => {
@@ -1249,42 +593,38 @@ export default function Home() {
           const data = JSON.parse(event.data);
           
           if (data.type === 'heartbeat') {
-            console.log('[OVERLAY SSE] Heartbeat received');
             return; // Ignore heartbeat messages
           }
           
           if (data.type === 'settings_update') {
             const latency = Date.now() - (data.timestamp || 0);
-            console.log(`[OVERLAY SSE] Settings update received (${latency}ms latency):`, data);
+            Logger.settings(`Real-time settings update received (${latency}ms latency)`, data);
             
-            // Extract just the settings (remove metadata)
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { timestamp, type, ...settingsOnly } = data;
             setSettings(settingsOnly);
-            console.log('[OVERLAY SSE] Settings state updated:', settingsOnly);
             return;
           }
           
-          // Legacy format (without timestamp/type)
-          console.log('[OVERLAY SSE] Settings update received (legacy format):', data);
+          // Legacy format
+          Logger.settings('Settings update received (legacy format)', data);
           setSettings(data);
-          console.log('[OVERLAY SSE] Settings state updated (legacy):', data);
         } catch (error) {
-          console.error('[OVERLAY SSE] Failed to parse settings update:', error);
+          Logger.error('Failed to parse settings update', error);
         }
       };
       
       eventSource.onerror = (error) => {
-        console.error('Settings stream error:', error, 'ReadyState:', eventSource?.readyState);
+        Logger.error(`SSE connection error (ReadyState: ${eventSource?.readyState})`, error);
         
-        if (eventSource?.readyState === EventSource.CLOSED || eventSource?.readyState === EventSource.CONNECTING) {
-          console.log('SSE connection closed or failed to connect');
+        if (eventSource?.readyState === EventSource.CLOSED || 
+            eventSource?.readyState === EventSource.CONNECTING) {
+          Logger.settings('SSE connection lost - attempting reconnection');
           
           reconnectAttempts++;
-          const delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttempts - 1, 5)), 30000); // Cap at 30s
-          console.log(`Attempting to reconnect SSE in ${delay}ms (attempt ${reconnectAttempts})`);
+          const delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttempts - 1, 5)), 30000);
+          Logger.settings(`Reconnecting SSE in ${delay}ms (attempt ${reconnectAttempts})`);
           
-          // Always try to reconnect, but start polling as backup after a few attempts
           if (reconnectAttempts >= 3 && !isPolling) {
             startPolling();
           }
@@ -1296,11 +636,10 @@ export default function Home() {
       };
     }
     
-    // Initial connection
     connectSSE();
     
     return () => {
-      console.log('Cleaning up SSE connection and polling');
+      Logger.settings('Cleaning up SSE connection and polling');
       if (eventSource) {
         eventSource.close();
       }
@@ -1311,42 +650,9 @@ export default function Home() {
     };
   }, []);
 
-  // Reformat location when raw location changes
-  useEffect(() => {
-    if (rawLocation) {
-      const label = formatLocation(rawLocation);
-      const countryCode = rawLocation.countryCode ? rawLocation.countryCode.toLowerCase() : '';
-      if (label && countryCode) {
-        setLocation({ label, countryCode });
-      }
-    }
-  }, [rawLocation]);
-
-  // Type guards for coordinates
-  function hasLatLon(obj: unknown): obj is { lat: number; lon: number } {
-    return (
-      typeof obj === 'object' &&
-      obj !== null &&
-      typeof (obj as { lat?: unknown }).lat === 'number' &&
-      typeof (obj as { lon?: unknown }).lon === 'number'
-    );
-  }
-
-  function hasLatitudeLongitude(obj: unknown): obj is { latitude: number; longitude: number } {
-    return (
-      typeof obj === 'object' &&
-      obj !== null &&
-      typeof (obj as { latitude?: unknown }).latitude === 'number' &&
-      typeof (obj as { longitude?: unknown }).longitude === 'number'
-    );
-  }
-
-  // Note: No longer saving location to KV - we fetch fresh from APIs using GPS coordinates
-
-  // Speed-based minimap logic
+  // === 🏃‍♂️ SPEED-BASED MINIMAP LOGIC ===
   useEffect(() => {
     if (!settings.minimapSpeedBased) {
-      // Reset when speed-based mode is disabled
       speedBasedVisible.current = false;
       speedAboveThresholdCount.current = 0;
       if (speedHideTimeout.current) {
@@ -1358,79 +664,73 @@ export default function Home() {
 
     const kmh = speed * 3.6;
     
-    if (kmh >= 10) {
-      // Speed is above threshold
+    if (kmh >= THRESHOLDS.SPEED_SHOW) {
       speedAboveThresholdCount.current++;
       
-      // Show map after 3 successive readings above 10km/h
-      if (speedAboveThresholdCount.current >= 3) {
-        speedBasedVisible.current = true;
+      if (speedAboveThresholdCount.current >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
+        if (!speedBasedVisible.current) {
+          Logger.overlay(`Speed threshold reached - showing minimap (${kmh.toFixed(1)} km/h)`);
+          speedBasedVisible.current = true;
+        }
         
-        // Clear any existing hide timeout
         if (speedHideTimeout.current) {
           clearTimeout(speedHideTimeout.current);
           speedHideTimeout.current = null;
         }
       }
     } else {
-      // Speed is below threshold
       speedAboveThresholdCount.current = 0;
       
-      // Start hide timer if map is currently visible
       if (speedBasedVisible.current && !speedHideTimeout.current) {
         speedHideTimeout.current = setTimeout(() => {
+          Logger.overlay(`Speed below threshold - hiding minimap (${kmh.toFixed(1)} km/h)`);
           speedBasedVisible.current = false;
           speedHideTimeout.current = null;
-        }, 10000); // 10 seconds delay
+        }, TIMERS.SPEED_HIDE_DELAY);
       }
     }
-    
-    return () => {
-      if (speedHideTimeout.current) {
-        clearTimeout(speedHideTimeout.current);
-      }
-    };
   }, [speed, settings.minimapSpeedBased]);
 
-  // Render
+  // === 🌅 INITIAL STATE SETUP ===
+  useEffect(() => {
+    Logger.overlay('Setting up initial overlay state');
+    
+    // Set initial browser timezone as fallback
+    if (!timezone) {
+      try {
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        formatter.current = new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: browserTimezone,
+        });
+        setTimezone(browserTimezone);
+        setValidTimezone(true);
+        setFirstTimezoneChecked(true);
+        Logger.overlay('Browser timezone set as fallback', { timezone: browserTimezone });
+      } catch (error) {
+        Logger.error('Failed to set browser timezone', error);
+        setFirstTimezoneChecked(true);
+      }
+    }
+  }, [timezone]);
+
+  // === 🎨 RENDER OVERLAY ===
   return (
     <div 
       id="overlay" 
       className={showOverlay && hasVisibleElements ? 'show' : ''}
     >
-      {/* Stream Vitals - Heart Rate Monitor */}
-      {heartRate.isConnected && heartRate.bpm > 0 && (
-        <div 
-          className="stream-vitals corner-top-left"
-          style={{
-            background: getHeartRateColors(Math.round(smoothHeartRate || heartRate.bpm)).background
-          }}
-        >
-          <div className="vitals-content">
-            <div 
-              className="vitals-icon beating"
-              style={{
-                animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s'
-              }}
-            >
-              ❤️
-            </div>
-            <div className="vitals-text">
-              <span className="vitals-value">{Math.round(smoothHeartRate || heartRate.bpm)}</span>
-              <span className="vitals-label">BPM</span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Heart Rate Monitor - Auto-show when data available */}
+      <HeartRateMonitor pulsoidToken={API_KEYS.PULSOID} />
 
       {/* Stream Info and Movement Container */}
       <div className="stream-container" style={{ position: 'absolute', top: '10px', right: '10px' }}>
         {/* Stream Info - Live Status Display */}
         <div className="stream-info">
           {settings.showTime && (
-            <div 
-              className={`stream-time ${!validTimezone ? 'hidden' : ''}`}
-            >
+            <div className={`stream-time ${!validTimezone ? 'hidden' : ''}`}>
               <span>{time}</span>
               {location && location.countryCode && settings.showLocation && (
                 <Image
@@ -1444,16 +744,12 @@ export default function Home() {
             </div>
           )}
           {settings.showLocation && (
-            <div 
-              className={`stream-location ${!validLocation ? 'hidden' : ''}`}
-            >
+            <div className={`stream-location ${!validLocation ? 'hidden' : ''}`}>
               {location && location.label}
             </div>
           )}
           {settings.showWeather && (
-            <div 
-              className={`stream-weather ${!validWeather ? 'hidden' : ''}`}
-            >
+            <div className={`stream-weather ${!validWeather ? 'hidden' : ''}`}>
               {weather && (
                 <>
                   <div className="weather-temp" style={{
@@ -1487,25 +783,16 @@ export default function Home() {
         </div>
 
         {/* Stream Movement - GPS Minimap */}
-        {shouldShowMinimap() && (
+        {shouldShowMinimap() && mapCoords && (
           <div className="stream-movement">
-            <MapboxMinimap lat={mapCoords![0]} lon={mapCoords![1]} isVisible={true} />
+            <LeafletMinimap 
+              lat={mapCoords[0]} 
+              lon={mapCoords[1]} 
+              isVisible={true}
+            />
           </div>
         )}
       </div>
-
-      {/* 
-        === FUTURE STREAM ELEMENTS ===
-        Bottom-left/Bottom-right: Chat Alerts, Stream Stats, or Recent Events
-        Additional stream elements can use the unified .stream-element base class
-        or specialized classes like .stream-stats, .stream-alerts, etc.
-        
-        Current Layout:
-        Top-left: Heart Rate (auto-show)
-        Top-right: Time, Location, Weather
-        Top-right-below: GPS Minimap (manual toggle)
-        Bottom corners: Available for future features
-      */}
     </div>
   );
-} 
+}

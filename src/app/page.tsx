@@ -3,36 +3,106 @@
 import { useState, useEffect } from 'react';
 import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import '@/styles/admin.css';
 
+// === 🎛️ ADMIN PANEL LOGGER ===
+const AdminLogger = {
+  info: (message: string, data?: unknown) => 
+    console.log(`🎛️ [ADMIN PANEL] ${message}`, data || ''),
+  
+  auth: (message: string, data?: unknown) => 
+    console.log(`🔐 [ADMIN AUTH] ${message}`, data || ''),
+  
+  settings: (message: string, data?: unknown) => 
+    console.log(`⚙️ [ADMIN SETTINGS] ${message}`, data || ''),
+  
+  error: (message: string, error?: unknown) => 
+    console.error(`❌ [ADMIN ERROR] ${message}`, error || ''),
+  
+  warn: (message: string, data?: unknown) => 
+    console.warn(`⚠️ [ADMIN WARNING] ${message}`, data || ''),
+} as const;
+
+// === 🎛️ ADMIN PANEL COMPONENT ===
 export default function AdminPage() {
+  AdminLogger.info('Admin panel initialized');
+
+  // === 🔐 AUTHENTICATION STATE ===
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // === ⚙️ SETTINGS STATE ===
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
+  
+  // === 💬 UI STATE ===
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
+  // === 🔐 SESSION MANAGEMENT ===
+  
   // Check for existing session on load
   useEffect(() => {
+    AdminLogger.auth('Checking for existing authentication session');
     const savedAuth = localStorage.getItem('admin_authenticated');
     if (savedAuth === 'true') {
+      AdminLogger.auth('Found valid session - authenticating user');
       setIsAuthenticated(true);
+    } else {
+      AdminLogger.auth('No valid session found - user needs to login');
     }
   }, []);
 
   // Load current settings when authenticated
   useEffect(() => {
     if (isAuthenticated) {
+      AdminLogger.settings('User authenticated - loading current settings');
+      setIsLoading(true);
+      
       authenticatedFetch('/api/get-settings')
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          return res.json();
+        })
         .then(data => {
-          console.log('Loaded current settings:', data);
+          AdminLogger.settings('Settings loaded successfully', data);
           setSettings(data);
         })
-        .catch(err => console.error('Failed to load current settings:', err));
+        .catch(err => {
+          AdminLogger.error('Failed to load settings', err);
+          showToast('Failed to load settings. Please refresh the page.', 'error');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
   }, [isAuthenticated]);
 
+  // === 💬 TOAST NOTIFICATION SYSTEM ===
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    AdminLogger.info(`Showing ${type} toast: ${message}`);
+    setSaveToastMessage(message);
+    setShowSaveToast(true);
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      setShowSaveToast(false);
+    }, 3000);
+  };
+
+  // === 🔐 AUTHENTICATION HANDLERS ===
   const handleLogin = async () => {
+    if (!password.trim()) {
+      AdminLogger.warn('Login attempted with empty password');
+      showToast('Please enter a password', 'error');
+      return;
+    }
+
+    AdminLogger.auth('Attempting login...');
+    setIsLoading(true);
+
     try {
       const response = await fetch('/api/admin-login', {
         method: 'POST',
@@ -41,661 +111,335 @@ export default function AdminPage() {
       });
       
       if (response.ok) {
+        AdminLogger.auth('Login successful - setting up session');
         setIsAuthenticated(true);
         localStorage.setItem('admin_authenticated', 'true');
-        setPassword(''); // Clear password field
+        setPassword(''); // Clear password field for security
+        showToast('Successfully logged in!', 'success');
       } else {
-        alert('Incorrect password');
+        AdminLogger.auth('Login failed - incorrect password');
+        showToast('Incorrect password. Please try again.', 'error');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      alert('Login failed');
+      AdminLogger.error('Login request failed', error);
+      showToast('Login failed. Please check your connection and try again.', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleLogout = () => {
+    AdminLogger.auth('User logging out - clearing session');
     setIsAuthenticated(false);
     localStorage.removeItem('admin_authenticated');
+    setPassword('');
+    setSettings(DEFAULT_OVERLAY_SETTINGS);
+    showToast('Successfully logged out', 'success');
   };
 
-  const saveSettings = async (newSettings = settings, showAlert = true) => {
-    const startTime = Date.now();
-    
+  // === ⚙️ SETTINGS HANDLERS ===
+  const handleSettingsChange = (newSettings: Partial<OverlaySettings>) => {
+    const updatedSettings = { ...settings, ...newSettings };
+    AdminLogger.settings('Settings changed locally', { 
+      changed: newSettings, 
+      full: updatedSettings 
+    });
+    setSettings(updatedSettings);
+  };
+
+  const handleSaveSettings = async () => {
+    AdminLogger.settings('Attempting to save settings', settings);
+    setIsLoading(true);
+
     try {
       const response = await authenticatedFetch('/api/save-settings', {
         method: 'POST',
-        body: JSON.stringify(newSettings),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
       });
-      
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const result = await response.json();
-      const clientTime = Date.now() - startTime;
-      
-      console.log(`Settings save complete - Client: ${clientTime}ms, Server: ${result.saveTime || 'unknown'}ms`);
-      
-      if (showAlert) {
-        alert(`Settings saved! (${clientTime}ms)`);
-      } else {
-        // Show toast notification for auto-saves
-        setSaveToastMessage(`Saved (${clientTime}ms)`);
-        setShowSaveToast(true);
-        setTimeout(() => setShowSaveToast(false), 2000);
-      }
+      AdminLogger.settings('Settings saved successfully', result);
+      showToast('Settings saved successfully!', 'success');
     } catch (error) {
-      const clientTime = Date.now() - startTime;
-      console.error(`Settings save failed after ${clientTime}ms:`, error);
-      
-      if (showAlert) {
-        alert('Failed to save settings');
-      } else {
-        setSaveToastMessage('Save failed');
-        setShowSaveToast(true);
-        setTimeout(() => setShowSaveToast(false), 3000);
-      }
+      AdminLogger.error('Failed to save settings', error);
+      showToast('Failed to save settings. Please try again.', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const updateSetting = async (key: keyof OverlaySettings, value: boolean | string) => {
-    const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
-    await saveSettings(newSettings, false); // Auto-save without alert
+  // === 📧 KEYBOARD HANDLERS ===
+  const handlePasswordKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isLoading) {
+      handleLogin();
+    }
   };
 
+  // === 🎨 RENDER LOGIN FORM ===
   if (!isAuthenticated) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#0a0a0a',
-        color: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: 'system-ui, -apple-system, sans-serif'
-      }}>
-        <div style={{
-          backgroundColor: '#1a1a1a',
-          padding: '32px',
-          borderRadius: '12px',
-          border: '1px solid #333',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          maxWidth: '400px',
-          width: '100%'
-        }}>
-          <h1 style={{
-            fontSize: '24px',
-            fontWeight: 'bold',
-            marginBottom: '24px',
-            textAlign: 'center'
-          }}>Admin Panel</h1>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <input
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              style={{
-                width: '100%',
-                padding: '12px',
-                backgroundColor: '#333',
-                border: '1px solid #555',
-                borderRadius: '4px',
-                color: 'white',
-                fontSize: '16px'
-              }}
-            />
-            <button
-              onClick={handleLogin}
-              style={{
-                width: '100%',
-                backgroundColor: '#0066cc',
-                color: 'white',
-                padding: '12px',
-                borderRadius: '4px',
-                border: 'none',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: 'pointer'
-              }}
-            >
-              Login
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{
-      background: '#0a0a0a',
-      color: '#e2e8f0',
-      padding: '16px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      minHeight: '100vh',
-      overflowX: 'hidden'
-    }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Mobile-First Header */}
-        <div style={{
-          marginBottom: '24px',
-          background: '#1a1a1a',
-          borderRadius: '16px',
-          border: '1px solid #333',
-          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-          overflow: 'hidden'
-        }}>
-          {/* Title Section */}
-          <div style={{
-            padding: '20px 20px 16px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
-            <div style={{
-              width: '48px',
-              height: '48px',
-              background: 'linear-gradient(45deg, #22c55e, #16a34a)',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '24px',
-              flexShrink: 0
-            }}>
-              ⚡
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h1 style={{ 
-                fontSize: '28px', 
-                fontWeight: '700', 
-                margin: 0,
-                color: '#ffffff',
-                lineHeight: '1.2'
-              }}>
-                Control Center
-              </h1>
-              <p style={{ 
-                margin: '4px 0 0 0', 
-                fontSize: '14px', 
-                opacity: 0.8,
-                fontWeight: '400'
-              }}>
-                Real-time overlay management
-              </p>
-            </div>
-          </div>
-          
-          {/* Action Buttons */}
-          <div style={{
-            padding: '0 20px 20px 20px',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: '12px'
-          }}>
-            <button
-              onClick={() => window.open('/overlay', '_blank')}
-              style={{
-                background: 'linear-gradient(45deg, #10b981, #059669)',
-                color: 'white',
-                padding: '14px 16px',
-                borderRadius: '12px',
-                border: '1px solid #065f46',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
-                transition: 'all 0.2s ease',
-                minHeight: '48px',
-                position: 'relative'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 20px rgba(34, 197, 94, 0.4)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(34, 197, 94, 0.3)';
-              }}
-            >
-              <span style={{ fontSize: '16px' }}>🚀</span>
-              <span>Open Overlay</span>
-            </button>
+      <div className="admin-container">
+        <div className="admin-content">
+          <div className="admin-login">
+            <h1>🎮 Admin Panel</h1>
+            <p>Configure your streaming overlay settings</p>
             
-            <button
-              onClick={handleLogout}
-              style={{
-                background: 'linear-gradient(45deg, #dc2626, #b91c1c)',
-                color: 'white',
-                padding: '14px 16px',
-                borderRadius: '12px',
-                border: 'none',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 16px rgba(220, 38, 38, 0.3)',
-                transition: 'all 0.2s ease',
-                minHeight: '48px'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 20px rgba(220, 38, 38, 0.4)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(220, 38, 38, 0.3)';
-              }}
+            <div className="form-group">
+              <label htmlFor="password">Password:</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyPress={handlePasswordKeyPress}
+                placeholder="Enter admin password"
+                disabled={isLoading}
+                className={isLoading ? 'loading' : ''}
+              />
+            </div>
+            
+            <button 
+              onClick={handleLogin} 
+              disabled={isLoading}
+              className={`primary ${isLoading ? 'loading' : ''}`}
             >
-              <span style={{ fontSize: '16px' }}>👋</span>
-              <span>Logout</span>
+              {isLoading ? '🔄 Logging in...' : '🔐 Login'}
             </button>
-          </div>
-        </div>
-
-        {/* Settings Section */}
-        <div style={{
-          background: '#1a1a1a',
-          borderRadius: '16px',
-          border: '1px solid #333',
-          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-          overflow: 'hidden'
-        }}>
-          {/* Settings Header */}
-          <div style={{
-            padding: '24px 20px 16px 20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '18px',
-                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
-              }}>
-                ⚙️
-              </div>
-              <div>
-                <h2 style={{ 
-                  fontSize: '22px', 
-                  fontWeight: '700', 
-                  margin: 0,
-                  background: 'linear-gradient(45deg, #ffffff, #e2e8f0)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}>
-                  Display Settings
-                </h2>
-                <p style={{
-                  margin: '2px 0 0 0',
-                  fontSize: '13px',
-                  opacity: 0.7
-                }}>
-                  Configure what appears on your streaming overlay
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          {/* Settings Controls */}
-          <div style={{
-            padding: '20px'
-          }}>
-            <div style={{ 
-              display: 'grid',
-              gap: '16px'
-            }}>
-              {[
-                { 
-                  key: 'showTime', 
-                  label: 'Time Display', 
-                  icon: '🕐', 
-                  desc: 'Show current local time'
-                },
-                { 
-                  key: 'showLocation', 
-                  label: 'Location Display', 
-                  icon: '📍', 
-                  desc: 'Show current city and country'
-                },
-                { 
-                  key: 'showWeather', 
-                  label: 'Weather Display', 
-                  icon: '🌤️', 
-                  desc: 'Show temperature and conditions'
-                },
-                { 
-                  key: 'showMinimap', 
-                  label: 'GPS Minimap', 
-                  icon: '🗺️', 
-                  desc: 'Show circular minimap with current location' 
-                },
-                { 
-                  key: 'minimapSpeedBased', 
-                  label: 'Speed-Based Minimap', 
-                  icon: '🚗', 
-                  desc: 'Auto-show map when moving >10 km/h' 
-                }
-              ].map(({ key, label, icon, desc }) => (
-                <div key={key} style={{
-                  background: '#262626',
-                  borderRadius: '12px',
-                  border: '1px solid #404040',
-                  padding: '20px',
-                  transition: 'all 0.2s ease'
-                }}>
-                  <label style={{ 
-                    display: 'flex', 
-                    alignItems: 'flex-start', 
-                    gap: '16px', 
-                    cursor: 'pointer',
-                    width: '100%'
-                  }}>
-                    <div style={{
-                      position: 'relative',
-                      width: '52px',
-                      height: '32px',
-                      background: (settings[key as keyof OverlaySettings] as boolean)
-                        ? 'linear-gradient(45deg, #22c55e, #16a34a)' 
-                        : 'rgba(255, 255, 255, 0.2)',
-                      borderRadius: '16px',
-                      transition: 'all 0.3s ease',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      boxShadow: settings[key as keyof OverlaySettings] 
-                        ? '0 4px 12px rgba(34, 197, 94, 0.3)' 
-                        : '0 2px 8px rgba(0, 0, 0, 0.1)'
-                    }}>
-                      <div style={{
-                        position: 'absolute',
-                        top: '2px',
-                        left: settings[key as keyof OverlaySettings] ? '22px' : '2px',
-                        width: '28px',
-                        height: '28px',
-                        background: 'white',
-                        borderRadius: '50%',
-                        transition: 'all 0.3s ease',
-                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '14px'
-                      }}>
-                        {(settings[key as keyof OverlaySettings] as boolean) ? '✓' : ''}
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={settings[key as keyof OverlaySettings] as boolean}
-                        onChange={(e) => updateSetting(key as keyof OverlaySettings, e.target.checked)}
-                        style={{ 
-                          opacity: 0, 
-                          position: 'absolute', 
-                          width: '100%', 
-                          height: '100%',
-                          cursor: 'pointer',
-                          margin: 0
-                        }}
-                      />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        marginBottom: '6px',
-                        flexWrap: 'wrap'
-                      }}>
-                        <span style={{ fontSize: '20px' }}>{icon}</span>
-                        <span style={{ 
-                          fontSize: '18px', 
-                          fontWeight: '600',
-                          color: 'white'
-                        }}>
-                          {label}
-                        </span>
-                      </div>
-                      <p style={{
-                        margin: '0',
-                        fontSize: '14px',
-                        opacity: 0.8,
-                        lineHeight: '1.4'
-                      }}>
-                        {desc}
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              ))}
-            </div>
-
-            {/* Weather Sub-Controls - Separate Section */}
-            {settings.showWeather && (
-              <div style={{
-                background: '#262626',
-                borderRadius: '12px',
-                border: '1px solid #404040',
-                padding: '20px',
-                marginTop: '20px',
-                transition: 'all 0.2s ease'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  marginBottom: '16px'
-                }}>
-                  <span style={{ fontSize: '20px' }}>🌤️</span>
-                  <div>
-                    <h3 style={{ 
-                      fontSize: '18px', 
-                      fontWeight: '600', 
-                      margin: 0,
-                      color: '#e2e8f0'
-                    }}>
-                      Weather Options
-                    </h3>
-                    <p style={{ 
-                      fontSize: '14px', 
-                      color: '#94a3b8', 
-                      margin: 0 
-                    }}>
-                      Customize weather display details
-                    </p>
-                  </div>
-                </div>
-
-                {/* Weather Condition Toggle */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '16px'
-                }}>
-                  <span style={{ fontSize: '15px', fontWeight: '500', color: '#e2e8f0' }}>Show Weather Condition</span>
-                  <div style={{
-                    position: 'relative',
-                    width: '52px',
-                    height: '32px',
-                    background: settings.showWeatherCondition 
-                      ? 'linear-gradient(45deg, #22c55e, #16a34a)' 
-                      : 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: '16px',
-                    transition: 'all 0.3s ease',
-                    cursor: 'pointer',
-                    boxShadow: settings.showWeatherCondition 
-                      ? '0 4px 12px rgba(34, 197, 94, 0.3)' 
-                      : '0 2px 8px rgba(0, 0, 0, 0.1)'
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      top: '2px',
-                      left: settings.showWeatherCondition ? '22px' : '2px',
-                      width: '28px',
-                      height: '28px',
-                      background: 'white',
-                      borderRadius: '50%',
-                      transition: 'all 0.3s ease',
-                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px'
-                    }}>
-                      {settings.showWeatherCondition ? '✓' : ''}
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.showWeatherCondition}
-                      onChange={(e) => updateSetting('showWeatherCondition', e.target.checked)}
-                      style={{
-                        opacity: 0,
-                        position: 'absolute',
-                        width: '100%',
-                        height: '100%',
-                        cursor: 'pointer',
-                        margin: 0
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Weather Icon Toggle */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '16px'
-                }}>
-                  <span style={{ fontSize: '15px', fontWeight: '500', color: '#e2e8f0' }}>Show Weather Icon</span>
-                  <div style={{
-                    position: 'relative',
-                    width: '52px',
-                    height: '32px',
-                    background: settings.showWeatherIcon 
-                      ? 'linear-gradient(45deg, #22c55e, #16a34a)' 
-                      : 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: '16px',
-                    transition: 'all 0.3s ease',
-                    cursor: 'pointer',
-                    boxShadow: settings.showWeatherIcon 
-                      ? '0 4px 12px rgba(34, 197, 94, 0.3)' 
-                      : '0 2px 8px rgba(0, 0, 0, 0.1)'
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      top: '2px',
-                      left: settings.showWeatherIcon ? '22px' : '2px',
-                      width: '28px',
-                      height: '28px',
-                      background: 'white',
-                      borderRadius: '50%',
-                      transition: 'all 0.3s ease',
-                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '14px'
-                    }}>
-                      {settings.showWeatherIcon ? '✓' : ''}
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.showWeatherIcon}
-                      onChange={(e) => updateSetting('showWeatherIcon', e.target.checked)}
-                      style={{
-                        opacity: 0,
-                        position: 'absolute',
-                        width: '100%',
-                        height: '100%',
-                        cursor: 'pointer',
-                        margin: 0
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Weather Icon Position Dropdown */}
-                {settings.showWeatherIcon && (
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ fontSize: '15px', fontWeight: '500', color: '#e2e8f0' }}>Icon Position</span>
-                    <select
-                      value={settings.weatherIconPosition}
-                      onChange={(e) => updateSetting('weatherIconPosition', e.target.value as 'left' | 'right')}
-                      style={{
-                        background: '#333',
-                        border: '1px solid #555',
-                        borderRadius: '8px',
-                        padding: '8px 12px',
-                        color: '#e2e8f0',
-                        fontSize: '14px',
-                        cursor: 'pointer',
-                        minWidth: '140px'
-                      }}
-                    >
-                      <option value="left" style={{ background: '#1a1a1a', color: '#e2e8f0' }}>Icon on left</option>
-                      <option value="right" style={{ background: '#1a1a1a', color: '#e2e8f0' }}>Icon on right</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
         {/* Toast Notification */}
         {showSaveToast && (
-          <div style={{
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            zIndex: 1000,
-            background: 'rgba(0, 0, 0, 0.9)',
-            color: 'white',
-            padding: '12px 20px',
-            borderRadius: '12px',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-            fontSize: '14px',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            animation: 'slideInUp 0.3s ease-out',
-            transform: showSaveToast ? 'translateY(0)' : 'translateY(100%)',
-            transition: 'transform 0.3s ease-out'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              background: saveToastMessage.includes('failed') ? '#ef4444' : '#22c55e',
-              borderRadius: '50%',
-              flexShrink: 0
-            }} />
+          <div className={`toast ${saveToastMessage.includes('Failed') ? 'error' : 'success'}`}>
             {saveToastMessage}
           </div>
         )}
       </div>
+    );
+  }
+
+  // === 🎨 RENDER ADMIN PANEL ===
+  return (
+    <div className="admin-container">
+      <div className="admin-content">
+        <div className="admin-header">
+          <h1>🎮 Streaming Overlay Admin</h1>
+          <p>Configure your live stream overlay settings</p>
+          <button onClick={handleLogout} className="logout-btn">
+            🚪 Logout
+          </button>
+        </div>
+
+        {isLoading && (
+          <div className="loading-indicator">
+            <span>🔄 Loading...</span>
+          </div>
+        )}
+
+        <div className="settings-grid">
+          {/* ⏰ Time Settings */}
+          <div className="settings-section">
+            <h2>⏰ Time Display</h2>
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.showTime}
+                  onChange={(e) => handleSettingsChange({ showTime: e.target.checked })}
+                />
+                <span className="checkmark"></span>
+                Show current time
+              </label>
+              <p className="help-text">Displays local time based on current timezone</p>
+            </div>
+          </div>
+
+          {/* 📍 Location Settings */}
+          <div className="settings-section">
+            <h2>📍 Location Display</h2>
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.showLocation}
+                  onChange={(e) => handleSettingsChange({ showLocation: e.target.checked })}
+                />
+                <span className="checkmark"></span>
+                Show current location
+              </label>
+              <p className="help-text">Displays city/state and country with flag</p>
+            </div>
+          </div>
+
+          {/* 🌤️ Weather Settings */}
+          <div className="settings-section">
+            <h2>🌤️ Weather Display</h2>
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.showWeather}
+                  onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
+                />
+                <span className="checkmark"></span>
+                Show current weather
+              </label>
+              <p className="help-text">Temperature and conditions from Open-Meteo</p>
+            </div>
+            
+            {settings.showWeather && (
+              <>
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.showWeatherIcon}
+                      onChange={(e) => handleSettingsChange({ showWeatherIcon: e.target.checked })}
+                    />
+                    <span className="checkmark"></span>
+                    Show weather icon
+                  </label>
+                </div>
+                
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.showWeatherCondition}
+                      onChange={(e) => handleSettingsChange({ showWeatherCondition: e.target.checked })}
+                    />
+                    <span className="checkmark"></span>
+                    Show weather description
+                  </label>
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="iconPosition">Weather icon position:</label>
+                  <select
+                    id="iconPosition"
+                    value={settings.weatherIconPosition}
+                    onChange={(e) => handleSettingsChange({ 
+                      weatherIconPosition: e.target.value as 'left' | 'right' 
+                    })}
+                  >
+                    <option value="right">Right of temperature</option>
+                    <option value="left">Left of temperature</option>
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 🗺️ Minimap Settings */}
+          <div className="settings-section">
+            <h2>🗺️ GPS Minimap</h2>
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.showMinimap}
+                  onChange={(e) => handleSettingsChange({ showMinimap: e.target.checked })}
+                />
+                <span className="checkmark"></span>
+                Show minimap manually
+              </label>
+              <p className="help-text">Always show minimap regardless of movement</p>
+            </div>
+            
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.minimapSpeedBased}
+                  onChange={(e) => handleSettingsChange({ minimapSpeedBased: e.target.checked })}
+                />
+                <span className="checkmark"></span>
+                Auto-show when moving
+              </label>
+              <p className="help-text">Show minimap automatically when speed ≥ 10 km/h</p>
+            </div>
+            
+            <div className="info-box">
+              <h4>🎯 Minimap Behavior</h4>
+              <ul>
+                <li><strong>Manual:</strong> Shows/hides based on toggle above</li>
+                <li><strong>Speed-based:</strong> Auto-appears when moving fast</li>
+                <li><strong>Both enabled:</strong> Shows in either condition</li>
+                <li><strong>3D view:</strong> Buildings and realistic perspective</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* 💾 Save Settings */}
+        <div className="save-section">
+          <button 
+            onClick={handleSaveSettings} 
+            disabled={isLoading}
+            className={`save-btn ${isLoading ? 'loading' : ''}`}
+          >
+            {isLoading ? '🔄 Saving...' : '💾 Save Settings'}
+          </button>
+          <p className="help-text">
+            Changes are applied in real-time to the overlay
+          </p>
+        </div>
+
+        {/* 📖 Information Section */}
+        <div className="info-section">
+          <h2>📖 Usage Information</h2>
+          <div className="info-grid">
+            <div className="info-card">
+              <h3>🎮 Overlay URL</h3>
+              <p>Add this URL as a Browser Source in OBS:</p>
+              <code>{window.location.origin}/overlay</code>
+            </div>
+            
+            <div className="info-card">
+              <h3>💗 Heart Rate Monitor</h3>
+              <p>Heart rate display appears automatically when:</p>
+              <ul>
+                <li>Pulsoid token is configured</li>
+                <li>Heart rate monitor is connected</li>
+                <li>BPM data is being received</li>
+              </ul>
+            </div>
+            
+            <div className="info-card">
+              <h3>🗺️ GPS Minimap</h3>
+              <p>Minimap status:</p>
+              <ul>
+                <li><strong>Token:</strong> {process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN ? '✅ Configured' : '❌ Missing'}</li>
+                <li><strong>Required:</strong> NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN</li>
+                <li><strong>Get token:</strong> <a href="https://account.mapbox.com/access-tokens/" target="_blank" rel="noopener noreferrer" style={{color: '#22c55e'}}>Mapbox Account</a></li>
+                <li><strong>3D view:</strong> Buildings and realistic perspective</li>
+              </ul>
+            </div>
+            
+            <div className="info-card">
+              <h3>🔧 Technical Details</h3>
+              <ul>
+                <li><strong>Real-time updates:</strong> Settings change instantly</li>
+                <li><strong>GPS tracking:</strong> Updates on 100m+ movement</li>
+                <li><strong>Weather data:</strong> Refreshes every 5 minutes</li>
+                <li><strong>Auto-hide:</strong> Elements hide when data unavailable</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Toast Notification */}
+      {showSaveToast && (
+        <div className={`toast ${saveToastMessage.includes('Failed') ? 'error' : 'success'}`}>
+          {saveToastMessage}
+        </div>
+      )}
     </div>
   );
 } 
