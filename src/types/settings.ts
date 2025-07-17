@@ -8,6 +8,7 @@ export interface OverlaySettings {
   showWeatherCondition: boolean;
   weatherIconPosition: 'left' | 'right';
   showMinimap: boolean;
+  minimapSpeedBased: boolean;
 }
 
 // Default settings (single source of truth)
@@ -19,6 +20,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showWeatherCondition: true,
   weatherIconPosition: 'right',
   showMinimap: false,
+  minimapSpeedBased: false,
 };
 
 // Valid settings schema for validation
@@ -30,6 +32,7 @@ export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'
   showWeatherCondition: 'boolean',
   weatherIconPosition: 'string',
   showMinimap: 'boolean',
+  minimapSpeedBased: 'boolean',
 };
 
 export const VALID_WEATHER_ICON_POSITIONS = ['left', 'right'] as const;

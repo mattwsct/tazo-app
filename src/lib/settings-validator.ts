@@ -64,6 +64,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     showWeatherCondition: cleanSettings.showWeatherCondition ?? DEFAULT_OVERLAY_SETTINGS.showWeatherCondition,
     weatherIconPosition: cleanSettings.weatherIconPosition ?? DEFAULT_OVERLAY_SETTINGS.weatherIconPosition,
     showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
+    minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
   };
 
   return completeSettings;

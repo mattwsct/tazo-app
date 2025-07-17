@@ -213,6 +213,33 @@ function MapboxMinimap({ lat, lon, isVisible }: { lat: number; lon: number; isVi
         .addTo(map.current);
     });
 
+    // Handle WebGL context lost/restored events
+    map.current.on('webglcontextlost', () => {
+      console.log('WebGL context lost - map will attempt to recover');
+    });
+
+    map.current.on('webglcontextrestored', () => {
+      console.log('WebGL context restored - map should be visible again');
+      // Force a refresh of the map
+      if (map.current) {
+        map.current.resize();
+        map.current.triggerRepaint();
+      }
+    });
+
+    // Add error handler for general map errors
+    map.current.on('error', (e) => {
+      console.log('Map error occurred:', e);
+      // Try to recover by reloading the style
+      if (map.current && e.error && e.error.message.includes('WebGL')) {
+        setTimeout(() => {
+          if (map.current) {
+            map.current.setStyle('mapbox://styles/mapbox/streets-v12');
+          }
+        }, 1000);
+      }
+    });
+
     return () => {
       // Restore original console methods
       console.warn = originalWarn;
@@ -550,6 +577,7 @@ export default function Home() {
   const [location, setLocation] = useState<{ label: string; countryCode: string } | null>(null);
   const [rawLocation, setRawLocation] = useState<RTIRLLocation | null>(null);
   const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
+  const [speed, setSpeed] = useState(0);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [validWeather, setValidWeather] = useState(false);
   const [validLocation, setValidLocation] = useState(false);
@@ -586,12 +614,26 @@ export default function Home() {
   const weatherRefreshTimer = useRef<NodeJS.Timeout | null>(null);
   const overlayShown = useRef(false);
   
+  // Speed-based minimap refs
+  const speedBasedVisible = useRef(false);
+  const speedAboveThresholdCount = useRef(0);
+  const speedHideTimeout = useRef<NodeJS.Timeout | null>(null);
+  
   // Time formatter
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
 
   // Determine if minimap should be visible based on settings
   const shouldShowMinimap = () => {
-    return settings.showMinimap && mapCoords && MAPBOX_ACCESS_TOKEN;
+    if (!mapCoords || !MAPBOX_ACCESS_TOKEN) return false;
+    
+    // Manual mode: show if manual toggle is enabled
+    const manualShow = settings.showMinimap;
+    
+    // Speed-based mode: show if speed-based toggle is enabled AND moving
+    const speedBasedShow = settings.minimapSpeedBased && speedBasedVisible.current;
+    
+    // Show map if either condition is met
+    return manualShow || speedBasedShow;
   };
 
   // Check if any overlay elements should be visible
@@ -740,6 +782,10 @@ export default function Home() {
         window.RealtimeIRL.forPullKey(RTIRL_PULL_KEY).addListener((p: unknown) => {
           if (!p || typeof p !== 'object') return;
           const payload = p as RTIRLPayload;
+          
+          // Speed tracking for minimap
+          setSpeed(typeof payload.speed === 'number' ? payload.speed : 0);
+          
           // Weather
           if (
             payload.weather &&
@@ -1080,6 +1126,7 @@ export default function Home() {
     setLocation(null);
     setRawLocation(null);
     setWeather(null);
+    setSpeed(0);
     setShowOverlay(false);
     setFirstWeatherChecked(false);
     setFirstLocationChecked(false);
@@ -1295,6 +1342,55 @@ export default function Home() {
   }
 
   // Note: No longer saving location to KV - we fetch fresh from APIs using GPS coordinates
+
+  // Speed-based minimap logic
+  useEffect(() => {
+    if (!settings.minimapSpeedBased) {
+      // Reset when speed-based mode is disabled
+      speedBasedVisible.current = false;
+      speedAboveThresholdCount.current = 0;
+      if (speedHideTimeout.current) {
+        clearTimeout(speedHideTimeout.current);
+        speedHideTimeout.current = null;
+      }
+      return;
+    }
+
+    const kmh = speed * 3.6;
+    
+    if (kmh >= 10) {
+      // Speed is above threshold
+      speedAboveThresholdCount.current++;
+      
+      // Show map after 3 successive readings above 10km/h
+      if (speedAboveThresholdCount.current >= 3) {
+        speedBasedVisible.current = true;
+        
+        // Clear any existing hide timeout
+        if (speedHideTimeout.current) {
+          clearTimeout(speedHideTimeout.current);
+          speedHideTimeout.current = null;
+        }
+      }
+    } else {
+      // Speed is below threshold
+      speedAboveThresholdCount.current = 0;
+      
+      // Start hide timer if map is currently visible
+      if (speedBasedVisible.current && !speedHideTimeout.current) {
+        speedHideTimeout.current = setTimeout(() => {
+          speedBasedVisible.current = false;
+          speedHideTimeout.current = null;
+        }, 10000); // 10 seconds delay
+      }
+    }
+    
+    return () => {
+      if (speedHideTimeout.current) {
+        clearTimeout(speedHideTimeout.current);
+      }
+    };
+  }, [speed, settings.minimapSpeedBased]);
 
   // Render
   return (

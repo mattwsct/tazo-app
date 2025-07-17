@@ -385,6 +385,12 @@ export default function AdminPage() {
                   label: 'GPS Minimap', 
                   icon: '🗺️', 
                   desc: 'Show circular minimap with current location' 
+                },
+                { 
+                  key: 'minimapSpeedBased', 
+                  label: 'Speed-Based Minimap', 
+                  icon: '🚗', 
+                  desc: 'Auto-show map when moving >10 km/h' 
                 }
               ].map(({ key, label, icon, desc }) => (
                 <div key={key} style={{
