@@ -35,37 +35,37 @@ const HeartRateLogger = {
 function getHeartRateColors(bpm: number) {
   if (bpm <= 0) {
     return {
-      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.4) 0%, rgba(30, 30, 40, 0.4) 100%)',
+      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.65) 0%, rgba(30, 30, 40, 0.65) 100%)',
       description: 'Disconnected'
     };
   } else if (bpm <= 60) {
     return {
-      background: 'linear-gradient(135deg, rgba(30, 40, 60, 0.4) 0%, rgba(40, 50, 70, 0.4) 100%)',
+      background: 'linear-gradient(135deg, rgba(30, 40, 60, 0.65) 0%, rgba(40, 50, 70, 0.65) 100%)',
       description: 'Resting'
     };
   } else if (bpm <= 100) {
     return {
-      background: 'linear-gradient(135deg, rgba(40, 40, 60, 0.4) 0%, rgba(60, 50, 70, 0.4) 100%)',
+      background: 'linear-gradient(135deg, rgba(40, 40, 60, 0.65) 0%, rgba(60, 50, 70, 0.65) 100%)',
       description: 'Normal'
     };
   } else if (bpm <= 120) {
     return {
-      background: 'linear-gradient(135deg, rgba(60, 40, 50, 0.4) 0%, rgba(80, 50, 60, 0.4) 100%)',
+      background: 'linear-gradient(135deg, rgba(60, 40, 50, 0.65) 0%, rgba(80, 50, 60, 0.65) 100%)',
       description: 'Elevated'
     };
   } else if (bpm <= 140) {
     return {
-      background: 'linear-gradient(135deg, rgba(80, 40, 40, 0.4) 0%, rgba(100, 50, 50, 0.4) 100%)',
+      background: 'linear-gradient(135deg, rgba(80, 40, 40, 0.65) 0%, rgba(100, 50, 50, 0.65) 100%)',
       description: 'High'
     };
   } else if (bpm <= 160) {
     return {
-      background: 'linear-gradient(135deg, rgba(100, 35, 35, 0.4) 0%, rgba(120, 45, 45, 0.4) 100%)',
+      background: 'linear-gradient(135deg, rgba(100, 35, 35, 0.65) 0%, rgba(120, 45, 45, 0.65) 100%)',
       description: 'Very High'
     };
   } else {
     return {
-      background: 'linear-gradient(135deg, rgba(120, 30, 30, 0.4) 0%, rgba(140, 40, 40, 0.4) 100%)',
+      background: 'linear-gradient(135deg, rgba(120, 30, 30, 0.65) 0%, rgba(140, 40, 40, 0.65) 100%)',
       description: 'Maximum'
     };
   }
@@ -239,7 +239,6 @@ export default function HeartRateMonitor({ pulsoidToken }: HeartRateMonitorProps
     <div 
       className="stream-vitals corner-top-left"
       style={{ background: colors.background }}
-      title={`Heart Rate: ${colors.description}`}
     >
       <div className="vitals-content">
         <div 

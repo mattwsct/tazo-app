@@ -30,7 +30,7 @@ import {
 } from '@/utils/overlay-utils';
 import HeartRateMonitor from '@/components/HeartRateMonitor';
 import dynamic from 'next/dynamic';
-const LeafletMinimap = dynamic(() => import('@/components/LeafletMinimap'), {
+const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
   ssr: false,
   loading: () => <div className="minimap-placeholder" />
 });
@@ -773,14 +773,23 @@ export default function OverlayPage() {
           )}
         </div>
 
-        {/* Stream Movement - GPS Minimap */}
+        {/* Stream Movement - GPS Minimap with Speed */}
         {shouldShowMinimap() && mapCoords && (
           <div className="stream-movement">
-            <LeafletMinimap 
+            <MapboxMinimap 
               lat={mapCoords[0]} 
               lon={mapCoords[1]} 
               isVisible={true}
             />
+            {/* Speed Display - shows when moving */}
+            {speed > 0 && (
+              <div className="stream-speed-display">
+                <span className="speed-value">
+                  {(speed * 3.6).toFixed(0)}
+                </span>
+                <span className="speed-unit">km/h</span>
+              </div>
+            )}
           </div>
         )}
       </div>

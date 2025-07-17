@@ -77,12 +77,12 @@ body.overlay-page {
 .vitals-content {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   min-height: 3rem; /* Ensure consistent container height */
 }
 
 .vitals-icon {
-  font-size: 2.4rem; /* Increased from 1.8rem for better visibility */
+  font-size: 2.5rem; /* Match the time font size */
   line-height: 1;
   display: flex;
   align-items: center;
@@ -99,34 +99,35 @@ body.overlay-page {
 .vitals-text {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center; /* Center align the BPM label */
   line-height: 1.1;
 }
 
 .vitals-value {
-  font-size: 1.8rem; /* Increased from 1.4rem to match location/weather prominence */
-  font-weight: 700;
+  font-size: 2.5rem; /* Match the time font size exactly */
+  font-weight: 600; /* Match the time font weight */
   line-height: 1;
   letter-spacing: -0.02em;
 }
 
 .vitals-label {
-  font-size: 0.85rem; /* Increased from 0.7rem for better readability */
-  font-weight: 500;
+  font-size: 0.9rem; /* Slightly larger for better readability */
+  font-weight: 700; /* Heavier font weight */
   opacity: 0.9;
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: -1px; /* Adjusted for better alignment with centered heart */
+  text-align: center; /* Center the BPM text */
 }
 
 /* === STREAM INFO (Main Info Card) === */
 .stream-info {
   text-align: right;
   background: linear-gradient(135deg, 
-    rgba(30, 20, 60, 0.4) 0%, 
-    rgba(20, 30, 50, 0.4) 50%, 
-    rgba(40, 20, 80, 0.4) 100%);
+    rgba(30, 20, 60, 0.65) 0%, 
+    rgba(20, 30, 50, 0.65) 50%, 
+    rgba(40, 20, 80, 0.65) 100%);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
@@ -225,35 +226,50 @@ body.overlay-page {
   transform: translateY(16px);
   overflow: hidden;
   background: linear-gradient(135deg, 
-    rgba(30, 20, 60, 0.2) 0%, 
-    rgba(20, 30, 50, 0.2) 50%, 
-    rgba(40, 20, 80, 0.2) 100%);
+    rgba(30, 20, 60, 0.4) 0%, 
+    rgba(20, 30, 50, 0.4) 50%, 
+    rgba(40, 20, 80, 0.4) 100%);
 }
 
-.minimap-tile {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-  opacity: 0.95;
-}
-
-.minimap-center-dot {
+/* Speed Display within Minimap */
+.stream-speed-display {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 12px;
-  height: 12px;
-  background: #22c55e;
-  border: 3px solid rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  box-shadow: 
-    0 0 20px rgba(34, 197, 94, 0.8),
-    0 0 40px rgba(34, 197, 94, 0.4),
-    0 2px 8px rgba(0, 0, 0, 0.4);
-  z-index: 2;
+  bottom: -40px;
+  right: 0;
+  background: linear-gradient(135deg, 
+    rgba(30, 20, 60, 0.65) 0%, 
+    rgba(20, 30, 50, 0.65) 50%, 
+    rgba(40, 20, 80, 0.65) 100%);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: white;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  min-width: 80px;
+  justify-content: center;
 }
+
+.speed-value {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.speed-unit {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+
+
+
 
 /* === UTILITY CLASSES === */
 .hidden {
