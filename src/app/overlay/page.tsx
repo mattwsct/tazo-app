@@ -467,14 +467,17 @@ export default function OverlayPage() {
             // Update minimap coordinates
             setMapCoords([lat, lon]);
             
-            // Clear existing timeout and set new one
+            // Clear existing timeout and set new one (only if not manually enabled)
             if (minimapTimeout.current) {
               clearTimeout(minimapTimeout.current);
             }
-            minimapTimeout.current = setTimeout(() => {
-              Logger.overlay('GPS data timeout - hiding minimap');
-              setMapCoords(null);
-            }, TIMERS.MINIMAP_HIDE_DELAY);
+            if (!settings.showMinimap) {
+              // Only auto-hide if manual display is not enabled
+              minimapTimeout.current = setTimeout(() => {
+                Logger.overlay('GPS data timeout - hiding minimap (auto-hide only)');
+                setMapCoords(null);
+              }, TIMERS.MINIMAP_HIDE_DELAY);
+            }
           }
         });
       } else {
@@ -640,6 +643,25 @@ export default function OverlayPage() {
       stopPolling();
     };
   }, []);
+
+  // === 🗺️ MANUAL MINIMAP SETTING LOGIC ===
+  useEffect(() => {
+    // Clear auto-hide timeout when manual display is enabled
+    if (settings.showMinimap && minimapTimeout.current) {
+      Logger.overlay('Manual minimap enabled - clearing auto-hide timeout');
+      clearTimeout(minimapTimeout.current);
+      minimapTimeout.current = null;
+    }
+    
+    // Set auto-hide timeout when manual display is disabled and we have coordinates
+    if (!settings.showMinimap && mapCoords && !minimapTimeout.current) {
+      Logger.overlay('Manual minimap disabled - setting auto-hide timeout');
+      minimapTimeout.current = setTimeout(() => {
+        Logger.overlay('GPS data timeout - hiding minimap (manual disabled)');
+        setMapCoords(null);
+      }, TIMERS.MINIMAP_HIDE_DELAY);
+    }
+  }, [settings.showMinimap, mapCoords]);
 
   // === 🏃‍♂️ SPEED-BASED MINIMAP LOGIC ===
   useEffect(() => {
