@@ -13,34 +13,24 @@ declare global {
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Image from 'next/image';
-import dynamic from 'next/dynamic';
 import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
-
-// Import new components and utilities
-import HeartRateMonitor from '@/components/HeartRateMonitor';
 import { 
-  formatLocation, 
-  distanceInMeters, 
-  capitalizeWords, 
-  hasLatLon, 
-  hasLatitudeLongitude, 
-  isValidCoordinate,
-  type LocationData 
-} from '@/utils/overlay-utils';
-import { 
-  fetchLocationFromLocationIQ, 
   fetchWeatherAndTimezoneFromOpenMeteo,
-  type WeatherData 
+  fetchLocationFromLocationIQ,
 } from '@/utils/api-utils';
-
-// Dynamic imports for map components to prevent SSR issues
+import {
+  formatLocation,
+  distanceInMeters,
+  isValidCoordinate,
+  hasLatLon,
+  hasLatitudeLongitude,
+  capitalizeWords,
+  type LocationData
+} from '@/utils/overlay-utils';
+import HeartRateMonitor from '@/components/HeartRateMonitor';
+import dynamic from 'next/dynamic';
 const LeafletMinimap = dynamic(() => import('@/components/LeafletMinimap'), {
-  ssr: false,
-  loading: () => <div className="minimap-placeholder" />
-});
-
-const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
   ssr: false,
   loading: () => <div className="minimap-placeholder" />
 });
@@ -100,7 +90,7 @@ interface RTIRLWeather {
 interface RTIRLPayload {
   speed?: number;
   weather?: RTIRLWeather;
-  location?: LocationData;
+  location?: { lat: number; lon: number; countryCode?: string; timezone?: string };
 }
 
 // === 🎮 MAIN OVERLAY COMPONENT ===
@@ -120,7 +110,7 @@ export default function OverlayPage() {
   const [showOverlay, setShowOverlay] = useState(false);
   const [time, setTime] = useState('Loading...');
   const [location, setLocation] = useState<{ label: string; countryCode: string } | null>(null);
-  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
   const [speed, setSpeed] = useState(0);
   const [timezone, setTimezone] = useState<string | null>(null);
   
@@ -269,7 +259,7 @@ export default function OverlayPage() {
     return () => {
       if (weatherRefreshTimer.current) clearInterval(weatherRefreshTimer.current);
     };
-  }, [timezone]);
+  }, [timezone, setWeather, setValidWeather, setFirstWeatherChecked, setTimezone, setValidTimezone, setFirstTimezoneChecked]);
 
   // === 📍 LOCATION UPDATE LOGIC ===
   const updateFromCoordinates = useCallback(async (lat: number, lon: number) => {
@@ -464,8 +454,9 @@ export default function OverlayPage() {
               lat = payload.location.lat;
               lon = payload.location.lon;
             } else if (hasLatitudeLongitude(payload.location)) {
-              lat = payload.location.latitude;
-              lon = payload.location.longitude;
+              const loc = payload.location as LocationData;
+              lat = loc.latitude ?? null;
+              lon = loc.longitude ?? null;
             }
           }
           
