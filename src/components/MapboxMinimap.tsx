@@ -1,5 +1,7 @@
 "use client";
 
+import Image from 'next/image';
+
 interface MapboxMinimapProps {
   lat: number;
   lon: number;
@@ -19,38 +21,49 @@ export default function MapboxMinimap({ lat, lon, isVisible }: MapboxMinimapProp
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   if (!mapboxToken) return null;
 
-  const size = 300; // Larger image to crop out copyright
-  const url = `/api/static-map?lat=${lat}&lon=${lon}&zoom=${MINIMAP_CONFIG.ZOOM_LEVEL}&size=${size}`;
+  const size = 200;
+  // Request a larger image to ensure copyright is visible but will be cropped by the circle
+  const imageSize = Math.ceil(size * 1.2); // 20% larger to ensure copyright is included
+  const url = `/api/static-map?lat=${lat}&lon=${lon}&zoom=${MINIMAP_CONFIG.ZOOM_LEVEL}&size=${imageSize}`;
 
   return (
     <div
       style={{
-        width: "100%",
-        height: "100%",
+        width: "200px",
+        height: "200px",
         borderRadius: "50%",
         overflow: "hidden",
         position: "relative",
         background: "#f8fafc",
         border: "2px solid rgba(255, 255, 255, 0.9)",
-        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+        boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+        transform: "translateZ(0)",
+        outline: "none",
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      <img
+      <Image
         src={url}
         alt="Map preview"
+        width={imageSize}
+        height={imageSize}
         style={{
-          width: "150%", // Larger than container to crop out edges
-          height: "150%", // Larger than container to crop out edges
-          borderRadius: "50%",
+          width: `${imageSize}px`,
+          height: `${imageSize}px`,
           objectFit: "cover",
           opacity: 0.95,
           position: "absolute",
-          top: "-25%", // Center the larger image
-          left: "-25%", // Center the larger image
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)", // Center the larger image
         }}
         draggable={false}
       />
-      {/* Center green dot with glow */}
+      {/* Center green dot with simplified glow for OBS compatibility */}
       <div
         style={{
           position: "absolute",
@@ -61,12 +74,10 @@ export default function MapboxMinimap({ lat, lon, isVisible }: MapboxMinimapProp
           background: MINIMAP_CONFIG.MARKER_COLOR,
           borderRadius: "50%",
           transform: "translate(-50%, -50%)",
-          boxShadow: `0 0 20px ${MINIMAP_CONFIG.MARKER_GLOW}, 0 0 40px ${MINIMAP_CONFIG.MARKER_GLOW}, 0 0 60px ${MINIMAP_CONFIG.MARKER_GLOW}, 0 2px 8px rgba(0,0,0,0.4)`,
+          boxShadow: `0 0 8px ${MINIMAP_CONFIG.MARKER_GLOW}, 0 2px 4px rgba(0,0,0,0.3)`,
           zIndex: 2,
         }}
       />
-      
-
     </div>
   );
 } 

@@ -54,6 +54,13 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
 }
 
 /**
+ * Converts Celsius to Fahrenheit
+ */
+export function celsiusToFahrenheit(celsius: number): number {
+  return Math.round(celsius * 9 / 5 + 32);
+}
+
+/**
  * Formats location data for overlay display
  * Follows user preference: City, Country OR State, Country (max 16 chars per field)
  */
@@ -212,31 +219,7 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
   return true;
 }
 
-// === 🔧 TYPE GUARDS ===
 
-/**
- * Type guard for lat/lon coordinate format
- */
-export function hasLatLon(obj: unknown): obj is { lat: number; lon: number } {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    typeof (obj as { lat?: unknown }).lat === 'number' &&
-    typeof (obj as { lon?: unknown }).lon === 'number'
-  );
-}
-
-/**
- * Type guard for latitude/longitude coordinate format
- */
-export function hasLatitudeLongitude(obj: unknown): obj is { latitude: number; longitude: number } {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    typeof (obj as { latitude?: unknown }).latitude === 'number' &&
-    typeof (obj as { longitude?: unknown }).longitude === 'number'
-  );
-}
 
 /**
  * Validates coordinate values are within valid ranges

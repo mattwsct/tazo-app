@@ -16,7 +16,6 @@ export default function AdminPage() {
   const showToastMessage = (message: string) => {
     setToastMessage(message);
     setShowToast(true);
-    // Shorter duration for success messages, longer for errors
     const duration = message.includes('✓') ? 1500 : 3000;
     setTimeout(() => setShowToast(false), duration);
   };
@@ -86,7 +85,24 @@ export default function AdminPage() {
 
   // === ⚙️ SETTINGS HANDLERS ===
   const handleSettingsChange = async (newSettings: Partial<OverlaySettings>) => {
-    const updatedSettings = { ...settings, ...newSettings };
+    let updatedSettings = { ...settings, ...newSettings };
+    
+    // Auto-disable minimap settings when location is turned off
+    if (newSettings.showLocation === false) {
+      updatedSettings = {
+        ...updatedSettings,
+        showMinimap: false,
+        minimapSpeedBased: false,
+      };
+    }
+    // Auto-enable minimapSpeedBased when location is turned ON
+    if (newSettings.showLocation === true) {
+      updatedSettings = {
+        ...updatedSettings,
+        minimapSpeedBased: true,
+      };
+    }
+    
     setSettings(updatedSettings);
     
     // Auto-save on every change
@@ -98,11 +114,8 @@ export default function AdminPage() {
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      // Show brief success toast
-      showToastMessage('✓ Saved');
+      showToastMessage('Saved');
     } catch {
-      // Only show error toast for critical failures, not module resolution issues
-      // The settings are actually being saved successfully as shown in the logs
       console.warn('Auto-save warning (settings may still be saved):', newSettings);
     }
   };
@@ -113,18 +126,18 @@ export default function AdminPage() {
       <div className="admin-container">
         <div className="admin-content">
           <div className="admin-login">
-            <h1>🎮 Admin Panel</h1>
-            <p>Configure your streaming overlay settings</p>
+            <h1>🎮 Stream Control Panel</h1>
+            <p>Configure your live streaming overlay</p>
             
             <div className="form-group">
-              <label htmlFor="password">Password:</label>
+              <label htmlFor="password">Admin Password:</label>
               <input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleLogin()}
-                placeholder="Enter admin password"
+                placeholder="Enter password"
                 disabled={isLoading}
                 className={isLoading ? 'loading' : ''}
               />
@@ -135,7 +148,7 @@ export default function AdminPage() {
               disabled={isLoading}
               className={`primary ${isLoading ? 'loading' : ''}`}
             >
-              {isLoading ? '🔄 Logging in...' : '🔐 Login'}
+              {isLoading ? '🔄 Logging in...' : '🔐 Access Panel'}
             </button>
           </div>
         </div>
@@ -153,154 +166,238 @@ export default function AdminPage() {
   return (
     <div className="admin-container">
       <div className="admin-content">
+        {/* Header */}
         <div className="admin-header">
-          <h1>🎮 Streaming Overlay Admin</h1>
-          <p>Configure your live stream overlay settings</p>
+          <div className="header-main">
+            <h1>🎮 Stream Control</h1>
+            <p>Configure your live streaming overlay</p>
+          </div>
           <div className="header-actions">
             <a 
               href="/overlay" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="overlay-link"
+              className="preview-btn"
             >
-              🖥️ Open Overlay
+              <span className="btn-icon">🖥️</span>
+              <span className="btn-text">Preview</span>
             </a>
             <button onClick={handleLogout} className="logout-btn">
-              🚪 Logout
+              <span className="btn-icon">🚪</span>
+              <span className="btn-text">Logout</span>
             </button>
           </div>
         </div>
 
         {isLoading && (
-          <div className="loading-indicator">
-            <span>🔄 Loading...</span>
+          <div className="loading-overlay">
+            <div className="loading-spinner"></div>
+            <span>Loading settings...</span>
           </div>
         )}
 
-        <div className="settings-grid">
-          {/* ⏰ Time Settings */}
-          <div className="settings-section">
-            <h2>⏰ Time Display</h2>
-            <div className="form-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.showTime}
-                  onChange={(e) => handleSettingsChange({ showTime: e.target.checked })}
-                />
-                <span className="checkmark"></span>
-                Show current time
-              </label>
-            </div>
+        {/* Settings Container */}
+        <div className="settings-container">
+          <div className="settings-header">
+            <h2>Overlay Settings</h2>
+            <p>Toggle features on/off for your stream</p>
           </div>
 
-          {/* 📍 Location Settings */}
-          <div className="settings-section">
-            <h2>📍 Location Display</h2>
-            <div className="form-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.showLocation}
-                  onChange={(e) => handleSettingsChange({ showLocation: e.target.checked })}
-                />
-                <span className="checkmark"></span>
-                Show current location
-              </label>
+          <div className="settings-list">
+            {/* Time Display */}
+            <div className="setting-item">
+              <div className="setting-info">
+                <div className="setting-icon">⏰</div>
+                <div className="setting-details">
+                  <h3>Time Display</h3>
+                  <p>Show current local time</p>
+                </div>
+              </div>
+              <div className="setting-control">
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.showTime}
+                    onChange={(e) => handleSettingsChange({ showTime: e.target.checked })}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
             </div>
-          </div>
 
-          {/* 🌤️ Weather Settings */}
-          <div className="settings-section">
-            <h2>🌤️ Weather Display</h2>
-            <div className="form-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.showWeather}
-                  onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
-                />
-                <span className="checkmark"></span>
-                Show current weather
-              </label>
+            {/* Location Display */}
+            <div className="setting-item">
+              <div className="setting-info">
+                <div className="setting-icon">📍</div>
+                <div className="setting-details">
+                  <h3>Location Display</h3>
+                  <p>Show current city and country</p>
+                </div>
+              </div>
+              <div className="setting-control">
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.showLocation}
+                    onChange={(e) => handleSettingsChange({ showLocation: e.target.checked })}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
             </div>
-            
+
+            {/* GPS Minimap - Only show if location is enabled */}
+            {settings.showLocation && (
+              <div className="setting-item sub-setting">
+                <div className="setting-info">
+                  <div className="setting-icon">🗺️</div>
+                  <div className="setting-details">
+                    <h3>GPS Minimap</h3>
+                    <p>Show live location map</p>
+                  </div>
+                </div>
+                <div className="setting-control">
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.showMinimap}
+                      onChange={(e) => handleSettingsChange({ showMinimap: e.target.checked })}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Auto-show when moving - Only show if location is enabled */}
+            {settings.showLocation && (
+              <div className="setting-item sub-setting">
+                <div className="setting-info">
+                  <div className="setting-icon">🏃</div>
+                  <div className="setting-details">
+                    <h3>Auto-show when moving</h3>
+                    <p>Display minimap only when traveling</p>
+                  </div>
+                </div>
+                <div className="setting-control">
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.minimapSpeedBased}
+                      onChange={(e) => handleSettingsChange({ minimapSpeedBased: e.target.checked })}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Weather Display */}
+            <div className="setting-item">
+              <div className="setting-info">
+                <div className="setting-icon">🌤️</div>
+                <div className="setting-details">
+                  <h3>Weather Display</h3>
+                  <p>Show temperature and conditions</p>
+                </div>
+              </div>
+              <div className="setting-control">
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={settings.showWeather}
+                    onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            {/* Weather Sub-settings - Only show if weather is enabled */}
             {settings.showWeather && (
               <>
-                <div className="form-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={settings.showWeatherIcon}
-                      onChange={(e) => handleSettingsChange({ showWeatherIcon: e.target.checked })}
-                    />
-                    <span className="checkmark"></span>
-                    Show weather icon
-                  </label>
+                <div className="setting-item sub-setting">
+                  <div className="setting-info">
+                    <div className="setting-icon">🌡️</div>
+                    <div className="setting-details">
+                      <h3>Weather Icon</h3>
+                      <p>Show weather condition icon</p>
+                    </div>
+                  </div>
+                  <div className="setting-control">
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={settings.showWeatherIcon}
+                        onChange={(e) => handleSettingsChange({ showWeatherIcon: e.target.checked })}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
                 </div>
-                
-                <div className="form-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={settings.showWeatherCondition}
-                      onChange={(e) => handleSettingsChange({ showWeatherCondition: e.target.checked })}
-                    />
-                    <span className="checkmark"></span>
-                    Show weather description
-                  </label>
+
+                <div className="setting-item sub-setting">
+                  <div className="setting-info">
+                    <div className="setting-icon">📝</div>
+                    <div className="setting-details">
+                      <h3>Weather Description</h3>
+                      <p>Show weather condition text</p>
+                    </div>
+                  </div>
+                  <div className="setting-control">
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={settings.showWeatherCondition}
+                        onChange={(e) => handleSettingsChange({ showWeatherCondition: e.target.checked })}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
                 </div>
-                
-                <div className="form-group">
-                  <label htmlFor="iconPosition">Weather icon position:</label>
-                  <select
-                    id="iconPosition"
-                    value={settings.weatherIconPosition}
-                    onChange={(e) => handleSettingsChange({ 
-                      weatherIconPosition: e.target.value as 'left' | 'right' 
-                    })}
-                  >
-                    <option value="right">Right of temperature</option>
-                    <option value="left">Left of temperature</option>
-                  </select>
+
+                <div className="setting-item sub-setting">
+                  <div className="setting-info">
+                    <div className="setting-icon">↔️</div>
+                    <div className="setting-details">
+                      <h3>Icon Position</h3>
+                      <p>Choose icon placement</p>
+                    </div>
+                  </div>
+                  <div className="setting-control">
+                    <select
+                      className="select-control"
+                      value={settings.weatherIconPosition}
+                      onChange={(e) => handleSettingsChange({ 
+                        weatherIconPosition: e.target.value as 'left' | 'right' 
+                      })}
+                    >
+                      <option value="right">Right of temperature</option>
+                      <option value="left">Left of temperature</option>
+                    </select>
+                  </div>
                 </div>
               </>
             )}
           </div>
+        </div>
 
-          {/* 🗺️ Minimap Settings */}
-          <div className="settings-section">
-            <h2>🗺️ GPS Minimap</h2>
-            <div className="form-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.showMinimap}
-                  onChange={(e) => handleSettingsChange({ showMinimap: e.target.checked })}
-                />
-                <span className="checkmark"></span>
-                Show minimap manually
-              </label>
-            </div>
-            
-            <div className="form-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.minimapSpeedBased}
-                  onChange={(e) => handleSettingsChange({ minimapSpeedBased: e.target.checked })}
-                />
-                <span className="checkmark"></span>
-                Auto-show when moving
-              </label>
+        {/* Footer */}
+        <div className="admin-footer">
+          <div className="footer-content">
+            <div className="footer-status">
+              <div className="status-indicator"></div>
+              <span>Auto-save enabled</span>
             </div>
           </div>
         </div>
-      </div>
+      </div> {/* <-- Properly close admin-content here */}
 
+      {/* Toast Notification */}
       {showToast && (
         <div className={`toast ${toastMessage.includes('Failed') ? 'error' : 'success'}`}>
-          {toastMessage}
+          <span className="toast-icon">{toastMessage.includes('Failed') ? '❌' : '✓'}</span>
+          <span className="toast-text">{toastMessage}</span>
         </div>
       )}
     </div>

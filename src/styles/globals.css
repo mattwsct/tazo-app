@@ -1,3 +1,24 @@
+/* === OBS BROWSER SOURCE OPTIMIZATIONS === */
+/* These styles help ensure proper rendering in OBS browser sources */
+#overlay {
+  /* Force hardware acceleration for better OBS performance */
+  transform: translateZ(0);
+  /* Ensure proper rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent any potential rendering artifacts */
+  backface-visibility: hidden;
+}
+
+/* Ensure minimap renders cleanly in OBS */
+.stream-movement {
+  /* Force clean rendering */
+  transform: translateZ(0);
+  /* Prevent any potential border artifacts */
+  outline: none;
+}
+
+/* === GLOBAL RESET === */
 /* === BASE STYLES === */
 * {
   box-sizing: border-box;
@@ -152,6 +173,27 @@ body.overlay-page {
   gap: 12px;
 }
 
+.time-display {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.time-main {
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.time-ampm {
+  font-size: 0.6em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  vertical-align: super;
+}
+
 .stream-time img {
   height: 2rem;
   width: auto;
@@ -182,13 +224,26 @@ body.overlay-page {
   gap: 8px;
 }
 
+.weather-temp.left-icon {
+  flex-direction: row-reverse;
+}
+
+
+
+
+
+.temp-separator {
+  font-size: 1.2rem;
+  font-weight: 600;
+  opacity: 0.7;
+  margin: 0 2px;
+}
+
 .stream-weather .weather-desc {
   font-size: 1.25rem;
 }
 
 .stream-weather .weather-icon-container {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -208,13 +263,10 @@ body.overlay-page {
 
 /* === STREAM MOVEMENT (GPS Minimap) === */
 .stream-movement {
-  border: 6px solid rgba(255, 255, 255, 0.95);
+  border: 3px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  box-shadow: 
-    0 4px 20px rgba(0, 0, 0, 0.6),
-    0 0 0 3px rgba(255, 255, 255, 0.5),
-    inset 0 3px 6px rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(8px);
+  /* Simplified shadow for OBS compatibility */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -223,12 +275,10 @@ body.overlay-page {
   position: absolute;
   top: 100%;
   right: 0;
-  transform: translateY(16px);
+  margin-top: 16px;
   overflow: hidden;
-  background: linear-gradient(135deg, 
-    rgba(30, 20, 60, 0.4) 0%, 
-    rgba(20, 30, 50, 0.4) 50%, 
-    rgba(40, 20, 80, 0.4) 100%);
+  /* Simplified background for OBS compatibility */
+  background: rgba(30, 20, 60, 0.2);
 }
 
 /* Speed Display within Minimap */
@@ -236,17 +286,14 @@ body.overlay-page {
   position: absolute;
   bottom: -40px;
   right: 0;
-  background: linear-gradient(135deg, 
-    rgba(30, 20, 60, 0.65) 0%, 
-    rgba(20, 30, 50, 0.65) 50%, 
-    rgba(40, 20, 80, 0.65) 100%);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(30, 20, 60, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   padding: 8px 12px;
   color: white;
   text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  /* Simplified shadow for OBS compatibility */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -271,10 +318,7 @@ body.overlay-page {
 
 
 
-/* === UTILITY CLASSES === */
-.hidden {
-  display: none !important;
-}
+
 
 /* Corner positioning for stream elements */
 .corner-top-left {
@@ -348,23 +392,12 @@ body.overlay-page {
   }
 }
 
-.stream-element {
-  animation: fadeIn 0.6s ease-out;
+/* Individual section fade-in */
+.fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
 }
 
-/* === LEGACY SUPPORT (for gradual migration) === */
 
-/* Remove old styles that are no longer needed */
-#overlay .main-info,
-.overlay-card,
-.heart-rate,
-.heart-rate-content,
-.heart-icon,
-.heart-rate-text,
-.bpm-value,
-.bpm-label {
-  /* Legacy styles removed - use new stream-* classes */
-}
 
 /* Add disabled toggle styles */
 .toggle.disabled {
@@ -379,4 +412,54 @@ body.overlay-page {
 .disabled-text {
   opacity: 0.6;
   color: #666;
+}
+
+/* === 🎭 FADE-IN ANIMATIONS === */
+.fade-in-slow {
+  animation: fadeIn 1.5s ease-out forwards;
+}
+
+.fade-in-slow-no-move {
+  animation: fadeInNoMove 1.5s ease-out forwards;
+}
+
+.fade-out-slow {
+  animation: fadeOut 1.5s ease-out forwards;
+}
+
+@keyframes fadeInNoMove {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* === 🎮 OVERLAY STYLES === */
+#overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 1.5s ease-out;
+}
+
+#overlay.show {
+  opacity: 1;
 }

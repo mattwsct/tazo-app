@@ -1,7 +1,51 @@
 import { kv } from '@vercel/kv';
 import { NextRequest } from 'next/server';
 import { addConnection, removeConnection } from '@/lib/settings-broadcast';
-import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import { DEFAULT_OVERLAY_SETTINGS, OverlaySettings } from '@/types/settings';
+
+// Cache settings to reduce KV calls
+let cachedSettings: OverlaySettings | null = null;
+let cachedLastModified: number | null = null;
+let cacheExpiry = 0;
+const CACHE_DURATION = 5000; // 5 seconds cache
+
+async function getCachedSettings() {
+  const now = Date.now();
+  
+  // Check if cache was invalidated
+  const cacheInvalidated = typeof global !== 'undefined' && global.sseCacheInvalidated;
+  const shouldUseCache = cachedSettings && cachedLastModified && now < cacheExpiry && !cacheInvalidated;
+  
+  // Return cached data if still valid and not invalidated
+  if (shouldUseCache) {
+    return { settings: cachedSettings, lastModified: cachedLastModified };
+  }
+  
+  // Fetch fresh data from KV
+  try {
+    const [settings, lastModified] = await Promise.all([
+      kv.get('overlay_settings'),
+      kv.get('overlay_settings_modified')
+    ]);
+    
+    cachedSettings = (settings as OverlaySettings) || DEFAULT_OVERLAY_SETTINGS;
+    cachedLastModified = (lastModified as number) || now;
+    cacheExpiry = now + CACHE_DURATION;
+    
+    // Clear invalidation flag
+    if (typeof global !== 'undefined') {
+      global.sseCacheInvalidated = undefined;
+    }
+    
+    return { settings: cachedSettings, lastModified: cachedLastModified };
+  } catch (error) {
+    console.error('[SSE] Failed to fetch settings from KV:', error);
+    return { 
+      settings: DEFAULT_OVERLAY_SETTINGS, 
+      lastModified: now 
+    };
+  }
+}
 
 async function handleGET(request: NextRequest) {
   const encoder = new TextEncoder();
@@ -12,16 +56,23 @@ async function handleGET(request: NextRequest) {
       const connectionId = addConnection(controller);
       console.log(`[SSE] Connection ${connectionId} added to broadcast pool`);
       
-      // Send initial settings
-      kv.get('overlay_settings').then(settings => {
-        const initialSettings = settings || DEFAULT_OVERLAY_SETTINGS;
-        const data = JSON.stringify(initialSettings);
-        console.log(`[SSE] Sending initial settings to ${connectionId}:`, initialSettings);
+      // Send initial settings with timestamp (using cached data)
+      getCachedSettings().then(({ settings, lastModified }) => {
+        const data = JSON.stringify({
+          ...settings,
+          _lastModified: lastModified,
+          _type: 'initial'
+        });
+        console.log(`[SSE] Sending initial settings to ${connectionId}:`, settings);
         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       }).catch(error => {
         console.error(`[SSE] Failed to load initial settings for ${connectionId}:`, error);
-        // Send default settings if KV fails
-        const defaultData = JSON.stringify(DEFAULT_OVERLAY_SETTINGS);
+        // Send default settings if everything fails
+        const defaultData = JSON.stringify({
+          ...DEFAULT_OVERLAY_SETTINGS,
+          _lastModified: Date.now(),
+          _type: 'initial'
+        });
         controller.enqueue(encoder.encode(`data: ${defaultData}\n\n`));
       });
       

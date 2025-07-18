@@ -31,52 +31,86 @@ const HeartRateLogger = {
     console.error(`💗 [HEART RATE ERROR] ${message}`, error || ''),
 } as const;
 
-// Heart rate color calculation based on BPM ranges
+// Heart rate color calculation based on BPM ranges with dynamic opacity
 function getHeartRateColors(bpm: number) {
   if (bpm <= 0) {
     return {
-      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.65) 0%, rgba(30, 30, 40, 0.65) 100%)',
+      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.3) 0%, rgba(30, 30, 40, 0.3) 100%)',
+      heartColor: 'rgba(255, 255, 255, 0.7)',
       description: 'Disconnected'
     };
-  } else if (bpm <= 60) {
+  }
+  
+  // Threshold: start changing background only above 100 BPM
+  const thresholdBpm = 100;
+  const maxBpm = 200;
+  
+  // Clamp BPM to reasonable range
+  const clampedBpm = Math.max(0, Math.min(maxBpm, bpm));
+  
+  // Base background: same as main info card (blue/purple gradient)
+  const baseBackground = 'linear-gradient(135deg, rgba(30, 20, 60, 0.65) 0%, rgba(20, 30, 50, 0.65) 50%, rgba(40, 20, 80, 0.65) 100%)';
+  
+  // If BPM is below threshold, use base background
+  if (clampedBpm <= thresholdBpm) {
     return {
-      background: 'linear-gradient(135deg, rgba(30, 40, 60, 0.65) 0%, rgba(40, 50, 70, 0.65) 100%)',
-      description: 'Resting'
-    };
-  } else if (bpm <= 100) {
-    return {
-      background: 'linear-gradient(135deg, rgba(40, 40, 60, 0.65) 0%, rgba(60, 50, 70, 0.65) 100%)',
+      background: baseBackground,
+      heartColor: 'rgba(255, 255, 255, 1)',
       description: 'Normal'
     };
-  } else if (bpm <= 120) {
-    return {
-      background: 'linear-gradient(135deg, rgba(60, 40, 50, 0.65) 0%, rgba(80, 50, 60, 0.65) 100%)',
-      description: 'Elevated'
-    };
-  } else if (bpm <= 140) {
-    return {
-      background: 'linear-gradient(135deg, rgba(80, 40, 40, 0.65) 0%, rgba(100, 50, 50, 0.65) 100%)',
-      description: 'High'
-    };
-  } else if (bpm <= 160) {
-    return {
-      background: 'linear-gradient(135deg, rgba(100, 35, 35, 0.65) 0%, rgba(120, 45, 45, 0.65) 100%)',
-      description: 'Very High'
-    };
-  } else {
-    return {
-      background: 'linear-gradient(135deg, rgba(120, 30, 30, 0.65) 0%, rgba(140, 40, 40, 0.65) 100%)',
-      description: 'Maximum'
-    };
   }
+  
+  // Calculate red intensity and opacity only when above threshold
+  const progress = (clampedBpm - thresholdBpm) / (maxBpm - thresholdBpm);
+  
+  // Opacity: 0.65 (base) to 0.9 (high BPM)
+  const opacity = 0.65 + (progress * 0.25);
+  
+  // Red accent: 0 to 100 additional red
+  const redAccent = Math.floor(progress * 100);
+  
+  // Base colors from main info card
+  const baseRed = 30;
+  const baseGreen = 20;
+  const baseBlue = 60;
+  
+  const finalRed = baseRed + redAccent;
+  const finalGreen = Math.max(0, baseGreen - Math.floor(progress * 10)); // Slight green reduction
+  const finalBlue = Math.max(0, baseBlue - Math.floor(progress * 20)); // More blue reduction for redder effect
+  
+  const background = `linear-gradient(135deg, 
+    rgba(${finalRed}, ${finalGreen}, ${finalBlue}, ${opacity}) 0%, 
+    rgba(${finalRed + 10}, ${finalGreen + 10}, ${finalBlue + 20}, ${opacity}) 100%)`;
+  
+  // Heart icon color: white at low BPM, red at high BPM
+  const heartRed = Math.floor(255 - (progress * 100)); // 255 to 155
+  const heartGreen = Math.floor(255 - (progress * 200)); // 255 to 55
+  const heartBlue = Math.floor(255 - (progress * 200)); // 255 to 55
+  const heartColor = `rgba(${heartRed}, ${heartGreen}, ${heartBlue}, 1)`;
+  
+  // Determine description based on BPM ranges
+  let description = 'Normal';
+  if (bpm <= 60) description = 'Resting';
+  else if (bpm <= 100) description = 'Normal';
+  else if (bpm <= 120) description = 'Elevated';
+  else if (bpm <= 140) description = 'High';
+  else if (bpm <= 160) description = 'Very High';
+  else description = 'Maximum';
+  
+  return {
+    background,
+    heartColor,
+    description
+  };
 }
 
 // === 💗 HEART RATE MONITOR COMPONENT ===
 interface HeartRateMonitorProps {
   pulsoidToken?: string;
+  onConnected?: () => void;
 }
 
-export default function HeartRateMonitor({ pulsoidToken }: HeartRateMonitorProps) {
+export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRateMonitorProps) {
   // Heart rate state
   const [heartRate, setHeartRate] = useState<HeartRateState>({
     bpm: 0,
@@ -89,6 +123,7 @@ export default function HeartRateMonitor({ pulsoidToken }: HeartRateMonitorProps
   // Refs for managing timeouts
   const heartRateTimeout = useRef<NodeJS.Timeout | null>(null);
   const animationUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const currentBpmRef = useRef(0);
 
   // === 💗 SMOOTH HEART RATE TRANSITIONS ===
   useEffect(() => {
@@ -150,6 +185,8 @@ export default function HeartRateMonitor({ pulsoidToken }: HeartRateMonitorProps
     let pulsoidSocket: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout | null = null;
     let reconnectAttempts = 0;
+    let isConnecting = false;
+    let isDestroyed = false;
     
     function connectPulsoid() {
       if (!pulsoidToken) {
@@ -157,23 +194,54 @@ export default function HeartRateMonitor({ pulsoidToken }: HeartRateMonitorProps
         return;
       }
       
+      // Prevent multiple simultaneous connection attempts
+      if (isConnecting || (pulsoidSocket && pulsoidSocket.readyState === WebSocket.CONNECTING)) {
+        return;
+      }
+      
+      // Don't connect if component is being destroyed
+      if (isDestroyed) {
+        return;
+      }
+      
+      isConnecting = true;
+      
       try {
         const wsUrl = `wss://dev.pulsoid.net/api/v1/data/real_time?access_token=${pulsoidToken}`;
         pulsoidSocket = new WebSocket(wsUrl);
         
         pulsoidSocket.onopen = () => {
+          if (isDestroyed) {
+            pulsoidSocket?.close();
+            return;
+          }
+          
           HeartRateLogger.info('Pulsoid WebSocket connected successfully');
           setHeartRate(prev => ({ ...prev, isConnected: true }));
+          onConnected?.();
           reconnectAttempts = 0;
+          isConnecting = false;
         };
         
         pulsoidSocket.onmessage = (event) => {
+          if (isDestroyed) return;
+          
           try {
             const data: PulsoidHeartRateData = JSON.parse(event.data);
             if (data.data && typeof data.data.heart_rate === 'number') {
-              HeartRateLogger.info(`Heart rate received: ${data.data.heart_rate} BPM`);
+              const newBpm = data.data.heart_rate;
+              
+              // Only log if BPM changed significantly (more than 2 BPM difference)
+              const currentBpm = currentBpmRef.current;
+              if (Math.abs(newBpm - currentBpm) > 2) {
+                HeartRateLogger.info(`Heart rate changed: ${currentBpm} → ${newBpm} BPM`);
+              }
+              
+              // Update the ref
+              currentBpmRef.current = newBpm;
+              
               setHeartRate({
-                bpm: data.data.heart_rate,
+                bpm: newBpm,
                 lastUpdate: data.measured_at,
                 isConnected: true,
               });
@@ -184,49 +252,79 @@ export default function HeartRateMonitor({ pulsoidToken }: HeartRateMonitorProps
         };
         
         pulsoidSocket.onclose = () => {
+          if (isDestroyed) return;
+          
           HeartRateLogger.info('Pulsoid WebSocket connection closed');
           setHeartRate(prev => ({ ...prev, isConnected: false }));
+          isConnecting = false;
           
-          // Auto-reconnect with exponential backoff
-          if (reconnectAttempts < HEART_RATE_CONFIG.MAX_RECONNECT_ATTEMPTS) {
+          // Auto-reconnect with exponential backoff (only if not destroyed)
+          if (!isDestroyed && reconnectAttempts < HEART_RATE_CONFIG.MAX_RECONNECT_ATTEMPTS) {
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-            HeartRateLogger.info(`Reconnecting to Pulsoid in ${delay}ms (attempt ${reconnectAttempts + 1})`);
+            // Add minimum 2 second delay to prevent rapid reconnection
+            const finalDelay = Math.max(delay, 2000);
+            HeartRateLogger.info(`Reconnecting to Pulsoid in ${finalDelay}ms (attempt ${reconnectAttempts + 1})`);
             reconnectTimeout = setTimeout(() => {
-              reconnectAttempts++;
-              connectPulsoid();
-            }, delay);
-          } else {
+              if (!isDestroyed) {
+                reconnectAttempts++;
+                connectPulsoid();
+              }
+            }, finalDelay);
+          } else if (reconnectAttempts >= HEART_RATE_CONFIG.MAX_RECONNECT_ATTEMPTS) {
             HeartRateLogger.error('Max reconnection attempts reached, giving up');
           }
         };
         
         pulsoidSocket.onerror = (error) => {
-          HeartRateLogger.error('Pulsoid WebSocket error:', error);
+          if (isDestroyed) return;
+          
+          // Only log significant errors, not connection interruptions
+          if (pulsoidSocket?.readyState === WebSocket.CLOSED || 
+              pulsoidSocket?.readyState === WebSocket.CLOSING) {
+            HeartRateLogger.error('Pulsoid WebSocket connection error:', error);
+          }
+          isConnecting = false;
         };
         
       } catch (error) {
         HeartRateLogger.error('Failed to connect to Pulsoid:', error);
+        isConnecting = false;
       }
     }
     
-    // Start connection
-    connectPulsoid();
+    // Start connection with a delay to stagger with other WebSocket connections
+    const initTimeout = setTimeout(() => {
+      connectPulsoid();
+    }, 500); // 500ms delay to let other connections establish first
     
     return () => {
+      isDestroyed = true;
+      isConnecting = false;
+      
+      // Clear the initialization timeout
+      clearTimeout(initTimeout);
+      
       if (pulsoidSocket) {
         pulsoidSocket.close();
+        pulsoidSocket = null;
       }
+      
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
       }
+      
       if (heartRateTimeout.current) {
         clearTimeout(heartRateTimeout.current);
+        heartRateTimeout.current = null;
       }
+      
       if (animationUpdateTimeout.current) {
         clearTimeout(animationUpdateTimeout.current);
+        animationUpdateTimeout.current = null;
       }
     };
-  }, [pulsoidToken]);
+  }, [pulsoidToken, onConnected]); // Include onConnected dependency
 
   // Don't render if not connected or no BPM data
   if (!heartRate.isConnected || heartRate.bpm <= 0) {
@@ -244,7 +342,8 @@ export default function HeartRateMonitor({ pulsoidToken }: HeartRateMonitorProps
         <div 
           className="vitals-icon beating"
           style={{
-            animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s'
+            animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s',
+            color: colors.heartColor
           }}
         >
           ❤️
