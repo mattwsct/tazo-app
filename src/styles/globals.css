@@ -1,3 +1,26 @@
+/* === CSS CUSTOM PROPERTIES === */
+:root {
+  /* Font sizes (scaled up by 25%) */
+  --font-size-xs: 0.9375rem;    /* 0.75rem * 1.25 */
+  --font-size-sm: 1.125rem;     /* 0.9rem * 1.25 */
+  --font-size-base: 1.5625rem;  /* 1.25rem * 1.25 */
+  --font-size-lg: 1.875rem;     /* 1.5rem * 1.25 */
+  --font-size-xl: 2.5rem;       /* 2rem * 1.25 */
+  --font-size-2xl: 3.125rem;    /* 2.5rem * 1.25 */
+  
+  /* Spacing (scaled up by 25%) */
+  --gap-sm: 5px;                /* 4px * 1.25 */
+  --gap-md: 7.5px;              /* 6px * 1.25 */
+  --gap-lg: 10px;               /* 8px * 1.25 */
+  --gap-xl: 12.5px;             /* 10px * 1.25 */
+  --gap-2xl: 15px;              /* 12px * 1.25 */
+  --gap-3xl: 20px;              /* 16px * 1.25 */
+  
+  /* Border radius */
+  --radius-sm: 5px;             /* 4px * 1.25 */
+  --radius-md: 15px;            /* 12px * 1.25 */
+}
+
 /* === OBS BROWSER SOURCE OPTIMIZATIONS === */
 /* These styles help ensure proper rendering in OBS browser sources */
 #overlay {
@@ -58,16 +81,16 @@ body.overlay-page {
     rgba(40, 20, 80, 0.65) 100%);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  padding: var(--gap-xl) var(--gap-3xl);
   color: white;
   text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
   width: fit-content;
   font-weight: 600;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--gap-md);
 }
 
 /* Hide container when it has no visible children */
@@ -93,7 +116,7 @@ body.overlay-page {
 
 /* === TIME DISPLAY STYLES === */
 .time {
-  font-size: 2.5rem;
+  font-size: var(--font-size-2xl);
   font-weight: 600;
   margin: 0;
   line-height: 1;
@@ -115,16 +138,15 @@ body.overlay-page {
 }
 
 .time-main {
-  font-size: 2.5rem;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   line-height: 1;
 }
 
 .time-ampm {
-  font-size: 0.6em;
+  font-size: 0.45em;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
   line-height: 1;
   align-self: flex-end;
   margin-bottom: 0.05em;
@@ -132,7 +154,7 @@ body.overlay-page {
 
 /* === DATE DISPLAY STYLES === */
 .date {
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   margin: 0;
   line-height: 1;
@@ -163,18 +185,18 @@ body.overlay-page {
 .heart-rate-content {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 1.5rem;
+  gap: var(--gap-lg);
+  min-height: var(--font-size-lg);
   justify-content: flex-start;
 }
 
 .heart-rate-icon {
-  font-size: 1.5rem;
+  font-size: var(--font-size-lg);
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 1.5rem;
+  height: var(--font-size-lg);
   transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -191,14 +213,15 @@ body.overlay-page {
 }
 
 .heart-rate-value {
-  font-size: 1.5rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
+  transition: color 0.5s ease, text-shadow 0.5s ease;
 }
 
 .heart-rate-label {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   opacity: 0.9;
   line-height: 1;
@@ -210,7 +233,7 @@ body.overlay-page {
 
 /* === LOCATION DISPLAY STYLES === */
 .location {
-  font-size: 1.25rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
   margin: 0;
   line-height: 1.2;
@@ -218,33 +241,33 @@ body.overlay-page {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--gap-lg);
 }
 
 .location-flag {
-  width: 32px;
-  height: 20px;
-  border-radius: 4px;
+  width: 40px;
+  height: 25px;
+  border-radius: var(--radius-sm);
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }
 
 /* === WEATHER DISPLAY STYLES === */
 .weather {
-  font-size: 1.5rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   margin: 0;
   line-height: 1.2;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--gap-sm);
 }
 
 .weather-container {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--gap-lg);
 }
 
 .weather-content {
@@ -255,14 +278,14 @@ body.overlay-page {
 }
 
 .weather-description {
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   margin: 0;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--gap-lg);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   opacity: 0.8;
@@ -270,12 +293,12 @@ body.overlay-page {
 }
 
 .weather-temperature {
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--gap-lg);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   opacity: 0.8;
@@ -283,7 +306,7 @@ body.overlay-page {
 }
 
 .weather-icon {
-  height: 2rem;
+  height: 2.6rem;
   width: auto;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }

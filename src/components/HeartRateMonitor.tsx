@@ -31,6 +31,28 @@ const HeartRateLogger = {
     console.error(`💗 [HEART RATE ERROR] ${message}`, error || ''),
 } as const;
 
+// Heart rate zones and color mapping
+const HEART_RATE_ZONES = {
+  VERY_LOW: { min: 0, max: 40, color: '#9370DB', name: 'Very Low' },     // Purple (unusually low)
+  RESTING: { min: 40, max: 60, color: '#87CEEB', name: 'Resting' },      // Light blue
+  NORMAL: { min: 60, max: 100, color: '#FFFFFF', name: 'Normal' },       // White
+  ELEVATED: { min: 100, max: 120, color: '#FFD700', name: 'Elevated' },  // Gold
+  HIGH: { min: 120, max: 140, color: '#FFA500', name: 'High' },          // Orange
+  VERY_HIGH: { min: 140, max: 160, color: '#FF4500', name: 'Very High' }, // Red-orange
+  MAXIMUM: { min: 160, max: 200, color: '#FF0000', name: 'Maximum' },    // Bright red
+} as const;
+
+// Function to get heart rate zone and color
+function getHeartRateZone(bpm: number) {
+  if (bpm <= HEART_RATE_ZONES.VERY_LOW.max) return HEART_RATE_ZONES.VERY_LOW;
+  if (bpm <= HEART_RATE_ZONES.RESTING.max) return HEART_RATE_ZONES.RESTING;
+  if (bpm <= HEART_RATE_ZONES.NORMAL.max) return HEART_RATE_ZONES.NORMAL;
+  if (bpm <= HEART_RATE_ZONES.ELEVATED.max) return HEART_RATE_ZONES.ELEVATED;
+  if (bpm <= HEART_RATE_ZONES.HIGH.max) return HEART_RATE_ZONES.HIGH;
+  if (bpm <= HEART_RATE_ZONES.VERY_HIGH.max) return HEART_RATE_ZONES.VERY_HIGH;
+  return HEART_RATE_ZONES.MAXIMUM;
+}
+
 
 
 // === 💗 HEART RATE MONITOR COMPONENT ===
@@ -267,6 +289,16 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
     return null;
   }
 
+  // Get current heart rate zone and color
+  const currentBpm = Math.round(smoothHeartRate || heartRate.bpm);
+  const heartRateZone = getHeartRateZone(currentBpm);
+  
+  // Log zone changes (only when zone actually changes)
+  const previousZone = getHeartRateZone(Math.round(smoothHeartRate || 0));
+  if (previousZone.name !== heartRateZone.name && currentBpm > 0) {
+    HeartRateLogger.info(`Heart rate zone changed: ${previousZone.name} → ${heartRateZone.name} (${currentBpm} BPM)`);
+  }
+
   return (
     <div className="heart-rate">
       <div className="heart-rate-content">
@@ -279,7 +311,15 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
           💓
         </div>
         <div className="heart-rate-text">
-          <span className="heart-rate-value">{Math.round(smoothHeartRate || heartRate.bpm)}</span>
+          <span 
+            className="heart-rate-value"
+            style={{ 
+              color: heartRateZone.color,
+              textShadow: `0 0 8px ${heartRateZone.color}40, 1px 1px 3px rgba(0, 0, 0, 0.8)`
+            }}
+          >
+            {currentBpm}
+          </span>
           <span className="heart-rate-label">BPM</span>
         </div>
       </div>

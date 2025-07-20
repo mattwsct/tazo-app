@@ -38,51 +38,30 @@ function getWeatherIcon(icon: string, timezone: string | null, sunrise: string |
   if (!timezone) return icon;
   
   try {
-    const now = new Date();
-    const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    // If icon already has day/night suffix, return as is
+    if (icon.endsWith('d') || icon.endsWith('n')) {
+      return icon;
+    }
+    
+    const currentTime = new Date();
+    const currentLocal = new Date(currentTime.toLocaleString('en-US', { timeZone: timezone }));
+    let isDay: boolean;
     
     // If we have sunrise/sunset data, use actual times
     if (sunrise && sunset) {
-      // Parse sunrise/sunset times (they come in ISO format from API, already in local timezone)
       const sunriseTime = new Date(sunrise);
       const sunsetTime = new Date(sunset);
-      
-      // Get current time in the same timezone
-      const currentTime = new Date();
-      const currentLocal = new Date(currentTime.toLocaleString('en-US', { timeZone: timezone }));
-      
-      // Determine if current time is between sunrise and sunset
-      // Include sunrise time (>=) but exclude sunset time (<) to avoid edge cases
-      const isDay = currentLocal >= sunriseTime && currentLocal < sunsetTime;
-      
-      // If icon already has day/night suffix, return as is
-      if (icon.endsWith('d') || icon.endsWith('n')) {
-        return icon;
-      }
-      
-      // Add day/night suffix based on actual sunrise/sunset
-      const suffix = isDay ? 'd' : 'n';
-      const resultIcon = icon.replace(/@\d+x$/, '') + suffix; // Remove any existing @4x suffix first
-      Logger.weather(`Weather icon: ${isDay ? 'DAY' : 'NIGHT'} mode (sunrise: ${sunriseTime.toLocaleTimeString()}, sunset: ${sunsetTime.toLocaleTimeString()}, current: ${currentLocal.toLocaleTimeString()})`, { icon: resultIcon });
-      return resultIcon;
+      isDay = currentLocal >= sunriseTime && currentLocal < sunsetTime;
     } else {
       // Fallback to fixed times if no sunrise/sunset data
-      const hour = localTime.getHours();
-      const isDay = hour >= 6 && hour < 18;
-      
-      // If icon already has day/night suffix, return as is
-      if (icon.endsWith('d') || icon.endsWith('n')) {
-        return icon;
-      }
-      
-      // Add day/night suffix based on fixed times
-      const suffix = isDay ? 'd' : 'n';
-      const resultIcon = icon.replace(/@\d+x$/, '') + suffix; // Remove any existing @4x suffix first
-      Logger.weather(`Weather icon: ${isDay ? 'DAY' : 'NIGHT'} mode (fallback 6AM-6PM)`, { icon: resultIcon });
-      return resultIcon;
+      const hour = currentLocal.getHours();
+      isDay = hour >= 6 && hour < 18;
     }
+    
+    // Add day/night suffix
+    const suffix = isDay ? 'd' : 'n';
+    return icon.replace(/@\d+x$/, '') + suffix;
   } catch {
-    // Fallback to original icon if timezone conversion fails
     return icon;
   }
 }
@@ -100,6 +79,8 @@ const TIMERS = {
   OVERLAY_FADE_TIMEOUT: 5000, // 5 seconds to force fade-in
   MINIMAP_HIDE_DELAY: 120000, // 2 minutes - hide minimap if no GPS data
   SPEED_HIDE_DELAY: 10000, // 10 seconds - hide speed when below threshold
+  API_COOLDOWN: 300000, // 5 minutes between API calls
+  POLLING_INTERVAL: 300000, // 5 minutes for settings polling
 } as const;
 
 const THRESHOLDS = {
@@ -157,12 +138,7 @@ export default function OverlayPage() {
     if (hasLoggedInitialization.current) return;
     hasLoggedInitialization.current = true;
     
-    Logger.overlay('Initializing streaming overlay');
     document.body.classList.add('overlay-page');
-    Logger.overlay('Added overlay-page CSS class to body');
-    
-    // Log connection sequence
-    Logger.overlay('Connection sequence: Settings SSE → HeartRate → RTIRL (with delays)');
     
     return () => {
       document.body.classList.remove('overlay-page');
@@ -246,8 +222,6 @@ export default function OverlayPage() {
   // Rate limiting refs
   const lastWeatherAPICall = useRef(0);
   const lastLocationAPICall = useRef(0);
-  const weatherAPICooldown = 300000; // 5 minutes between weather API calls
-  const locationAPICooldown = 300000; // 5 minutes between location API calls
   
   // Logging flags to prevent duplicate logs
   const hasLoggedInitialization = useRef(false);
@@ -327,7 +301,6 @@ export default function OverlayPage() {
       // Set timeout to sync with the next minute boundary
       const syncTimeout = setTimeout(() => {
         updateTimeAndDate();
-        Logger.overlay('Time and date updated on minute boundary');
         
         // Set regular interval for the next hour, then re-sync
         let updateCount = 0;
@@ -338,7 +311,6 @@ export default function OverlayPage() {
           // Re-sync every hour (60 updates) to prevent drift
           if (updateCount >= 60) {
             clearInterval(interval);
-            Logger.overlay('Hourly time sync - setting up next cycle');
             setupNextSync();
           }
         }, 60000);
@@ -361,11 +333,10 @@ export default function OverlayPage() {
     async function doWeatherUpdate() {
       const now = Date.now();
       if (lastWeatherCoords.current && !isUpdatingWeather.current && 
-          (now - lastWeatherAPICall.current) >= weatherAPICooldown) {
+          (now - lastWeatherAPICall.current) >= TIMERS.API_COOLDOWN) {
         isUpdatingWeather.current = true;
         lastWeatherAPICall.current = now;
         const [lat, lon] = lastWeatherCoords.current;
-        Logger.weather('Performing scheduled weather/timezone update', { lat, lon });
         
         try {
           const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
@@ -429,7 +400,7 @@ export default function OverlayPage() {
         // Rate limited - skip this update
         Logger.weather('Weather update skipped due to rate limiting', { 
           timeSinceLastCall: now - lastWeatherAPICall.current,
-          cooldown: weatherAPICooldown 
+          cooldown: TIMERS.API_COOLDOWN 
         });
       }
     }
@@ -456,7 +427,7 @@ export default function OverlayPage() {
     // If first time getting coordinates, do immediate weather update (respect rate limits)
     const currentTime = Date.now();
     if (!hadCoords && currentIsLoading.current.weather && 
-        (currentTime - lastWeatherAPICall.current) >= weatherAPICooldown) {
+        (currentTime - lastWeatherAPICall.current) >= TIMERS.API_COOLDOWN) {
       lastWeatherAPICall.current = currentTime;
       Logger.weather('First coordinates received - fetching immediate weather update');
       try {
@@ -510,10 +481,10 @@ export default function OverlayPage() {
       }
     } else if (!hadCoords && currentIsLoading.current.weather) {
       // Rate limited - skip initial weather update
-      Logger.weather('Initial weather update skipped due to rate limiting', { 
-        timeSinceLastCall: currentTime - lastWeatherAPICall.current,
-        cooldown: weatherAPICooldown 
-      });
+              Logger.weather('Initial weather update skipped due to rate limiting', { 
+          timeSinceLastCall: currentTime - lastWeatherAPICall.current,
+          cooldown: TIMERS.API_COOLDOWN 
+        });
       // Mark weather as loaded so it doesn't block the overlay
       setIsLoading(prev => ({ ...prev, weather: false }));
     }
@@ -531,12 +502,11 @@ export default function OverlayPage() {
                            timeSinceLastUpdate >= TIMERS.LOCATION_UPDATE;
       
       if (shouldUpdateLocation) {
-        Logger.location(`Significant movement detected: ${distanceMoved.toFixed(0)}m after ${(timeSinceLastUpdate / 1000).toFixed(0)}s`);
+        // Significant movement detected
       }
     } else {
       // First update
       shouldUpdateLocation = true;
-      Logger.location('First location update');
     }
     
     if (!shouldUpdateLocation) {
@@ -546,7 +516,7 @@ export default function OverlayPage() {
     lastAPICoords.current = [lat, lon];
     
     // Update location name from LocationIQ (with rate limiting)
-    if (API_KEYS.LOCATIONIQ && (now - lastLocationAPICall.current) >= locationAPICooldown) {
+    if (API_KEYS.LOCATIONIQ && (now - lastLocationAPICall.current) >= TIMERS.API_COOLDOWN) {
       lastLocationAPICall.current = now;
       try {
         const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
@@ -597,10 +567,10 @@ export default function OverlayPage() {
       }
     } else if (API_KEYS.LOCATIONIQ) {
       // Rate limited - skip this update
-      Logger.location('Location update skipped due to rate limiting', { 
-        timeSinceLastCall: now - lastLocationAPICall.current,
-        cooldown: locationAPICooldown 
-      });
+              Logger.location('Location update skipped due to rate limiting', { 
+          timeSinceLastCall: now - lastLocationAPICall.current,
+          cooldown: TIMERS.API_COOLDOWN 
+        });
       // Mark location as loaded if we haven't already
       if (currentIsLoading.current.location) {
         setIsLoading(prev => ({ ...prev, location: false }));
@@ -614,7 +584,6 @@ export default function OverlayPage() {
 
   // === 📡 RTIRL INTEGRATION ===
   useEffect(() => {
-    Logger.overlay('Initializing RealtimeIRL integration');
     
     // Add a small delay to let other connections establish first
     const initTimeout = setTimeout(() => {
@@ -625,7 +594,6 @@ export default function OverlayPage() {
       
       script.onload = () => {
         if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
-          Logger.overlay('RealtimeIRL API loaded, setting up listener');
           
           window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
             if (!p || typeof p !== 'object') return;
@@ -634,7 +602,7 @@ export default function OverlayPage() {
             // Speed tracking for minimap
             if (typeof payload.speed === 'number') {
               setSpeed(payload.speed);
-              Logger.overlay(`Speed update: ${payload.speed.toFixed(1)} m/s (${(payload.speed * 3.6).toFixed(1)} km/h)`);
+              // Speed update received
             }
             
             // Weather data
@@ -650,11 +618,9 @@ export default function OverlayPage() {
               setWeather(weatherData);
               setIsLoading(prev => ({ ...prev, weather: false }));
               lastWeatherUpdate.current = Date.now();
-              Logger.weather('Weather data received from RTIRL', weatherData);
             } else if (currentIsLoading.current.weather) {
               // RTIRL has no weather data but we're still loading - mark as loaded
               setIsLoading(prev => ({ ...prev, weather: false }));
-              Logger.weather('RTIRL has no weather data - marking as loaded');
             }
             
             // Location data from RTIRL (basic coordinates only - detailed location comes from LocationIQ)
@@ -668,27 +634,18 @@ export default function OverlayPage() {
                 setIsLoading(prev => ({ ...prev, location: false }));
                 lastLocationUpdate.current = Date.now();
                 
-                // Only log location details if not in hidden mode
-                if (settings.locationDisplay !== 'hidden') {
-                  Logger.location('Basic location data received from RTIRL (country only)', { countryCode });
-                }
+                // Basic location data received from RTIRL (country only)
               } else if (currentIsLoading.current.location) {
                 // RTIRL has location but no valid country - mark as loaded
                 setIsLoading(prev => ({ ...prev, location: false }));
                 
-                // Only log location details if not in hidden mode
-                if (settings.locationDisplay !== 'hidden') {
-                  Logger.location('RTIRL has location but no valid country - marking as loaded');
-                }
+                // RTIRL has location but no valid country
               }
             } else if (currentIsLoading.current.location) {
               // RTIRL has no location data but we're still loading - mark as loaded
               setIsLoading(prev => ({ ...prev, location: false }));
               
-              // Only log location details if not in hidden mode
-              if (settings.locationDisplay !== 'hidden') {
-                Logger.location('RTIRL has no location data - marking as loaded');
-              }
+              // RTIRL has no location data
             }
             
             // Timezone data
@@ -732,7 +689,6 @@ export default function OverlayPage() {
             }
             
             if (lat !== null && lon !== null && isValidCoordinate(lat, lon)) {
-              Logger.overlay('GPS coordinates received', { lat, lon });
               updateFromCoordinates(lat, lon);
               
               // Update minimap coordinates
@@ -745,7 +701,6 @@ export default function OverlayPage() {
               if (!currentSettings.current.showMinimap) {
                 // Only auto-hide if manual display is not enabled
                 minimapTimeout.current = setTimeout(() => {
-                  Logger.overlay('GPS data timeout - hiding minimap (auto-hide only)');
                   setMapCoords(null);
                 }, TIMERS.MINIMAP_HIDE_DELAY);
               }
@@ -779,7 +734,6 @@ export default function OverlayPage() {
     function startSmartPolling() {
       if (isPolling) return;
       isPolling = true;
-      Logger.settings('Starting smart polling fallback for settings');
       
       pollingInterval = setInterval(async () => {
         try {
@@ -787,13 +741,11 @@ export default function OverlayPage() {
           const data = await response.json();
           
           if (data.hasChanges) {
-            Logger.settings('Settings change detected via smart polling', data.settings);
             setSettings(data.settings);
             lastKnownModified = data.lastModified;
             
             // Try to reconnect SSE after successful update
             if (reconnectAttempts > 0) {
-              Logger.settings('Attempting to restore SSE connection after successful polling update');
               stopPolling();
               reconnectAttempts = 0;
               connectSSE();
@@ -801,12 +753,11 @@ export default function OverlayPage() {
           } else {
             // No changes - just update timestamp
             lastKnownModified = data.lastModified;
-            Logger.settings('No settings changes detected (smart polling)');
           }
         } catch (err) {
           Logger.error('Smart polling failed', err);
         }
-      }, 300000); // Check every 5 minutes instead of 60 seconds
+      }, TIMERS.POLLING_INTERVAL); // Check every 5 minutes instead of 60 seconds
     }
     
     function stopPolling() {
@@ -818,13 +769,11 @@ export default function OverlayPage() {
     }
     
     function connectSSE() {
-      Logger.settings('Setting up SSE connection for real-time settings');
       
       // Load settings immediately as fallback
       authenticatedFetch('/api/get-settings')
         .then(res => res.json())
         .then(data => {
-          Logger.settings('Initial settings loaded before SSE', data);
           setSettings(data);
           // Update last known modified timestamp
           if (data._lastModified) {
@@ -840,7 +789,6 @@ export default function OverlayPage() {
       eventSource = createAuthenticatedEventSource('/api/settings-stream');
       
       eventSource.onopen = () => {
-        Logger.settings('✅ SSE connection established successfully');
         reconnectAttempts = 0;
         stopPolling();
       };
@@ -854,9 +802,6 @@ export default function OverlayPage() {
           }
           
           if (data.type === 'settings_update') {
-            const latency = Date.now() - (data.timestamp || 0);
-            Logger.settings(`⚡ Real-time settings update received (${latency}ms latency)`, data);
-            
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { timestamp, type, ...settingsOnly } = data;
             setSettings(settingsOnly);
@@ -865,7 +810,6 @@ export default function OverlayPage() {
           
           // Handle initial settings with timestamp
           if (data._type === 'initial') {
-            Logger.settings('📡 Initial settings received via SSE', data);
             const { _lastModified, ...settingsOnly } = data;
             setSettings(settingsOnly);
             if (_lastModified) {
@@ -875,7 +819,6 @@ export default function OverlayPage() {
           }
           
           // Legacy format
-          Logger.settings('📡 Settings update received (legacy format)', data);
           setSettings(data);
         } catch (error) {
           Logger.error('Failed to parse settings update', error);
@@ -887,17 +830,13 @@ export default function OverlayPage() {
         
         if (eventSource?.readyState === EventSource.CLOSED || 
             eventSource?.readyState === EventSource.CONNECTING) {
-          Logger.settings('🔄 SSE connection lost - attempting reconnection');
-          
-          reconnectAttempts++;
-          const delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttempts - 1, 5)), 30000);
-          Logger.settings(`⏰ Reconnecting SSE in ${delay}ms (attempt ${reconnectAttempts})`);
-          
-          // Start polling only after 5 failed attempts (more aggressive SSE reconnection)
-          if (reconnectAttempts >= 5 && !isPolling) {
-            Logger.settings('⚠️ Multiple SSE failures - starting smart polling fallback');
-            startSmartPolling();
-          }
+                  reconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttempts - 1, 5)), 30000);
+        
+        // Start polling only after 5 failed attempts (more aggressive SSE reconnection)
+        if (reconnectAttempts >= 5 && !isPolling) {
+          startSmartPolling();
+        }
           
           reconnectTimeout = setTimeout(() => {
             connectSSE();
@@ -909,7 +848,6 @@ export default function OverlayPage() {
     connectSSE();
     
     return () => {
-      Logger.settings('Cleaning up SSE connection and polling');
       if (eventSource) {
         eventSource.close();
       }
@@ -924,16 +862,13 @@ export default function OverlayPage() {
   useEffect(() => {
     // Clear auto-hide timeout when manual display is enabled
     if (settings.showMinimap && minimapTimeout.current) {
-      Logger.overlay('Manual minimap enabled - clearing auto-hide timeout');
       clearTimeout(minimapTimeout.current);
       minimapTimeout.current = null;
     }
     
     // Set auto-hide timeout when manual display is disabled and we have coordinates
     if (!settings.showMinimap && mapCoords && !minimapTimeout.current) {
-      Logger.overlay('Manual minimap disabled - setting auto-hide timeout');
       minimapTimeout.current = setTimeout(() => {
-        Logger.overlay('GPS data timeout - hiding minimap (manual disabled)');
         setMapCoords(null);
       }, TIMERS.MINIMAP_HIDE_DELAY);
     }
@@ -956,11 +891,10 @@ export default function OverlayPage() {
     if (kmh >= THRESHOLDS.SPEED_SHOW) {
       speedAboveThresholdCount.current++;
       
-      if (speedAboveThresholdCount.current >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
-        if (!speedBasedVisible.current) {
-          Logger.overlay(`Speed threshold reached - showing minimap (${kmh.toFixed(1)} km/h)`);
-          speedBasedVisible.current = true;
-        }
+              if (speedAboveThresholdCount.current >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
+          if (!speedBasedVisible.current) {
+            speedBasedVisible.current = true;
+          }
         
         if (speedHideTimeout.current) {
           clearTimeout(speedHideTimeout.current);
@@ -972,7 +906,6 @@ export default function OverlayPage() {
       
       if (speedBasedVisible.current && !speedHideTimeout.current) {
         speedHideTimeout.current = setTimeout(() => {
-          Logger.overlay(`Speed below threshold - hiding minimap (${kmh.toFixed(1)} km/h)`);
           speedBasedVisible.current = false;
           speedHideTimeout.current = null;
         }, TIMERS.SPEED_HIDE_DELAY);
@@ -983,7 +916,6 @@ export default function OverlayPage() {
   // === 🌅 INITIAL STATE SETUP ===
   useEffect(() => {
     if (hasLoggedInitialization.current) return;
-    Logger.overlay('Setting up initial overlay state');
 
     // Set timeout to force overlay to show after 6 seconds (5 + 1 extra) even if some services fail
     const overlayTimeout = setTimeout(() => {
@@ -1002,14 +934,11 @@ export default function OverlayPage() {
       const overlayReady = hasConfiguredElements && dataReady;
       
       if (!overlayReady) {
-        Logger.overlay('Overlay timeout reached - forcing fade-in with available data');
         setIsLoading({
           weather: false,
           location: false,
           timezone: false
         });
-      } else {
-        Logger.overlay('Overlay already ready - skipping timeout force');
       }
     }, TIMERS.OVERLAY_FADE_TIMEOUT + 1000); // Add 1 second extra delay
 
@@ -1031,14 +960,9 @@ export default function OverlayPage() {
           countryCode: location.countryCode || '', 
           originalData: location.originalData 
         });
-        Logger.location('Location reformatted due to display mode change', { 
-          oldLabel: location.label, 
-          newLabel, 
-          mode: settings.locationDisplay 
-        });
       }
     }
-  }, [settings.locationDisplay, location?.label, location?.originalData]); // Include all dependencies
+  }, [settings.locationDisplay, location]); // Include all dependencies
 
   // === 🎨 RENDER OVERLAY ===
   
