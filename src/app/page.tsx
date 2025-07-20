@@ -102,8 +102,8 @@ export default function AdminPage() {
         minimapSpeedBased: true,
       };
     }
-    // Auto-disable minimapSpeedBased when state is selected
-    if (newSettings.locationDisplay === 'state') {
+    // Auto-disable minimapSpeedBased when state or country is selected
+    if (newSettings.locationDisplay === 'state' || newSettings.locationDisplay === 'country') {
       updatedSettings = {
         ...updatedSettings,
         minimapSpeedBased: false,
@@ -211,47 +211,7 @@ export default function AdminPage() {
           </div>
 
           <div className="settings-list">
-            {/* Time Display */}
-            <div className="setting-item">
-              <div className="setting-info">
-                <div className="setting-icon">⏰</div>
-                <div className="setting-details">
-                  <h3>Time Display</h3>
-                  <p>Show current local time</p>
-                </div>
-              </div>
-              <div className="setting-control">
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    checked={settings.showTime}
-                    onChange={(e) => handleSettingsChange({ showTime: e.target.checked })}
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
 
-            {/* Date Display */}
-            <div className="setting-item">
-              <div className="setting-info">
-                <div className="setting-icon">📅</div>
-                <div className="setting-details">
-                  <h3>Date Display</h3>
-                  <p>Show current date</p>
-                </div>
-              </div>
-              <div className="setting-control">
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    checked={settings.showDate}
-                    onChange={(e) => handleSettingsChange({ showDate: e.target.checked })}
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
 
             {/* Location Display */}
             <div className="setting-item">
@@ -263,16 +223,55 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="setting-control">
-                <select
-                  className="select-control"
-                  value={settings.locationDisplay}
-                  onChange={(e) => handleSettingsChange({ locationDisplay: e.target.value as LocationDisplayMode })}
-                >
-                  <option value="city">City</option>
-                  <option value="state">State</option>
-                  <option value="country">Country</option>
-                  <option value="hidden">Location Hidden</option>
-                </select>
+                <div className="location-options">
+                  <label className={`location-option ${settings.locationDisplay === 'city' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="locationDisplay"
+                      value="city"
+                      checked={settings.locationDisplay === 'city'}
+                      onChange={(e) => handleSettingsChange({ locationDisplay: e.target.value as LocationDisplayMode })}
+                    />
+                    <span className="option-icon">🏙️</span>
+                    <span className="option-text">City</span>
+                  </label>
+                  
+                  <label className={`location-option ${settings.locationDisplay === 'state' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="locationDisplay"
+                      value="state"
+                      checked={settings.locationDisplay === 'state'}
+                      onChange={(e) => handleSettingsChange({ locationDisplay: e.target.value as LocationDisplayMode })}
+                    />
+                    <span className="option-icon">🗺️</span>
+                    <span className="option-text">State</span>
+                  </label>
+                  
+                  <label className={`location-option ${settings.locationDisplay === 'country' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="locationDisplay"
+                      value="country"
+                      checked={settings.locationDisplay === 'country'}
+                      onChange={(e) => handleSettingsChange({ locationDisplay: e.target.value as LocationDisplayMode })}
+                    />
+                    <span className="option-icon">🌍</span>
+                    <span className="option-text">Country</span>
+                  </label>
+                  
+                  <label className={`location-option ${settings.locationDisplay === 'hidden' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="locationDisplay"
+                      value="hidden"
+                      checked={settings.locationDisplay === 'hidden'}
+                      onChange={(e) => handleSettingsChange({ locationDisplay: e.target.value as LocationDisplayMode })}
+                    />
+                    <span className="option-icon">🚫</span>
+                    <span className="option-text">Hidden</span>
+                  </label>
+                </div>
               </div>
             </div>
 

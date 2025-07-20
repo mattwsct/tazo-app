@@ -46,8 +46,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
 
   // Ensure all required settings are present with defaults
   const completeSettings: OverlaySettings = {
-    showTime: cleanSettings.showTime ?? DEFAULT_OVERLAY_SETTINGS.showTime,
-    showDate: cleanSettings.showDate ?? DEFAULT_OVERLAY_SETTINGS.showDate,
+
     locationDisplay: cleanSettings.locationDisplay ?? DEFAULT_OVERLAY_SETTINGS.locationDisplay,
     showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
     showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,

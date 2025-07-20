@@ -3,8 +3,6 @@
 export type LocationDisplayMode = 'city' | 'state' | 'country' | 'hidden';
 
 export interface OverlaySettings {
-  showTime: boolean;
-  showDate: boolean;
   locationDisplay: LocationDisplayMode;
   showWeather: boolean;
   showMinimap: boolean;
@@ -13,8 +11,6 @@ export interface OverlaySettings {
 
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
-  showTime: true,
-  showDate: true,
   locationDisplay: 'city',
   showWeather: true,
   showMinimap: false,
@@ -23,8 +19,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 
 // Valid settings schema for validation
 export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'> = {
-  showTime: 'boolean',
-  showDate: 'boolean',
   locationDisplay: 'string',
   showWeather: 'boolean',
   showMinimap: 'boolean',

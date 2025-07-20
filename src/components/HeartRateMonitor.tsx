@@ -33,24 +33,22 @@ const HeartRateLogger = {
 
 // Heart rate zones and color mapping
 const HEART_RATE_ZONES = {
-  VERY_LOW: { min: 0, max: 40, color: '#9370DB', name: 'Very Low' },     // Purple (unusually low)
+  NEUTRAL: { min: 0, max: 40, color: '#808080', name: 'Neutral' },       // Gray (neutral/error state)
   RESTING: { min: 40, max: 60, color: '#87CEEB', name: 'Resting' },      // Light blue
   NORMAL: { min: 60, max: 100, color: '#FFFFFF', name: 'Normal' },       // White
-  ELEVATED: { min: 100, max: 120, color: '#FFD700', name: 'Elevated' },  // Gold
+  ELEVATED: { min: 100, max: 120, color: '#FFFF99', name: 'Elevated' },  // Light yellow
   HIGH: { min: 120, max: 140, color: '#FFA500', name: 'High' },          // Orange
-  VERY_HIGH: { min: 140, max: 160, color: '#FF4500', name: 'Very High' }, // Red-orange
-  MAXIMUM: { min: 160, max: 200, color: '#FF0000', name: 'Maximum' },    // Bright red
+  VERY_HIGH: { min: 140, max: 200, color: '#FF0000', name: 'Very High' }, // Red
 } as const;
 
 // Function to get heart rate zone and color
 function getHeartRateZone(bpm: number) {
-  if (bpm <= HEART_RATE_ZONES.VERY_LOW.max) return HEART_RATE_ZONES.VERY_LOW;
-  if (bpm <= HEART_RATE_ZONES.RESTING.max) return HEART_RATE_ZONES.RESTING;
-  if (bpm <= HEART_RATE_ZONES.NORMAL.max) return HEART_RATE_ZONES.NORMAL;
-  if (bpm <= HEART_RATE_ZONES.ELEVATED.max) return HEART_RATE_ZONES.ELEVATED;
-  if (bpm <= HEART_RATE_ZONES.HIGH.max) return HEART_RATE_ZONES.HIGH;
-  if (bpm <= HEART_RATE_ZONES.VERY_HIGH.max) return HEART_RATE_ZONES.VERY_HIGH;
-  return HEART_RATE_ZONES.MAXIMUM;
+  if (bpm < HEART_RATE_ZONES.NEUTRAL.max) return HEART_RATE_ZONES.NEUTRAL;
+  if (bpm < HEART_RATE_ZONES.RESTING.max) return HEART_RATE_ZONES.RESTING;
+  if (bpm < HEART_RATE_ZONES.NORMAL.max) return HEART_RATE_ZONES.NORMAL;
+  if (bpm < HEART_RATE_ZONES.ELEVATED.max) return HEART_RATE_ZONES.ELEVATED;
+  if (bpm < HEART_RATE_ZONES.HIGH.max) return HEART_RATE_ZONES.HIGH;
+  return HEART_RATE_ZONES.VERY_HIGH;
 }
 
 

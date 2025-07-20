@@ -15,7 +15,7 @@ declare global {
   }
 }
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
@@ -162,16 +162,12 @@ export default function OverlayPage() {
     timezone: true
   });
 
-  // Image loading states
-  const [imagesLoaded, setImagesLoaded] = useState({
-    weatherIcon: false,
-    countryFlag: false
-  });
+
 
 
 
   // Heart rate visibility state
-  const [heartRateVisible, setHeartRateVisible] = useState(false);
+
   const heartRateRef = useRef<HTMLDivElement>(null);
 
   // Settings state
@@ -234,40 +230,35 @@ export default function OverlayPage() {
     return manualShow || speedBasedShow;
   }, [mapCoords, settings.showMinimap, settings.minimapSpeedBased]);
 
-  // === 🎯 SIMPLIFIED OVERLAY READY LOGIC ===
-  const isOverlayReady = useCallback(() => {
-    // Check if we have any visible elements configured
-    const hasConfiguredElements = settings.showTime || settings.showDate || settings.locationDisplay || settings.showWeather || shouldShowMinimap();
-    if (!hasConfiguredElements) return false;
-
-    // Check if all required data is loaded
-    const dataReady = !isLoading.weather && !isLoading.location && !isLoading.timezone;
-    if (!dataReady) return false;
-
-    // For images, only wait if we actually have the data to show them
-    // Once an image is loaded, consider it ready for the session
-    const weatherIconReady = !weather?.icon || imagesLoaded.weatherIcon;
-    const countryFlagReady = settings.locationDisplay === 'hidden' || !location?.countryCode || imagesLoaded.countryFlag;
-    
-    return weatherIconReady && countryFlagReady;
-  }, [settings, isLoading.weather, isLoading.location, isLoading.timezone, imagesLoaded.weatherIcon, imagesLoaded.countryFlag, weather, location, shouldShowMinimap]);
-
-  // === 👁️ OVERLAY VISIBILITY LOGIC ===
+  // === 👁️ SIMPLIFIED OVERLAY VISIBILITY ===
+  const isLocationEnabled = settings.locationDisplay && settings.locationDisplay !== 'hidden';
   const [overlayVisible, setOverlayVisible] = useState(false);
   
+  const isOverlayReady = useMemo(() => {
+    // Always need timezone for time/date display
+    if (isLoading.timezone) return false;
+    
+    // Check weather data if enabled
+    if (settings.showWeather && isLoading.weather) return false;
+    
+    // Check location data if enabled
+    if (isLocationEnabled && isLoading.location) return false;
+    
+    return true;
+  }, [isLoading.timezone, isLoading.weather, isLoading.location, settings.showWeather, isLocationEnabled]);
+  
+  // Add 1 second delay for images to load
   useEffect(() => {
-    const overlayReady = isOverlayReady();
-    if (overlayReady && !overlayVisible) {
-      // Add 1 second delay to ensure images are fully loaded
+    if (isOverlayReady && !overlayVisible) {
       const delay = setTimeout(() => {
         setOverlayVisible(true);
       }, 1000);
       
       return () => clearTimeout(delay);
-    } else if (!overlayReady && overlayVisible) {
+    } else if (!isOverlayReady && overlayVisible) {
       setOverlayVisible(false);
     }
-  }, [overlayVisible, isOverlayReady]);
+  }, [isOverlayReady, overlayVisible]);
   
   const shouldShowOverlay = overlayVisible;
 
@@ -920,9 +911,7 @@ export default function OverlayPage() {
     // Set timeout to force overlay to show after 6 seconds (5 + 1 extra) even if some services fail
     const overlayTimeout = setTimeout(() => {
       // Check if overlay is ready using current state values
-      const hasConfiguredElements = currentSettings.current.showTime || 
-                                   currentSettings.current.showDate ||
-                                   currentSettings.current.locationDisplay || 
+      const hasConfiguredElements = currentSettings.current.locationDisplay || 
                                    currentSettings.current.showWeather || 
                                    (currentSettings.current.showMinimap || 
                                     (currentSettings.current.minimapSpeedBased && speedBasedVisible.current));
@@ -945,9 +934,9 @@ export default function OverlayPage() {
     return () => clearTimeout(overlayTimeout);
   }, []); // Run only once on mount
 
-  // Heart rate visibility callback
-  const handleHeartRateVisibilityChange = useCallback((isVisible: boolean) => {
-    setHeartRateVisible(isVisible);
+  // Heart rate visibility callback (kept for component interface compatibility)
+  const handleHeartRateVisibilityChange = useCallback(() => {
+    // Heart rate visibility is now always true since time/date are always shown
   }, []);
 
   // Reformat location when display mode changes
@@ -966,10 +955,6 @@ export default function OverlayPage() {
 
   // === 🎨 RENDER OVERLAY ===
   
-  // Check if time/date elements are visible
-  const hasTimeDateElements = (settings.showTime && timezone) || 
-                             (settings.showDate && timezone);
-  
   return (
     <div 
       id="overlay" 
@@ -977,25 +962,24 @@ export default function OverlayPage() {
     >
 
       {/* Left Side - Time, Date, Heart Rate */}
-      {(hasTimeDateElements || heartRateVisible) && (
-        <div className="top-left">
-          <div className="overlay-container">
-            {/* Time Display */}
-            {settings.showTime && timezone && (
-              <div className="time time-left">
-                <div className="time-display">
-                  <span className="time-main">{time.split(' ')[0]}</span>
-                  <span className="time-ampm">{time.split(' ')[1]}</span>
-                </div>
+      <div className="top-left">
+        <div className="overlay-container">
+          {/* Time Display */}
+          {timezone && (
+            <div className="time time-left">
+              <div className="time-display">
+                <span className="time-main">{time.split(' ')[0]}</span>
+                <span className="time-ampm">{time.split(' ')[1]}</span>
               </div>
-            )}
-            
-            {/* Date Display */}
-            {settings.showDate && timezone && (
-              <div className="date date-left">
-                {date}
-              </div>
-            )}
+            </div>
+          )}
+          
+          {/* Date Display */}
+          {timezone && (
+            <div className="date date-left">
+              {date}
+            </div>
+          )}
             
             {/* Heart Rate */}
             <div ref={heartRateRef}>
@@ -1006,76 +990,73 @@ export default function OverlayPage() {
             </div>
           </div>
         </div>
-      )}
 
       {/* Right Side - Location, Weather */}
-      <div className="top-right">
-        {/* Stream Info - Live Status Display */}
-        <div className="overlay-container">
-          
-          {settings.locationDisplay && (
-            <div className="location" style={{ display: settings.locationDisplay === 'hidden' ? 'none' : 'flex' }}>
-              {location && location.label ? location.label : ''}
-              {location && location.countryCode && settings.locationDisplay !== 'hidden' && (
-                <Image
-                  src={`https://flagcdn.com/${location.countryCode}.svg`}
-                  alt={`Country: ${location.label}`}
-                  width={32}
-                  height={20}
-                  unoptimized
-                  priority
-                  loading="eager"
-                  onLoad={() => setImagesLoaded(prev => ({ ...prev, countryFlag: true }))}
-                  onError={() => setImagesLoaded(prev => ({ ...prev, countryFlag: true }))}
-                  className="location-flag"
-                />
-              )}
-            </div>
-          )}
-          
-          {settings.showWeather && (
-            <div className="weather">
-              {weather && (
-                <div className="weather-container">
-                  <div className="weather-content">
-                    <div className="weather-description">
-                      {weather.desc.toUpperCase()}
-                    </div>
-                    <div className="weather-temperature">
-                      {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
-                    </div>
-                  </div>
+      {(isLocationEnabled || settings.showWeather || shouldShowMinimap()) && (
+        <div className="top-right">
+          {/* Stream Info - Live Status Display */}
+          <div className="overlay-container">
+            
+            {settings.locationDisplay && (
+              <div className="location" style={{ display: settings.locationDisplay === 'hidden' ? 'none' : 'flex' }}>
+                {location && location.label ? location.label : ''}
+                {location && location.countryCode && settings.locationDisplay !== 'hidden' && (
                   <Image
-                    src={`https://openweathermap.org/img/wn/${getWeatherIcon(weather.icon, timezone, sunrise, sunset)}@4x.png`}
-                    alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                    width={24}
-                    height={24}
+                    src={`https://flagcdn.com/${location.countryCode}.svg`}
+                    alt={`Country: ${location.label}`}
+                    width={32}
+                    height={20}
                     unoptimized
                     priority
                     loading="eager"
-                    onLoad={() => setImagesLoaded(prev => ({ ...prev, weatherIcon: true }))}
-                    onError={() => setImagesLoaded(prev => ({ ...prev, weatherIcon: true }))}
-                    className="weather-icon"
+                    className="location-flag"
                   />
-                </div>
-              )}
+                )}
+              </div>
+            )}
+            
+            {settings.showWeather && (
+              <div className="weather">
+                {weather && (
+                  <div className="weather-container">
+                    <div className="weather-content">
+                      <div className="weather-description">
+                        {weather.desc.toUpperCase()}
+                      </div>
+                      <div className="weather-temperature">
+                        {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
+                      </div>
+                    </div>
+                    <Image
+                      src={`https://openweathermap.org/img/wn/${getWeatherIcon(weather.icon, timezone, sunrise, sunset)}@4x.png`}
+                      alt={`Weather: ${capitalizeWords(weather.desc)}`}
+                      width={24}
+                      height={24}
+                      unoptimized
+                      priority
+                      loading="eager"
+                      className="weather-icon"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            
+
+          </div>
+
+          {/* Stream Movement - GPS Minimap */}
+          {shouldShowMinimap() && mapCoords && (
+            <div className="minimap">
+              <MapboxMinimap 
+                lat={mapCoords[0]} 
+                lon={mapCoords[1]} 
+                isVisible={true}
+              />
             </div>
           )}
-          
-
         </div>
-
-        {/* Stream Movement - GPS Minimap */}
-        {shouldShowMinimap() && mapCoords && (
-          <div className="minimap">
-            <MapboxMinimap 
-              lat={mapCoords[0]} 
-              lon={mapCoords[1]} 
-              isVisible={true}
-            />
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

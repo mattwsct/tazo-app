@@ -34,10 +34,10 @@ async function handleGET() {
     const settings = await kv.get('overlay_settings');
     console.log('Loaded overlay settings:', settings);
     return NextResponse.json(settings || {
-      showLocation: true,
+      locationDisplay: 'city',
       showWeather: true,
-      showSpeed: true,
-      showTime: true,
+      showMinimap: false,
+      minimapSpeedBased: false,
     });
   } catch {
     return NextResponse.json({ error: 'Failed to load settings' }, { status: 500 });
