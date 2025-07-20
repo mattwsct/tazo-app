@@ -128,8 +128,6 @@ body.overlay-page {
   justify-content: flex-start;
 }
 
-
-
 .time-display {
   display: flex;
   align-items: flex-end;
@@ -168,8 +166,6 @@ body.overlay-page {
 .date-left {
   text-align: left;
 }
-
-
 
 /* === HEART RATE STYLES === */
 .heart-rate {
