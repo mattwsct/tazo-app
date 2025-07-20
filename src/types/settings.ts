@@ -1,12 +1,12 @@
 // Centralized settings types and constants
 
+export type LocationDisplayMode = 'city' | 'state' | 'country' | 'hidden';
+
 export interface OverlaySettings {
   showTime: boolean;
-  showLocation: boolean;
+  showDate: boolean;
+  locationDisplay: LocationDisplayMode;
   showWeather: boolean;
-  showWeatherIcon: boolean;
-  showWeatherCondition: boolean;
-  weatherIconPosition: 'left' | 'right';
   showMinimap: boolean;
   minimapSpeedBased: boolean;
 }
@@ -14,11 +14,9 @@ export interface OverlaySettings {
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showTime: true,
-  showLocation: true,
+  showDate: true,
+  locationDisplay: 'city',
   showWeather: true,
-  showWeatherIcon: true,
-  showWeatherCondition: true,
-  weatherIconPosition: 'right',
   showMinimap: false,
   minimapSpeedBased: false,
 };
@@ -26,16 +24,14 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 // Valid settings schema for validation
 export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'> = {
   showTime: 'boolean',
-  showLocation: 'boolean',
+  showDate: 'boolean',
+  locationDisplay: 'string',
   showWeather: 'boolean',
-  showWeatherIcon: 'boolean',
-  showWeatherCondition: 'boolean',
-  weatherIconPosition: 'string',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',
 };
 
-export const VALID_WEATHER_ICON_POSITIONS = ['left', 'right'] as const;
+
 
 // SSE message types
 export interface SettingsUpdateMessage {

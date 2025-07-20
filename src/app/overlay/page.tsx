@@ -29,7 +29,63 @@ import {
   isValidCoordinate,
   capitalizeWords,
   celsiusToFahrenheit,
+  shortenCountryName,
+  LocationData,
 } from '@/utils/overlay-utils';
+
+// Helper function to get day/night weather icon
+function getWeatherIcon(icon: string, timezone: string | null, sunrise: string | null, sunset: string | null): string {
+  if (!timezone) return icon;
+  
+  try {
+    const now = new Date();
+    const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    
+    // If we have sunrise/sunset data, use actual times
+    if (sunrise && sunset) {
+      // Parse sunrise/sunset times (they come in ISO format from API, already in local timezone)
+      const sunriseTime = new Date(sunrise);
+      const sunsetTime = new Date(sunset);
+      
+      // Get current time in the same timezone
+      const currentTime = new Date();
+      const currentLocal = new Date(currentTime.toLocaleString('en-US', { timeZone: timezone }));
+      
+      // Determine if current time is between sunrise and sunset
+      // Include sunrise time (>=) but exclude sunset time (<) to avoid edge cases
+      const isDay = currentLocal >= sunriseTime && currentLocal < sunsetTime;
+      
+      // If icon already has day/night suffix, return as is
+      if (icon.endsWith('d') || icon.endsWith('n')) {
+        return icon;
+      }
+      
+      // Add day/night suffix based on actual sunrise/sunset
+      const suffix = isDay ? 'd' : 'n';
+      const resultIcon = icon.replace(/@\d+x$/, '') + suffix; // Remove any existing @4x suffix first
+      Logger.weather(`Weather icon: ${isDay ? 'DAY' : 'NIGHT'} mode (sunrise: ${sunriseTime.toLocaleTimeString()}, sunset: ${sunsetTime.toLocaleTimeString()}, current: ${currentLocal.toLocaleTimeString()})`, { icon: resultIcon });
+      return resultIcon;
+    } else {
+      // Fallback to fixed times if no sunrise/sunset data
+      const hour = localTime.getHours();
+      const isDay = hour >= 6 && hour < 18;
+      
+      // If icon already has day/night suffix, return as is
+      if (icon.endsWith('d') || icon.endsWith('n')) {
+        return icon;
+      }
+      
+      // Add day/night suffix based on fixed times
+      const suffix = isDay ? 'd' : 'n';
+      const resultIcon = icon.replace(/@\d+x$/, '') + suffix; // Remove any existing @4x suffix first
+      Logger.weather(`Weather icon: ${isDay ? 'DAY' : 'NIGHT'} mode (fallback 6AM-6PM)`, { icon: resultIcon });
+      return resultIcon;
+    }
+  } catch {
+    // Fallback to original icon if timezone conversion fails
+    return icon;
+  }
+}
 import HeartRateMonitor from '@/components/HeartRateMonitor';
 import dynamic from 'next/dynamic';
 const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
@@ -115,10 +171,13 @@ export default function OverlayPage() {
 
   // === �� OVERLAY STATE ===
   const [time, setTime] = useState('Loading...');
-  const [location, setLocation] = useState<{ label: string; countryCode: string } | null>(null);
+  const [date, setDate] = useState('Loading...');
+  const [location, setLocation] = useState<{ label: string; countryCode: string; originalData?: LocationData } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
   const [speed, setSpeed] = useState(0);
   const [timezone, setTimezone] = useState<string | null>(null);
+  const [sunrise, setSunrise] = useState<string | null>(null);
+  const [sunset, setSunset] = useState<string | null>(null);
   
   // Loading states
   const [isLoading, setIsLoading] = useState({
@@ -133,9 +192,10 @@ export default function OverlayPage() {
     countryFlag: false
   });
 
-  // Heart rate fade states
+
+
+  // Heart rate visibility state
   const [heartRateVisible, setHeartRateVisible] = useState(false);
-  const [heartRateFadeIn, setHeartRateFadeIn] = useState(false);
   const heartRateRef = useRef<HTMLDivElement>(null);
 
   // Settings state
@@ -171,8 +231,9 @@ export default function OverlayPage() {
   const speedAboveThresholdCount = useRef(0);
   const speedHideTimeout = useRef<NodeJS.Timeout | null>(null);
   
-  // Time formatter
+  // Time and date formatters
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
+  const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
   
   // Refs for current state values (to avoid useEffect dependencies)
   const currentSettings = useRef(settings);
@@ -202,7 +263,7 @@ export default function OverlayPage() {
   // === 🎯 SIMPLIFIED OVERLAY READY LOGIC ===
   const isOverlayReady = useCallback(() => {
     // Check if we have any visible elements configured
-    const hasConfiguredElements = settings.showTime || settings.showLocation || settings.showWeather || shouldShowMinimap();
+    const hasConfiguredElements = settings.showTime || settings.showDate || settings.locationDisplay || settings.showWeather || shouldShowMinimap();
     if (!hasConfiguredElements) return false;
 
     // Check if all required data is loaded
@@ -211,8 +272,8 @@ export default function OverlayPage() {
 
     // For images, only wait if we actually have the data to show them
     // Once an image is loaded, consider it ready for the session
-    const weatherIconReady = !settings.showWeatherIcon || !weather?.icon || imagesLoaded.weatherIcon;
-    const countryFlagReady = !settings.showLocation || !location?.countryCode || imagesLoaded.countryFlag;
+    const weatherIconReady = !weather?.icon || imagesLoaded.weatherIcon;
+    const countryFlagReady = settings.locationDisplay === 'hidden' || !location?.countryCode || imagesLoaded.countryFlag;
     
     return weatherIconReady && countryFlagReady;
   }, [settings, isLoading.weather, isLoading.location, isLoading.timezone, imagesLoaded.weatherIcon, imagesLoaded.countryFlag, weather, location, shouldShowMinimap]);
@@ -238,21 +299,26 @@ export default function OverlayPage() {
 
   // === ⏰ TIME MANAGEMENT ===
   useEffect(() => {
-    if (!timezone || !formatter.current) return;
+    if (!timezone || !formatter.current || !dateFormatter.current) return;
     
-    function updateTime() {
+    function updateTimeAndDate() {
       const now = new Date();
-      const timeParts = formatter.current!.formatToParts(now);
       
+      // Update time
+      const timeParts = formatter.current!.formatToParts(now);
       const timePart = timeParts.find(part => part.type === 'hour' || part.type === 'minute')?.value || '';
       const minutePart = timeParts.find(part => part.type === 'minute')?.value || '';
       const ampmPart = timeParts.find(part => part.type === 'dayPeriod')?.value || '';
       
       setTime(`${timePart}:${minutePart} ${ampmPart}`);
+      
+      // Update date
+      const formattedDate = dateFormatter.current!.format(now);
+      setDate(formattedDate);
     }
     
     // Update immediately
-    updateTime();
+    updateTimeAndDate();
     
     function setupNextSync() {
       const now = new Date();
@@ -260,13 +326,13 @@ export default function OverlayPage() {
       
       // Set timeout to sync with the next minute boundary
       const syncTimeout = setTimeout(() => {
-        updateTime();
-        Logger.overlay('Time updated on minute boundary');
+        updateTimeAndDate();
+        Logger.overlay('Time and date updated on minute boundary');
         
         // Set regular interval for the next hour, then re-sync
         let updateCount = 0;
         const interval = setInterval(() => {
-          updateTime();
+          updateTimeAndDate();
           updateCount++;
           
           // Re-sync every hour (60 updates) to prevent drift
@@ -317,6 +383,13 @@ export default function OverlayPage() {
             Logger.weather('Weather API succeeded but no weather data available');
           }
           
+          // Update sunrise/sunset data if available
+          if (result.sunrise && result.sunset) {
+            setSunrise(result.sunrise);
+            setSunset(result.sunset);
+            Logger.weather('Sunrise/sunset data updated', { sunrise: result.sunrise, sunset: result.sunset });
+          }
+          
           // Update timezone if available and different
           if (result.timezone && result.timezone !== timezone) {
             try {
@@ -324,6 +397,12 @@ export default function OverlayPage() {
                 hour: 'numeric',
                 minute: '2-digit',
                 hour12: true,
+                timeZone: result.timezone,
+              });
+              dateFormatter.current = new Intl.DateTimeFormat('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
                 timeZone: result.timezone,
               });
               setTimezone(result.timezone);
@@ -394,12 +473,25 @@ export default function OverlayPage() {
           Logger.weather('Initial weather API succeeded but no weather data available');
         }
         
+        // Update sunrise/sunset data if available
+        if (result?.sunrise && result?.sunset) {
+          setSunrise(result.sunrise);
+          setSunset(result.sunset);
+          Logger.weather('Initial sunrise/sunset data loaded', { sunrise: result.sunrise, sunset: result.sunset });
+        }
+        
         if (result?.timezone && result.timezone !== currentTimezone.current) {
           try {
             formatter.current = new Intl.DateTimeFormat('en-US', {
               hour: 'numeric',
               minute: '2-digit',
               hour12: true,
+              timeZone: result.timezone,
+       });
+            dateFormatter.current = new Intl.DateTimeFormat('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
               timeZone: result.timezone,
             });
             setTimezone(result.timezone);
@@ -459,11 +551,15 @@ export default function OverlayPage() {
       try {
         const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
         if (loc) {
-          const label = formatLocation(loc);
-          setLocation({ label, countryCode: loc.countryCode || '' });
+          const label = formatLocation(loc, settings.locationDisplay);
+          setLocation({ label, countryCode: loc.countryCode || '', originalData: loc });
           setIsLoading(prev => ({ ...prev, location: false }));
           lastLocationUpdate.current = now;
-          Logger.location('Location name updated', { label, countryCode: loc.countryCode });
+          
+          // Only log location details if not in hidden mode
+          if (settings.locationDisplay !== 'hidden') {
+            Logger.location('Location name updated', { label, countryCode: loc.countryCode });
+          }
           
           // Use timezone from LocationIQ as fallback
           if (loc.timezone && loc.timezone !== currentTimezone.current) {
@@ -472,6 +568,12 @@ export default function OverlayPage() {
                 hour: 'numeric',
                 minute: '2-digit',
                 hour12: true,
+                timeZone: loc.timezone,
+              });
+              dateFormatter.current = new Intl.DateTimeFormat('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
                 timeZone: loc.timezone,
               });
               setTimezone(loc.timezone);
@@ -508,7 +610,7 @@ export default function OverlayPage() {
       setIsLoading(prev => ({ ...prev, location: false }));
       Logger.warn('No LocationIQ API key - marking location as loaded');
     }
-  }, []); // Remove dependencies to prevent frequent recreation
+  }, [settings.locationDisplay]); // Include locationDisplay dependency to get current setting
 
   // === 📡 RTIRL INTEGRATION ===
   useEffect(() => {
@@ -555,24 +657,38 @@ export default function OverlayPage() {
               Logger.weather('RTIRL has no weather data - marking as loaded');
             }
             
-            // Location data
+            // Location data from RTIRL (basic coordinates only - detailed location comes from LocationIQ)
             if (payload.location) {
-              const label = formatLocation(payload.location);
+              // Only use RTIRL location data if we don't have detailed LocationIQ data
+              // RTIRL provides coordinates but not city/state names
               const countryCode = payload.location.countryCode ? payload.location.countryCode.toLowerCase() : '';
-              if (label && countryCode) {
-                setLocation({ label, countryCode });
+              if (countryCode && !location?.label) {
+                // Fallback: just show country if no detailed location data
+                setLocation({ label: shortenCountryName('', countryCode), countryCode });
                 setIsLoading(prev => ({ ...prev, location: false }));
                 lastLocationUpdate.current = Date.now();
-                Logger.location('Location data received from RTIRL', { label, countryCode });
+                
+                // Only log location details if not in hidden mode
+                if (settings.locationDisplay !== 'hidden') {
+                  Logger.location('Basic location data received from RTIRL (country only)', { countryCode });
+                }
               } else if (currentIsLoading.current.location) {
-                // RTIRL has location but no valid label/country - mark as loaded
+                // RTIRL has location but no valid country - mark as loaded
                 setIsLoading(prev => ({ ...prev, location: false }));
-                Logger.location('RTIRL has location but no valid label/country - marking as loaded');
+                
+                // Only log location details if not in hidden mode
+                if (settings.locationDisplay !== 'hidden') {
+                  Logger.location('RTIRL has location but no valid country - marking as loaded');
+                }
               }
             } else if (currentIsLoading.current.location) {
               // RTIRL has no location data but we're still loading - mark as loaded
               setIsLoading(prev => ({ ...prev, location: false }));
-              Logger.location('RTIRL has no location data - marking as loaded');
+              
+              // Only log location details if not in hidden mode
+              if (settings.locationDisplay !== 'hidden') {
+                Logger.location('RTIRL has no location data - marking as loaded');
+              }
             }
             
             // Timezone data
@@ -582,6 +698,12 @@ export default function OverlayPage() {
                   hour: 'numeric',
                   minute: '2-digit',
                   hour12: true,
+                  timeZone: payload.location.timezone,
+                });
+                dateFormatter.current = new Intl.DateTimeFormat('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
                   timeZone: payload.location.timezone,
                 });
                 setTimezone(payload.location.timezone);
@@ -867,7 +989,8 @@ export default function OverlayPage() {
     const overlayTimeout = setTimeout(() => {
       // Check if overlay is ready using current state values
       const hasConfiguredElements = currentSettings.current.showTime || 
-                                   currentSettings.current.showLocation || 
+                                   currentSettings.current.showDate ||
+                                   currentSettings.current.locationDisplay || 
                                    currentSettings.current.showWeather || 
                                    (currentSettings.current.showMinimap || 
                                     (currentSettings.current.minimapSpeedBased && speedBasedVisible.current));
@@ -893,59 +1016,83 @@ export default function OverlayPage() {
     return () => clearTimeout(overlayTimeout);
   }, []); // Run only once on mount
 
+  // Heart rate visibility callback
+  const handleHeartRateVisibilityChange = useCallback((isVisible: boolean) => {
+    setHeartRateVisible(isVisible);
+  }, []);
 
-
-  // Monitor heart rate visibility changes
+  // Reformat location when display mode changes
   useEffect(() => {
-    const checkHeartRateVisibility = () => {
-      const heartRateElement = heartRateRef.current;
-      if (heartRateElement) {
-        const isVisible = heartRateElement.children.length > 0;
-        if (isVisible && !heartRateVisible) {
-          setHeartRateVisible(true);
-          setHeartRateFadeIn(true);
-        } else if (!isVisible && heartRateVisible) {
-          setHeartRateFadeIn(false);
-          // Delay setting visible to false to allow fade out animation
-          setTimeout(() => setHeartRateVisible(false), 1500);
-        }
+    if (location && location.originalData && settings.locationDisplay !== 'hidden') {
+      const newLabel = formatLocation(location.originalData, settings.locationDisplay);
+      if (newLabel && newLabel !== location.label) {
+        setLocation({ 
+          label: newLabel, 
+          countryCode: location.countryCode || '', 
+          originalData: location.originalData 
+        });
+        Logger.location('Location reformatted due to display mode change', { 
+          oldLabel: location.label, 
+          newLabel, 
+          mode: settings.locationDisplay 
+        });
       }
-    };
-
-    // Check immediately and then every 2 seconds (reduced frequency to reduce noise)
-    checkHeartRateVisibility();
-    const interval = setInterval(checkHeartRateVisibility, 2000);
-
-    return () => clearInterval(interval);
-  }, [heartRateVisible]);
+    }
+  }, [settings.locationDisplay, location?.label, location?.originalData]); // Include all dependencies
 
   // === 🎨 RENDER OVERLAY ===
+  
+  // Check if time/date elements are visible
+  const hasTimeDateElements = (settings.showTime && timezone) || 
+                             (settings.showDate && timezone);
+  
   return (
     <div 
       id="overlay" 
       className={shouldShowOverlay ? 'show' : ''}
     >
-      {/* Heart Rate Monitor - Auto-show when data available */}
-      <div 
-        ref={heartRateRef}
-        className={heartRateFadeIn ? 'fade-in-slow-no-move' : heartRateVisible ? '' : 'fade-out-slow'}
-      >
-        <HeartRateMonitor 
-          pulsoidToken={API_KEYS.PULSOID} 
-        />
-      </div>
 
-      {/* Stream Info and Movement Container */}
-      <div className="stream-container" style={{ position: 'absolute', top: '10px', right: '10px' }}>
-        {/* Stream Info - Live Status Display */}
-        <div className="stream-info">
-          {settings.showTime && timezone && (
-            <div className="stream-time">
-              <div className="time-display">
-                <span className="time-main">{time.split(' ')[0]}</span>
-                <span className="time-ampm">{time.split(' ')[1]}</span>
+      {/* Left Side - Time, Date, Heart Rate */}
+      {(hasTimeDateElements || heartRateVisible) && (
+        <div className="top-left">
+          <div className="overlay-container">
+            {/* Time Display */}
+            {settings.showTime && timezone && (
+              <div className="time time-left">
+                <div className="time-display">
+                  <span className="time-main">{time.split(' ')[0]}</span>
+                  <span className="time-ampm">{time.split(' ')[1]}</span>
+                </div>
               </div>
-              {location && location.countryCode && settings.showLocation && (
+            )}
+            
+            {/* Date Display */}
+            {settings.showDate && timezone && (
+              <div className="date date-left">
+                {date}
+              </div>
+            )}
+            
+            {/* Heart Rate */}
+            <div ref={heartRateRef}>
+              <HeartRateMonitor 
+                pulsoidToken={API_KEYS.PULSOID} 
+                onVisibilityChange={handleHeartRateVisibilityChange}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Right Side - Location, Weather */}
+      <div className="top-right">
+        {/* Stream Info - Live Status Display */}
+        <div className="overlay-container">
+          
+          {settings.locationDisplay && (
+            <div className="location" style={{ display: settings.locationDisplay === 'hidden' ? 'none' : 'flex' }}>
+              {location && location.label ? location.label : ''}
+              {location && location.countryCode && settings.locationDisplay !== 'hidden' && (
                 <Image
                   src={`https://flagcdn.com/${location.countryCode}.svg`}
                   alt={`Country: ${location.label}`}
@@ -956,67 +1103,52 @@ export default function OverlayPage() {
                   loading="eager"
                   onLoad={() => setImagesLoaded(prev => ({ ...prev, countryFlag: true }))}
                   onError={() => setImagesLoaded(prev => ({ ...prev, countryFlag: true }))}
+                  className="location-flag"
                 />
               )}
             </div>
           )}
-          {settings.showLocation && (
-            <div className="stream-location">
-              {location && location.label}
-            </div>
-          )}
+          
           {settings.showWeather && (
-            <div className="stream-weather">
+            <div className="weather">
               {weather && (
-                <>
-                  <div className={`weather-temp ${settings.weatherIconPosition === 'left' ? 'left-icon' : ''}`}>
-                    <span>{celsiusToFahrenheit(weather.temp)}°F</span>
-                    <span className="temp-separator"> / </span>
-                    <span>{weather.temp}°C</span>
-                    {settings.showWeatherIcon && (
-                      <div className="weather-icon-container">
-                        <Image
-                          src={`https://openweathermap.org/img/wn/${weather.icon}@4x.png`}
-                          alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                          width={30}
-                          height={30}
-                          unoptimized
-                          priority
-                          loading="eager"
-                          onLoad={() => setImagesLoaded(prev => ({ ...prev, weatherIcon: true }))}
-                          onError={() => setImagesLoaded(prev => ({ ...prev, weatherIcon: true }))}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {settings.showWeatherCondition && (
-                    <div className="weather-desc">
-                      {capitalizeWords(weather.desc)}
+                <div className="weather-container">
+                  <div className="weather-content">
+                    <div className="weather-description">
+                      {weather.desc.toUpperCase()}
                     </div>
-                  )}
-                </>
+                    <div className="weather-temperature">
+                      {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
+                    </div>
+                  </div>
+                  <Image
+                    src={`https://openweathermap.org/img/wn/${getWeatherIcon(weather.icon, timezone, sunrise, sunset)}@4x.png`}
+                    alt={`Weather: ${capitalizeWords(weather.desc)}`}
+                    width={24}
+                    height={24}
+                    unoptimized
+                    priority
+                    loading="eager"
+                    onLoad={() => setImagesLoaded(prev => ({ ...prev, weatherIcon: true }))}
+                    onError={() => setImagesLoaded(prev => ({ ...prev, weatherIcon: true }))}
+                    className="weather-icon"
+                  />
+                </div>
               )}
             </div>
           )}
+          
+
         </div>
 
-        {/* Stream Movement - GPS Minimap with Speed */}
+        {/* Stream Movement - GPS Minimap */}
         {shouldShowMinimap() && mapCoords && (
-          <div className="stream-movement">
+          <div className="minimap">
             <MapboxMinimap 
               lat={mapCoords[0]} 
               lon={mapCoords[1]} 
               isVisible={true}
             />
-            {/* Speed Display - shows when moving */}
-            {speed > 0 && (
-              <div className="stream-speed-display">
-                <span className="speed-value">
-                  {(speed * 3.6).toFixed(0)}
-                </span>
-                <span className="speed-unit">km/h</span>
-              </div>
-            )}
           </div>
         )}
       </div>

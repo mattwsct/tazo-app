@@ -25,6 +25,8 @@ export interface WeatherData {
 export interface WeatherTimezoneResponse {
   weather: WeatherData | null;
   timezone: string | null;
+  sunrise?: string;
+  sunset?: string;
 }
 
 // === 📍 LOCATION API (LocationIQ) ===
@@ -114,7 +116,7 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
   try {
     ApiLogger.info('openmeteo', 'Fetching weather and timezone data', { lat, lon });
     
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=sunrise,sunset&temperature_unit=celsius&timezone=auto&forecast_days=1`;
     
     const response = await fetch(url);
     
@@ -130,6 +132,8 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
     
     let weather: WeatherData | null = null;
     let timezone: string | null = null;
+    let sunrise: string | undefined;
+    let sunset: string | undefined;
     
     // Extract weather data
     if (data.current && 
@@ -151,7 +155,14 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
       ApiLogger.info('openmeteo', 'Timezone data received', { timezone });
     }
     
-    return { weather, timezone };
+    // Extract sunrise/sunset data
+    if (data.daily && data.daily.sunrise && data.daily.sunset) {
+      sunrise = data.daily.sunrise[0]; // First day's sunrise
+      sunset = data.daily.sunset[0];   // First day's sunset
+      ApiLogger.info('openmeteo', 'Sunrise/sunset data received', { sunrise, sunset });
+    }
+    
+    return { weather, timezone, sunrise, sunset };
     
   } catch (error) {
     ApiLogger.error('openmeteo', 'Failed to fetch weather/timezone', error);

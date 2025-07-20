@@ -2,8 +2,7 @@
 
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, SETTINGS_CONFIG } from '@/types/settings';
 
-// Valid weather icon positions
-const VALID_WEATHER_ICON_POSITIONS: ('left' | 'right')[] = ['left', 'right'];
+
 
 /**
  * Validates and sanitizes settings object
@@ -26,17 +25,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
       if (expectedType === 'boolean' && typeof value === 'boolean') {
         (cleanSettings as Record<string, unknown>)[key] = value;
       } else if (expectedType === 'string' && typeof value === 'string') {
-        // Special validation for weatherIconPosition
-        if (key === 'weatherIconPosition') {
-          if (VALID_WEATHER_ICON_POSITIONS.includes(value as 'left' | 'right')) {
-            cleanSettings.weatherIconPosition = value as 'left' | 'right';
-          } else {
-            console.warn(`Invalid weatherIconPosition: ${value}, defaulting to 'right'`);
-            cleanSettings.weatherIconPosition = 'right';
-          }
-        } else {
-          (cleanSettings as Record<string, unknown>)[key] = value;
-        }
+        (cleanSettings as Record<string, unknown>)[key] = value;
       } else {
         console.warn(`Invalid type for ${key}: expected ${expectedType}, got ${typeof value}`);
         rejectedKeys.push(key);
@@ -58,11 +47,9 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
   // Ensure all required settings are present with defaults
   const completeSettings: OverlaySettings = {
     showTime: cleanSettings.showTime ?? DEFAULT_OVERLAY_SETTINGS.showTime,
-    showLocation: cleanSettings.showLocation ?? DEFAULT_OVERLAY_SETTINGS.showLocation,
+    showDate: cleanSettings.showDate ?? DEFAULT_OVERLAY_SETTINGS.showDate,
+    locationDisplay: cleanSettings.locationDisplay ?? DEFAULT_OVERLAY_SETTINGS.locationDisplay,
     showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
-    showWeatherIcon: cleanSettings.showWeatherIcon ?? DEFAULT_OVERLAY_SETTINGS.showWeatherIcon,
-    showWeatherCondition: cleanSettings.showWeatherCondition ?? DEFAULT_OVERLAY_SETTINGS.showWeatherCondition,
-    weatherIconPosition: cleanSettings.weatherIconPosition ?? DEFAULT_OVERLAY_SETTINGS.weatherIconPosition,
     showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
     minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
   };

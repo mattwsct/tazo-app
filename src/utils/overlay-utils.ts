@@ -64,23 +64,60 @@ export function celsiusToFahrenheit(celsius: number): number {
  * Formats location data for overlay display
  * Follows user preference: City, Country OR State, Country (max 16 chars per field)
  */
-export function formatLocation(location: LocationData): string {
+export function formatLocation(location: LocationData, displayMode: 'city' | 'state' | 'country' | 'hidden' = 'city'): string {
   if (!location) return '';
+  
+  if (displayMode === 'hidden') {
+    return 'Location Hidden';
+  }
   
   const shortenedCountry = shortenCountryName(location.country || '', location.countryCode || '');
   
-  // Try city first, but check length (16 char limit)
-  if (location.city && location.city.length <= 16) {
-    return `${location.city}, ${shortenedCountry}`;
+  if (displayMode === 'city') {
+    console.log(`📍 [LOCATION FORMAT] City mode: city="${location.city}"`);
+    
+    if (location.city) {
+      console.log(`📍 [LOCATION FORMAT] Using city: "${location.city}, ${shortenedCountry}"`);
+      return `${location.city}, ${shortenedCountry}`;
+    }
+    
+    // Fallback to state if no city
+    if (location.state) {
+      console.log(`📍 [LOCATION FORMAT] No city available, falling back to state: "${location.state}, ${shortenedCountry}"`);
+      return `${location.state}, ${shortenedCountry}`;
+    }
+    
+    // Final fallback: just country
+    console.log(`📍 [LOCATION FORMAT] No city or state available, using country: "${shortenedCountry}"`);
+    return shortenedCountry;
   }
   
-  // Fallback to state if city is too long
-  if (location.state && location.state.length <= 16) {
-    return `${location.state}, ${shortenedCountry}`;
+  if (displayMode === 'state') {
+    console.log(`📍 [LOCATION FORMAT] State mode: state="${location.state}"`);
+    
+    if (location.state) {
+      console.log(`📍 [LOCATION FORMAT] Using state: "${location.state}, ${shortenedCountry}"`);
+      return `${location.state}, ${shortenedCountry}`;
+    }
+    
+    // Fallback to city if no state
+    if (location.city) {
+      console.log(`📍 [LOCATION FORMAT] No state available, falling back to city: "${location.city}, ${shortenedCountry}"`);
+      return `${location.city}, ${shortenedCountry}`;
+    }
+    
+    // Final fallback: just country
+    console.log(`📍 [LOCATION FORMAT] No state or city available, using country: "${shortenedCountry}"`);
+    return shortenedCountry;
   }
   
-  // Final fallback: just country
-  return shortenedCountry;
+  if (displayMode === 'country') {
+    console.log(`📍 [LOCATION FORMAT] Country mode: country="${shortenedCountry}"`);
+    console.log(`📍 [LOCATION FORMAT] Using country: "${shortenedCountry}"`);
+    return shortenedCountry;
+  }
+  
+  return '';
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode } from '@/types/settings';
 import '@/styles/admin.css';
 
 export default function AdminPage() {
@@ -87,19 +87,26 @@ export default function AdminPage() {
   const handleSettingsChange = async (newSettings: Partial<OverlaySettings>) => {
     let updatedSettings = { ...settings, ...newSettings };
     
-    // Auto-disable minimap settings when location is turned off
-    if (newSettings.showLocation === false) {
+    // Auto-disable minimap settings when location is hidden
+    if (newSettings.locationDisplay === 'hidden') {
       updatedSettings = {
         ...updatedSettings,
         showMinimap: false,
         minimapSpeedBased: false,
       };
     }
-    // Auto-enable minimapSpeedBased when location is turned ON
-    if (newSettings.showLocation === true) {
+    // Auto-enable minimapSpeedBased when city is selected
+    if (newSettings.locationDisplay === 'city') {
       updatedSettings = {
         ...updatedSettings,
         minimapSpeedBased: true,
+      };
+    }
+    // Auto-disable minimapSpeedBased when state is selected
+    if (newSettings.locationDisplay === 'state') {
+      updatedSettings = {
+        ...updatedSettings,
+        minimapSpeedBased: false,
       };
     }
     
@@ -225,29 +232,52 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Location Display */}
+            {/* Date Display */}
             <div className="setting-item">
               <div className="setting-info">
-                <div className="setting-icon">📍</div>
+                <div className="setting-icon">📅</div>
                 <div className="setting-details">
-                  <h3>Location Display</h3>
-                  <p>Show current city and country</p>
+                  <h3>Date Display</h3>
+                  <p>Show current date</p>
                 </div>
               </div>
               <div className="setting-control">
                 <label className="toggle-switch">
                   <input
                     type="checkbox"
-                    checked={settings.showLocation}
-                    onChange={(e) => handleSettingsChange({ showLocation: e.target.checked })}
+                    checked={settings.showDate}
+                    onChange={(e) => handleSettingsChange({ showDate: e.target.checked })}
                   />
                   <span className="toggle-slider"></span>
                 </label>
               </div>
             </div>
 
-            {/* GPS Minimap - Only show if location is enabled */}
-            {settings.showLocation && (
+            {/* Location Display */}
+            <div className="setting-item">
+              <div className="setting-info">
+                <div className="setting-icon">📍</div>
+                <div className="setting-details">
+                  <h3>Location Display</h3>
+                  <p>Choose location format or hide completely</p>
+                </div>
+              </div>
+              <div className="setting-control">
+                <select
+                  className="select-control"
+                  value={settings.locationDisplay}
+                  onChange={(e) => handleSettingsChange({ locationDisplay: e.target.value as LocationDisplayMode })}
+                >
+                  <option value="city">City</option>
+                  <option value="state">State</option>
+                  <option value="country">Country</option>
+                  <option value="hidden">Location Hidden</option>
+                </select>
+              </div>
+            </div>
+
+            {/* GPS Minimap - Only show if location is not hidden */}
+            {settings.locationDisplay && settings.locationDisplay !== 'hidden' && (
               <div className="setting-item sub-setting">
                 <div className="setting-info">
                   <div className="setting-icon">🗺️</div>
@@ -269,8 +299,8 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Auto-show when moving - Only show if location is enabled */}
-            {settings.showLocation && (
+            {/* Auto-show when moving - Only show if location is not hidden */}
+            {settings.locationDisplay && settings.locationDisplay !== 'hidden' && (
               <div className="setting-item sub-setting">
                 <div className="setting-info">
                   <div className="setting-icon">🏃</div>
@@ -313,72 +343,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Weather Sub-settings - Only show if weather is enabled */}
-            {settings.showWeather && (
-              <>
-                <div className="setting-item sub-setting">
-                  <div className="setting-info">
-                    <div className="setting-icon">🌡️</div>
-                    <div className="setting-details">
-                      <h3>Weather Icon</h3>
-                      <p>Show weather condition icon</p>
-                    </div>
-                  </div>
-                  <div className="setting-control">
-                    <label className="toggle-switch">
-                      <input
-                        type="checkbox"
-                        checked={settings.showWeatherIcon}
-                        onChange={(e) => handleSettingsChange({ showWeatherIcon: e.target.checked })}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
 
-                <div className="setting-item sub-setting">
-                  <div className="setting-info">
-                    <div className="setting-icon">📝</div>
-                    <div className="setting-details">
-                      <h3>Weather Description</h3>
-                      <p>Show weather condition text</p>
-                    </div>
-                  </div>
-                  <div className="setting-control">
-                    <label className="toggle-switch">
-                      <input
-                        type="checkbox"
-                        checked={settings.showWeatherCondition}
-                        onChange={(e) => handleSettingsChange({ showWeatherCondition: e.target.checked })}
-                      />
-                      <span className="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="setting-item sub-setting">
-                  <div className="setting-info">
-                    <div className="setting-icon">↔️</div>
-                    <div className="setting-details">
-                      <h3>Icon Position</h3>
-                      <p>Choose icon placement</p>
-                    </div>
-                  </div>
-                  <div className="setting-control">
-                    <select
-                      className="select-control"
-                      value={settings.weatherIconPosition}
-                      onChange={(e) => handleSettingsChange({ 
-                        weatherIconPosition: e.target.value as 'left' | 'right' 
-                      })}
-                    >
-                      <option value="right">Right of temperature</option>
-                      <option value="left">Left of temperature</option>
-                    </select>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
         </div>
 

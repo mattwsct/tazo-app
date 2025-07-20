@@ -31,86 +31,16 @@ const HeartRateLogger = {
     console.error(`💗 [HEART RATE ERROR] ${message}`, error || ''),
 } as const;
 
-// Heart rate color calculation based on BPM ranges with dynamic opacity
-function getHeartRateColors(bpm: number) {
-  if (bpm <= 0) {
-    return {
-      background: 'linear-gradient(135deg, rgba(20, 20, 30, 0.3) 0%, rgba(30, 30, 40, 0.3) 100%)',
-      heartColor: 'rgba(255, 255, 255, 0.7)',
-      description: 'Disconnected'
-    };
-  }
-  
-  // Threshold: start changing background only above 100 BPM
-  const thresholdBpm = 100;
-  const maxBpm = 200;
-  
-  // Clamp BPM to reasonable range
-  const clampedBpm = Math.max(0, Math.min(maxBpm, bpm));
-  
-  // Base background: same as main info card (blue/purple gradient)
-  const baseBackground = 'linear-gradient(135deg, rgba(30, 20, 60, 0.65) 0%, rgba(20, 30, 50, 0.65) 50%, rgba(40, 20, 80, 0.65) 100%)';
-  
-  // If BPM is below threshold, use base background
-  if (clampedBpm <= thresholdBpm) {
-    return {
-      background: baseBackground,
-      heartColor: 'rgba(255, 255, 255, 1)',
-      description: 'Normal'
-    };
-  }
-  
-  // Calculate red intensity and opacity only when above threshold
-  const progress = (clampedBpm - thresholdBpm) / (maxBpm - thresholdBpm);
-  
-  // Opacity: 0.65 (base) to 0.9 (high BPM)
-  const opacity = 0.65 + (progress * 0.25);
-  
-  // Red accent: 0 to 100 additional red
-  const redAccent = Math.floor(progress * 100);
-  
-  // Base colors from main info card
-  const baseRed = 30;
-  const baseGreen = 20;
-  const baseBlue = 60;
-  
-  const finalRed = baseRed + redAccent;
-  const finalGreen = Math.max(0, baseGreen - Math.floor(progress * 10)); // Slight green reduction
-  const finalBlue = Math.max(0, baseBlue - Math.floor(progress * 20)); // More blue reduction for redder effect
-  
-  const background = `linear-gradient(135deg, 
-    rgba(${finalRed}, ${finalGreen}, ${finalBlue}, ${opacity}) 0%, 
-    rgba(${finalRed + 10}, ${finalGreen + 10}, ${finalBlue + 20}, ${opacity}) 100%)`;
-  
-  // Heart icon color: white at low BPM, red at high BPM
-  const heartRed = Math.floor(255 - (progress * 100)); // 255 to 155
-  const heartGreen = Math.floor(255 - (progress * 200)); // 255 to 55
-  const heartBlue = Math.floor(255 - (progress * 200)); // 255 to 55
-  const heartColor = `rgba(${heartRed}, ${heartGreen}, ${heartBlue}, 1)`;
-  
-  // Determine description based on BPM ranges
-  let description = 'Normal';
-  if (bpm <= 60) description = 'Resting';
-  else if (bpm <= 100) description = 'Normal';
-  else if (bpm <= 120) description = 'Elevated';
-  else if (bpm <= 140) description = 'High';
-  else if (bpm <= 160) description = 'Very High';
-  else description = 'Maximum';
-  
-  return {
-    background,
-    heartColor,
-    description
-  };
-}
+
 
 // === 💗 HEART RATE MONITOR COMPONENT ===
 interface HeartRateMonitorProps {
   pulsoidToken?: string;
   onConnected?: () => void;
+  onVisibilityChange?: (isVisible: boolean) => void;
 }
 
-export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRateMonitorProps) {
+export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibilityChange }: HeartRateMonitorProps) {
   // Heart rate state
   const [heartRate, setHeartRate] = useState<HeartRateState>({
     bpm: 0,
@@ -326,31 +256,31 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     };
   }, [pulsoidToken, onConnected]); // Include onConnected dependency
 
+  // Notify parent about visibility changes
+  useEffect(() => {
+    const isVisible = heartRate.isConnected && heartRate.bpm > 0;
+    onVisibilityChange?.(isVisible);
+  }, [heartRate.isConnected, heartRate.bpm, onVisibilityChange]);
+
   // Don't render if not connected or no BPM data
   if (!heartRate.isConnected || heartRate.bpm <= 0) {
     return null;
   }
 
-  const colors = getHeartRateColors(Math.round(smoothHeartRate || heartRate.bpm));
-
   return (
-    <div 
-      className="stream-vitals corner-top-left"
-      style={{ background: colors.background }}
-    >
-      <div className="vitals-content">
+    <div className="heart-rate">
+      <div className="heart-rate-content">
         <div 
-          className="vitals-icon beating"
+          className="heart-rate-icon beating"
           style={{
-            animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s',
-            color: colors.heartColor
+            animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s'
           }}
         >
-          ❤️
+          💓
         </div>
-        <div className="vitals-text">
-          <span className="vitals-value">{Math.round(smoothHeartRate || heartRate.bpm)}</span>
-          <span className="vitals-label">BPM</span>
+        <div className="heart-rate-text">
+          <span className="heart-rate-value">{Math.round(smoothHeartRate || heartRate.bpm)}</span>
+          <span className="heart-rate-label">BPM</span>
         </div>
       </div>
     </div>

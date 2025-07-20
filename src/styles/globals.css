@@ -8,18 +8,31 @@
   -moz-osx-font-smoothing: grayscale;
   /* Prevent any potential rendering artifacts */
   backface-visibility: hidden;
+  /* Overlay positioning and visibility */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  padding: 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  color: white;
+  text-shadow: 1px 1px 2px black;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.5s ease-out;
+  z-index: 9999;
 }
 
-/* Ensure minimap renders cleanly in OBS */
-.stream-movement {
-  /* Force clean rendering */
-  transform: translateZ(0);
-  /* Prevent any potential border artifacts */
-  outline: none;
+#overlay.show {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* === GLOBAL RESET === */
-/* === BASE STYLES === */
 * {
   box-sizing: border-box;
 }
@@ -37,114 +50,8 @@ body.overlay-page {
   overflow: hidden;
 }
 
-/* === STREAMING OVERLAY DESIGN SYSTEM === */
-
-/* Base overlay container */
-#overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 5px;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  color: white;
-  text-shadow: 1px 1px 2px black;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.5s ease-in-out;
-  z-index: 50;
-}
-
-#overlay.show {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* === UNIFIED STREAM ELEMENT STYLING === */
-
-/* Base stream element - all overlay cards inherit from this */
-.stream-element {
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  padding: 12px 16px;
-  color: white;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-/* === STREAM VITALS (Heart Rate) === */
-.stream-vitals {
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  padding: 12px 16px;
-  color: white;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 120px;
-  /* Background now set dynamically via JavaScript */
-}
-
-.vitals-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 3rem; /* Ensure consistent container height */
-}
-
-.vitals-icon {
-  font-size: 2.5rem; /* Match the time font size */
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 3rem; /* Fixed height instead of min-height */
-  margin-top: -2px; /* Slight upward adjustment for better centering */
-  transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1); /* Slower transition for smoother changes */
-}
-
-.vitals-icon.beating {
-  animation: heartbeat 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.vitals-text {
-  display: flex;
-  flex-direction: column;
-  align-items: center; /* Center align the BPM label */
-  line-height: 1.1;
-}
-
-.vitals-value {
-  font-size: 2.5rem; /* Match the time font size exactly */
-  font-weight: 600; /* Match the time font weight */
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-.vitals-label {
-  font-size: 0.9rem; /* Slightly larger for better readability */
-  font-weight: 700; /* Heavier font weight */
-  opacity: 0.9;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: -1px; /* Adjusted for better alignment with centered heart */
-  text-align: center; /* Center the BPM text */
-}
-
-/* === STREAM INFO (Main Info Card) === */
-.stream-info {
-  text-align: right;
+/* === SHARED CONTAINER STYLES === */
+.overlay-container {
   background: linear-gradient(135deg, 
     rgba(30, 20, 60, 0.65) 0%, 
     rgba(20, 30, 50, 0.65) 50%, 
@@ -152,31 +59,59 @@ body.overlay-page {
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 5px 15px 8px 15px;
+  padding: 10px 16px;
   color: white;
   text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   width: fit-content;
-  max-width: 300px;
-  min-width: 200px;
   font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* Stream info elements */
-.stream-time {
+/* Hide container when it has no visible children */
+.overlay-container:empty {
+  display: none;
+}
+
+/* === POSITIONING CLASSES === */
+.top-left {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  text-align: left;
+}
+
+.top-right {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  text-align: right;
+  max-width: 300px;
+}
+
+/* === TIME DISPLAY STYLES === */
+.time {
   font-size: 2.5rem;
   font-weight: 600;
-  margin: 4px 0;
+  margin: 0;
+  line-height: 1;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
 }
+
+.time-left {
+  justify-content: flex-start;
+}
+
+
 
 .time-display {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   gap: 4px;
+  line-height: 1;
 }
 
 .time-main {
@@ -191,81 +126,172 @@ body.overlay-page {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   line-height: 1;
-  vertical-align: super;
+  align-self: flex-end;
+  margin-bottom: 0.05em;
 }
 
-.stream-time img {
-  height: 2rem;
-  width: auto;
-  border-radius: 6px;
+/* === DATE DISPLAY STYLES === */
+.date {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+  margin-top: -2px;
+  margin-right: -0.1em;
 }
 
-.stream-location {
+.date-left {
+  text-align: left;
+}
+
+
+
+/* === HEART RATE STYLES === */
+.heart-rate {
+  color: white;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0;
+}
+
+.heart-rate-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1.5rem;
+  justify-content: flex-start;
+}
+
+.heart-rate-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.5rem;
+  transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.heart-rate-icon.beating {
+  animation: heartbeat 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.heart-rate-text {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+}
+
+.heart-rate-value {
   font-size: 1.5rem;
   font-weight: 600;
-  margin: 4px 0;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.heart-rate-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.9;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  margin-top: 0.2em;
+}
+
+/* === LOCATION DISPLAY STYLES === */
+.location {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.2;
   text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.stream-weather {
+.location-flag {
+  width: 32px;
+  height: 20px;
+  border-radius: 4px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
+}
+
+/* === WEATHER DISPLAY STYLES === */
+.weather {
   font-size: 1.5rem;
   font-weight: 600;
-  margin: 4px 0;
+  margin: 0;
+  line-height: 1.2;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
 }
 
-.stream-weather .weather-temp {
-  font-size: 1.5rem;
+.weather-container {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
-.weather-temp.left-icon {
-  flex-direction: row-reverse;
+.weather-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
 }
 
-
-
-
-
-.temp-separator {
-  font-size: 1.2rem;
+.weather-description {
+  font-size: 0.9rem;
   font-weight: 600;
-  opacity: 0.7;
-  margin: 0 2px;
-}
-
-.stream-weather .weather-desc {
-  font-size: 1.25rem;
-}
-
-.stream-weather .weather-icon-container {
+  margin: 0;
+  line-height: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+  margin-right: -0.1em;
 }
 
-.stream-weather img {
-  height: 1.87rem;
+.weather-temperature {
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+  margin-right: -0.1em;
+}
+
+.weather-icon {
+  height: 2rem;
   width: auto;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
 }
 
-.stream-speed {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 4px 0;
-}
-
-/* === STREAM MOVEMENT (GPS Minimap) === */
-.stream-movement {
+/* === MINIMAP STYLES === */
+.minimap {
   border: 3px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  /* Simplified shadow for OBS compatibility */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
@@ -277,82 +303,14 @@ body.overlay-page {
   right: 0;
   margin-top: 16px;
   overflow: hidden;
-  /* Simplified background for OBS compatibility */
   background: rgba(30, 20, 60, 0.2);
-}
-
-/* Speed Display within Minimap */
-.stream-speed-display {
-  position: absolute;
-  bottom: -40px;
-  right: 0;
-  background: rgba(30, 20, 60, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 8px 12px;
-  color: white;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-  /* Simplified shadow for OBS compatibility */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 600;
-  min-width: 80px;
-  justify-content: center;
-}
-
-.speed-value {
-  font-size: 1.5rem;
-  line-height: 1;
-}
-
-.speed-unit {
-  font-size: 0.9rem;
-  opacity: 0.9;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-
-
-
-
-
-
-/* Corner positioning for stream elements */
-.corner-top-left {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-}
-
-.corner-top-right {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-}
-
-/* Container for stream info with minimap */
-.stream-container {
-  position: relative;
-}
-
-.corner-bottom-left {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-}
-
-.corner-bottom-right {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
+  /* Force clean rendering */
+  transform: translateZ(0);
+  /* Prevent any potential border artifacts */
+  outline: none;
 }
 
 /* === ANIMATIONS === */
-
-/* Realistic heartbeat animation - smoother and less jarring */
 @keyframes heartbeat {
   0% { 
     transform: scale(1); 
@@ -380,7 +338,6 @@ body.overlay-page {
   }
 }
 
-/* Fade in animation for overlay elements */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -390,41 +347,6 @@ body.overlay-page {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Individual section fade-in */
-.fade-in {
-  animation: fadeIn 0.6s ease-out forwards;
-}
-
-
-
-/* Add disabled toggle styles */
-.toggle.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.toggle.disabled input {
-  cursor: not-allowed;
-}
-
-.disabled-text {
-  opacity: 0.6;
-  color: #666;
-}
-
-/* === 🎭 FADE-IN ANIMATIONS === */
-.fade-in-slow {
-  animation: fadeIn 1.5s ease-out forwards;
-}
-
-.fade-in-slow-no-move {
-  animation: fadeInNoMove 1.5s ease-out forwards;
-}
-
-.fade-out-slow {
-  animation: fadeOut 1.5s ease-out forwards;
 }
 
 @keyframes fadeInNoMove {
@@ -447,19 +369,4 @@ body.overlay-page {
   }
 }
 
-/* === 🎮 OVERLAY STYLES === */
-#overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0;
-  transition: opacity 1.5s ease-out;
-}
 
-#overlay.show {
-  opacity: 1;
-}
