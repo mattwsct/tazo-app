@@ -323,6 +323,7 @@ body.overlay-page {
   margin-top: 16px;
   overflow: hidden;
   background: rgba(30, 20, 60, 0.2);
+  opacity: 0.95;
   /* Force clean rendering */
   transform: translateZ(0);
   /* Prevent any potential border artifacts */
