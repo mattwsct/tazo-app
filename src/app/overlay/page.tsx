@@ -708,6 +708,7 @@ export default function OverlayPage() {
       // Note: We can't easily remove the script tag as it may have already loaded
       // The RTIRL library handles its own cleanup
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateFromCoordinates]); // Include updateFromCoordinates dependency
 
 
@@ -951,7 +952,7 @@ export default function OverlayPage() {
         });
       }
     }
-  }, [settings.locationDisplay, location]); // Include all dependencies
+  }, [settings.locationDisplay, location]); // Include location object
 
   // === 🎨 RENDER OVERLAY ===
   
