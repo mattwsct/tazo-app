@@ -33,7 +33,7 @@ async function handlePOST(request: NextRequest) {
     }
     
     // Validate backup type
-    const validTypes = ['gps', 'location', 'weather', 'timezone', 'speed'];
+    const validTypes = ['overlay_state'];
     if (!validTypes.includes(type)) {
       return NextResponse.json({ 
         error: `Invalid backup type. Must be one of: ${validTypes.join(', ')}` 
@@ -84,7 +84,7 @@ async function handleGET(request: NextRequest) {
       }, { status: 400 });
     }
     
-    const validTypes = ['gps', 'location', 'weather', 'timezone', 'speed'];
+    const validTypes = ['overlay_state'];
     if (!validTypes.includes(type)) {
       return NextResponse.json({ 
         error: `Invalid backup type. Must be one of: ${validTypes.join(', ')}` 
