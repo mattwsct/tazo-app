@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { HeartRateLogger } from '@/lib/logger';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -17,12 +17,13 @@ interface HeartRateState {
 }
 
 const HEART_RATE_CONFIG = {
-  TIMEOUT: 10000, // 10 seconds - hide if no data (faster for streaming)
+  TIMEOUT: 5000, // 5 seconds - hide if no data (faster for streaming)
   CHANGE_THRESHOLD: 5, // 5 BPM - minimum change to update animation
   TRANSITION_STEPS: 20, // Number of smooth transition steps
   STEP_DURATION: 100, // ms per step (2 seconds total)
   ANIMATION_DELAY: 1000, // 1 second delay before updating animation speed
   MAX_RECONNECT_ATTEMPTS: 10,
+  CONNECTION_DEBOUNCE: 30000, // 30 seconds - optimal for IRL streams with brief connection drops (tunnels, rural areas)
 } as const;
 
 
@@ -69,7 +70,29 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
   // Refs for managing timeouts
   const heartRateTimeout = useRef<NodeJS.Timeout | null>(null);
   const animationUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+  const connectionDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const currentBpmRef = useRef(0);
+
+  // === 💗 DEBOUNCED CONNECTION STATE UPDATE ===
+  const updateConnectionState = useCallback((isConnected: boolean) => {
+    // Clear any existing debounce timeout
+    if (connectionDebounceTimeout.current) {
+      clearTimeout(connectionDebounceTimeout.current);
+      connectionDebounceTimeout.current = null;
+    }
+
+    // If connecting, update immediately
+    if (isConnected) {
+      setHeartRate(prev => ({ ...prev, isConnected: true }));
+      return;
+    }
+
+    // If disconnecting, debounce to prevent rapid flashing
+    connectionDebounceTimeout.current = setTimeout(() => {
+      setHeartRate(prev => ({ ...prev, isConnected: false }));
+      connectionDebounceTimeout.current = null;
+    }, HEART_RATE_CONFIG.CONNECTION_DEBOUNCE);
+  }, []);
 
   // === 💗 SMOOTH HEART RATE TRANSITIONS ===
   useEffect(() => {
@@ -112,10 +135,11 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
         }, HEART_RATE_CONFIG.ANIMATION_DELAY);
       }
       
-      // Set timeout to hide heart rate if no new data after 30 seconds
+      // Set timeout to hide heart rate if no new data after 5 seconds
       heartRateTimeout.current = setTimeout(() => {
         HeartRateLogger.info('Heart rate data timeout - hiding monitor');
-        setHeartRate(prev => ({ ...prev, isConnected: false, bpm: 0 }));
+        updateConnectionState(false);
+        setHeartRate(prev => ({ ...prev, bpm: 0 }));
         setSmoothHeartRate(0);
         setStableAnimationBpm(0);
       }, HEART_RATE_CONFIG.TIMEOUT);
@@ -123,6 +147,22 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
       return () => {
         clearInterval(transitionInterval);
       };
+    } else if (!heartRate.isConnected && heartRate.bpm > 0) {
+      // Connection lost - immediately clear heart rate data
+      HeartRateLogger.info('Heart rate connection lost - hiding monitor');
+      setHeartRate(prev => ({ ...prev, bpm: 0 }));
+      setSmoothHeartRate(0);
+      setStableAnimationBpm(0);
+      
+      // Clear any existing timeouts
+      if (heartRateTimeout.current) {
+        clearTimeout(heartRateTimeout.current);
+        heartRateTimeout.current = null;
+      }
+      if (animationUpdateTimeout.current) {
+        clearTimeout(animationUpdateTimeout.current);
+        animationUpdateTimeout.current = null;
+      }
     }
   }, [heartRate.bpm, heartRate.isConnected, smoothHeartRate, stableAnimationBpm]);
 
@@ -163,7 +203,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
           }
           
           HeartRateLogger.info('Pulsoid WebSocket connected successfully');
-          setHeartRate(prev => ({ ...prev, isConnected: true }));
+          updateConnectionState(true);
           onConnected?.();
           reconnectAttempts = 0;
           isConnecting = false;
@@ -201,7 +241,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
           if (isDestroyed) return;
           
           HeartRateLogger.info('Pulsoid WebSocket connection closed');
-          setHeartRate(prev => ({ ...prev, isConnected: false }));
+          updateConnectionState(false);
           isConnecting = false;
           
           // Auto-reconnect with exponential backoff (only if not destroyed)
@@ -269,8 +309,13 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
         clearTimeout(animationUpdateTimeout.current);
         animationUpdateTimeout.current = null;
       }
+      
+      if (connectionDebounceTimeout.current) {
+        clearTimeout(connectionDebounceTimeout.current);
+        connectionDebounceTimeout.current = null;
+      }
     };
-  }, [pulsoidToken, onConnected]); // Include onConnected dependency
+      }, [pulsoidToken, onConnected, updateConnectionState]); // Include onConnected dependency
 
   // Notify parent about visibility changes
   useEffect(() => {
