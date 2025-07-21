@@ -41,9 +41,23 @@ export async function broadcastSettings(settings: OverlaySettings) {
   
   console.log(`[BROADCAST] Starting broadcast to ${connections.size} connected clients:`, broadcastData);
   
+  // If no connections, wait a bit for overlay to connect, then try again
   if (connections.size === 0) {
-    console.warn(`[BROADCAST] ⚠️  No active SSE connections! Settings update will be lost unless overlay polls.`);
-    return { success: false, reason: 'no_connections' };
+    console.warn(`[BROADCAST] ⚠️  No active SSE connections! Waiting for overlay to connect...`);
+    
+    // Wait up to 2 seconds for overlay to connect
+    for (let i = 0; i < 20; i++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (connections.size > 0) {
+        console.log(`[BROADCAST] ✅ Overlay connected after ${(i + 1) * 100}ms, proceeding with broadcast`);
+        break;
+      }
+    }
+    
+    if (connections.size === 0) {
+      console.warn(`[BROADCAST] ⚠️  Still no connections after waiting. Settings update will be lost unless overlay polls.`);
+      return { success: false, reason: 'no_connections' };
+    }
   }
   
   let successCount = 0;

@@ -34,8 +34,8 @@ async function handlePOST(request: NextRequest) {
     
     console.log('🔄 Starting settings save and broadcast process...');
     
-    // Save to KV and broadcast simultaneously for better performance
-    const [kvResult, broadcastResult] = await Promise.allSettled([
+    // Save to KV first, then broadcast with a small delay to ensure SSE connection is ready
+    const kvResult = await Promise.allSettled([
       Promise.all([
         kv.set('overlay_settings', settings),
         kv.set('overlay_settings_modified', Date.now())
@@ -43,27 +43,35 @@ async function handlePOST(request: NextRequest) {
         logKVUsage('write');
         invalidateSSECache(); // Invalidate cache after successful save
         return true;
-      }),
-      broadcastSettings(settings) // Broadcast immediately, don't wait for KV
+      })
+    ]);
+    
+    // Small delay to ensure SSE connection is established
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Now broadcast the settings
+    const broadcastResult = await Promise.allSettled([
+      broadcastSettings(settings)
     ]);
     
     const saveTime = Date.now() - startTime;
     console.log(`⚡ Settings processed in ${saveTime}ms:`, settings);
     
     // Check results
-    const kvSuccess = kvResult.status === 'fulfilled';
-    const broadcastSuccess = broadcastResult.status === 'fulfilled' && 
-                            broadcastResult.value?.success;
+    const kvSuccess = kvResult[0].status === 'fulfilled';
+    const broadcastSuccess = broadcastResult[0].status === 'fulfilled' && 
+                            broadcastResult[0].value?.success;
     
     if (!kvSuccess) {
-      console.error('🚨 KV save failed:', kvResult.reason);
+      console.error('🚨 KV save failed:', kvResult[0].status === 'rejected' ? 
+        kvResult[0].reason : 'Unknown error');
     } else {
       console.log('✅ KV save successful');
     }
     
     if (!broadcastSuccess) {
-      console.error('🚨 Broadcast failed:', broadcastResult.status === 'rejected' ? 
-        broadcastResult.reason : broadcastResult.value);
+      console.error('🚨 Broadcast failed:', broadcastResult[0].status === 'rejected' ? 
+        broadcastResult[0].reason : broadcastResult[0].value);
     } else {
       console.log('✅ Broadcast successful');
     }
