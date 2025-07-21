@@ -4,7 +4,6 @@
 // are expected in development and can be safely ignored. These services use cookies 
 // for session management and analytics.
 
-// Add global declaration at the very top
 declare global {
   interface Window {
     RealtimeIRL?: {
@@ -17,8 +16,11 @@ declare global {
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
+
 import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import HeartRateMonitor from '@/components/HeartRateMonitor';
 import { 
   fetchWeatherAndTimezoneFromOpenMeteo,
   fetchLocationFromLocationIQ,
@@ -39,6 +41,11 @@ import {
   BACKUP_CONFIG, 
   BackupLogger
 } from '@/utils/backup-utils';
+
+const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
+  ssr: false,
+  loading: () => <div />
+});
 
 // Helper function to get day/night weather icon
 function getWeatherIcon(icon: string, timezone: string | null, sunrise: string | null, sunset: string | null): string {
@@ -72,12 +79,6 @@ function getWeatherIcon(icon: string, timezone: string | null, sunrise: string |
     return icon;
   }
 }
-import HeartRateMonitor from '@/components/HeartRateMonitor';
-import dynamic from 'next/dynamic';
-const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
-  ssr: false,
-  loading: () => <div />
-});
 
 // === 🎯 CONFIGURATION CONSTANTS ===
 const TIMERS = {
@@ -165,12 +166,6 @@ export default function OverlayPage() {
     location: true,
     timezone: true
   });
-
-
-
-
-
-  // Heart rate visibility state
 
   const heartRateRef = useRef<HTMLDivElement>(null);
 
