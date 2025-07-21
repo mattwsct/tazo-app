@@ -96,7 +96,7 @@ class PerformanceMonitor {
 export const performanceMonitor = new PerformanceMonitor();
 
 // React performance hooks
-export function usePerformanceMeasure(name: string, deps: React.DependencyList = []) {
+export function usePerformanceMeasure(name: string) {
   const startTime = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => {
@@ -110,7 +110,7 @@ export function usePerformanceMeasure(name: string, deps: React.DependencyList =
         }
       }
     };
-  }, deps);
+  }, [name]);
 }
 
 // API performance wrapper

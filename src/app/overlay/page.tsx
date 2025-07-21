@@ -46,34 +46,38 @@ const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
 
 // Helper function to get day/night weather icon
 function getWeatherIcon(icon: string, timezone: string | null, sunrise: string | null, sunset: string | null): string {
-  if (!timezone) return icon;
-  
+  // Always strip any existing day/night suffix
+  const baseIcon = icon.replace(/([dn])$/, '').replace(/@\dx$/, '');
+
+  if (!timezone) return baseIcon + 'd'; // Default to day if timezone is missing
+
   try {
-    // If icon already has day/night suffix, return as is
-    if (icon.endsWith('d') || icon.endsWith('n')) {
-      return icon;
-    }
-    
-    const currentTime = new Date();
-    const currentLocal = new Date(currentTime.toLocaleString('en-US', { timeZone: timezone }));
-    let isDay: boolean;
-    
-    // If we have sunrise/sunset data, use actual times
+    // Parse current time in the target timezone
+    const now = new Date();
+    // Get the current time in the target timezone as a Date object
+    const currentLocal = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    let isDay = true;
+
     if (sunrise && sunset) {
+      // Parse sunrise/sunset as Date objects (should be ISO strings)
       const sunriseTime = new Date(sunrise);
       const sunsetTime = new Date(sunset);
+
+      // Convert sunrise/sunset to the same timezone as currentLocal for comparison
+      // (Assume sunrise/sunset are in the correct local time already)
       isDay = currentLocal >= sunriseTime && currentLocal < sunsetTime;
     } else {
-      // Fallback to fixed times if no sunrise/sunset data
+      // Fallback: 6am-6pm is day
       const hour = currentLocal.getHours();
       isDay = hour >= 6 && hour < 18;
     }
-    
+
     // Add day/night suffix
     const suffix = isDay ? 'd' : 'n';
-    return icon.replace(/@\d+x$/, '') + suffix;
+    return baseIcon + suffix;
   } catch {
-    return icon;
+    // Fallback to day icon if any error
+    return baseIcon + 'd';
   }
 }
 
@@ -83,7 +87,7 @@ const TIMERS = {
   LOCATION_UPDATE: 300000, // 5 minutes - more conservative for API limits
   OVERLAY_FADE_TIMEOUT: 5000, // 5 seconds to force fade-in
   MINIMAP_HIDE_DELAY: 120000, // 2 minutes - hide minimap if no GPS data
-  SPEED_HIDE_DELAY: 10000, // 10 seconds - hide speed when below threshold
+  SPEED_HIDE_DELAY: 20000, // 20 seconds - hide speed when below threshold (was 10s)
   API_COOLDOWN: 300000, // 5 minutes between API calls
   POLLING_INTERVAL: 600000, // 10 minutes for settings polling (was 5)
 } as const;
@@ -91,7 +95,7 @@ const TIMERS = {
 const THRESHOLDS = {
   LOCATION_DISTANCE: 100, // 100 meters - as requested
   SPEED_SHOW: 10, // 10 km/h - show speed-based minimap
-  SPEED_READINGS_REQUIRED: 3, // 3 successive readings above threshold
+  SPEED_READINGS_REQUIRED: 2, // 2 successive readings above threshold (was 3)
 } as const;
 
 // === 🔑 API CONFIGURATION ===
@@ -658,7 +662,7 @@ export default function OverlayPage() {
       setIsLoading(prev => ({ ...prev, location: false }));
       OverlayLogger.warn('No LocationIQ API key - marking location as loaded');
     }
-  }, [settings.locationDisplay]); // Include locationDisplay dependency to get current setting
+  }, [settings.locationDisplay, clearError]); // Include locationDisplay dependency to get current setting
 
   // === 📡 RTIRL INTEGRATION ===
   useEffect(() => {
@@ -1023,15 +1027,17 @@ export default function OverlayPage() {
     }
 
     const kmh = speed * 3.6;
-    
+    console.log(`[MINIMAP] Current speed: ${kmh.toFixed(2)} km/h`);
+
     if (kmh >= THRESHOLDS.SPEED_SHOW) {
       speedAboveThresholdCount.current++;
-      
-              if (speedAboveThresholdCount.current >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
-          if (!speedBasedVisible.current) {
-            speedBasedVisible.current = true;
-          }
-        
+      console.log(`[MINIMAP] Speed above threshold (${THRESHOLDS.SPEED_SHOW} km/h): count = ${speedAboveThresholdCount.current}`);
+
+      if (speedAboveThresholdCount.current >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
+        if (!speedBasedVisible.current) {
+          speedBasedVisible.current = true;
+          console.log('[MINIMAP] Minimap shown due to speed');
+        }
         if (speedHideTimeout.current) {
           clearTimeout(speedHideTimeout.current);
           speedHideTimeout.current = null;
@@ -1039,12 +1045,13 @@ export default function OverlayPage() {
       }
     } else {
       speedAboveThresholdCount.current = 0;
-      
       if (speedBasedVisible.current && !speedHideTimeout.current) {
         speedHideTimeout.current = setTimeout(() => {
           speedBasedVisible.current = false;
           speedHideTimeout.current = null;
+          console.log('[MINIMAP] Minimap hidden due to speed drop');
         }, TIMERS.SPEED_HIDE_DELAY);
+        console.log(`[MINIMAP] Speed below threshold, will hide minimap in ${TIMERS.SPEED_HIDE_DELAY / 1000}s`);
       }
     }
   }, [speed, settings.minimapSpeedBased]);
@@ -1102,7 +1109,7 @@ export default function OverlayPage() {
         });
       }
     }
-  }, [settings.locationDisplay, settings.showMinimap, settings.showWeather, location]); // Include location object
+  }, [settings.locationDisplay, settings.showMinimap, settings.showWeather, location, setLocation]);
 
   // === 🎨 RENDER OVERLAY ===
   
@@ -1220,6 +1227,12 @@ export default function OverlayPage() {
                 lon={mapCoords[1]} 
                 isVisible={true}
               />
+              {/* Show speed if autoshow is active and minimap is visible due to speed */}
+              {settings.minimapSpeedBased && speedBasedVisible.current && (
+                <div className="minimap-speed" style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '4px 10px', borderRadius: 8, fontSize: 18, fontWeight: 600, zIndex: 2 }}>
+                  {`${(speed * 3.6).toFixed(1)} km/h`}
+                </div>
+              )}
             </div>
           )}
         </div>
