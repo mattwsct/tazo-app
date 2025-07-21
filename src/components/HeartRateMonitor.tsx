@@ -17,7 +17,7 @@ interface HeartRateState {
 }
 
 const HEART_RATE_CONFIG = {
-  TIMEOUT: 5000, // 5 seconds - hide if no data (faster for streaming)
+  TIMEOUT: 30000, // 30 seconds - hide if no data (more forgiving for IRL streaming)
   CHANGE_THRESHOLD: 5, // 5 BPM - minimum change to update animation
   TRANSITION_STEPS: 20, // Number of smooth transition steps
   STEP_DURATION: 100, // ms per step (2 seconds total)

@@ -86,8 +86,8 @@ const TIMERS = {
   WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes - as requested
   LOCATION_UPDATE: 300000, // 5 minutes - more conservative for API limits
   OVERLAY_FADE_TIMEOUT: 5000, // 5 seconds to force fade-in
-  MINIMAP_HIDE_DELAY: 120000, // 2 minutes - hide minimap if no GPS data
-  SPEED_HIDE_DELAY: 20000, // 20 seconds - hide speed when below threshold (was 10s)
+  MINIMAP_HIDE_DELAY: 30000, // 30 seconds - hide minimap if no GPS data
+  SPEED_HIDE_DELAY: 30000, // 30 seconds - hide speed when below threshold (was 20s)
   API_COOLDOWN: 300000, // 5 minutes between API calls
   POLLING_INTERVAL: 600000, // 10 minutes for settings polling (was 5)
 } as const;
