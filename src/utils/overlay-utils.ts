@@ -230,7 +230,7 @@ interface RateLimit {
 
 export const RATE_LIMITS: Record<string, RateLimit> = {
   openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 600 }, // 600/min free tier
-  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 }, // 2/sec conservative limit
+  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 }, // 2/sec official limit
 } as const;
 
 /**
