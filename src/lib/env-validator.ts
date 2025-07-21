@@ -13,16 +13,16 @@ export function validateEnvironment(): EnvValidationResult {
   const missing: string[] = [];
   const warnings: string[] = [];
   
-  // Required environment variables
+  // Required environment variables (only for KV storage)
   const required = [
-    'API_SECRET',
-    'NEXT_PUBLIC_API_SECRET',
     'KV_REST_API_URL',
     'KV_REST_API_TOKEN',
   ];
   
   // Optional but recommended
   const recommended = [
+    'API_SECRET',
+    'NEXT_PUBLIC_API_SECRET',
     'NEXT_PUBLIC_RTIRL_PULL_KEY',
     'NEXT_PUBLIC_LOCATIONIQ_KEY',
     'NEXT_PUBLIC_PULSOID_TOKEN',
@@ -43,8 +43,9 @@ export function validateEnvironment(): EnvValidationResult {
     }
   }
   
-  // Validate API secret consistency
-  if (process.env.API_SECRET !== process.env.NEXT_PUBLIC_API_SECRET) {
+  // Validate API secret consistency (only if both are present)
+  if (process.env.API_SECRET && process.env.NEXT_PUBLIC_API_SECRET && 
+      process.env.API_SECRET !== process.env.NEXT_PUBLIC_API_SECRET) {
     warnings.push('API_SECRET and NEXT_PUBLIC_API_SECRET should be identical');
   }
   

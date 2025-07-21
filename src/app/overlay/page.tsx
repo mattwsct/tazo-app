@@ -805,7 +805,7 @@ export default function OverlayPage() {
     if (hasErrors) {
       OverlayLogger.warn('Service errors detected', errors);
     }
-  }, [errors]);
+  }, [errors, setError]);
 
   // === 🎛️ SETTINGS MANAGEMENT ===
   // (Settings SSE logic remains the same but with better logging)
@@ -1076,7 +1076,13 @@ export default function OverlayPage() {
       }
     }, TIMERS.OVERLAY_FADE_TIMEOUT + 1000); // Add 1 second extra delay
 
-    return () => clearTimeout(overlayTimeout);
+    return () => {
+      clearTimeout(overlayTimeout);
+      // Clean up any remaining timeouts to prevent memory leaks
+      if (weatherRefreshTimer.current) clearTimeout(weatherRefreshTimer.current);
+      if (minimapTimeout.current) clearTimeout(minimapTimeout.current);
+      if (speedHideTimeout.current) clearTimeout(speedHideTimeout.current);
+    };
   }, []); // Run only once on mount
 
   // Heart rate visibility callback (kept for component interface compatibility)
@@ -1096,7 +1102,7 @@ export default function OverlayPage() {
         });
       }
     }
-  }, [settings.locationDisplay, location]); // Include location object
+  }, [settings.locationDisplay, settings.showMinimap, settings.showWeather, location]); // Include location object
 
   // === 🎨 RENDER OVERLAY ===
   

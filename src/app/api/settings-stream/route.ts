@@ -13,6 +13,11 @@ export async function GET(request: NextRequest): Promise<Response> {
     console.log('SSE: Auth check failed, treating as unauthenticated');
   }
   
+  // Always allow access to SSE, authenticated or not
+  if (!isAuthenticated) {
+    console.log('SSE: Not authenticated, will use default settings');
+  }
+  
   if (!isAuthenticated) {
     console.log('SSE: Not authenticated, will use default settings');
   }

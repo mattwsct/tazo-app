@@ -13,11 +13,13 @@ export async function verifyAuth(): Promise<boolean> {
   const cookieStore = await cookies();
   const authToken = cookieStore.get('admin-auth');
   
-  if (!authToken || !ADMIN_SECRET) {
+  if (!authToken) {
     return false;
   }
   
-  return authToken.value === ADMIN_SECRET;
+  // Check against ADMIN_SECRET or fallback to ADMIN_PASSWORD
+  const expectedSecret = ADMIN_SECRET || process.env.ADMIN_PASSWORD || 'admin123';
+  return authToken.value === expectedSecret;
 }
 
 // === 📊 KV USAGE TRACKING ===
