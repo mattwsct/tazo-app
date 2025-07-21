@@ -145,64 +145,7 @@ export default function OverlayPage() {
     };
   }, []);
 
-  // === 💾 LOAD BACKUP DATA ON INITIALIZATION ===
-  useEffect(() => {
-    async function loadBackupData() {
-      Logger.overlay('Loading backup data...');
-      
-      // Load backup overlay state
-      try {
-        const backup = await getBackup('overlay_state');
-        if (backup && backup.data && isBackupValid(backup, BACKUP_CONFIG.OVERLAY_STATE.maxAge)) {
-          const state = backup.data;
-          
-          // Load GPS data
-          if (state.gps && state.gps.lat && state.gps.lon) {
-            setMapCoords([state.gps.lat, state.gps.lon]);
-            BackupLogger.info('overlay_state', 'Loaded backup GPS coordinates', state.gps);
-          }
-          
-          // Load location data
-          if (state.location && state.location.label) {
-            setLocation({ 
-              label: state.location.label, 
-              countryCode: state.location.countryCode || '',
-              originalData: state.location.originalData as LocationData
-            });
-            BackupLogger.info('overlay_state', 'Loaded backup location data', {
-              label: state.location.label,
-              countryCode: state.location.countryCode,
-              city: state.location.originalData?.city,
-              state: state.location.originalData?.state,
-              country: state.location.originalData?.country
-            });
-          }
-          
-          // Load weather data
-          if (state.weather && state.weather.temp && state.weather.icon && state.weather.desc) {
-            setWeather({
-              temp: state.weather.temp,
-              icon: state.weather.icon,
-              desc: state.weather.desc
-            });
-            BackupLogger.info('overlay_state', 'Loaded backup weather data', state.weather);
-          }
-          
-          // Load timezone data
-          if (state.timezone) {
-            setTimezone(state.timezone);
-            BackupLogger.info('overlay_state', 'Loaded backup timezone data', { timezone: state.timezone });
-          }
-        }
-      } catch (error) {
-        BackupLogger.error('overlay_state', 'Failed to load backup data', error);
-      }
-      
-      Logger.overlay('Backup data loading completed');
-    }
-    
-    loadBackupData();
-  }, []);
+
 
 
 
@@ -255,25 +198,9 @@ export default function OverlayPage() {
     const backupInterval = setInterval(() => {
       const now = Date.now();
       if (!lastOverlayBackup.current || (now - lastOverlayBackup.current) >= BACKUP_CONFIG.OVERLAY_STATE.frequency) {
-        // Save entire overlay state
+        // Save critical overlay state (GPS and timezone only)
         const overlayState = {
           gps: mapCoords ? { lat: mapCoords[0], lon: mapCoords[1] } : undefined,
-          location: location ? { 
-            label: location.label, 
-            countryCode: location.countryCode,
-            originalData: location.originalData as {
-              city?: string;
-              state?: string;
-              country?: string;
-              display_name?: string;
-              [key: string]: unknown;
-            }
-          } : undefined,
-          weather: weather ? { 
-            temp: weather.temp, 
-            icon: weather.icon, 
-            desc: weather.desc 
-          } : undefined,
           timezone: timezone || undefined,
         };
         
@@ -287,7 +214,7 @@ export default function OverlayPage() {
     }, 60000); // Check every minute
     
     return () => clearInterval(backupInterval);
-  }, [mapCoords, location, weather, timezone]);
+  }, [mapCoords, timezone]);
 
   // Refs for timers and tracking
   const lastAPICoords = useRef<[number, number] | null>(null);
@@ -321,6 +248,8 @@ export default function OverlayPage() {
   
   // Backup tracking ref
   const lastOverlayBackup = useRef(0);
+  const backupGPS = useRef<{ lat: number; lon: number } | null>(null);
+  const backupTimezone = useRef<string | null>(null);
   
   // Logging flags to prevent duplicate logs
   const hasLoggedInitialization = useRef(false);
@@ -487,24 +416,23 @@ export default function OverlayPage() {
           }
         } else {
           // Weather API failed - try timezone fallback
-          Logger.warn('Weather API failed, checking backup overlay state');
-          getBackup('overlay_state').then(backup => {
-            if (backup && backup.data && isBackupValid(backup, 480)) { // 8 hours max age
-              const state = backup.data;
-              if (state.timezone && state.timezone !== timezone) {
-                Logger.overlay('Using backup timezone', { timezone: state.timezone });
-                setTimezone(state.timezone);
-                setIsLoading(prev => ({ ...prev, timezone: false }));
-              }
-            }
-          });
+          Logger.warn('Weather API failed, checking backup timezone');
+          if (backupTimezone.current && backupTimezone.current !== timezone) {
+            Logger.overlay('Using backup timezone', { timezone: backupTimezone.current });
+            setTimezone(backupTimezone.current);
+            setIsLoading(prev => ({ ...prev, timezone: false }));
+          } else {
+            Logger.error('No valid backup timezone available');
+          }
           
-          // Mark as loaded so it doesn't block the overlay
+          // Clear weather data and mark as loaded so it doesn't block the overlay
+          setWeather(null);
           setIsLoading(prev => ({ ...prev, weather: false }));
-          Logger.error('Weather API failed - marking as loaded to prevent overlay blocking');
+          Logger.error('Weather API failed - clearing weather data and marking as loaded');
         }
               } catch (error) {
           Logger.error('Weather update failed', error);
+          setWeather(null);
           setIsLoading(prev => ({ ...prev, weather: false }));
         } finally {
           isUpdatingWeather.current = false;
@@ -589,7 +517,8 @@ export default function OverlayPage() {
         }
       } catch (error) {
         Logger.error('Immediate weather update failed', error);
-        // Mark weather as loaded so it doesn't block the overlay
+        // Clear weather data and mark as loaded so it doesn't block the overlay
+        setWeather(null);
         setIsLoading(prev => ({ ...prev, weather: false }));
       }
     } else if (!hadCoords && currentIsLoading.current.weather) {
@@ -814,17 +743,14 @@ export default function OverlayPage() {
               }
             } else {
               // RTIRL GPS failed - try to use backup GPS
-              Logger.warn('RTIRL GPS data invalid, checking backup overlay state');
-              getBackup('overlay_state').then(backup => {
-                if (backup && backup.data && isBackupValid(backup, 60)) { // 1 hour max age
-                  const state = backup.data;
-                  if (state.gps && state.gps.lat && state.gps.lon && isValidCoordinate(state.gps.lat, state.gps.lon)) {
-                    Logger.overlay('Using backup GPS coordinates', state.gps);
-                    updateFromCoordinates(state.gps.lat, state.gps.lon);
-                    setMapCoords([state.gps.lat, state.gps.lon]);
-                  }
-                }
-              });
+              Logger.warn('RTIRL GPS data invalid, checking backup GPS');
+              if (backupGPS.current && isValidCoordinate(backupGPS.current.lat, backupGPS.current.lon)) {
+                Logger.overlay('Using backup GPS coordinates', backupGPS.current);
+                updateFromCoordinates(backupGPS.current.lat, backupGPS.current.lon);
+                setMapCoords([backupGPS.current.lat, backupGPS.current.lon]);
+              } else {
+                Logger.error('No valid backup GPS available');
+              }
             }
           });
         } else {
@@ -840,6 +766,50 @@ export default function OverlayPage() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateFromCoordinates]); // Include updateFromCoordinates dependency
+
+  // === 💾 LOAD BACKUP DATA ON INITIALIZATION ===
+  useEffect(() => {
+    async function loadBackupData() {
+      Logger.overlay('Loading backup data...');
+      
+      // Load backup overlay state (store for fallback, don't use immediately)
+      try {
+        const backup = await getBackup('overlay_state');
+        if (backup && backup.data && isBackupValid(backup, BACKUP_CONFIG.OVERLAY_STATE.maxAge)) {
+          const state = backup.data;
+          
+          // Store backup timezone for potential fallback (don't use immediately)
+          if (state.timezone) {
+            backupTimezone.current = state.timezone;
+            BackupLogger.info('overlay_state', 'Backup timezone stored for fallback', { timezone: state.timezone });
+          }
+          
+          // Store backup GPS for potential fallback (don't use immediately)
+          if (state.gps && state.gps.lat && state.gps.lon) {
+            backupGPS.current = { lat: state.gps.lat, lon: state.gps.lon };
+            BackupLogger.info('overlay_state', 'Backup GPS stored for fallback', state.gps);
+          }
+        }
+      } catch (error) {
+        BackupLogger.error('overlay_state', 'Failed to load backup data', error);
+      }
+      
+      Logger.overlay('Backup data loading completed');
+    }
+    
+    loadBackupData();
+    
+    // Set timeout to use backup timezone if APIs haven't provided timezone after 30 seconds
+    const timezoneFallbackTimeout = setTimeout(() => {
+      if (!timezone && backupTimezone.current && isLoading.timezone) {
+        Logger.warn('No timezone from APIs after 30 seconds, using backup timezone');
+        setTimezone(backupTimezone.current);
+        setIsLoading(prev => ({ ...prev, timezone: false }));
+      }
+    }, 30000);
+    
+    return () => clearTimeout(timezoneFallbackTimeout);
+  }, [timezone, isLoading.timezone]);
 
 
 

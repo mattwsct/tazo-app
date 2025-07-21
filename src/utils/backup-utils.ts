@@ -5,18 +5,6 @@ export type BackupType = 'overlay_state';
 
 export interface OverlayStateData {
   gps?: { lat: number; lon: number };
-  location?: { 
-    label: string; 
-    countryCode: string; 
-    originalData?: {
-      city?: string;
-      state?: string;
-      country?: string;
-      display_name?: string;
-      [key: string]: unknown;
-    };
-  };
-  weather?: { temp: number; icon: string; desc: string };
   timezone?: string;
   timestamp: number;
 }
@@ -73,22 +61,10 @@ export async function saveBackup(type: BackupType, data: OverlayStateData): Prom
 }
 
 /**
- * Saves the entire overlay state to KV storage
+ * Saves critical overlay state to KV storage
  */
 export async function saveOverlayState(state: {
   gps?: { lat: number; lon: number };
-  location?: { 
-    label: string; 
-    countryCode: string; 
-    originalData?: {
-      city?: string;
-      state?: string;
-      country?: string;
-      display_name?: string;
-      [key: string]: unknown;
-    };
-  };
-  weather?: { temp: number; icon: string; desc: string };
   timezone?: string;
 }): Promise<boolean> {
   try {
@@ -185,8 +161,8 @@ export async function getDataWithFallback<T>(
  */
 export const BACKUP_CONFIG = {
   OVERLAY_STATE: {
-    frequency: 15 * 60 * 1000, // 15 minutes
-    maxAge: 240, // 4 hours
+    frequency: 30 * 60 * 1000, // 30 minutes
+    maxAge: 120, // 2 hours
   },
 } as const;
 
