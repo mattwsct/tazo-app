@@ -1,101 +1,70 @@
-import { NextRequest, NextResponse } from 'next/server';
+// === 🔐 API AUTHENTICATION UTILITIES ===
 
-// Simple API authentication using shared secret
-const API_SECRET = process.env.API_SECRET || 'fallback-dev-secret-change-in-production';
+import { cookies } from 'next/headers';
 
-export interface AuthenticatedRequest extends NextRequest {
-  isAuthenticated: boolean;
-}
+// Centralized admin secret configuration
+export const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD || 'admin123';
 
 /**
- * Validates API requests using shared secret
- * Supports both header and body authentication methods
+ * Verify authentication using HTTP-only cookie
+ * Centralized authentication for all API routes
  */
-export function validateApiSecret(request: NextRequest): boolean {
-  // Method 1: Check Authorization header
-  const authHeader = request.headers.get('authorization');
-  if (authHeader === `Bearer ${API_SECRET}`) {
-    return true;
+export async function verifyAuth(): Promise<boolean> {
+  const cookieStore = await cookies();
+  const authToken = cookieStore.get('admin-auth');
+  
+  if (!authToken || !ADMIN_SECRET) {
+    return false;
   }
+  
+  return authToken.value === ADMIN_SECRET;
+}
 
-  // Method 2: Check X-API-Secret header (simpler)
-  const apiSecretHeader = request.headers.get('x-api-secret');
-  if (apiSecretHeader === API_SECRET) {
-    return true;
-  }
+// === 📊 KV USAGE TRACKING ===
 
-  return false;
+// Simple KV usage tracking
+let kvReadCount = 0;
+let kvWriteCount = 0;
+
+// Reset counters daily
+declare global {
+  var kvUsageReset: number | undefined;
+}
+
+if (typeof global !== 'undefined' && !global.kvUsageReset) {
+  global.kvUsageReset = Date.now();
+  kvReadCount = 0;
+  kvWriteCount = 0;
 }
 
 /**
- * Middleware wrapper for API routes that require authentication
- * Returns 401 if authentication fails
+ * Log KV usage every 100 operations
+ * Centralized tracking for all API routes
+ */
+export function logKVUsage(operation: 'read' | 'write') {
+  if (operation === 'read') kvReadCount++;
+  if (operation === 'write') kvWriteCount++;
+  
+  const total = kvReadCount + kvWriteCount;
+  if (total % 100 === 0) {
+    console.log(`📊 KV Usage: ${kvReadCount} reads, ${kvWriteCount} writes (${total} total)`);
+  }
+}
+
+// === 🔄 GENERIC API UTILITIES ===
+
+/**
+ * Generic API wrapper with authentication and error handling
  */
 export function withApiAuth<T extends unknown[]>(
-  handler: (request: NextRequest, ...args: T) => Promise<NextResponse> | NextResponse
+  handler: (...args: T) => Promise<Response>
 ) {
-  return async (request: NextRequest, ...args: T): Promise<NextResponse> => {
-    // Skip auth for OPTIONS requests (CORS preflight)
-    if (request.method === 'OPTIONS') {
-      return new NextResponse(null, { status: 200 });
+  return async (...args: T): Promise<Response> => {
+    // Verify authentication
+    if (!(await verifyAuth())) {
+      return new Response('Unauthorized', { status: 401 });
     }
-
-    if (!validateApiSecret(request)) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Invalid or missing API secret' },
-        { status: 401 }
-      );
-    }
-
-    return handler(request, ...args);
+    
+    return handler(...args);
   };
-}
-
-// Special wrapper for GET routes that don't need the request parameter
-export function withApiAuthGet(
-  handler: () => Promise<NextResponse> | NextResponse
-) {
-  return async (request: NextRequest): Promise<NextResponse> => {
-    // Skip auth for OPTIONS requests (CORS preflight)
-    if (request.method === 'OPTIONS') {
-      return new NextResponse(null, { status: 200 });
-    }
-
-    if (!validateApiSecret(request)) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Invalid or missing API secret' },
-        { status: 401 }
-      );
-    }
-
-    return handler();
-  };
-}
-
-/**
- * Helper to create authenticated headers for frontend API calls
- */
-export function createAuthHeaders(): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    'X-API-Secret': API_SECRET,
-  };
-}
-
-/**
- * Helper for frontend to make authenticated API requests
- */
-export async function authenticatedFetch(
-  url: string, 
-  options: RequestInit = {}
-): Promise<Response> {
-  const headers = {
-    ...createAuthHeaders(),
-    ...options.headers,
-  };
-
-  return fetch(url, {
-    ...options,
-    headers,
-  });
 } 

@@ -1,44 +1,74 @@
-// Client-side authentication utility for frontend API calls
-// Note: API_SECRET must be available on the client side via NEXT_PUBLIC_ prefix
-
-const API_SECRET = process.env.NEXT_PUBLIC_API_SECRET || 'fallback-dev-secret-change-in-production';
+// === 🔐 CLIENT-SIDE AUTHENTICATION UTILITIES ===
 
 /**
- * Helper to create authenticated headers for frontend API calls
- */
-export function createAuthHeaders(): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    'X-API-Secret': API_SECRET,
-  };
-}
-
-/**
- * Helper for frontend to make authenticated API requests
+ * Authenticated fetch with automatic token handling
+ * Uses HTTP-only cookies instead of URL parameters for security
  */
 export async function authenticatedFetch(
   url: string, 
   options: RequestInit = {}
 ): Promise<Response> {
-  const headers = {
-    ...createAuthHeaders(),
-    ...options.headers,
-  };
-
-  return fetch(url, {
+  const response = await fetch(url, {
     ...options,
-    headers,
+    credentials: 'include', // Include cookies automatically
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
+  
+  return response;
 }
 
 /**
- * Helper to create EventSource with authentication headers
- * Note: EventSource doesn't support custom headers in browsers,
- * so we'll use URL parameters for SSE authentication
+ * Create authenticated EventSource with automatic token handling
+ * Uses HTTP-only cookies instead of URL parameters for security
  */
 export function createAuthenticatedEventSource(url: string): EventSource {
-  // For SSE, we'll pass the secret as a URL parameter since EventSource doesn't support custom headers
-  const separator = url.includes('?') ? '&' : '?';
-  const authenticatedUrl = `${url}${separator}secret=${encodeURIComponent(API_SECRET)}`;
-  return new EventSource(authenticatedUrl);
+  // EventSource automatically includes cookies for same-origin requests
+  // The withCredentials option is not supported by EventSource
+  return new EventSource(url);
+}
+
+/**
+ * Login to admin panel
+ * Sends credentials to server which sets HTTP-only cookie
+ */
+export async function loginToAdmin(password: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch('/api/admin-login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include', // Include cookies
+      body: JSON.stringify({ password }),
+    });
+    
+    const data = await response.json();
+    return data;
+  } catch {
+    return { 
+      success: false, 
+      error: 'Login failed' 
+    };
+  }
+}
+
+/**
+ * Logout from admin panel
+ * Clears the authentication cookie
+ */
+export async function logoutFromAdmin(): Promise<{ success: boolean }> {
+  try {
+    const response = await fetch('/api/admin-logout', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    
+    const data = await response.json();
+    return data;
+  } catch {
+    return { success: false };
+  }
 } 

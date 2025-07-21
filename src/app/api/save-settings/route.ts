@@ -1,37 +1,14 @@
-import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
+import { kv } from '@vercel/kv';
 import { broadcastSettings } from '@/lib/settings-broadcast';
-import { withApiAuth } from '@/lib/api-auth';
 import { validateAndSanitizeSettings, detectMaliciousKeys } from '@/lib/settings-validator';
+import { verifyAuth, logKVUsage } from '@/lib/api-auth';
 
-// Simple KV usage tracking
-let kvReadCount = 0;
-let kvWriteCount = 0;
-
-// Reset counters daily
+// Invalidate SSE cache when settings are updated
 declare global {
-  var kvUsageReset: number | undefined;
   var sseCacheInvalidated: number | undefined;
 }
 
-if (typeof global !== 'undefined' && !global.kvUsageReset) {
-  global.kvUsageReset = Date.now();
-  kvReadCount = 0;
-  kvWriteCount = 0;
-}
-
-// Log usage every 100 requests
-function logKVUsage(operation: 'read' | 'write') {
-  if (operation === 'read') kvReadCount++;
-  if (operation === 'write') kvWriteCount++;
-  
-  const total = kvReadCount + kvWriteCount;
-  if (total % 100 === 0) {
-    console.log(`📊 KV Usage: ${kvReadCount} reads, ${kvWriteCount} writes (${total} total)`);
-  }
-}
-
-// Invalidate SSE cache when settings are updated
 function invalidateSSECache() {
   // This will force the SSE route to fetch fresh data on next request
   if (typeof global !== 'undefined') {
@@ -104,4 +81,11 @@ async function handlePOST(request: NextRequest) {
   }
 }
 
-export const POST = withApiAuth(handlePOST); 
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Verify authentication
+  if (!(await verifyAuth())) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  
+  return handlePOST(request);
+} 

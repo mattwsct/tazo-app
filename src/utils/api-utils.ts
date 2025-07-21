@@ -4,16 +4,89 @@ import {
   mapWMOToDescription,
   type LocationData 
 } from './overlay-utils';
+import { ApiLogger } from '@/lib/logger';
 
-// === 🌐 API LOGGER ===
-const ApiLogger = {
-  info: (api: string, message: string, data?: unknown) => 
-    console.log(`🌐 [${api.toUpperCase()} API] ${message}`, data || ''),
-  error: (api: string, message: string, error?: unknown) => 
-    console.error(`🌐 [${api.toUpperCase()} API ERROR] ${message}`, error || ''),
-  warn: (api: string, message: string, data?: unknown) => 
-    console.warn(`🌐 [${api.toUpperCase()} API WARNING] ${message}`, data || ''),
+// === 🗄️ SIMPLE CACHE SYSTEM ===
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number;
+}
+
+class SimpleCache {
+  private cache = new Map<string, CacheEntry<unknown>>();
+
+  set<T>(key: string, data: T, ttlMs: number): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ttl: ttlMs
+    });
+  }
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    const now = Date.now();
+    if (now - entry.timestamp > entry.ttl) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data as T;
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+const apiCache = new SimpleCache();
+
+// === ⏱️ API CONFIGURATION ===
+const API_CONFIG = {
+  TIMEOUT: 10000, // 10 seconds
+  RETRY_ATTEMPTS: 2,
+  RETRY_DELAY: 1000, // 1 second base delay
+  MAX_RETRY_DELAY: 10000, // 10 seconds max delay
 } as const;
+
+// === 🔄 RETRY UTILITY ===
+async function fetchWithRetry(
+  url: string, 
+  options: RequestInit = {}, 
+  retries: number = API_CONFIG.RETRY_ATTEMPTS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (retries > 0 && (error instanceof Error && error.name === 'AbortError')) {
+      // Calculate exponential backoff delay
+      const attempt = API_CONFIG.RETRY_ATTEMPTS - retries + 1;
+      const backoffDelay = Math.min(
+        API_CONFIG.RETRY_DELAY * Math.pow(2, attempt - 1),
+        API_CONFIG.MAX_RETRY_DELAY
+      );
+      
+      ApiLogger.warn('fetch', `Request timeout, retrying in ${backoffDelay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    
+    throw error;
+  }
+}
 
 // === 🌤️ WEATHER TYPES ===
 export interface WeatherData {
@@ -40,6 +113,14 @@ export async function fetchLocationFromLocationIQ(
   lon: number, 
   apiKey: string
 ): Promise<LocationData | null> {
+  // Check cache first (30 minute cache for location data)
+  const cacheKey = `location_${lat.toFixed(3)}_${lon.toFixed(3)}`;
+  const cached = apiCache.get<LocationData>(cacheKey);
+  if (cached) {
+    ApiLogger.info('locationiq', 'Using cached location data', { lat, lon });
+    return cached;
+  }
+
   if (!apiKey || !checkRateLimit('locationiq')) {
     ApiLogger.warn('locationiq', 'API call skipped', { 
       hasKey: !!apiKey, 
@@ -51,7 +132,7 @@ export async function fetchLocationFromLocationIQ(
   try {
     ApiLogger.info('locationiq', 'Fetching location data', { lat, lon });
     
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&accept-language=en`
     );
     
@@ -87,6 +168,10 @@ export async function fetchLocationFromLocationIQ(
       };
       
       ApiLogger.info('locationiq', 'Location data received', result);
+      
+      // Cache the result for 30 minutes
+      apiCache.set(cacheKey, result, 30 * 60 * 1000);
+      
       return result;
     }
     
@@ -108,6 +193,14 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
   lat: number, 
   lon: number
 ): Promise<WeatherTimezoneResponse | null> {
+  // Check cache first (5 minute cache for weather data)
+  const cacheKey = `weather_${lat.toFixed(3)}_${lon.toFixed(3)}`;
+  const cached = apiCache.get<WeatherTimezoneResponse>(cacheKey);
+  if (cached) {
+    ApiLogger.info('openmeteo', 'Using cached weather data', { lat, lon });
+    return cached;
+  }
+
   if (!checkRateLimit('openmeteo')) {
     ApiLogger.warn('openmeteo', 'Rate limit exceeded, skipping API call');
     return null;
@@ -118,7 +211,7 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
     
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=sunrise,sunset&temperature_unit=celsius&timezone=auto&forecast_days=1`;
     
-    const response = await fetch(url);
+    const response = await fetchWithRetry(url);
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -162,7 +255,12 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
       ApiLogger.info('openmeteo', 'Sunrise/sunset data received', { sunrise, sunset });
     }
     
-    return { weather, timezone, sunrise, sunset };
+    const result = { weather, timezone, sunrise, sunset };
+    
+    // Cache the result for 5 minutes
+    apiCache.set(cacheKey, result, 5 * 60 * 1000);
+    
+    return result;
     
   } catch (error) {
     ApiLogger.error('openmeteo', 'Failed to fetch weather/timezone', error);

@@ -10,7 +10,7 @@
     "clean": "Remove-Item -Recurse -Force .next",
     "cleanup-settings": "node scripts/cleanup-kv-direct.js",
     "dev:debug": "npm run dev | tee dev.log",
-
+    "analyze": "cross-env ANALYZE=true npm run build",
     "monitor:sse": "node scripts/monitor-sse.js"
   },
   "dependencies": {

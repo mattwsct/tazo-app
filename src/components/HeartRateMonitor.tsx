@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { HeartRateLogger } from '@/lib/logger';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // === 💗 HEART RATE TYPES & CONSTANTS ===
 interface PulsoidHeartRateData {
@@ -23,13 +25,7 @@ const HEART_RATE_CONFIG = {
   MAX_RECONNECT_ATTEMPTS: 10,
 } as const;
 
-// === 💗 HEART RATE UTILITIES ===
-const HeartRateLogger = {
-  info: (message: string, data?: unknown) => 
-    console.log(`💗 [HEART RATE] ${message}`, data || ''),
-  error: (message: string, error?: unknown) => 
-    console.error(`💗 [HEART RATE ERROR] ${message}`, error || ''),
-} as const;
+
 
 // Heart rate zones and color mapping
 const HEART_RATE_ZONES = {
@@ -298,7 +294,8 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
   }
 
   return (
-    <div className="heart-rate">
+    <ErrorBoundary>
+      <div className="heart-rate">
       <div className="heart-rate-content">
         <div 
           className="heart-rate-icon beating"
@@ -322,5 +319,6 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   );
 } 

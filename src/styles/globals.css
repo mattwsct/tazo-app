@@ -46,7 +46,7 @@
   text-shadow: 1px 1px 2px black;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 1.5s ease-out;
+  transition: opacity 0.3s ease-out;
   z-index: 9999;
 }
 
@@ -181,7 +181,7 @@ body.overlay-page {
 .heart-rate-content {
   display: flex;
   align-items: center;
-  gap: var(--gap-lg);
+  gap: var(--gap-md);
   min-height: var(--font-size-lg);
   justify-content: flex-start;
 }
@@ -389,4 +389,51 @@ body.overlay-page {
   }
 }
 
+/* === 🚨 ERROR BOUNDARY STYLES === */
+.error-boundary {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  text-align: center;
+  max-width: 400px;
+  z-index: 9999;
+}
 
+.error-reload-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 1rem;
+  font-size: 1rem;
+}
+
+.error-reload-btn:hover {
+  background: #c82333;
+}
+
+.error-details {
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: #ffc107;
+}
+
+.error-details pre {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}

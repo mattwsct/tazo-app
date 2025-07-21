@@ -1,31 +1,7 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
-// Country name shortenings for display optimization
-const COUNTRY_SHORTENINGS: Record<string, string> = {
-  'United States of America': 'USA',
-  'United Kingdom': 'UK',
-  'United Arab Emirates': 'UAE',
-  'Antigua and Barbuda': 'Antigua',
-  'Bosnia and Herzegovina': 'Bosnia',
-  'Central African Republic': 'CAR',
-  'Democratic Republic of the Congo': 'DR Congo',
-  'Dominican Republic': 'Dominican Rep.',
-  'Equatorial Guinea': 'Eq. Guinea',
-  'Sao Tome and Principe': 'Sao Tome',
-  'Trinidad and Tobago': 'Trinidad',
-  'Turks and Caicos Islands': 'Turks & Caicos',
-  'Saint Kitts and Nevis': 'St. Kitts',
-  'Saint Vincent and the Grenadines': 'St. Vincent',
-  'Virgin Islands, British': 'BVI',
-  'Virgin Islands, U.S.': 'USVI',
-  'Federated States of Micronesia': 'Micronesia',
-  'Papua New Guinea': 'PNG',
-  'Czech Republic': 'Czechia',
-  'South Africa': 'South Africa',
-  'South Korea': 'South Korea',
-  'Philippines': 'Philippines',
-  'New Zealand': 'New Zealand',
-} as const;
+// Maximum character length for country names before using country code
+const MAX_COUNTRY_NAME_LENGTH = 12;
 
 // Interface for location data
 export interface LocationData {
@@ -42,15 +18,24 @@ export interface LocationData {
 }
 
 /**
- * Shortens country names for better display in overlay
+ * Smart country name shortening for overlay display
+ * Uses full name if short enough, otherwise uses country code
  */
 export function shortenCountryName(countryName: string, countryCode = ''): string {
   if (!countryName) return '';
-  const shortened = COUNTRY_SHORTENINGS[countryName] || countryName;
-  if (shortened.length > 12 && countryCode) {
+  
+  // If country name is short enough, use it as is
+  if (countryName.length <= MAX_COUNTRY_NAME_LENGTH) {
+    return countryName;
+  }
+  
+  // If country name is too long and we have a country code, use the code
+  if (countryCode) {
     return countryCode.toUpperCase();
   }
-  return shortened;
+  
+  // Fallback: use the original country name even if it's long
+  return countryName;
 }
 
 /**
@@ -74,46 +59,34 @@ export function formatLocation(location: LocationData, displayMode: 'city' | 'st
   const shortenedCountry = shortenCountryName(location.country || '', location.countryCode || '');
   
   if (displayMode === 'city') {
-    console.log(`📍 [LOCATION FORMAT] City mode: city="${location.city}"`);
-    
     if (location.city) {
-      console.log(`📍 [LOCATION FORMAT] Using city: "${location.city}, ${shortenedCountry}"`);
       return `${location.city}, ${shortenedCountry}`;
     }
     
     // Fallback to state if no city
     if (location.state) {
-      console.log(`📍 [LOCATION FORMAT] No city available, falling back to state: "${location.state}, ${shortenedCountry}"`);
       return `${location.state}, ${shortenedCountry}`;
     }
     
     // Final fallback: just country
-    console.log(`📍 [LOCATION FORMAT] No city or state available, using country: "${shortenedCountry}"`);
     return shortenedCountry;
   }
   
   if (displayMode === 'state') {
-    console.log(`📍 [LOCATION FORMAT] State mode: state="${location.state}"`);
-    
     if (location.state) {
-      console.log(`📍 [LOCATION FORMAT] Using state: "${location.state}, ${shortenedCountry}"`);
       return `${location.state}, ${shortenedCountry}`;
     }
     
     // Fallback to city if no state
     if (location.city) {
-      console.log(`📍 [LOCATION FORMAT] No state available, falling back to city: "${location.city}, ${shortenedCountry}"`);
       return `${location.city}, ${shortenedCountry}`;
     }
     
     // Final fallback: just country
-    console.log(`📍 [LOCATION FORMAT] No state or city available, using country: "${shortenedCountry}"`);
     return shortenedCountry;
   }
   
   if (displayMode === 'country') {
-    console.log(`📍 [LOCATION FORMAT] Country mode: country="${shortenedCountry}"`);
-    console.log(`📍 [LOCATION FORMAT] Using country: "${shortenedCountry}"`);
     return shortenedCountry;
   }
   
@@ -272,4 +245,34 @@ export function isValidCoordinate(lat: number, lon: number): boolean {
     lon >= -180 && 
     lon <= 180
   );
+}
+
+/**
+ * Validates coordinate precision and realistic bounds
+ */
+export function isValidCoordinatePrecision(lat: number, lon: number): boolean {
+  // Check basic validity first
+  if (!isValidCoordinate(lat, lon)) {
+    return false;
+  }
+  
+  // Check for reasonable precision (not too many decimal places)
+  const latStr = Math.abs(lat).toString();
+  const lonStr = Math.abs(lon).toString();
+  
+  // Should not have more than 6 decimal places (about 1 meter precision)
+  const latDecimals = latStr.includes('.') ? latStr.split('.')[1]?.length || 0 : 0;
+  const lonDecimals = lonStr.includes('.') ? lonStr.split('.')[1]?.length || 0 : 0;
+  
+  if (latDecimals > 6 || lonDecimals > 6) {
+    return false;
+  }
+  
+  // Check for obviously wrong coordinates (like 0,0 in the ocean)
+  // This is a basic check - could be expanded for specific regions
+  if (lat === 0 && lon === 0) {
+    return false; // Gulf of Guinea - unlikely to be correct
+  }
+  
+  return true;
 } 

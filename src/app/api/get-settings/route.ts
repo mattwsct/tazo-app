@@ -1,32 +1,7 @@
-import { kv } from '@vercel/kv';
 import { NextResponse } from 'next/server';
-import { withApiAuthGet } from '@/lib/api-auth';
-
-// Simple KV usage tracking
-let kvReadCount = 0;
-let kvWriteCount = 0;
-
-// Reset counters daily (in production, you'd want more sophisticated tracking)
-declare global {
-  var kvUsageReset: number | undefined;
-}
-
-if (typeof global !== 'undefined' && !global.kvUsageReset) {
-  global.kvUsageReset = Date.now();
-  kvReadCount = 0;
-  kvWriteCount = 0;
-}
-
-// Log usage every 100 requests
-function logKVUsage(operation: 'read' | 'write') {
-  if (operation === 'read') kvReadCount++;
-  if (operation === 'write') kvWriteCount++;
-  
-  const total = kvReadCount + kvWriteCount;
-  if (total % 100 === 0) {
-    console.log(`📊 KV Usage: ${kvReadCount} reads, ${kvWriteCount} writes (${total} total)`);
-  }
-}
+import { kv } from '@vercel/kv';
+import { verifyAuth, logKVUsage } from '@/lib/api-auth';
+import { validateEnvironment } from '@/lib/env-validator';
 
 async function handleGET() {
   try {
@@ -44,4 +19,18 @@ async function handleGET() {
   }
 }
 
-export const GET = withApiAuthGet(handleGET); 
+export async function GET(): Promise<NextResponse> {
+  // Validate environment
+  const envValidation = validateEnvironment();
+  if (!envValidation.isValid) {
+    console.error('Environment validation failed:', envValidation.missing);
+    return new NextResponse('Server configuration error', { status: 500 });
+  }
+  
+  // Verify authentication
+  if (!(await verifyAuth())) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  
+  return handleGET();
+} 

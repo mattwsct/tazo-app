@@ -1,18 +1,7 @@
-import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
-import { withApiAuth } from '@/lib/api-auth';
+import { kv } from '@vercel/kv';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
-
-// Simple KV usage tracking
-let kvReadCount = 0;
-
-// Log usage every 100 requests
-function logKVUsage() {
-  kvReadCount++;
-  if (kvReadCount % 100 === 0) {
-    console.log(`📊 KV Check Usage: ${kvReadCount} checks`);
-  }
-}
+import { verifyAuth, logKVUsage } from '@/lib/api-auth';
 
 async function handleGET(request: NextRequest) {
   try {
@@ -23,7 +12,7 @@ async function handleGET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing lastModified parameter' }, { status: 400 });
     }
 
-    logKVUsage();
+    logKVUsage('read');
     
     // Get the current modification timestamp
     const currentModified = await kv.get('overlay_settings_modified');
@@ -66,4 +55,11 @@ async function handleGET(request: NextRequest) {
   }
 }
 
-export const GET = withApiAuth(handleGET); 
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  // Verify authentication
+  if (!(await verifyAuth())) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  
+  return handleGET(request);
+} 

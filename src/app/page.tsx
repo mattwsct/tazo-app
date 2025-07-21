@@ -3,9 +3,14 @@
 import { useState, useEffect } from 'react';
 import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode } from '@/types/settings';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useRenderPerformance } from '@/lib/performance';
 import '@/styles/admin.css';
 
 export default function AdminPage() {
+  // Performance monitoring
+  useRenderPerformance('AdminPage');
+  
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
@@ -34,13 +39,26 @@ export default function AdminPage() {
       setIsLoading(true);
       authenticatedFetch('/api/get-settings')
         .then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) {
+            if (res.status === 401) {
+              // Not authenticated - use default settings
+              console.log('Not authenticated, using default settings');
+              setSettings(DEFAULT_OVERLAY_SETTINGS);
+              return null;
+            }
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
           return res.json();
         })
-        .then(data => setSettings(data))
-        .catch(() => {
-          console.error('Failed to load settings');
-          showToastMessage('Failed to load settings. Please refresh.');
+        .then(data => {
+          if (data) {
+            setSettings(data);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to load settings:', error);
+          showToastMessage('Failed to load settings. Using defaults.');
+          setSettings(DEFAULT_OVERLAY_SETTINGS);
         })
         .finally(() => setIsLoading(false));
     }
@@ -120,17 +138,25 @@ export default function AdminPage() {
         body: JSON.stringify(updatedSettings),
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Not authenticated - this is expected when not logged in
+          console.log('Not authenticated, settings not saved');
+          return;
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       showToastMessage('Saved');
-    } catch {
-      console.warn('Auto-save warning (settings may still be saved):', newSettings);
+    } catch (error) {
+      console.warn('Auto-save warning (settings may still be saved):', error);
     }
   };
 
   // === 🎨 RENDER LOGIN FORM ===
   if (!isAuthenticated) {
     return (
-      <div className="admin-container">
+      <ErrorBoundary>
+        <div className="admin-container">
         <div className="admin-content">
           <div className="admin-login">
             <h1>🎮 Stream Control Panel</h1>
@@ -166,12 +192,14 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      </ErrorBoundary>
     );
   }
 
   // === 🎨 RENDER ADMIN PANEL ===
   return (
-    <div className="admin-container">
+    <ErrorBoundary>
+      <div className="admin-container">
       <div className="admin-content">
         {/* Header */}
         <div className="admin-header">
@@ -365,5 +393,6 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 } 
