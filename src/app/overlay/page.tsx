@@ -18,12 +18,16 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
-import { authenticatedFetch, createAuthenticatedEventSource } from '@/lib/client-auth';
+
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import HeartRateMonitor from '@/components/HeartRateMonitor';
+import KickSubGoal from '@/components/KickSubGoal';
+
+
 import { 
   fetchWeatherAndTimezoneFromOpenMeteo,
   fetchLocationFromLocationIQ,
+  WeatherTimezoneResponse,
 } from '@/utils/api-utils';
 import {
   formatLocation,
@@ -136,6 +140,7 @@ interface RTIRLPayload {
 
 
 
+
 // === 🎮 MAIN OVERLAY COMPONENT ===
 export default function OverlayPage() {
   // Performance monitoring
@@ -200,10 +205,154 @@ export default function OverlayPage() {
   // Settings state
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   
+  // Sub goal data state (for manual updates)
+  const [subGoalData, setSubGoalData] = useState<{
+    currentSubs?: number;
+    latestSub?: string | null;
+    lastUpdate?: number;
+  } | null>(null);
+  
+  // Ensure settings always have all required properties
+  const safeSettings = useMemo(() => ({ ...DEFAULT_OVERLAY_SETTINGS, ...settings }), [settings]);
+  
+  // === 🛠️ HELPER FUNCTIONS ===
+  const createDateTimeFormatters = useCallback((timezone: string) => {
+    formatter.current = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone,
+    });
+    dateFormatter.current = new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: timezone,
+    });
+  }, []);
+
+  const setLoadingState = useCallback((type: 'weather' | 'timezone' | 'location', loading: boolean) => {
+    setIsLoading(prev => ({ ...prev, [type]: loading }));
+  }, []);
+
+  const processWeatherResult = useCallback(async (result: WeatherTimezoneResponse | null, isInitial = false) => {
+    if (!result) {
+      setError('weather', 'Weather API returned no data');
+      OverlayLogger.warn('Weather API failed');
+      setError('timezone', 'No timezone data available');
+      OverlayLogger.error('No timezone data available');
+      
+      // Clear weather data and mark as loaded so it doesn't block the overlay
+      setWeather(null);
+      setLoadingState('weather', false);
+      OverlayLogger.error('Weather API failed - clearing weather data and marking as loaded');
+      return;
+    }
+
+    // Update weather if available
+    if (result.weather) {
+      setWeather(result.weather);
+      setLoadingState('weather', false);
+      lastWeatherUpdate.current = Date.now();
+      OverlayLogger.weather(isInitial ? 'Initial weather data loaded' : 'Weather data updated successfully', result.weather);
+    } else {
+      // Weather API succeeded but no weather data - mark as loaded
+      setLoadingState('weather', false);
+      OverlayLogger.weather(isInitial ? 'Initial weather API succeeded but no weather data available' : 'Weather API succeeded but no weather data available');
+    }
+    
+    // Update sunrise/sunset data if available
+    if (result.sunrise && result.sunset) {
+      setSunrise(result.sunrise);
+      setSunset(result.sunset);
+      OverlayLogger.weather(isInitial ? 'Initial sunrise/sunset data loaded' : 'Sunrise/sunset data updated', { sunrise: result.sunrise, sunset: result.sunset });
+    }
+    
+    // Update timezone if available and different
+    if (result.timezone && result.timezone !== timezone) {
+      try {
+        createDateTimeFormatters(result.timezone);
+        setTimezone(result.timezone);
+        setLoadingState('timezone', false);
+        lastTimezoneUpdate.current = Date.now();
+        OverlayLogger.overlay(isInitial ? 'Initial timezone set' : 'Timezone updated successfully', { timezone: result.timezone });
+      } catch (error) {
+        OverlayLogger.error(isInitial ? 'Failed to set initial timezone' : 'Failed to set timezone', error);
+        setLoadingState('timezone', false);
+      }
+    }
+  }, [timezone, createDateTimeFormatters, setLoadingState, setError]);
+  
+  // Debug settings state
+  useEffect(() => {
+    console.log('Overlay: Settings state changed:', {
+      rawSettings: settings,
+      safeSettings: safeSettings,
+      showKickSubGoal: safeSettings.showKickSubGoal
+    });
+  }, [settings, safeSettings]);
+  
+  // SSE connection for real-time settings updates
+  useEffect(() => {
+    console.log('Overlay: Connecting to SSE for real-time updates');
+    
+    const eventSource = new EventSource('/api/settings-stream');
+    
+    eventSource.onopen = () => {
+      console.log('Overlay: SSE connected successfully');
+    };
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Overlay: Received SSE message:', data);
+        
+        if (data.type === 'settings_update') {
+          console.log('Overlay: Received settings update via SSE');
+          
+          // Handle sub goal data separately
+          if (data._subGoalData) {
+            console.log('Overlay: Received sub goal data:', data._subGoalData);
+            setSubGoalData(data._subGoalData);
+          }
+          
+          setSettings(data);
+        } else if (data.type === 'heartbeat') {
+          console.log('Overlay: Received SSE heartbeat');
+        } else if (data.type === 'connected') {
+          console.log('Overlay: SSE connection confirmed');
+        }
+      } catch (error) {
+        console.error('Overlay: Failed to parse SSE message:', error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('Overlay: SSE error:', error);
+      // Try to reconnect after a delay
+      setTimeout(() => {
+        console.log('Overlay: Attempting SSE reconnection...');
+        eventSource.close();
+        // The useEffect will recreate the connection
+      }, 5000);
+    };
+    
+    return () => {
+      console.log('Overlay: Closing SSE connection');
+      eventSource.close();
+    };
+  }, []);
+  
   // Update refs when state changes
   useEffect(() => {
     currentSettings.current = settings;
   }, [settings]);
+  
+  // Debug KickSubGoal visibility
+  useEffect(() => {
+    console.log('Overlay: Settings changed, showKickSubGoal =', safeSettings.showKickSubGoal);
+    console.log('Overlay: Full settings state:', safeSettings);
+  }, [safeSettings]);
   
   useEffect(() => {
     currentIsLoading.current = isLoading;
@@ -289,9 +438,14 @@ export default function OverlayPage() {
   // === 🗺️ MINIMAP VISIBILITY LOGIC ===
   const shouldShowMinimap = useCallback(() => {
     if (!mapCoords) return false;
-    const manualShow = settings.showMinimap;
-    const speedBasedShow = settings.minimapSpeedBased && speedBasedVisible.current;
-    return manualShow || speedBasedShow;
+    
+    // If speed-based mode is enabled, only show when speed conditions are met
+    if (settings.minimapSpeedBased) {
+      return speedBasedVisible.current;
+    }
+    
+    // Otherwise, show if manual display is enabled
+    return settings.showMinimap;
   }, [mapCoords, settings.showMinimap, settings.minimapSpeedBased]);
 
   // === 👁️ SIMPLIFIED OVERLAY VISIBILITY ===
@@ -400,75 +554,13 @@ export default function OverlayPage() {
         
         try {
           const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
-        
-        if (result) {
-          // Update weather if available
-          if (result.weather) {
-            setWeather(result.weather);
-            setIsLoading(prev => ({ ...prev, weather: false }));
-            lastWeatherUpdate.current = Date.now();
-            
-
-            
-            OverlayLogger.weather('Weather data updated successfully', result.weather);
-          } else {
-            // Weather API succeeded but no weather data - mark as loaded
-            setIsLoading(prev => ({ ...prev, weather: false }));
-            OverlayLogger.weather('Weather API succeeded but no weather data available');
-          }
-          
-          // Update sunrise/sunset data if available
-          if (result.sunrise && result.sunset) {
-            setSunrise(result.sunrise);
-            setSunset(result.sunset);
-            OverlayLogger.weather('Sunrise/sunset data updated', { sunrise: result.sunrise, sunset: result.sunset });
-          }
-          
-          // Update timezone if available and different
-          if (result.timezone && result.timezone !== timezone) {
-            try {
-              formatter.current = new Intl.DateTimeFormat('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-                timeZone: result.timezone,
-              });
-              dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-                timeZone: result.timezone,
-              });
-                            setTimezone(result.timezone);
-              setIsLoading(prev => ({ ...prev, timezone: false }));
-              lastTimezoneUpdate.current = Date.now();
-              
-
-              
-              OverlayLogger.overlay('Timezone updated successfully', { timezone: result.timezone });
-            } catch (error) {
-              OverlayLogger.error('Failed to set timezone', error);
-              setIsLoading(prev => ({ ...prev, timezone: false }));
-            }
-          }
-        } else {
-          // Weather API failed
-          setError('weather', 'Weather API returned no data');
-          OverlayLogger.warn('Weather API failed');
-          setError('timezone', 'No timezone data available');
-          OverlayLogger.error('No timezone data available');
-          
-          // Clear weather data and mark as loaded so it doesn't block the overlay
-          setWeather(null);
-          setIsLoading(prev => ({ ...prev, weather: false }));
-          OverlayLogger.error('Weather API failed - clearing weather data and marking as loaded');
-        }
-              } catch (error) {
+          await processWeatherResult(result);
+        } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           setError('weather', `Weather update failed: ${errorMessage}`);
           OverlayLogger.error('Weather update failed', error);
           setWeather(null);
-          setIsLoading(prev => ({ ...prev, weather: false }));
+          setLoadingState('weather', false);
         } finally {
           isUpdatingWeather.current = false;
         }
@@ -487,7 +579,7 @@ export default function OverlayPage() {
     return () => {
       if (weatherRefreshTimer.current) clearInterval(weatherRefreshTimer.current);
     };
-  }, [timezone]);
+  }, [timezone, processWeatherResult, setError, setLoadingState]);
 
   // === 📍 LOCATION UPDATE LOGIC ===
   const updateFromCoordinates = useCallback(async (lat: number, lon: number) => {
@@ -509,52 +601,12 @@ export default function OverlayPage() {
       try {
         const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
         
-        if (result?.weather) {
-          setWeather(result.weather);
-          setIsLoading(prev => ({ ...prev, weather: false }));
-          lastWeatherUpdate.current = Date.now();
-          OverlayLogger.weather('Initial weather data loaded', result.weather);
-        } else {
-          // Weather API succeeded but no weather data - mark as loaded
-          setIsLoading(prev => ({ ...prev, weather: false }));
-          OverlayLogger.weather('Initial weather API succeeded but no weather data available');
-        }
-        
-        // Update sunrise/sunset data if available
-        if (result?.sunrise && result?.sunset) {
-          setSunrise(result.sunrise);
-          setSunset(result.sunset);
-          OverlayLogger.weather('Initial sunrise/sunset data loaded', { sunrise: result.sunrise, sunset: result.sunset });
-        }
-        
-        if (result?.timezone && result.timezone !== currentTimezone.current) {
-          try {
-            formatter.current = new Intl.DateTimeFormat('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true,
-              timeZone: result.timezone,
-       });
-            dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric',
-              timeZone: result.timezone,
-            });
-            setTimezone(result.timezone);
-            setIsLoading(prev => ({ ...prev, timezone: false }));
-            lastTimezoneUpdate.current = Date.now();
-            OverlayLogger.overlay('Initial timezone set', { timezone: result.timezone });
-          } catch (error) {
-            OverlayLogger.error('Failed to set initial timezone', error);
-            setIsLoading(prev => ({ ...prev, timezone: false }));
-          }
-        }
+        await processWeatherResult(result, true);
       } catch (error) {
         OverlayLogger.error('Immediate weather update failed', error);
         // Clear weather data and mark as loaded so it doesn't block the overlay
         setWeather(null);
-        setIsLoading(prev => ({ ...prev, weather: false }));
+        setLoadingState('weather', false);
       }
     } else if (!hadCoords && currentIsLoading.current.weather) {
       // Rate limited - skip initial weather update
@@ -563,7 +615,7 @@ export default function OverlayPage() {
           cooldown: TIMERS.API_COOLDOWN 
         });
       // Mark weather as loaded so it doesn't block the overlay
-      setIsLoading(prev => ({ ...prev, weather: false }));
+      setLoadingState('weather', false);
     }
     
     // Check location update: only on significant movement AND respecting rate limit
@@ -601,7 +653,7 @@ export default function OverlayPage() {
           clearError('location');
           const label = formatLocation(loc, settings.locationDisplay);
           setLocation({ label, countryCode: loc.countryCode || '', originalData: loc });
-          setIsLoading(prev => ({ ...prev, location: false }));
+          setLoadingState('location', false);
           lastLocationUpdate.current = now;
           
 
@@ -614,30 +666,19 @@ export default function OverlayPage() {
           // Use timezone from LocationIQ as fallback
           if (loc.timezone && loc.timezone !== currentTimezone.current) {
             try {
-              formatter.current = new Intl.DateTimeFormat('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true,
-                timeZone: loc.timezone,
-              });
-              dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-                timeZone: loc.timezone,
-              });
+              createDateTimeFormatters(loc.timezone);
               setTimezone(loc.timezone);
-              setIsLoading(prev => ({ ...prev, timezone: false }));
+              setLoadingState('timezone', false);
               lastTimezoneUpdate.current = now;
               OverlayLogger.overlay('Timezone updated from LocationIQ', { timezone: loc.timezone });
             } catch (error) {
               OverlayLogger.error('Failed to set timezone from LocationIQ', error);
-              setIsLoading(prev => ({ ...prev, timezone: false }));
+              setLoadingState('timezone', false);
             }
           }
         } else {
           // Location API succeeded but no location data - mark as loaded
-          setIsLoading(prev => ({ ...prev, location: false }));
+          setLoadingState('location', false);
           OverlayLogger.location('Location API succeeded but no location data available');
         }
       } catch (error) {
@@ -645,7 +686,7 @@ export default function OverlayPage() {
         setError('location', `Location API failed: ${errorMessage}`);
         OverlayLogger.error('Location API failed', error);
         // Mark location as loaded so it doesn't block the overlay
-        setIsLoading(prev => ({ ...prev, location: false }));
+        setLoadingState('location', false);
       }
     } else if (API_KEYS.LOCATIONIQ) {
       // Rate limited - skip this update
@@ -655,14 +696,14 @@ export default function OverlayPage() {
         });
       // Mark location as loaded if we haven't already
       if (currentIsLoading.current.location) {
-        setIsLoading(prev => ({ ...prev, location: false }));
+        setLoadingState('location', false);
       }
     } else {
       // No LocationIQ API key - mark location as loaded
-      setIsLoading(prev => ({ ...prev, location: false }));
+      setLoadingState('location', false);
       OverlayLogger.warn('No LocationIQ API key - marking location as loaded');
     }
-  }, [settings.locationDisplay, clearError]); // Include locationDisplay dependency to get current setting
+  }, [settings.locationDisplay, clearError, processWeatherResult, setError, setLoadingState, createDateTimeFormatters]); // Include all dependencies
 
   // === 📡 RTIRL INTEGRATION ===
   useEffect(() => {
@@ -693,7 +734,7 @@ export default function OverlayPage() {
             // RTIRL doesn't provide weather data - weather comes from Open-Meteo API
             // Mark weather as loaded if we're still loading (weather will come from API)
             if (currentIsLoading.current.weather) {
-              setIsLoading(prev => ({ ...prev, weather: false }));
+              setLoadingState('weather', false);
             }
             
             // Location data from RTIRL (basic coordinates only - detailed location comes from LocationIQ)
@@ -704,19 +745,19 @@ export default function OverlayPage() {
               if (countryCode && !location?.label) {
                 // Fallback: just show country if no detailed location data
                 setLocation({ label: shortenCountryName('', countryCode), countryCode });
-                setIsLoading(prev => ({ ...prev, location: false }));
+                setLoadingState('location', false);
                 lastLocationUpdate.current = Date.now();
                 
                 // Basic location data received from RTIRL (country only)
               } else if (currentIsLoading.current.location) {
                 // RTIRL has location but no valid country - mark as loaded
-                setIsLoading(prev => ({ ...prev, location: false }));
+                setLoadingState('location', false);
                 
                 // RTIRL has location but no valid country
               }
             } else if (currentIsLoading.current.location) {
               // RTIRL has no location data but we're still loading - mark as loaded
-              setIsLoading(prev => ({ ...prev, location: false }));
+              setLoadingState('location', false);
               
               // RTIRL has no location data
             }
@@ -724,25 +765,14 @@ export default function OverlayPage() {
             // Timezone data
             if (payload.location?.timezone && payload.location.timezone !== currentTimezone.current) {
               try {
-                formatter.current = new Intl.DateTimeFormat('en-US', {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true,
-                  timeZone: payload.location.timezone,
-                });
-                dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric',
-                  timeZone: payload.location.timezone,
-                });
+                createDateTimeFormatters(payload.location.timezone);
                 setTimezone(payload.location.timezone);
-                setIsLoading(prev => ({ ...prev, timezone: false }));
+                setLoadingState('timezone', false);
                 lastTimezoneUpdate.current = Date.now();
                 OverlayLogger.overlay('Timezone updated from RTIRL', { timezone: payload.location.timezone });
               } catch (error) {
                 OverlayLogger.error('Failed to set timezone from RTIRL', error);
-                setIsLoading(prev => ({ ...prev, timezone: false }));
+                setLoadingState('timezone', false);
               }
             }
             
@@ -814,189 +844,124 @@ export default function OverlayPage() {
   // === 🎛️ SETTINGS MANAGEMENT ===
   // (Settings SSE logic remains the same but with better logging)
   useEffect(() => {
-    let eventSource: EventSource | null = null;
-    let reconnectTimeout: NodeJS.Timeout | null = null;
-    let reconnectAttempts = 0;
-    let isPolling = false;
-    let pollingInterval: NodeJS.Timeout | null = null;
-    let lastKnownModified = Date.now(); // Track when we last received settings
+    let retryCount = 0;
+    const maxRetries = 10; // Increased retries since we need to get settings from KV
+    let isUsingDefaults = false;
     
-    function startSmartPolling() {
-      if (isPolling) return;
-      isPolling = true;
-      
-      pollingInterval = setInterval(async () => {
-        try {
-          const response = await authenticatedFetch(`/api/check-settings-update?lastModified=${lastKnownModified}`);
-          
-          if (!response.ok) {
-            if (response.status === 401) {
-              // Not authenticated - stop polling
-              OverlayLogger.settings('Not authenticated, stopping polling');
-              stopPolling();
-              return;
-            }
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          
-          const data = await response.json();
-          
-          if (data.hasChanges) {
-            setSettings(data.settings);
-            lastKnownModified = data.lastModified;
-            
-            // Try to reconnect SSE after successful update
-            if (reconnectAttempts > 0) {
-              stopPolling();
-              reconnectAttempts = 0;
-              connectSSE();
-            }
-          } else {
-            // No changes - just update timestamp
-            lastKnownModified = data.lastModified;
-          }
-        } catch (err) {
-          OverlayLogger.error('Smart polling failed', err);
-        }
-      }, TIMERS.POLLING_INTERVAL); // Check every 5 minutes instead of 60 seconds
-    }
-    
-    function stopPolling() {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-      }
-      isPolling = false;
-    }
-    
-    function connectSSE() {
-      
-      // Load settings immediately as fallback
-      authenticatedFetch('/api/get-settings')
+    const loadSettings = () => {
+      // Load initial settings
+      console.log('Overlay: Loading initial settings... (attempt', retryCount + 1, ')');
+      fetch('/api/get-settings')
         .then(res => {
           if (!res.ok) {
-            if (res.status === 401) {
-              // Not authenticated - use default settings
-              OverlayLogger.settings('Not authenticated, using default settings');
-              setSettings(DEFAULT_OVERLAY_SETTINGS);
-              return;
-            }
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
           }
           return res.json();
         })
         .then(data => {
           if (data) {
-            setSettings(data);
-            // Update last known modified timestamp
-            if (data._lastModified) {
-              lastKnownModified = data._lastModified;
+            console.log('Overlay: Loaded initial settings', data);
+            console.log('Overlay: showKickSubGoal from API =', data.showKickSubGoal);
+            console.log('Overlay: kickDailySubGoal from API =', data.kickDailySubGoal);
+            console.log('Overlay: kickChannelName from API =', data.kickChannelName);
+            
+            // Check if this is actually default settings (meaning no settings in KV yet)
+            // We need to check multiple fields to be sure
+            const isDefaultSettings = (
+              data.showKickSubGoal === DEFAULT_OVERLAY_SETTINGS.showKickSubGoal &&
+              data.kickDailySubGoal === DEFAULT_OVERLAY_SETTINGS.kickDailySubGoal &&
+              data.showWeather === DEFAULT_OVERLAY_SETTINGS.showWeather &&
+              data.showMinimap === DEFAULT_OVERLAY_SETTINGS.showMinimap
+            );
+            
+            console.log('Overlay: Is default settings?', isDefaultSettings);
+            
+            if (isDefaultSettings) {
+              console.log('Overlay: API returned default settings - no settings in KV yet, will retry');
+              throw new Error('No settings in KV yet');
             }
+            
+            console.log('Overlay: Using real settings from KV');
+            setSettings(data);
+            isUsingDefaults = false;
+            
+            // Extract sub goal data from initial settings if present
+            if (data._subGoalData) {
+              console.log('Overlay: Found sub goal data in initial settings:', data._subGoalData);
+              setSubGoalData(data._subGoalData);
+            }
+          } else {
+            // No data from KV, retry instead of using defaults
+            throw new Error('No settings data received from KV');
           }
         })
         .catch(err => {
-          OverlayLogger.error('Failed to load initial settings', err);
-          // Use default settings on error
-          setSettings(DEFAULT_OVERLAY_SETTINGS);
+          console.error('Overlay: Failed to load initial settings', err);
+          
+          // Always retry to get settings from KV
+          if (retryCount < maxRetries) {
+            retryCount++;
+            console.log('Overlay: Retrying settings load in 2 seconds... (attempt', retryCount, 'of', maxRetries, ')');
+            setTimeout(loadSettings, 2000);
+          } else {
+            console.error('Overlay: Failed to load settings from KV after', maxRetries, 'attempts');
+            // Only use defaults as absolute last resort
+            setSettings(DEFAULT_OVERLAY_SETTINGS);
+            isUsingDefaults = true;
+          }
         });
-      
-      if (eventSource) {
-        eventSource.close();
-      }
-      
-      eventSource = createAuthenticatedEventSource('/api/settings-stream');
-      
-      eventSource.onopen = () => {
-        reconnectAttempts = 0;
-        stopPolling();
-      };
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === 'heartbeat') {
-            return; // Ignore heartbeat messages
-          }
-          
-          if (data.type === 'settings_update') {
-            const { ...settingsOnly } = data;
-            setSettings(settingsOnly);
-            return;
-          }
-          
-          // Handle initial settings with timestamp
-          if (data._type === 'initial') {
-            const { _lastModified, ...settingsOnly } = data;
-            setSettings(settingsOnly);
-            if (_lastModified) {
-              lastKnownModified = _lastModified;
-            }
-            return;
-          }
-          
-          // Legacy format
-          setSettings(data);
-        } catch (error) {
-          OverlayLogger.error('Failed to parse settings update', error);
-        }
-      };
-      
-      eventSource.onerror = (error) => {
-        const readyState = eventSource?.readyState;
-        OverlayLogger.error(`❌ SSE connection error (ReadyState: ${readyState})`, error);
-        
-        // If SSE fails, ensure we have default settings
-        if (!settings.locationDisplay || settings.showWeather === undefined || settings.showMinimap === undefined) {
-          OverlayLogger.settings('SSE failed, ensuring default settings are loaded');
-          setSettings(DEFAULT_OVERLAY_SETTINGS);
-        }
-        
-        // Handle different ready states
-        if (readyState === EventSource.CLOSED) {
-          // Connection was closed, try to reconnect
-          reconnectAttempts++;
-          const delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttempts - 1, 5)), 30000);
-          
-          OverlayLogger.settings(`SSE connection closed, attempting reconnect #${reconnectAttempts} in ${delay}ms`);
-          
-          // Start polling only after 5 failed attempts
-          if (reconnectAttempts >= 5 && !isPolling) {
-            OverlayLogger.settings('Multiple SSE failures, switching to polling mode');
-            startSmartPolling();
-          }
-          
-          reconnectTimeout = setTimeout(() => {
-            connectSSE();
-          }, delay);
-        } else if (readyState === EventSource.CONNECTING) {
-          // Still connecting, wait a bit longer
-          OverlayLogger.settings('SSE still connecting, waiting...');
-        } else {
-          // Unknown state, try to reconnect
-          OverlayLogger.settings('SSE in unknown state, attempting reconnect');
-          reconnectAttempts++;
-          const delay = 5000; // 5 second delay for unknown states
-          
-          reconnectTimeout = setTimeout(() => {
-            connectSSE();
-          }, delay);
-        }
-      };
-    }
+    };
     
-    connectSSE();
+    loadSettings();
+    
+    // Fallback: Check for settings every 5 seconds if we're using defaults
+    console.log('Overlay: Setting up fallback interval (will only run if using defaults)');
+    const fallbackInterval = setInterval(() => {
+      console.log('Overlay: Fallback interval triggered, isUsingDefaults =', isUsingDefaults);
+      if (isUsingDefaults) {
+        console.log('Overlay: Fallback check - attempting to load settings from KV again');
+        fetch('/api/get-settings')
+          .then(res => res.json())
+          .then(data => {
+            if (data) {
+              console.log('Overlay: Fallback check - received data:', data);
+              
+              // Use the same comparison logic as above
+              const isDefaultSettings = (
+                data.showKickSubGoal === DEFAULT_OVERLAY_SETTINGS.showKickSubGoal &&
+                data.kickDailySubGoal === DEFAULT_OVERLAY_SETTINGS.kickDailySubGoal &&
+                data.showWeather === DEFAULT_OVERLAY_SETTINGS.showWeather &&
+                data.showMinimap === DEFAULT_OVERLAY_SETTINGS.showMinimap
+              );
+              
+              console.log('Overlay: Fallback check - is default settings?', isDefaultSettings);
+              
+              if (!isDefaultSettings) {
+                console.log('Overlay: Fallback check - found real settings in KV, updating');
+                setSettings(data);
+                isUsingDefaults = false;
+                if (data._subGoalData) {
+                  setSubGoalData(data._subGoalData);
+                }
+              } else {
+                console.log('Overlay: Fallback check - KV still contains default settings');
+              }
+            } else {
+              console.log('Overlay: Fallback check - no data received');
+            }
+          })
+          .catch(err => {
+            console.log('Overlay: Fallback check - KV still not available:', err);
+          });
+      } else {
+        console.log('Overlay: Fallback check - not using defaults, skipping');
+      }
+    }, 5000); // Reduced to 5 seconds for faster recovery
     
     return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-      stopPolling();
+      clearInterval(fallbackInterval);
     };
-  }, []);
+  }, []); // Removed settings dependency to prevent cascading effects
 
   // === 🗺️ MANUAL MINIMAP SETTING LOGIC ===
   useEffect(() => {
@@ -1038,18 +1003,20 @@ export default function OverlayPage() {
           speedBasedVisible.current = true;
           console.log('[MINIMAP] Minimap shown due to speed');
         }
+        // Clear any existing hide timeout when speed is above threshold
         if (speedHideTimeout.current) {
           clearTimeout(speedHideTimeout.current);
           speedHideTimeout.current = null;
         }
       }
     } else {
-      speedAboveThresholdCount.current = 0;
+      // Only start the hide timeout if minimap is currently visible and no timeout is already set
       if (speedBasedVisible.current && !speedHideTimeout.current) {
         speedHideTimeout.current = setTimeout(() => {
           speedBasedVisible.current = false;
+          speedAboveThresholdCount.current = 0; // Reset counter only after timeout
           speedHideTimeout.current = null;
-          console.log('[MINIMAP] Minimap hidden due to speed drop');
+          console.log('[MINIMAP] Minimap hidden due to speed drop after 30s timeout');
         }, TIMERS.SPEED_HIDE_DELAY);
         console.log(`[MINIMAP] Speed below threshold, will hide minimap in ${TIMERS.SPEED_HIDE_DELAY / 1000}s`);
       }
@@ -1237,7 +1204,30 @@ export default function OverlayPage() {
           )}
         </div>
       )}
+
+      {/* Kick.com Sub Goal - Bottom Right */}
+      <KickSubGoal 
+        channelName={safeSettings.kickChannelName}
+        dailyGoal={safeSettings.kickDailySubGoal}
+        isVisible={safeSettings.showKickSubGoal}
+        showLatestSub={safeSettings.showLatestSub}
+        showLeaderboard={safeSettings.showSubLeaderboard}
+        leaderboardSize={safeSettings.kickLeaderboardSize}
+        enableRollingSubGoal={safeSettings.enableRollingSubGoal}
+        rollingSubGoalIncrement={safeSettings.rollingSubGoalIncrement}
+        rollingSubGoalDelay={safeSettings.rollingSubGoalDelay}
+        subGoalData={subGoalData}
+        onGoalReset={() => {
+          console.log('🎯 Sub goal reset triggered');
+        }}
+      />
+
+      {/* Server-side OBS Integration - No client-side component needed */}
+      
+
     </div>
     </ErrorBoundary>
   );
 }
+
+

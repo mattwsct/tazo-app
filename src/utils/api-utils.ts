@@ -267,3 +267,19 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
     return null;
   }
 } 
+
+// === 🛠️ API HELPER FUNCTIONS ===
+
+/**
+ * Creates a consistent error response
+ */
+export function createErrorResponse(message: string, status: number = 400) {
+  return Response.json({ success: false, error: message }, { status });
+}
+
+/**
+ * Creates a consistent success response
+ */
+export function createSuccessResponse(data?: Record<string, unknown>) {
+  return Response.json({ success: true, ...data });
+} 

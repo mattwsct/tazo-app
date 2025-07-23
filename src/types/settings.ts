@@ -7,6 +7,15 @@ export interface OverlaySettings {
   showWeather: boolean;
   showMinimap: boolean;
   minimapSpeedBased: boolean;
+  showKickSubGoal: boolean;
+  kickDailySubGoal: number;
+  kickChannelName: string;
+  showLatestSub: boolean;
+  showSubLeaderboard: boolean;
+  kickLeaderboardSize: number;
+  enableRollingSubGoal: boolean;
+  rollingSubGoalIncrement: number;
+  rollingSubGoalDelay: number;
 }
 
 // Default settings (single source of truth)
@@ -15,14 +24,32 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showWeather: true,
   showMinimap: false,
   minimapSpeedBased: false,
+  showKickSubGoal: false,
+  kickDailySubGoal: 10,
+  kickChannelName: 'Tazo', // Hardcoded since it's always Tazo
+  showLatestSub: false,
+  showSubLeaderboard: false,
+  kickLeaderboardSize: 5,
+  enableRollingSubGoal: false,
+  rollingSubGoalIncrement: 5,
+  rollingSubGoalDelay: 5
 };
 
 // Valid settings schema for validation
-export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'> = {
+export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   showWeather: 'boolean',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',
+  showKickSubGoal: 'boolean',
+  kickDailySubGoal: 'number',
+  kickChannelName: 'string',
+  showLatestSub: 'boolean',
+  showSubLeaderboard: 'boolean',
+  kickLeaderboardSize: 'number',
+  enableRollingSubGoal: 'boolean',
+  rollingSubGoalIncrement: 'number',
+  rollingSubGoalDelay: 'number'
 };
 
 

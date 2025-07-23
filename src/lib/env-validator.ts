@@ -4,6 +4,7 @@ interface EnvValidationResult {
   isValid: boolean;
   missing: string[];
   warnings: string[];
+  errors: string[];
 }
 
 /**
@@ -12,21 +13,28 @@ interface EnvValidationResult {
 export function validateEnvironment(): EnvValidationResult {
   const missing: string[] = [];
   const warnings: string[] = [];
+  const errors: string[] = [];
   
-  // Required environment variables (only for KV storage)
+  // Required environment variables
   const required = [
+    'ADMIN_PASSWORD',
     'KV_REST_API_URL',
     'KV_REST_API_TOKEN',
   ];
   
   // Optional but recommended
   const recommended = [
-    'API_SECRET',
-    'NEXT_PUBLIC_API_SECRET',
     'NEXT_PUBLIC_RTIRL_PULL_KEY',
     'NEXT_PUBLIC_LOCATIONIQ_KEY',
     'NEXT_PUBLIC_PULSOID_TOKEN',
     'NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN',
+    'OBS_PASSWORD',
+  ];
+
+  // Sensitive variables (server-side only, never use NEXT_PUBLIC_)
+  const sensitive = [
+    'OBS_IP_ADDRESS',
+    'OBS_PORT',
   ];
   
   // Check required variables
@@ -42,12 +50,15 @@ export function validateEnvironment(): EnvValidationResult {
       warnings.push(key);
     }
   }
-  
-  // Validate API secret consistency (only if both are present)
-  if (process.env.API_SECRET && process.env.NEXT_PUBLIC_API_SECRET && 
-      process.env.API_SECRET !== process.env.NEXT_PUBLIC_API_SECRET) {
-    warnings.push('API_SECRET and NEXT_PUBLIC_API_SECRET should be identical');
+
+  // Check sensitive variables (for security validation)
+  for (const key of sensitive) {
+    if (process.env[key] && process.env[key]!.startsWith('NEXT_PUBLIC_')) {
+      errors.push(`SECURITY ERROR: ${key} should NOT use NEXT_PUBLIC_ prefix`);
+    }
   }
+  
+
   
   // Validate KV URL format
   if (process.env.KV_REST_API_URL && !process.env.KV_REST_API_URL.startsWith('https://')) {
@@ -55,9 +66,10 @@ export function validateEnvironment(): EnvValidationResult {
   }
   
   return {
-    isValid: missing.length === 0,
+    isValid: missing.length === 0 && errors.length === 0,
     missing,
-    warnings
+    warnings,
+    errors
   };
 }
 
@@ -69,7 +81,12 @@ export function logEnvironmentValidation(): void {
   
   if (!result.isValid) {
     console.error('❌ Environment validation failed:');
-    console.error('Missing required variables:', result.missing);
+    if (result.missing.length > 0) {
+      console.error('Missing required variables:', result.missing);
+    }
+    if (result.errors.length > 0) {
+      console.error('Security errors:', result.errors);
+    }
   }
   
   if (result.warnings.length > 0) {

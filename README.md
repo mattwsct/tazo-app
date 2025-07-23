@@ -1,123 +1,295 @@
-# Tazo Streaming Overlay
+# 🎮 Tazo Streaming Overlay
 
-A real-time streaming overlay for OBS with admin panel, built with Next.js 15. Displays location, weather, speed, and time data from RealtimeIRL and Open-Meteo APIs.
+A modern, real-time streaming overlay for IRL streams with GPS tracking, weather display, and Kick.com integration.
 
-## Environment Variables
+## ✨ Features
 
-Create a `.env.local` file in the root directory with the following variables:
+- **📍 GPS Location Tracking** - Real-time location with smart minimap display
+- **🌤️ Weather Integration** - Current weather conditions and temperature
+- **🎯 Kick.com Integration** - Subscription goals, latest subs, and leaderboards
+- **🔗 Webhook Support** - Real-time Kick.com events via webhooks
+- **🎬 OBS Integration** - Stream start/stop detection (legacy)
+- **📱 Responsive Design** - Works on all screen sizes
+- **🔒 Secure Admin Panel** - Protected settings management
 
-```env
-# RealtimeIRL API Key (required)
-NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_pull_key_here
+## 🚀 Quick Start
 
-# LocationIQ API Key (required for location names)
-NEXT_PUBLIC_LOCATIONIQ_KEY=your_locationiq_api_key_here
-
-# Pulsoid API Token (optional - for heart rate display)
-NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_access_token_here
-
-# Vercel KV Database (required for settings storage)
-KV_REST_API_URL=your_vercel_kv_rest_api_url
-KV_REST_API_TOKEN=your_vercel_kv_rest_api_token
-
-# Admin Panel Password (defaults to 'admin123' if not set)
-ADMIN_PASSWORD=your_secure_admin_password_here
-
-# API Protection (required for security)
-API_SECRET=your_secure_random_api_secret_here
-NEXT_PUBLIC_API_SECRET=your_secure_random_api_secret_here
+### 1. Clone & Install
+```bash
+git clone https://github.com/your-username/tazo-app.git
+cd tazo-app
+npm install
 ```
 
-## Getting Started
+### 2. Environment Setup
+Create a `.env.local` file in your project root:
 
 ```bash
-npm install
+# Core Application (Required)
+KV_REST_API_URL=https://your-kv-url.vercel-storage.com
+KV_REST_API_TOKEN=your_kv_token_here
+KV_REST_API_READ_ONLY_TOKEN=your_readonly_token_here
+ADMIN_PASSWORD=your_secure_admin_password
+
+# Kick.com Integration (Required for webhooks)
+KICK_CLIENT_ID=your_kick_client_id
+KICK_CLIENT_SECRET=your_kick_client_secret
+
+# External APIs (Optional)
+NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_key
+NEXT_PUBLIC_LOCATIONIQ_KEY=your_locationiq_key
+NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
+```
+
+### 3. Start Development
+```bash
 npm run dev
 ```
 
-## Usage
+Visit `http://localhost:3000` for the admin panel and `http://localhost:3000/overlay` for the overlay.
 
-- **Admin Panel**: [http://localhost:3000](http://localhost:3000) - Configure overlay settings (password protected)
-- **Overlay**: [http://localhost:3000/overlay](http://localhost:3000/overlay) - Add as browser source in OBS
+## 🔧 Configuration
 
-## Features
+### Admin Panel
+Access the admin panel at `http://localhost:3000` and configure:
 
-- 🌍 **Location Display**: City-level location with country flags
-- 🌤️ **Weather**: Real-time temperature and conditions 
-- 🚗 **Speed**: Vehicle speed display (shows when moving > 10 km/h)
-- ⏰ **Time**: Local time based on current timezone
-- ❤️ **Heart Rate**: Auto-displaying BPM with realistic heartbeat animation (via Pulsoid)
-- 🗺️ **GPS Minimap**: Circular minimap showing current location (auto-updating)
-- ⚙️ **Admin Panel**: Real-time settings control with auto-save
-- 📡 **Real-time Updates**: Server-sent events for instant setting changes
-- 🎨 **Unified Design**: Consistent streaming overlay styling with excellent readability
+- **Display Settings** - Weather and location display options
+- **Location & Map** - GPS minimap and movement tracking
+- **Kick.com** - Subscription goals and community features
+- **Advanced** - System information and webhook status
 
-## Overlay Design
+### GPS Minimap Settings
+- **Smart Display Mode** (Recommended) - Shows minimap only when moving (speed > 10 km/h)
+- **Always Visible** - Shows minimap continuously
+- **Location Display** - Choose city, state, country, or hidden
 
-The overlay features a **unified design system** optimized for streaming:
+## 🎯 Kick.com Integration
 
-- **Minimal Appearance**: Clean, professional look perfect for IRL/coding/gaming streams
-- **Excellent Readability**: Strong text shadows and semi-transparent backgrounds work on any background
-- **Consistent Styling**: All elements follow the same design language with subtle variations
-- **No Interactivity**: Designed specifically for OBS browser sources (no hover effects)
-- **Automatic Elements**: Heart rate display appears/disappears automatically based on data availability
+### Webhook Setup
+1. Go to [Kick.com Developer Portal](https://kick.com/developer)
+2. Create an app and get your `client_id` and `client_secret`
+3. Configure webhook URL: `https://your-domain.com/api/kick-webhook`
+4. Subscribe to events: `livestream.status.updated`, `channel.subscription.new`, `channel.subscription.renewal`, `channel.subscription.gifts`
 
-### Stream Elements
+### Features
+- **Real-time Sub Goals** - Track subscriptions during stream sessions
+- **Latest Subscriber Display** - Show recent subscribers with animations
+- **Gift Sub Leaderboard** - Top gift subscription contributors
+- **Rolling Goals** - Automatically increase goals after completion
+- **Stream-based Resets** - Reset goals when stream ends (with 1-hour timeout)
 
-- **Stream Vitals** (top-left): Heart rate monitor with smooth tempo transitions
-- **Stream Info** (top-right): Time, location, weather display
-- **Stream Movement** (below stream info): GPS minimap + speed display with smart auto-toggle
-- **Future Elements**: Bottom corners available for expansion (stream stats, alerts, etc.)
+### Supported Events
+- `livestream.status.updated` - Stream start/stop detection
+- `channel.subscription.new` - New subscriptions
+- `channel.subscription.renewal` - Subscription renewals
+- `channel.subscription.gifts` - Gift subscriptions
 
-## Deploy on Vercel
+## 🔒 Security
 
-1. Deploy to [Vercel Platform](https://vercel.com/new)
-2. Add all environment variables from `.env.local` to your Vercel project settings
-3. Set up [Vercel KV](https://vercel.com/docs/storage/vercel-kv) for settings storage
-4. Update `KV_REST_API_URL` and `KV_REST_API_TOKEN` in environment variables
+### Environment Variables Security
+- **Server-side only** variables are secure and never exposed to the browser
+- **Client-side** variables (with `NEXT_PUBLIC_` prefix) are safe for this use case
+- **Admin password** is required and validated server-side
+- **Webhook signatures** are verified using Kick.com's public key
 
-## Pulsoid Heart Rate Setup
+### Safe to Expose (Client-Side)
+| Variable | Purpose | Security |
+|----------|---------|----------|
+| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Map rendering | Domain restrictions, usage limits |
+| `NEXT_PUBLIC_RTIRL_PULL_KEY` | Location data | Rate limiting, public API |
+| `NEXT_PUBLIC_LOCATIONIQ_KEY` | Geocoding | Usage quotas, domain restrictions |
+| `NEXT_PUBLIC_PULSOID_TOKEN` | Heart rate data | Public token, rate limited |
 
-1. Create account at [Pulsoid.net](https://pulsoid.net)
-2. Request API access token:
-   - **For personal use**: Use [Manual Token Issuing](https://docs.pulsoid.net/access-token-management/manual-token-issuing)
-   - **For applications**: Use [OAuth2 flow](https://docs.pulsoid.net/access-token-management/oauth2-authorization-code-grant)
-3. Add your token to `.env.local` as `NEXT_PUBLIC_PULSOID_TOKEN`
-4. Connect your heart rate monitor (Polar H10, Apple Watch, etc.) to Pulsoid app
-5. Heart rate display will **automatically appear** when data is received and disappear when disconnected
+### Server-Side Only (Secure)
+| Variable | Purpose | Security |
+|----------|---------|----------|
+| `ADMIN_PASSWORD` | Admin authentication | HTTP-only cookies |
+| `KICK_CLIENT_ID` | Kick.com API | Server-side only |
+| `KICK_CLIENT_SECRET` | Kick.com API | Server-side only |
+| `KV_REST_API_URL` | Database connection | Server-side only |
+| `KV_REST_API_TOKEN` | Database access | Server-side only |
 
-### Heart Rate Features
+## 🗺️ GPS & Location Features
 
-- **Auto Show/Hide**: Appears automatically when heart rate data is available
-- **Smooth Transitions**: BPM changes smoothly over 2 seconds instead of jumping
-- **Realistic Animation**: Heart beats in sync with your actual BPM with double-beat pattern
-- **Auto-timeout**: Disappears automatically if no data received for 30 seconds
+### Smart Display Mode
+The GPS minimap automatically shows/hides based on movement:
+- **Moving** (speed > 10 km/h) → Minimap visible
+- **Stationary** (speed ≤ 10 km/h) → Minimap hidden
+- **Perfect for IRL streams** - shows location when traveling
 
-## GPS Minimap & Movement Features
+### Location Display Options
+- **City** - Shows current city name
+- **State** - Shows current state/region
+- **Country** - Shows current country
+- **Hidden** - No location text displayed
 
-The movement section combines GPS visualization with speed tracking:
+### Supported Location Services
+- **RTIRL** - Real-time location tracking
+- **LocationIQ** - Geocoding and reverse geocoding
+- **OpenMeteo** - Weather data based on location
 
-- **English Labels**: Uses CartoDB Voyager tiles with English street names worldwide
-- **Smart Auto-Toggle**: Two modes via admin panel:
-  - **Manual Toggle**: Show/hide minimap independently 
-  - **Speed-Based Auto**: Show minimap + speed together when moving >10 km/h
-- **Circular Design**: 80px circular minimap with red center dot
-- **Real-time Updates**: Updates immediately when you move to new locations
-- **Linked Display**: Speed and map appear/disappear together in auto mode
-- **Admin Controls**: Toggle minimap and auto-show behavior from admin panel
-- **Auto-timeout**: Disappears if no GPS data for 2 minutes
+## 🌤️ Weather Integration
 
-### Movement Section Technical Details
+### Features
+- **Current Conditions** - Temperature, weather description, humidity
+- **Location-based** - Weather updates based on GPS location
+- **Auto-refresh** - Updates every 15 minutes
+- **Responsive** - Adapts to different screen sizes
 
-- **Tile Source**: CartoDB Voyager (English labels globally)
-- **Zoom Level**: 15 (good street-level detail)
-- **Update Frequency**: Updates with every GPS coordinate change  
-- **Position**: Below main info card (top-right area)
-- **Size**: 80x80px circular minimap + speed display
-- **Languages**: English street names in Japan and worldwide
+### Weather Icons
+- Dynamic weather icons based on conditions
+- Day/night variants
+- Animated weather effects
 
-## Security Notes
+## 🎬 OBS Integration
 
-- Change `ADMIN_PASSWORD` from the default for production
-- Consider using stronger authentication for sensitive deployments
-- The password is stored in localStorage for session persistence
+**Note**: OBS WebSocket integration has been completely removed. Stream start/stop detection is now handled exclusively via Kick.com webhooks, which provides more reliable and secure stream event detection.
+
+## 🚀 Deployment
+
+### Vercel (Recommended)
+1. **Connect Repository**
+   ```bash
+   vercel --prod
+   ```
+
+2. **Set Environment Variables**
+   - Go to Vercel Dashboard → Project Settings → Environment Variables
+   - Add all variables from your `.env.local` file
+
+3. **Configure Webhook URL**
+   - Update your Kick.com webhook URL to: `https://your-domain.vercel.app/api/kick-webhook`
+
+### Other Platforms
+- **Netlify** - Similar to Vercel setup
+- **Railway** - Use Railway's environment variable system
+- **Heroku** - Use Heroku config vars
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### "Environment validation failed"
+- Check that all required variables are set
+- Verify variable names are exactly as shown
+- Ensure no sensitive variables use `NEXT_PUBLIC_` prefix
+
+#### "Kick.com webhook not working"
+- Verify webhook URL is correct: `https://your-domain.com/api/kick-webhook`
+- Check that events are subscribed: `livestream.status.updated`, `channel.subscription.*`
+- Ensure `KICK_CLIENT_ID` and `KICK_CLIENT_SECRET` are set
+- Check webhook signature verification
+
+#### "GPS minimap not showing"
+- Verify `NEXT_PUBLIC_RTIRL_PULL_KEY` is set
+- Check that you're moving (speed > 10 km/h) if using Smart Display Mode
+- Ensure minimap is enabled in admin panel
+
+#### "Admin login not working"
+- Verify `ADMIN_PASSWORD` is set in environment variables
+- Check that the password is correct
+- Restart development server after adding environment variables
+
+### Debug Steps
+
+1. **Check Environment Variables**
+   ```bash
+   # Verify all required variables are set
+   cat .env.local
+   ```
+
+2. **Test Webhook Endpoint**
+   ```bash
+   curl -X GET https://your-domain.com/api/kick-webhook
+   ```
+
+3. **Check Server Logs**
+   - Vercel: Function logs in dashboard
+   - Local: Terminal output during development
+
+4. **Browser Console**
+   - Check for JavaScript errors
+   - Look for connection status messages
+   - Verify API calls are working
+
+## 📊 API Endpoints
+
+### Core Endpoints
+- `GET /api/health` - Health check and system status
+- `GET /api/get-settings` - Retrieve overlay settings
+- `POST /api/save-settings` - Save overlay settings
+- `GET /api/settings-stream` - Real-time settings updates (SSE)
+
+### Kick.com Integration
+- `POST /api/kick-webhook` - Receive Kick.com webhook events
+- `POST /api/manual-sub-update` - Manual sub count and latest sub updates
+
+### Admin Authentication
+- `POST /api/admin-login` - Admin login
+- `POST /api/admin-logout` - Admin logout
+
+## 🔧 Development
+
+### Project Structure
+```
+src/
+├── app/                    # Next.js app router
+│   ├── api/               # API routes
+│   ├── overlay/           # Overlay page
+│   └── page.tsx           # Admin panel
+├── components/            # React components
+├── lib/                   # Utility libraries
+├── styles/                # CSS styles
+├── types/                 # TypeScript types
+└── utils/                 # Helper utilities
+```
+
+### Key Technologies
+- **Next.js 15** - React framework with app router
+- **TypeScript** - Type-safe JavaScript
+- **Tailwind CSS** - Utility-first CSS framework
+- **Server-Sent Events** - Real-time updates
+- **Vercel KV** - Database storage
+
+### Development Commands
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run start        # Start production server
+npm run lint         # Run ESLint
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Support
+
+If you need help:
+
+1. Check this documentation
+2. Review the troubleshooting section
+3. Check browser console for errors
+4. Verify environment variables are set correctly
+5. Test with the provided endpoints
+
+## 🔄 Updates
+
+This project is actively maintained and updated with:
+- New Kick.com API features
+- Security improvements
+- Performance optimizations
+- Bug fixes
+
+---
+
+**Built with ❤️ for the streaming community**

@@ -1,10 +1,21 @@
 import { NextRequest } from 'next/server';
 import { kv } from '@vercel/kv';
 import { verifyAuth } from '@/lib/api-auth';
-import { addConnection, removeConnection } from '@/lib/settings-broadcast';
+import { addConnection, removeConnection, getConnectionInfo } from '@/lib/settings-broadcast';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
 export async function GET(request: NextRequest): Promise<Response> {
+  // Check if this is a status check request
+  const url = new URL(request.url);
+  if (url.searchParams.get('status') === 'check') {
+    const connectionInfo = getConnectionInfo();
+    return Response.json({
+      connections: connectionInfo.count,
+      ids: connectionInfo.ids,
+      timestamp: Date.now()
+    });
+  }
+  
   // Check authentication but don't require it
   let isAuthenticated = false;
   try {
@@ -14,10 +25,6 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
   
   // Always allow access to SSE, authenticated or not
-  if (!isAuthenticated) {
-    console.log('SSE: Not authenticated, will use default settings');
-  }
-  
   if (!isAuthenticated) {
     console.log('SSE: Not authenticated, will use default settings');
   }
@@ -34,6 +41,15 @@ export async function GET(request: NextRequest): Promise<Response> {
       
       // Register this connection with the broadcast system
       addConnection(controller, connectionId);
+      
+      console.log(`[SSE] Connection ${connectionId} registered with broadcast system`);
+      
+      // Log connection status after a short delay to verify registration
+      setTimeout(() => {
+        const connectionInfo = getConnectionInfo();
+        console.log(`[SSE] Connection ${connectionId} status check - registered: ${connectionInfo.ids.includes(connectionId)}, total: ${connectionInfo.count}`);
+        console.log(`[SSE] All connections:`, connectionInfo.ids);
+      }, 200);
       
       // Function to send SSE data
       const sendSSE = (data: string) => {
@@ -85,7 +101,10 @@ export async function GET(request: NextRequest): Promise<Response> {
       
       // Send current settings immediately if authenticated
       if (isAuthenticated) {
-        checkForUpdates();
+        // Small delay to ensure connection is fully established
+        setTimeout(() => {
+          checkForUpdates();
+        }, 100);
       }
       
       // Check for updates every 2 seconds

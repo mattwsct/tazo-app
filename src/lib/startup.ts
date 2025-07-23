@@ -23,7 +23,7 @@ export function performStartupValidation(): void {
     pulsoid: !!process.env.NEXT_PUBLIC_PULSOID_TOKEN,
     mapbox: !!process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
     kv: !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
-    auth: !!(process.env.API_SECRET && process.env.NEXT_PUBLIC_API_SECRET),
+    auth: !!process.env.ADMIN_PASSWORD,
   };
   
   console.log('🔧 Feature availability:', features);

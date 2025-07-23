@@ -62,10 +62,7 @@ const nextConfig: NextConfig = {
     ];
   },
   
-  // Environment variables
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
-  },
+
 };
 
 export default nextConfig;

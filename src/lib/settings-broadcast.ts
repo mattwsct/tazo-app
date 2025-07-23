@@ -7,7 +7,16 @@ interface ConnectionInfo {
   connectedAt: number;
 }
 
-const connections = new Map<string, ConnectionInfo>();
+// Use global variable to persist across module reloads in development
+declare global {
+  var __sseConnections: Map<string, ConnectionInfo> | undefined;
+}
+
+const connections = globalThis.__sseConnections || new Map<string, ConnectionInfo>();
+globalThis.__sseConnections = connections;
+
+// Export for debugging
+export { connections };
 
 export function addConnection(controller: ReadableStreamDefaultController, id?: string): string {
   const connectionId = id || `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -17,16 +26,26 @@ export function addConnection(controller: ReadableStreamDefaultController, id?: 
     connectedAt: Date.now()
   });
   console.log(`[BROADCAST] Added connection ${connectionId}, total: ${connections.size}`);
+  console.log(`[BROADCAST] Current connections:`, Array.from(connections.keys()));
+  console.log(`[BROADCAST] Connection map size:`, connections.size);
   return connectionId;
 }
 
 export function removeConnection(connectionId: string) {
   const removed = connections.delete(connectionId);
   console.log(`[BROADCAST] Removed connection ${connectionId}, success: ${removed}, remaining: ${connections.size}`);
+  console.log(`[BROADCAST] Remaining connections:`, Array.from(connections.keys()));
 }
 
 export function getConnectionCount(): number {
   return connections.size;
+}
+
+export function getConnectionInfo(): { count: number; ids: string[] } {
+  return {
+    count: connections.size,
+    ids: Array.from(connections.keys())
+  };
 }
 
 // Function to broadcast settings to all connected clients
@@ -41,12 +60,12 @@ export async function broadcastSettings(settings: OverlaySettings) {
   
   console.log(`[BROADCAST] Starting broadcast to ${connections.size} connected clients:`, broadcastData);
   
-  // If no connections, wait a bit for overlay to connect, then try again
+  // If no connections, wait longer for overlay to connect, then try again
   if (connections.size === 0) {
     console.warn(`[BROADCAST] ⚠️  No active SSE connections! Waiting for overlay to connect...`);
     
-    // Wait up to 2 seconds for overlay to connect
-    for (let i = 0; i < 20; i++) {
+    // Wait up to 5 seconds for overlay to connect (increased from 3 seconds)
+    for (let i = 0; i < 50; i++) {
       await new Promise(resolve => setTimeout(resolve, 100));
       if (connections.size > 0) {
         console.log(`[BROADCAST] ✅ Overlay connected after ${(i + 1) * 100}ms, proceeding with broadcast`);

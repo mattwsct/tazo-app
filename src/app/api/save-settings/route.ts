@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-import { broadcastSettings } from '@/lib/settings-broadcast';
 import { validateAndSanitizeSettings, detectMaliciousKeys } from '@/lib/settings-validator';
 import { verifyAuth, logKVUsage } from '@/lib/api-auth';
+import { broadcastSettings } from '@/lib/settings-broadcast';
 
 // Invalidate SSE cache when settings are updated
 declare global {
@@ -32,9 +32,13 @@ async function handlePOST(request: NextRequest) {
     const settings = validateAndSanitizeSettings(rawSettings);
     const startTime = Date.now();
     
-    console.log('🔄 Starting settings save and broadcast process...');
+    console.log('💾 Save-settings API: Saving settings to KV:', settings);
+    console.log('💾 Save-settings API: showKickSubGoal =', settings.showKickSubGoal);
+    console.log('💾 Save-settings API: kickDailySubGoal =', settings.kickDailySubGoal);
     
-    // Save to KV first, then broadcast with a small delay to ensure SSE connection is ready
+    // Reduced logging to prevent spam
+    
+    // Save to KV (minimal usage) and update fast polling cache
     const kvResult = await Promise.allSettled([
       Promise.all([
         kv.set('overlay_settings', settings),
@@ -46,34 +50,35 @@ async function handlePOST(request: NextRequest) {
       })
     ]);
     
-    // Small delay to ensure SSE connection is established
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // SSE broadcast handles real-time updates
     
-    // Now broadcast the settings
+    // Fast polling system handles updates immediately (no KV usage for broadcasting)
+    // SSE broadcast is kept as fallback but not retried aggressively
     const broadcastResult = await Promise.allSettled([
       broadcastSettings(settings)
     ]);
     
+    const broadcastSuccess = broadcastResult[0].status === 'fulfilled' && 
+                            broadcastResult[0].value?.success;
+    
+    if (broadcastSuccess) {
+      console.log(`✅ SSE broadcast successful (fallback)`);
+    } else {
+      console.log(`⚠️  SSE broadcast failed, but fast polling will handle updates`);
+    }
+    
     const saveTime = Date.now() - startTime;
-    console.log(`⚡ Settings processed in ${saveTime}ms:`, settings);
     
     // Check results
     const kvSuccess = kvResult[0].status === 'fulfilled';
-    const broadcastSuccess = broadcastResult[0].status === 'fulfilled' && 
-                            broadcastResult[0].value?.success;
     
     if (!kvSuccess) {
       console.error('🚨 KV save failed:', kvResult[0].status === 'rejected' ? 
         kvResult[0].reason : 'Unknown error');
-    } else {
-      console.log('✅ KV save successful');
     }
     
     if (!broadcastSuccess) {
-      console.error('🚨 Broadcast failed:', broadcastResult[0].status === 'rejected' ? 
-        broadcastResult[0].reason : broadcastResult[0].value);
-    } else {
-      console.log('✅ Broadcast successful');
+      console.error('🚨 Broadcast failed after 3 attempts');
     }
     
     return NextResponse.json({ 

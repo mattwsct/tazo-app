@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     
     if (!password || !ADMIN_PASSWORD) {
       return NextResponse.json(
-        { success: false, error: 'Invalid credentials' },
+        { success: false, error: 'Admin password not configured. Please set ADMIN_PASSWORD environment variable.' },
         { status: 401 }
       );
     }

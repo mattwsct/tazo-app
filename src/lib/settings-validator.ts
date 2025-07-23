@@ -26,6 +26,8 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
         (cleanSettings as Record<string, unknown>)[key] = value;
       } else if (expectedType === 'string' && typeof value === 'string') {
         (cleanSettings as Record<string, unknown>)[key] = value;
+      } else if (expectedType === 'number' && typeof value === 'number') {
+        (cleanSettings as Record<string, unknown>)[key] = value;
       } else {
         console.warn(`Invalid type for ${key}: expected ${expectedType}, got ${typeof value}`);
         rejectedKeys.push(key);
@@ -41,17 +43,34 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
   }
 
   if (rejectedKeys.length > 0) {
-    console.warn('🚨 Rejected malicious/invalid settings keys:', rejectedKeys);
+    // Check if these are just old chat bot settings that were removed
+    const oldChatBotKeys = ['enableChatBot', 'chatBotMessageTemplates', 'chatBotToken', 'kickClientId', 'kickClientSecret'];
+    const isOldSettings = rejectedKeys.every(key => oldChatBotKeys.includes(key));
+    
+    if (isOldSettings) {
+      console.log('ℹ️  Ignoring old chat bot settings (removed during cleanup):', rejectedKeys);
+    } else {
+      console.warn('🚨 Rejected malicious/invalid settings keys:', rejectedKeys);
+    }
   }
 
-  // Ensure all required settings are present with defaults
-  const completeSettings: OverlaySettings = {
+              // Ensure all required settings are present with defaults
+            const completeSettings: OverlaySettings = {
+              locationDisplay: cleanSettings.locationDisplay ?? DEFAULT_OVERLAY_SETTINGS.locationDisplay,
+              showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
+              showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
+              minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
+              showKickSubGoal: cleanSettings.showKickSubGoal ?? DEFAULT_OVERLAY_SETTINGS.showKickSubGoal,
+              kickDailySubGoal: cleanSettings.kickDailySubGoal ?? DEFAULT_OVERLAY_SETTINGS.kickDailySubGoal,
+              kickChannelName: cleanSettings.kickChannelName ?? DEFAULT_OVERLAY_SETTINGS.kickChannelName,
+              showLatestSub: cleanSettings.showLatestSub ?? DEFAULT_OVERLAY_SETTINGS.showLatestSub,
+              showSubLeaderboard: cleanSettings.showSubLeaderboard ?? DEFAULT_OVERLAY_SETTINGS.showSubLeaderboard,
+              kickLeaderboardSize: cleanSettings.kickLeaderboardSize ?? DEFAULT_OVERLAY_SETTINGS.kickLeaderboardSize,
+              enableRollingSubGoal: cleanSettings.enableRollingSubGoal ?? DEFAULT_OVERLAY_SETTINGS.enableRollingSubGoal,
+              rollingSubGoalIncrement: cleanSettings.rollingSubGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.rollingSubGoalIncrement,
+              rollingSubGoalDelay: cleanSettings.rollingSubGoalDelay ?? DEFAULT_OVERLAY_SETTINGS.rollingSubGoalDelay,
 
-    locationDisplay: cleanSettings.locationDisplay ?? DEFAULT_OVERLAY_SETTINGS.locationDisplay,
-    showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
-    showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
-    minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
-  };
+            };
 
   return completeSettings;
 }
