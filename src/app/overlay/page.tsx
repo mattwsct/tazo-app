@@ -87,18 +87,20 @@ function getWeatherIcon(icon: string, timezone: string | null, sunrise: string |
 
 // === 🎯 CONFIGURATION CONSTANTS ===
 const TIMERS = {
+  WEATHER_UPDATE: 300000, // 5 minutes - as requested
   WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes - as requested
   LOCATION_UPDATE: 300000, // 5 minutes - more conservative for API limits
   OVERLAY_FADE_TIMEOUT: 5000, // 5 seconds to force fade-in
   MINIMAP_HIDE_DELAY: 30000, // 30 seconds - hide minimap if no GPS data
-  SPEED_HIDE_DELAY: 30000, // 30 seconds - hide speed when below threshold (was 20s)
+  SPEED_HIDE_DELAY: 5000, // 5 seconds - start hiding when below threshold (reduced from 30s)
+  SPEED_FADE_DURATION: 10000, // 10 seconds - fade out duration
   API_COOLDOWN: 300000, // 5 minutes between API calls
   POLLING_INTERVAL: 600000, // 10 minutes for settings polling (was 5)
 } as const;
 
 const THRESHOLDS = {
   LOCATION_DISTANCE: 100, // 100 meters - as requested
-  SPEED_SHOW: 10, // 10 km/h - show speed-based minimap
+  SPEED_SHOW: 10, // 10 km/h - show speed-based minimap (for scooter, bike, car, train, etc.)
   SPEED_READINGS_REQUIRED: 2, // 2 successive readings above threshold (was 3)
 } as const;
 
@@ -192,6 +194,7 @@ export default function OverlayPage() {
   const [timezone, setTimezone] = useState<string | null>(null);
   const [sunrise, setSunrise] = useState<string | null>(null);
   const [sunset, setSunset] = useState<string | null>(null);
+  const [minimapOpacity, setMinimapOpacity] = useState(1); // Progressive hiding opacity
   
   // Loading states
   const [isLoading, setIsLoading] = useState({
@@ -979,11 +982,12 @@ export default function OverlayPage() {
     }
   }, [settings.showMinimap, mapCoords]);
 
-  // === 🏃‍♂️ SPEED-BASED MINIMAP LOGIC ===
+  // === 🏃‍♂️ PROGRESSIVE SPEED-BASED MINIMAP LOGIC ===
   useEffect(() => {
     if (!settings.minimapSpeedBased) {
       speedBasedVisible.current = false;
       speedAboveThresholdCount.current = 0;
+      setMinimapOpacity(1); // Reset opacity when speed-based mode is disabled
       if (speedHideTimeout.current) {
         clearTimeout(speedHideTimeout.current);
         speedHideTimeout.current = null;
@@ -1001,6 +1005,7 @@ export default function OverlayPage() {
       if (speedAboveThresholdCount.current >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
         if (!speedBasedVisible.current) {
           speedBasedVisible.current = true;
+          setMinimapOpacity(1); // Immediately show at full opacity
           console.log('[MINIMAP] Minimap shown due to speed');
         }
         // Clear any existing hide timeout when speed is above threshold
@@ -1010,15 +1015,26 @@ export default function OverlayPage() {
         }
       }
     } else {
-      // Only start the hide timeout if minimap is currently visible and no timeout is already set
+      // Progressive hiding: start fade after 5 seconds, complete fade after 15 seconds total
       if (speedBasedVisible.current && !speedHideTimeout.current) {
         speedHideTimeout.current = setTimeout(() => {
-          speedBasedVisible.current = false;
-          speedAboveThresholdCount.current = 0; // Reset counter only after timeout
-          speedHideTimeout.current = null;
-          console.log('[MINIMAP] Minimap hidden due to speed drop after 30s timeout');
+          // Start fade to 50% opacity after 5 seconds
+          setMinimapOpacity(0.5);
+          console.log('[MINIMAP] Speed below threshold, starting fade (50% opacity)');
+          
+          // Complete fade to 0% opacity after additional 10 seconds
+          const fadeTimeout = setTimeout(() => {
+            speedBasedVisible.current = false;
+            speedAboveThresholdCount.current = 0;
+            setMinimapOpacity(1); // Reset for next time
+            speedHideTimeout.current = null;
+            console.log('[MINIMAP] Minimap fully hidden after progressive fade');
+          }, TIMERS.SPEED_FADE_DURATION);
+          
+          // Store the fade timeout for cleanup
+          speedHideTimeout.current = fadeTimeout;
         }, TIMERS.SPEED_HIDE_DELAY);
-        console.log(`[MINIMAP] Speed below threshold, will hide minimap in ${TIMERS.SPEED_HIDE_DELAY / 1000}s`);
+        console.log(`[MINIMAP] Speed below threshold, will start fade in ${TIMERS.SPEED_HIDE_DELAY / 1000}s`);
       }
     }
   }, [speed, settings.minimapSpeedBased]);
@@ -1077,6 +1093,13 @@ export default function OverlayPage() {
       }
     }
   }, [settings.locationDisplay, settings.showMinimap, settings.showWeather, location, setLocation]);
+
+  // Reset minimap opacity when speed-based mode is disabled
+  useEffect(() => {
+    if (!settings.minimapSpeedBased) {
+      setMinimapOpacity(1);
+    }
+  }, [settings.minimapSpeedBased]);
 
   // === 🎨 RENDER OVERLAY ===
   
@@ -1188,18 +1211,12 @@ export default function OverlayPage() {
 
           {/* Stream Movement - GPS Minimap */}
           {shouldShowMinimap() && mapCoords && (
-            <div className="minimap">
+            <div className="minimap" style={{ opacity: minimapOpacity, transition: 'opacity 0.5s ease-in-out' }}>
               <MapboxMinimap 
                 lat={mapCoords[0]} 
                 lon={mapCoords[1]} 
                 isVisible={true}
               />
-              {/* Show speed if autoshow is active and minimap is visible due to speed */}
-              {settings.minimapSpeedBased && speedBasedVisible.current && (
-                <div className="minimap-speed" style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '4px 10px', borderRadius: 8, fontSize: 18, fontWeight: 600, zIndex: 2 }}>
-                  {`${(speed * 3.6).toFixed(1)} km/h`}
-                </div>
-              )}
             </div>
           )}
         </div>
