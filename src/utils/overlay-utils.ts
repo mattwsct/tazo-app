@@ -247,32 +247,4 @@ export function isValidCoordinate(lat: number, lon: number): boolean {
   );
 }
 
-/**
- * Validates coordinate precision and realistic bounds
- */
-export function isValidCoordinatePrecision(lat: number, lon: number): boolean {
-  // Check basic validity first
-  if (!isValidCoordinate(lat, lon)) {
-    return false;
-  }
-  
-  // Check for reasonable precision (not too many decimal places)
-  const latStr = Math.abs(lat).toString();
-  const lonStr = Math.abs(lon).toString();
-  
-  // Should not have more than 6 decimal places (about 1 meter precision)
-  const latDecimals = latStr.includes('.') ? latStr.split('.')[1]?.length || 0 : 0;
-  const lonDecimals = lonStr.includes('.') ? lonStr.split('.')[1]?.length || 0 : 0;
-  
-  if (latDecimals > 6 || lonDecimals > 6) {
-    return false;
-  }
-  
-  // Check for obviously wrong coordinates (like 0,0 in the ocean)
-  // This is a basic check - could be expanded for specific regions
-  if (lat === 0 && lon === 0) {
-    return false; // Gulf of Guinea - unlikely to be correct
-  }
-  
-  return true;
-} 
+ 

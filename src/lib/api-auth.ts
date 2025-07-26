@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 
 // Centralized admin secret configuration
-export const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD || 'admin123';
+export const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWORD;
 
 /**
  * Verify authentication using HTTP-only cookie
@@ -11,15 +11,16 @@ export const ADMIN_SECRET = process.env.ADMIN_SECRET || process.env.ADMIN_PASSWO
  */
 export async function verifyAuth(): Promise<boolean> {
   const cookieStore = await cookies();
-  const authToken = cookieStore.get('admin-auth');
+  const authToken = cookieStore.get('auth-token');
+  
+
   
   if (!authToken) {
     return false;
   }
   
-  // Check against ADMIN_SECRET or fallback to ADMIN_PASSWORD
-  const expectedSecret = ADMIN_SECRET || process.env.ADMIN_PASSWORD || 'admin123';
-  return authToken.value === expectedSecret;
+  // Check if the token is 'authenticated' (set by login route)
+  return authToken.value === 'authenticated';
 }
 
 // === 📊 KV USAGE TRACKING ===

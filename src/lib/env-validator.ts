@@ -58,8 +58,6 @@ export function validateEnvironment(): EnvValidationResult {
     }
   }
   
-
-  
   // Validate KV URL format
   if (process.env.KV_REST_API_URL && !process.env.KV_REST_API_URL.startsWith('https://')) {
     warnings.push('KV_REST_API_URL should be a valid HTTPS URL');

@@ -12,10 +12,8 @@ export interface OverlaySettings {
   kickChannelName: string;
   showLatestSub: boolean;
   showSubLeaderboard: boolean;
-  kickLeaderboardSize: number;
   enableRollingSubGoal: boolean;
   rollingSubGoalIncrement: number;
-  rollingSubGoalDelay: number;
 }
 
 // Default settings (single source of truth)
@@ -26,13 +24,11 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   minimapSpeedBased: false,
   showKickSubGoal: false,
   kickDailySubGoal: 10,
-  kickChannelName: 'Tazo', // Hardcoded since it's always Tazo
+  kickChannelName: 'Tazo',
   showLatestSub: false,
   showSubLeaderboard: false,
-  kickLeaderboardSize: 5,
   enableRollingSubGoal: false,
-  rollingSubGoalIncrement: 5,
-  rollingSubGoalDelay: 5
+  rollingSubGoalIncrement: 5
 };
 
 // Valid settings schema for validation
@@ -46,13 +42,9 @@ export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'
   kickChannelName: 'string',
   showLatestSub: 'boolean',
   showSubLeaderboard: 'boolean',
-  kickLeaderboardSize: 'number',
   enableRollingSubGoal: 'boolean',
-  rollingSubGoalIncrement: 'number',
-  rollingSubGoalDelay: 'number'
+  rollingSubGoalIncrement: 'number'
 };
-
-
 
 // SSE message types
 export interface SettingsUpdateMessage {

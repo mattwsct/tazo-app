@@ -95,10 +95,11 @@ async function handlePOST(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Try to verify authentication, but allow access if not authenticated
+  // Verify authentication - require it for admin access
   const isAuthenticated = await verifyAuth();
   if (!isAuthenticated) {
-    console.warn('Not authenticated, but allowing access for settings save');
+    console.warn('Unauthenticated access attempt to save settings');
+    return new NextResponse('Unauthorized', { status: 401 });
   }
   
   return handlePOST(request);

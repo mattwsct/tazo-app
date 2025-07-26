@@ -36,7 +36,7 @@ export function createAuthenticatedEventSource(url: string): EventSource {
  */
 export async function loginToAdmin(password: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch('/api/admin-login', {
+    const response = await fetch('/api/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,13 +61,12 @@ export async function loginToAdmin(password: string): Promise<{ success: boolean
  */
 export async function logoutFromAdmin(): Promise<{ success: boolean }> {
   try {
-    const response = await fetch('/api/admin-logout', {
-      method: 'POST',
+    const response = await fetch('/api/logout', {
+      method: 'GET',
       credentials: 'include',
     });
     
-    const data = await response.json();
-    return data;
+    return { success: true };
   } catch {
     return { success: false };
   }

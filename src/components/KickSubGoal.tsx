@@ -10,10 +10,8 @@ interface KickSubGoalProps {
   isVisible: boolean;
   showLatestSub?: boolean;
   showLeaderboard?: boolean;
-  leaderboardSize?: number;
   enableRollingSubGoal?: boolean;
   rollingSubGoalIncrement?: number;
-  rollingSubGoalDelay?: number;
   subGoalData?: {
     currentSubs?: number;
     latestSub?: string | null;
@@ -56,10 +54,8 @@ export default function KickSubGoal({
   isVisible, 
   showLatestSub = false,
   showLeaderboard = false,
-  leaderboardSize = 5,
   enableRollingSubGoal = false,
   rollingSubGoalIncrement = 5,
-  rollingSubGoalDelay = 5,
   subGoalData,
   onGoalReset
 }: KickSubGoalProps) {
@@ -173,7 +169,7 @@ export default function KickSubGoal({
           OverlayLogger.overlay('Sub goal reached! Starting rolling goal timer', { 
             currentSubs, 
             currentGoal, 
-            delay: rollingSubGoalDelay 
+            delay: 5 
           });
         } else {
           // Goal is still reached, check if we should reset timer
@@ -182,12 +178,12 @@ export default function KickSubGoal({
             OverlayLogger.overlay('Rolling goal timer reset due to new subs', { 
               currentSubs, 
               currentGoal, 
-              delay: rollingSubGoalDelay,
+              delay: 5,
               timeSinceLastSub: now - lastSubTime
             });
           }
         }
-      } else if (goalReachedTime && (now - goalReachedTime) >= (rollingSubGoalDelay * 60 * 1000)) {
+      } else if (goalReachedTime && (now - goalReachedTime) >= (5 * 60 * 1000)) {
         // Timer expired, calculate next goal as multiple of increment
         const nextGoal = Math.ceil(currentSubs / rollingSubGoalIncrement) * rollingSubGoalIncrement;
         setCurrentGoal(nextGoal);
@@ -208,7 +204,7 @@ export default function KickSubGoal({
     const rollingGoalInterval = setInterval(checkRollingGoal, 30 * 1000);
     
     return () => clearInterval(rollingGoalInterval);
-  }, [enableRollingSubGoal, currentSubs, currentGoal, goalReachedTime, rollingSubGoalDelay, rollingSubGoalIncrement, lastSubTime]);
+  }, [enableRollingSubGoal, currentSubs, currentGoal, goalReachedTime, rollingSubGoalIncrement, lastSubTime]);
 
   // Debug logging for prop changes
   useEffect(() => {
@@ -378,7 +374,7 @@ export default function KickSubGoal({
         if (b.totalSubs !== a.totalSubs) return b.totalSubs - a.totalSubs;
         return b.lastSubTime - a.lastSubTime;
       })
-      .slice(0, leaderboardSize);
+              .slice(0, 5);
 
     setSubLeaderboard(leaderboard);
   };

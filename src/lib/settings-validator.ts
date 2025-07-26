@@ -65,11 +65,8 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
               kickChannelName: cleanSettings.kickChannelName ?? DEFAULT_OVERLAY_SETTINGS.kickChannelName,
               showLatestSub: cleanSettings.showLatestSub ?? DEFAULT_OVERLAY_SETTINGS.showLatestSub,
               showSubLeaderboard: cleanSettings.showSubLeaderboard ?? DEFAULT_OVERLAY_SETTINGS.showSubLeaderboard,
-              kickLeaderboardSize: cleanSettings.kickLeaderboardSize ?? DEFAULT_OVERLAY_SETTINGS.kickLeaderboardSize,
               enableRollingSubGoal: cleanSettings.enableRollingSubGoal ?? DEFAULT_OVERLAY_SETTINGS.enableRollingSubGoal,
               rollingSubGoalIncrement: cleanSettings.rollingSubGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.rollingSubGoalIncrement,
-              rollingSubGoalDelay: cleanSettings.rollingSubGoalDelay ?? DEFAULT_OVERLAY_SETTINGS.rollingSubGoalDelay,
-
             };
 
   return completeSettings;

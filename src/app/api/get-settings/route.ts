@@ -86,10 +86,11 @@ export async function GET(): Promise<NextResponse> {
     return new NextResponse('Server configuration error', { status: 500 });
   }
   
-  // Try to verify authentication, but allow access if not authenticated
+  // Verify authentication - require it for admin access
   const isAuthenticated = await verifyAuth();
   if (!isAuthenticated) {
-    console.warn('Not authenticated, but allowing access for settings retrieval');
+    console.warn('Unauthenticated access attempt to admin settings');
+    return new NextResponse('Unauthorized', { status: 401 });
   }
   
   return handleGET();
