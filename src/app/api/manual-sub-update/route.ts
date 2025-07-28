@@ -36,9 +36,11 @@ async function updateAndBroadcastSettings(
   const broadcastResult = await broadcastSettings(settingsWithSubGoal);
   console.log('Manual sub update - Broadcast result:', broadcastResult);
   
-  // Also save to KV storage for persistence across page reloads
-  await kv.set('overlay_settings', settingsWithSubGoal);
-  await kv.set('overlay_settings_modified', Date.now());
+  // Batch KV operations to reduce calls
+  await Promise.all([
+    kv.set('overlay_settings', settingsWithSubGoal),
+    kv.set('overlay_settings_modified', Date.now())
+  ]);
   
   console.log('Manual sub update - Saved to KV storage for persistence');
   

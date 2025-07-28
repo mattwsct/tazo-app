@@ -253,11 +253,10 @@ export default function AdminPage() {
                 <label className="group-label">Location Format</label>
                 <RadioGroup
                   value={settings.locationDisplay}
-                  onChange={(value) => handleSettingsChange({ locationDisplay: value as 'city' | 'state' | 'country' })}
+                  onChange={(value) => handleSettingsChange({ locationDisplay: value as 'city' | 'state' })}
                   options={[
                     { value: 'city', label: 'City, Country', icon: '🏙️' },
-                    { value: 'state', label: 'State, Country', icon: '🗺️' },
-                    { value: 'country', label: 'Country Only', icon: '🌍' }
+                    { value: 'state', label: 'State, Country', icon: '🗺️' }
                   ]}
                 />
               </div>

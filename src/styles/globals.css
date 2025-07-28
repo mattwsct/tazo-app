@@ -94,7 +94,6 @@ body.overlay-page {
   font-weight: 600;
   display: flex;
   flex-direction: column;
-  gap: var(--gap-sm);
 }
 
 /* Hide container when it has no visible children */
@@ -126,7 +125,6 @@ body.overlay-page {
   line-height: 1;
   display: flex;
   align-items: center;
-  margin-bottom: var(--gap-sm);
 }
 
 .time-left {
@@ -165,7 +163,6 @@ body.overlay-page {
   letter-spacing: 0.1em;
   opacity: 0.8;
   margin-right: -0.1em;
-  margin-bottom: var(--gap-sm);
 }
 
 .date-left {
@@ -187,22 +184,14 @@ body.overlay-page {
   display: none;
 }
 
-/* When heart rate is visible, reduce gap between date and heart rate */
+/* Default container gap - consistent spacing */
+.overlay-container {
+  gap: var(--gap-sm);
+}
+
+/* When heart rate is visible, reduce gap for tighter spacing */
 .overlay-container.has-heart-rate {
   gap: var(--gap-xs);
-}
-
-.overlay-container.has-heart-rate .date {
-  margin-bottom: var(--gap-sm);
-}
-
-/* When heart rate is not visible, use normal gap */
-.overlay-container:not(.has-heart-rate) {
-  gap: var(--gap-md);
-}
-
-.overlay-container:not(.has-heart-rate) .date {
-  margin-bottom: 0;
 }
 
 .heart-rate {
@@ -317,7 +306,8 @@ body.overlay-page {
   gap: 0;
 }
 
-.weather-description {
+.weather-description,
+.weather-temperature {
   font-size: var(--font-size-sm);
   font-weight: 600;
   margin: 0;
@@ -332,20 +322,8 @@ body.overlay-page {
   margin-right: -0.1em;
 }
 
-.weather-temperature {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--gap-lg);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  opacity: 0.8;
-  margin-right: -0.1em;
-}
-
-.weather-icon {
+.weather-icon,
+.weather-icon-fallback {
   width: 42px;
   height: 42px;
   display: flex;
@@ -356,11 +334,6 @@ body.overlay-page {
 .weather-icon-fallback {
   font-size: 42px;
   line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
 }
 
 /* === MINIMAP STYLES === */

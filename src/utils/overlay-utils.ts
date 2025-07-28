@@ -40,7 +40,7 @@ export function celsiusToFahrenheit(celsius: number): number {
  * Formats location data for overlay display
  * Follows user preference: City, Country OR State, Country (max 16 chars per field)
  */
-export function formatLocation(location: LocationData, displayMode: 'city' | 'state' | 'country' | 'hidden' = 'city'): string {
+export function formatLocation(location: LocationData, displayMode: 'city' | 'state' | 'hidden' = 'city'): string {
   if (!location) return '';
   
   if (displayMode === 'hidden') {
@@ -70,9 +70,7 @@ export function formatLocation(location: LocationData, displayMode: 'city' | 'st
     return fullCountry;
   }
   
-  if (displayMode === 'country') {
-    return fullCountry;
-  }
+
   
   return '';
 }
@@ -108,8 +106,8 @@ interface RateLimit {
 }
 
 export const RATE_LIMITS: Record<string, RateLimit> = {
-  openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 600 },
-  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 },
+  openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 300 }, // Reduced from 600 to 300
+  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 1 }, // Reduced from 2 to 1
 } as const;
 
 /**

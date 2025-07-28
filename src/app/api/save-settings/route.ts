@@ -38,7 +38,7 @@ async function handlePOST(request: NextRequest) {
     
     // Reduced logging to prevent spam
     
-    // Save to KV (minimal usage) and update fast polling cache
+    // Batch KV operations to reduce calls
     const kvResult = await Promise.allSettled([
       Promise.all([
         kv.set('overlay_settings', settings),

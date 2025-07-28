@@ -15,6 +15,8 @@ async function handleGET() {
     
     // Get current sub goal data from the sub goal server
     let subGoalData = null;
+    let shouldUpdateKV = false;
+    
     try {
       const { getSubGoalServer } = await import('@/lib/sub-goal-server');
       const subGoalServer = getSubGoalServer();
@@ -29,16 +31,12 @@ async function handleGET() {
           };
           console.log('🔍 Get-settings API: Loaded sub goal data:', subGoalData);
           
-          // Also save this data to KV storage for persistence
-          const settingsWithSubGoal = {
-            ...(settings || DEFAULT_OVERLAY_SETTINGS),
-            _subGoalData: subGoalData
-          };
-          
-          // Save to KV storage to ensure persistence
-          await kv.set('overlay_settings', settingsWithSubGoal);
-          await kv.set('overlay_settings_modified', Date.now());
-          console.log('🔍 Get-settings API: Saved sub goal data to KV storage for persistence');
+          // Check if we need to update KV (only if data is different)
+          const existingSubGoalData = (settings as { _subGoalData?: unknown })?._subGoalData;
+          if (!existingSubGoalData || 
+              JSON.stringify(existingSubGoalData) !== JSON.stringify(subGoalData)) {
+            shouldUpdateKV = true;
+          }
         } else {
           console.log('🔍 Get-settings API: No real sub goal data found, skipping');
         }
@@ -60,12 +58,31 @@ async function handleGET() {
         console.log('🔍 Get-settings API: Found test data in KV, clearing it');
         const cleanSettings = { ...settings };
         delete (cleanSettings as { _subGoalData?: unknown })._subGoalData;
+        
+        // Update KV only when clearing test data
         await kv.set('overlay_settings', cleanSettings);
         await kv.set('overlay_settings_modified', Date.now());
+        logKVUsage('write');
         
         // Return clean settings without test data
         return NextResponse.json(cleanSettings);
       }
+    }
+    
+    // Only update KV if we have new sub goal data that's different
+    if (shouldUpdateKV && subGoalData) {
+      const settingsWithSubGoal = {
+        ...(settings || DEFAULT_OVERLAY_SETTINGS),
+        _subGoalData: subGoalData
+      };
+      
+      // Batch KV operations to reduce calls
+      await Promise.all([
+        kv.set('overlay_settings', settingsWithSubGoal),
+        kv.set('overlay_settings_modified', Date.now())
+      ]);
+      logKVUsage('write');
+      console.log('🔍 Get-settings API: Updated KV with new sub goal data');
     }
     
     console.log('🔍 Get-settings API: Final combined settings:', combinedSettings);

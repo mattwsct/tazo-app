@@ -116,8 +116,8 @@ const TIMERS = {
   OVERLAY_FADE_TIMEOUT: 5000,
   MINIMAP_HIDE_DELAY: 30000,
   SPEED_HIDE_DELAY: 5000,
-  API_COOLDOWN: 30000, // 30s - conservative for LocationIQ rate limits (2/sec)
-  FIRST_LOAD_API_COOLDOWN: 5000, // 5s for first load - still conservative for rate limits
+  API_COOLDOWN: 60000, // 60s - more conservative for LocationIQ rate limits (2/sec)
+  FIRST_LOAD_API_COOLDOWN: 10000, // 10s for first load - more conservative for rate limits
 } as const;
 
 const THRESHOLDS = {
@@ -143,6 +143,22 @@ interface RTIRLPayload {
 
 export default function OverlayPage() {
   useRenderPerformance('OverlayPage');
+
+  // Filter out RTIRL Firebase cookie warnings to clean up console
+  useEffect(() => {
+    const originalWarn = console.warn;
+    console.warn = (...args) => {
+      const message = args[0];
+      if (typeof message === 'string' && message.includes('Cookie "" has been rejected as third-party')) {
+        return; // Suppress RTIRL cookie warnings
+      }
+      originalWarn.apply(console, args);
+    };
+
+    return () => {
+      console.warn = originalWarn;
+    };
+  }, []);
 
   const [time, setTime] = useState('Loading...');
   const [date, setDate] = useState('Loading...');
@@ -858,10 +874,17 @@ export default function OverlayPage() {
                             // Fallback to a simple text representation if image fails
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
+                            
+                            // Show loading briefly, then fallback
                             const fallback = document.createElement('div');
-                            fallback.textContent = weather?.icon ? getWeatherFallback(weather.icon) : '🌤️';
                             fallback.className = 'weather-icon-fallback';
+                            fallback.textContent = '⏳'; // Loading indicator
                             target.parentNode?.appendChild(fallback);
+                            
+                            // Replace with actual fallback after brief delay
+                            setTimeout(() => {
+                              fallback.textContent = weather?.icon ? getWeatherFallback(weather.icon) : '🌤️';
+                            }, 100);
                           }}
                         />
                       </div>
@@ -903,7 +926,6 @@ export default function OverlayPage() {
            enableRollingSubGoal={safeSettings.enableRollingSubGoal}
            rollingSubGoalIncrement={safeSettings.rollingSubGoalIncrement}
            subGoalData={subGoalData}
-           onGoalReset={() => {}}
          />
       </div>
     </ErrorBoundary>
