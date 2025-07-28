@@ -844,7 +844,7 @@ export default function OverlayPage() {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
                             const fallback = document.createElement('div');
-                            fallback.textContent = getWeatherFallback(weather.icon);
+                            fallback.textContent = weather?.icon ? getWeatherFallback(weather.icon) : '🌤️';
                             fallback.className = 'weather-icon-fallback';
                             target.parentNode?.appendChild(fallback);
                           }}

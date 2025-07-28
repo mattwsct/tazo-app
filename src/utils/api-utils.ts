@@ -1,7 +1,5 @@
 import { 
   checkRateLimit, 
-  mapWMOToOpenWeatherIcon, 
-  mapWMOToDescription,
   type LocationData 
 } from './overlay-utils';
 import { ApiLogger } from '@/lib/logger';
