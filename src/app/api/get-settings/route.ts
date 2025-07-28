@@ -8,7 +8,11 @@ async function handleGET() {
   try {
     logKVUsage('read');
     const settings = await kv.get('overlay_settings');
-    console.log('🔍 Get-settings API: Raw settings from KV:', settings);
+    
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Get-settings API: Raw settings from KV:', settings);
+    }
     
     // Import the default settings to ensure all properties are included
     const { DEFAULT_OVERLAY_SETTINGS } = await import('@/types/settings');
@@ -29,7 +33,11 @@ async function handleGET() {
             latestSub: currentData.latestSub?.username || null,
             lastUpdate: Date.now()
           };
-          console.log('🔍 Get-settings API: Loaded sub goal data:', subGoalData);
+          
+          // Only log in development
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 Get-settings API: Loaded sub goal data:', subGoalData);
+          }
           
           // Check if we need to update KV (only if data is different)
           const existingSubGoalData = (settings as { _subGoalData?: unknown })?._subGoalData;
@@ -38,11 +46,17 @@ async function handleGET() {
             shouldUpdateKV = true;
           }
         } else {
-          console.log('🔍 Get-settings API: No real sub goal data found, skipping');
+          // Only log in development
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 Get-settings API: No real sub goal data found, skipping');
+          }
         }
       }
     } catch (error) {
-      console.log('🔍 Get-settings API: Could not load sub goal data:', error);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Get-settings API: Could not load sub goal data:', error);
+      }
     }
     
     // Combine settings with sub goal data

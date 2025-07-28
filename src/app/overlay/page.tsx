@@ -114,8 +114,8 @@ const TIMERS = {
   WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes (unchanged - Open-Meteo is generous: 600/min)
   LOCATION_UPDATE: 60000, // 60s - LocationIQ is very strict (2/sec, so we're conservative)
   OVERLAY_FADE_TIMEOUT: 5000,
-  MINIMAP_HIDE_DELAY: 30000,
-  SPEED_HIDE_DELAY: 5000,
+  MINIMAP_HIDE_DELAY: 15000, // 15s - reduced from 30s for faster hiding
+  SPEED_HIDE_DELAY: 3000, // 3s - reduced from 5s for more responsive hiding
   API_COOLDOWN: 60000, // 60s - more conservative for LocationIQ rate limits (2/sec)
   FIRST_LOAD_API_COOLDOWN: 10000, // 10s for first load - more conservative for rate limits
 } as const;
@@ -430,10 +430,12 @@ export default function OverlayPage() {
             setSubGoalData(data._subGoalData);
           }
           
-          // Log minimap-related settings changes
-          if (data.showMinimap !== settings.showMinimap || 
-              data.minimapSpeedBased !== settings.minimapSpeedBased ||
-              data.locationDisplay !== settings.locationDisplay) {
+          // Only update settings if they've actually changed
+          const hasMinimapChanges = data.showMinimap !== settings.showMinimap || 
+                                   data.minimapSpeedBased !== settings.minimapSpeedBased ||
+                                   data.locationDisplay !== settings.locationDisplay;
+          
+          if (hasMinimapChanges) {
             OverlayLogger.settings(`Minimap settings updated: showMinimap=${data.showMinimap}, speedBased=${data.minimapSpeedBased}, locationDisplay=${data.locationDisplay}`);
           }
           
@@ -448,7 +450,9 @@ export default function OverlayPage() {
       setTimeout(() => eventSource.close(), 5000);
     };
     
-    return () => eventSource.close();
+    return () => {
+      eventSource.close();
+    };
   }, [settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay]);
 
   useEffect(() => {
@@ -729,7 +733,8 @@ export default function OverlayPage() {
       if (isAboveThreshold) {
         speedAboveThresholdCount.current++;
         
-        if (speedAboveThresholdCount.current >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
+        // Show minimap when speed threshold is met (requires 2 readings to prevent false positives)
+        if (speedAboveThresholdCount.current >= 2) {
           if (speedHideTimeout.current) {
             clearTimeout(speedHideTimeout.current);
             speedHideTimeout.current = null;
@@ -743,6 +748,7 @@ export default function OverlayPage() {
       } else {
         speedAboveThresholdCount.current = 0;
         
+        // Hide minimap after brief delay when speed drops below threshold
         if (speedBasedVisible.current && !speedHideTimeout.current) {
           speedHideTimeout.current = setTimeout(() => {
             speedBasedVisible.current = false;
@@ -895,7 +901,7 @@ export default function OverlayPage() {
             </div>
 
             {shouldShowMinimap() && (
-              <div className="minimap" style={{ opacity: minimapOpacity, transition: 'opacity 0.5s ease-in-out' }}>
+              <div className="minimap" style={{ opacity: minimapOpacity, transition: 'opacity 0.2s ease-in-out' }}>
                 {mapCoords ? (
                   <MapboxMinimap 
                     lat={mapCoords[0]} 

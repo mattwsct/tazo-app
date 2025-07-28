@@ -108,6 +108,7 @@ interface RateLimit {
 export const RATE_LIMITS: Record<string, RateLimit> = {
   openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 300 }, // Reduced from 600 to 300
   locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 1 }, // Reduced from 2 to 1
+  mapbox: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 30 }, // 30 requests per minute
 } as const;
 
 /**
