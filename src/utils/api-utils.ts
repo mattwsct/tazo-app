@@ -176,17 +176,10 @@ export async function fetchLocationFromLocationIQ(
   try {
     ApiLogger.info('locationiq', 'Fetching location data', { lat, lon });
     
-    // Add cache busting timestamp and headers to prevent browser caching
+    // Add cache busting timestamp to prevent browser caching
     const timestamp = Date.now();
     const response = await fetchWithRetry(
-      `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&accept-language=en&_t=${timestamp}`,
-      {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      }
+      `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&accept-language=en&_t=${timestamp}`
     );
     
     if (!response.ok) {

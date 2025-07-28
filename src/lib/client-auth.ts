@@ -61,7 +61,7 @@ export async function loginToAdmin(password: string): Promise<{ success: boolean
  */
 export async function logoutFromAdmin(): Promise<{ success: boolean }> {
   try {
-    const response = await fetch('/api/logout', {
+    await fetch('/api/logout', {
       method: 'GET',
       credentials: 'include',
     });

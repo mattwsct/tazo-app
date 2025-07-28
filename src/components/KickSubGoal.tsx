@@ -105,7 +105,6 @@ export default function KickSubGoal({
         setLastResetDate(now);
         setCurrentGoal(dailyGoal);
         setIsStreamActive(false);
-        saveToStorage();
         
         OverlayLogger.overlay('Initialized new sub goal tracking', {
           dailyGoal,
@@ -114,10 +113,20 @@ export default function KickSubGoal({
       }
     } catch (error) {
       OverlayLogger.error('Error loading persisted sub goal data', error);
-      // Fallback to fresh start
-      resetSubGoal();
+      // Fallback to fresh start - reset manually
+      const now = new Date().toISOString();
+      setLastResetDate(now);
+      setCurrentGoal(dailyGoal);
+      setCurrentSubs(0);
+      setRecentEvents([]);
+      setLatestSub(null);
+      setSubLeaderboard([]);
+      setGoalReachedTime(null);
+      setLastSubTime(null);
+      setStreamEndTime(null);
+      setIsStreamActive(false);
     }
-  }, [channelName, dailyGoal]);
+  }, [channelName, dailyGoal, storageKey]);
 
   // Update currentGoal when dailyGoal prop changes
   useEffect(() => {

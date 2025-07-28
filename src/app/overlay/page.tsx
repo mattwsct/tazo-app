@@ -167,7 +167,7 @@ export default function OverlayPage() {
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
 
-  const heartRateRef = useRef<HTMLDivElement>(null);
+
   const lastAPICoords = useRef<[number, number] | null>(null);
   const lastWeatherCoords = useRef<[number, number] | null>(null);
   const lastLocationUpdate = useRef(0);
@@ -259,6 +259,12 @@ export default function OverlayPage() {
       return;
     }
     
+    // Ensure we have valid coordinates before making any API calls
+    if (lat === 0 && lon === 0) {
+      OverlayLogger.warn('Received zero coordinates, skipping API calls');
+      return;
+    }
+    
     const hadCoords = lastWeatherCoords.current !== null;
     lastWeatherCoords.current = [lat, lon];
     
@@ -315,6 +321,8 @@ export default function OverlayPage() {
           timeSinceUpdate,
           timeThreshold: TIMERS.LOCATION_UPDATE
         });
+      } else {
+        OverlayLogger.overlay('Location update skipped - no previous coordinates');
       }
       return;
     }
@@ -358,9 +366,10 @@ export default function OverlayPage() {
       } else {
         const remainingCooldown = cooldown - (now - lastLocationAPICall.current);
         OverlayLogger.overlay('Location API call skipped due to cooldown', { remainingMs: remainingCooldown });
-        setLoadingState('location', false);
+        // Don't set loading to false here - keep it loading until we get data
       }
     } else {
+      OverlayLogger.warn('LocationIQ API key not available');
       setLoadingState('location', false);
     }
   }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters, getAdaptiveDistanceThreshold, speed]);
@@ -562,6 +571,9 @@ export default function OverlayPage() {
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
     script.async = true;
+    script.onerror = () => {
+      OverlayLogger.error('Failed to load RTIRL script');
+    };
     document.body.appendChild(script);
     
     script.onload = () => {
@@ -627,7 +639,11 @@ export default function OverlayPage() {
           }
         });
       } else {
-        OverlayLogger.warn('RealtimeIRL API not available or missing API key');
+        if (!API_KEYS.RTIRL) {
+          OverlayLogger.warn('RTIRL API key not available');
+        } else {
+          OverlayLogger.warn('RealtimeIRL API not available');
+        }
       }
     };
     
@@ -635,7 +651,7 @@ export default function OverlayPage() {
     return () => {
       // Note: We can't easily remove the script, but the listener will be cleaned up
     };
-  }, [updateFromCoordinates]);
+  }, [updateFromCoordinates, createDateTimeFormatters, setLoadingState]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -771,41 +787,40 @@ export default function OverlayPage() {
               </div>
             )}
             
-            <div ref={heartRateRef}>
-              <HeartRateMonitor 
-                pulsoidToken={API_KEYS.PULSOID} 
-                onVisibilityChange={() => {}}
-              />
-            </div>
+            <HeartRateMonitor 
+              pulsoidToken={API_KEYS.PULSOID} 
+              onVisibilityChange={(isVisible) => {
+                // Add/remove class to overlay container based on heart rate visibility
+                const container = document.querySelector('.overlay-container');
+                if (container) {
+                  if (isVisible) {
+                    container.classList.add('has-heart-rate');
+                  } else {
+                    container.classList.remove('has-heart-rate');
+                  }
+                }
+              }}
+            />
           </div>
         </div>
 
         {(isLocationEnabled || settings.showWeather || (settings.showMinimap || settings.minimapSpeedBased)) && (
           <div className="top-right">
             <div className="overlay-container">
-              {settings.locationDisplay && settings.locationDisplay !== 'hidden' && (
-                <div 
-                  className="location" 
-                  style={{ 
-                    display: (location && location.label && location.countryCode) ? 'flex' : 'none'
-                  }}
-                >
-                  {location && location.label && (
-                    <>
-                      {location.label}
-                      {location.countryCode && (
-                        <Image
-                          src={`https://flagcdn.com/${location.countryCode}.svg`}
-                          alt={`Country: ${location.label}`}
-                          width={32}
-                          height={20}
-                          unoptimized
-                          priority
-                          loading="eager"
-                          className="location-flag"
-                        />
-                      )}
-                    </>
+              {settings.locationDisplay && settings.locationDisplay !== 'hidden' && location && location.label && (
+                <div className="location">
+                  {location.label}
+                  {location.countryCode && (
+                    <Image
+                      src={`https://flagcdn.com/${location.countryCode}.svg`}
+                      alt={`Country: ${location.label}`}
+                      width={32}
+                      height={20}
+                      unoptimized
+                      priority
+                      loading="eager"
+                      className="location-flag"
+                    />
                   )}
                 </div>
               )}
@@ -831,7 +846,7 @@ export default function OverlayPage() {
                       </div>
                       <div className="weather-icon">
                         <Image
-                          src={`https://openweathermap.org/img/wn/${weatherIcon}@4x.png`}
+                          src={`https://openweathermap.org/img/wn/${weatherIcon || '01d'}@4x.png`}
                           alt={`Weather: ${weather.desc}`}
                           width={24}
                           height={24}

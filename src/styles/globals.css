@@ -9,6 +9,7 @@
   --font-size-2xl: 3.125rem;    /* 2.5rem * 1.25 */
   
   /* Spacing (scaled up by 25%) */
+  --gap-xs: 3.75px;             /* 3px * 1.25 */
   --gap-sm: 5px;                /* 4px * 1.25 */
   --gap-md: 7.5px;              /* 6px * 1.25 */
   --gap-lg: 10px;               /* 8px * 1.25 */
@@ -93,7 +94,7 @@ body.overlay-page {
   font-weight: 600;
   display: flex;
   flex-direction: column;
-  gap: var(--gap-md);
+  gap: var(--gap-sm);
 }
 
 /* Hide container when it has no visible children */
@@ -125,6 +126,7 @@ body.overlay-page {
   line-height: 1;
   display: flex;
   align-items: center;
+  margin-bottom: var(--gap-sm);
 }
 
 .time-left {
@@ -162,8 +164,8 @@ body.overlay-page {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   opacity: 0.8;
-  margin-top: -2px;
   margin-right: -0.1em;
+  margin-bottom: var(--gap-sm);
 }
 
 .date-left {
@@ -171,6 +173,38 @@ body.overlay-page {
 }
 
 /* === HEART RATE STYLES === */
+.heart-rate-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0;
+  line-height: 1.2;
+  min-height: var(--font-size-lg);
+}
+
+/* Hide heart rate wrapper when no heart rate data is visible */
+.heart-rate-wrapper:empty {
+  display: none;
+}
+
+/* When heart rate is visible, reduce gap between date and heart rate */
+.overlay-container.has-heart-rate {
+  gap: var(--gap-xs);
+}
+
+.overlay-container.has-heart-rate .date {
+  margin-bottom: var(--gap-sm);
+}
+
+/* When heart rate is not visible, use normal gap */
+.overlay-container:not(.has-heart-rate) {
+  gap: var(--gap-md);
+}
+
+.overlay-container:not(.has-heart-rate) .date {
+  margin-bottom: 0;
+}
+
 .heart-rate {
   color: white;
   text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
@@ -179,14 +213,17 @@ body.overlay-page {
   align-items: center;
   justify-content: flex-start;
   margin: 0;
+  line-height: 1.2;
+  min-height: var(--font-size-lg);
+  width: 100%;
 }
 
 .heart-rate-content {
   display: flex;
   align-items: center;
   gap: var(--gap-md);
-  min-height: var(--font-size-lg);
   justify-content: flex-start;
+  width: 100%;
 }
 
 .heart-rate-icon {
@@ -196,6 +233,8 @@ body.overlay-page {
   align-items: center;
   justify-content: center;
   height: var(--font-size-lg);
+  width: var(--font-size-lg);
+  flex-shrink: 0;
   transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -207,8 +246,9 @@ body.overlay-page {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
+  gap: var(--gap-sm);
   line-height: 1;
+  flex: 1;
 }
 
 .heart-rate-value {
@@ -217,6 +257,7 @@ body.overlay-page {
   line-height: 1;
   letter-spacing: -0.02em;
   transition: color 0.5s ease, text-shadow 0.5s ease;
+  margin: 0;
 }
 
 .heart-rate-label {
@@ -227,7 +268,7 @@ body.overlay-page {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   text-align: left;
-  margin-top: 0.2em;
+  margin: 0;
 }
 
 /* === LOCATION DISPLAY STYLES === */
@@ -305,21 +346,21 @@ body.overlay-page {
 }
 
 .weather-icon {
-  width: 24px;
-  height: 24px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .weather-icon-fallback {
-  font-size: 24px;
+  font-size: 42px;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 42px;
+  height: 42px;
 }
 
 /* === MINIMAP STYLES === */

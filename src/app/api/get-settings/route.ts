@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-import { verifyAuth, logKVUsage } from '@/lib/api-auth';
+import { logKVUsage } from '@/lib/api-auth';
 import { validateEnvironment } from '@/lib/env-validator';
 import { OverlaySettings } from '@/types/settings';
 
@@ -86,12 +86,7 @@ export async function GET(): Promise<NextResponse> {
     return new NextResponse('Server configuration error', { status: 500 });
   }
   
-  // Verify authentication - require it for admin access
-  const isAuthenticated = await verifyAuth();
-  if (!isAuthenticated) {
-    console.warn('Unauthenticated access attempt to admin settings');
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-  
+  // Allow unauthenticated access for overlay (public access)
+  // Authentication is only required for admin panel access
   return handleGET();
 } 

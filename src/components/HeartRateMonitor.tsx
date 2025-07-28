@@ -340,30 +340,32 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
 
   return (
     <ErrorBoundary>
-      <div className="heart-rate">
-      <div className="heart-rate-content">
-        <div 
-          className="heart-rate-icon beating"
-          style={{
-            animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s'
-          }}
-        >
-          💓
-        </div>
-        <div className="heart-rate-text">
-          <span 
-            className="heart-rate-value"
-            style={{ 
-              color: heartRateZone.color,
-              textShadow: `0 0 8px ${heartRateZone.color}40, 1px 1px 3px rgba(0, 0, 0, 0.8)`
-            }}
-          >
-            {currentBpm}
-          </span>
-          <span className="heart-rate-label">BPM</span>
+      <div className="heart-rate-wrapper">
+        <div className="heart-rate">
+          <div className="heart-rate-content">
+            <div 
+              className="heart-rate-icon beating"
+              style={{
+                animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s'
+              }}
+            >
+              💓
+            </div>
+            <div className="heart-rate-text">
+              <span 
+                className="heart-rate-value"
+                style={{ 
+                  color: heartRateZone.color,
+                  textShadow: `0 0 8px ${heartRateZone.color}40, 1px 1px 3px rgba(0, 0, 0, 0.8)`
+                }}
+              >
+                {currentBpm}
+              </span>
+              <span className="heart-rate-label">BPM</span>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
     </ErrorBoundary>
   );
 } 

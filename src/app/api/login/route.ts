@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
     }
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 } 
