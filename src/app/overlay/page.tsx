@@ -27,7 +27,6 @@ import {
   formatLocation,
   distanceInMeters,
   isValidCoordinate,
-  capitalizeWords,
   celsiusToFahrenheit,
   LocationData,
 } from '@/utils/overlay-utils';
@@ -40,8 +39,42 @@ const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
   loading: () => <div />
 });
 
-function getWeatherIcon(icon: string, timezone: string | null, sunrise: string | null, sunset: string | null): string {
-  const baseIcon = icon.replace(/([dn])$/, '').replace(/@\dx$/, '');
+function getWeatherIcon(wmoCode: string, timezone: string | null, sunrise: string | null, sunset: string | null): string {
+  // Convert WMO code to OpenWeather format for proper icons
+  const wmoToOpenWeather: Record<string, string> = {
+    '0': '01',    // Clear sky
+    '1': '02',    // Mainly clear
+    '2': '03',    // Partly cloudy
+    '3': '04',    // Overcast
+    '45': '50',   // Fog
+    '48': '50',   // Depositing rime fog
+    '51': '09',   // Light drizzle
+    '53': '09',   // Moderate drizzle
+    '55': '09',   // Dense drizzle
+    '56': '13',   // Light freezing drizzle
+    '57': '13',   // Dense freezing drizzle
+    '61': '10',   // Slight rain
+    '63': '10',   // Moderate rain
+    '65': '10',   // Heavy rain
+    '66': '13',   // Light freezing rain
+    '67': '13',   // Heavy freezing rain
+    '71': '13',   // Slight snow fall
+    '73': '13',   // Moderate snow fall
+    '75': '13',   // Heavy snow fall
+    '77': '13',   // Snow grains
+    '80': '09',   // Slight rain showers
+    '81': '09',   // Moderate rain showers
+    '82': '09',   // Violent rain showers
+    '85': '13',   // Slight snow showers
+    '86': '13',   // Heavy snow showers
+    '95': '11',   // Thunderstorm
+    '96': '11',   // Thunderstorm with slight hail
+    '99': '11',   // Thunderstorm with heavy hail
+  };
+
+  const baseIcon = wmoToOpenWeather[wmoCode] || '01';
+  
+  // Determine if it's day or night
   if (!timezone) return baseIcon + 'd';
 
   try {
@@ -64,19 +97,36 @@ function getWeatherIcon(icon: string, timezone: string | null, sunrise: string |
   }
 }
 
+function getWeatherFallback(wmoCode: string): string {
+  // Simple fallback symbols for when weather icons fail to load
+  const fallbackMap: Record<string, string> = {
+    '0': '☀️', '1': '🌤️', '2': '⛅', '3': '☁️',
+    '45': '🌫️', '48': '🌫️', '51': '🌦️', '53': '🌦️', '55': '🌧️',
+    '56': '🌨️', '57': '🌨️', '61': '🌧️', '63': '🌧️', '65': '🌧️',
+    '66': '🌨️', '67': '🌨️', '71': '🌨️', '73': '🌨️', '75': '🌨️',
+    '77': '🌨️', '80': '🌦️', '81': '🌧️', '82': '🌧️', '85': '🌨️',
+    '86': '🌨️', '95': '⛈️', '96': '⛈️', '99': '⛈️'
+  };
+  return fallbackMap[wmoCode] || '🌤️';
+}
+
 const TIMERS = {
-  WEATHER_TIMEZONE_UPDATE: 300000,
-  LOCATION_UPDATE: 60000,
+  WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes (unchanged - Open-Meteo is generous: 600/min)
+  LOCATION_UPDATE: 60000, // 60s - LocationIQ is very strict (2/sec, so we're conservative)
   OVERLAY_FADE_TIMEOUT: 5000,
   MINIMAP_HIDE_DELAY: 30000,
   SPEED_HIDE_DELAY: 5000,
-  API_COOLDOWN: 60000,
+  API_COOLDOWN: 30000, // 30s - conservative for LocationIQ rate limits (2/sec)
+  FIRST_LOAD_API_COOLDOWN: 5000, // 5s for first load - still conservative for rate limits
 } as const;
 
 const THRESHOLDS = {
-  LOCATION_DISTANCE: 100,
-  SPEED_SHOW: 10,
+  LOCATION_DISTANCE: 100, // 100m - conservative to avoid excessive API calls
+  SPEED_SHOW: 10, // 10 km/h - show for faster transport
   SPEED_READINGS_REQUIRED: 2,
+  // Adaptive thresholds based on speed
+  HIGH_SPEED_THRESHOLD: 50, // km/h - above this, use adaptive distance
+  BULLET_TRAIN_SPEED: 200, // km/h - above this, very conservative updates
 } as const;
 
 const API_KEYS = {
@@ -132,8 +182,23 @@ export default function OverlayPage() {
   const currentTimezone = useRef(timezone);
   const lastWeatherAPICall = useRef(0);
   const lastLocationAPICall = useRef(0);
+  const isFirstLoad = useRef(true); // Track if this is the first load
 
   const safeSettings = useMemo(() => ({ ...DEFAULT_OVERLAY_SETTINGS, ...settings }), [settings]);
+
+  // Calculate adaptive distance threshold based on speed
+  const getAdaptiveDistanceThreshold = useCallback((speedKmh: number): number => {
+    if (speedKmh >= THRESHOLDS.BULLET_TRAIN_SPEED) {
+      // Bullet train speeds (200+ km/h): very conservative
+      return 5000; // 5km - only update every 5km
+    } else if (speedKmh >= THRESHOLDS.HIGH_SPEED_THRESHOLD) {
+      // High speeds (50+ km/h): moderate conservative
+      return Math.max(500, speedKmh * 10); // At least 500m, scales with speed
+    } else {
+      // Normal speeds: standard threshold
+      return THRESHOLDS.LOCATION_DISTANCE;
+    }
+  }, []);
 
   const createDateTimeFormatters = useCallback((timezone: string) => {
     formatter.current = new Intl.DateTimeFormat('en-US', {
@@ -197,65 +262,108 @@ export default function OverlayPage() {
     const hadCoords = lastWeatherCoords.current !== null;
     lastWeatherCoords.current = [lat, lon];
     
-    if (!hadCoords && currentIsLoading.current.weather) {
+    // On first load, always fetch fresh data regardless of cooldowns
+    const isFirstLoadNow = isFirstLoad.current;
+    if (isFirstLoadNow) {
+      isFirstLoad.current = false;
+      OverlayLogger.overlay('First load detected - fetching fresh API data immediately', { lat, lon });
+    }
+    
+    // Fetch weather data (if we don't have it or it's first load)
+    if (!hadCoords || isFirstLoadNow) {
       const currentTime = Date.now();
-      if ((currentTime - lastWeatherAPICall.current) >= TIMERS.API_COOLDOWN) {
+      const cooldown = isFirstLoadNow ? TIMERS.FIRST_LOAD_API_COOLDOWN : TIMERS.API_COOLDOWN;
+      
+      if ((currentTime - lastWeatherAPICall.current) >= cooldown) {
         lastWeatherAPICall.current = currentTime;
         try {
+          OverlayLogger.overlay('Fetching weather data from API', { lat, lon });
           const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
-          await processWeatherResult(result, true);
+          await processWeatherResult(result, isFirstLoadNow);
         } catch (error) {
-          OverlayLogger.error('Initial weather update failed', error);
+          OverlayLogger.error('Weather update failed', error);
           setWeather(null);
           setLoadingState('weather', false);
         }
       } else {
+        const remainingCooldown = cooldown - (currentTime - lastWeatherAPICall.current);
+        OverlayLogger.overlay('Weather API call skipped due to cooldown', { remainingMs: remainingCooldown });
         setLoadingState('weather', false);
       }
     }
     
+    // Fetch location name data (if we don't have it or it's first load or moved enough)
     const now = Date.now();
-    const shouldUpdateLocation = !lastAPICoords.current || (
-      distanceInMeters(lat, lon, lastAPICoords.current![0], lastAPICoords.current![1]) >= THRESHOLDS.LOCATION_DISTANCE &&
+    
+    // Calculate adaptive distance threshold based on current speed
+    const speedKmh = speed * 3.6; // Convert m/s to km/h
+    const adaptiveDistanceThreshold = getAdaptiveDistanceThreshold(speedKmh);
+    
+    const shouldUpdateLocation = isFirstLoadNow || !lastAPICoords.current || (
+      distanceInMeters(lat, lon, lastAPICoords.current![0], lastAPICoords.current![1]) >= adaptiveDistanceThreshold &&
       (now - lastLocationUpdate.current) >= TIMERS.LOCATION_UPDATE
     );
     
-    if (!shouldUpdateLocation) return;
+    if (!shouldUpdateLocation) {
+      if (lastAPICoords.current) {
+        const distance = distanceInMeters(lat, lon, lastAPICoords.current[0], lastAPICoords.current[1]);
+        const timeSinceUpdate = now - lastLocationUpdate.current;
+        OverlayLogger.overlay('Location update skipped', { 
+          distance, 
+          adaptiveThreshold: adaptiveDistanceThreshold,
+          speedKmh,
+          timeSinceUpdate,
+          timeThreshold: TIMERS.LOCATION_UPDATE
+        });
+      }
+      return;
+    }
     
     lastAPICoords.current = [lat, lon];
     
-    if (API_KEYS.LOCATIONIQ && (now - lastLocationAPICall.current) >= TIMERS.API_COOLDOWN) {
-      lastLocationAPICall.current = now;
-      try {
-        const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
-        if (loc) {
-          const label = formatLocation(loc, settings.locationDisplay);
-          setLocation({ label, countryCode: loc.countryCode || '', originalData: loc });
-          setLoadingState('location', false);
-          lastLocationUpdate.current = now;
-          
-          if (loc.timezone && loc.timezone !== currentTimezone.current) {
-            try {
-              createDateTimeFormatters(loc.timezone);
-              setTimezone(loc.timezone);
-              setLoadingState('timezone', false);
-            } catch (error) {
-              OverlayLogger.error('Failed to set timezone from LocationIQ', error);
-              setLoadingState('timezone', false);
+    if (API_KEYS.LOCATIONIQ) {
+      const cooldown = isFirstLoadNow ? TIMERS.FIRST_LOAD_API_COOLDOWN : TIMERS.API_COOLDOWN;
+      
+      if ((now - lastLocationAPICall.current) >= cooldown) {
+        lastLocationAPICall.current = now;
+        try {
+          OverlayLogger.overlay('Fetching location name from API', { lat, lon });
+          const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
+          if (loc) {
+            const label = formatLocation(loc, settings.locationDisplay);
+            setLocation({ label, countryCode: loc.countryCode || '', originalData: loc });
+            setLoadingState('location', false);
+            lastLocationUpdate.current = now;
+            
+            // Only update timezone from LocationIQ if RTIRL didn't provide one
+            if (loc.timezone && !currentTimezone.current && loc.timezone !== currentTimezone.current) {
+              try {
+                createDateTimeFormatters(loc.timezone);
+                setTimezone(loc.timezone);
+                setLoadingState('timezone', false);
+                OverlayLogger.overlay('Timezone updated from LocationIQ (fallback)', { timezone: loc.timezone });
+              } catch (error) {
+                OverlayLogger.error('Failed to set timezone from LocationIQ', error);
+                setLoadingState('timezone', false);
+              }
             }
+          } else {
+            setLoadingState('location', false);
           }
-        } else {
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          OverlayLogger.error(`Location API failed: ${errorMessage}`);
           setLoadingState('location', false);
         }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        OverlayLogger.error(`Location API failed: ${errorMessage}`);
+      } else {
+        const remainingCooldown = cooldown - (now - lastLocationAPICall.current);
+        OverlayLogger.overlay('Location API call skipped due to cooldown', { remainingMs: remainingCooldown });
         setLoadingState('location', false);
       }
     } else {
       setLoadingState('location', false);
     }
-  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters]);
+  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters, getAdaptiveDistanceThreshold, speed]);
 
   const shouldShowMinimap = useCallback(() => {
     // If location is hidden, never show minimap
@@ -279,6 +387,12 @@ export default function OverlayPage() {
 
   const isLocationEnabled = settings.locationDisplay && settings.locationDisplay !== 'hidden';
   const isOverlayReady = useMemo(() => !isLoading.timezone, [isLoading.timezone]);
+
+  // Memoize weather icon to prevent unnecessary recalculations
+  const weatherIcon = useMemo(() => {
+    if (!weather?.icon || !timezone) return null;
+    return getWeatherIcon(weather.icon, timezone, sunrise, sunset);
+  }, [weather?.icon, timezone, sunrise, sunset]);
 
   useEffect(() => {
     const eventSource = new EventSource('/api/settings-stream');
@@ -424,7 +538,7 @@ export default function OverlayPage() {
     
     const interval = setInterval(async () => {
       const now = Date.now();
-      if ((now - lastWeatherAPICall.current) >= TIMERS.API_COOLDOWN) {
+      if ((now - lastWeatherAPICall.current) >= TIMERS.WEATHER_TIMEZONE_UPDATE) {
         lastWeatherAPICall.current = now;
         const [lat, lon] = lastWeatherCoords.current!;
         
@@ -444,77 +558,83 @@ export default function OverlayPage() {
   }, [processWeatherResult, setLoadingState]);
 
   useEffect(() => {
-    const initTimeout = setTimeout(() => {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
-      script.async = true;
-      document.body.appendChild(script);
-      
-      script.onload = () => {
-        if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
-          window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
-            if (!p || typeof p !== 'object') return;
-            const payload = p as RTIRLPayload;
-            
-            if (typeof payload.speed === 'number') {
-              setSpeed(payload.speed);
-            }
-            
-            if (currentIsLoading.current.weather) {
-              setLoadingState('weather', false);
-            }
-            if (currentIsLoading.current.location) {
-              setLoadingState('location', false);
-            }
-            
-            if (payload.location?.timezone && payload.location.timezone !== currentTimezone.current) {
-              try {
-                createDateTimeFormatters(payload.location.timezone);
-                setTimezone(payload.location.timezone);
-                setLoadingState('timezone', false);
-                OverlayLogger.overlay('Timezone updated from RTIRL', { timezone: payload.location.timezone });
-              } catch (error) {
-                OverlayLogger.error('Failed to set timezone from RTIRL', error);
-                setLoadingState('timezone', false);
-              }
-            }
-            
-            let lat: number | null = null;
-            let lon: number | null = null;
-            if (payload.location) {
-              if ('lat' in payload.location && 'lon' in payload.location) {
-                lat = payload.location.lat;
-                lon = payload.location.lon;
-              } else if ('latitude' in payload.location && 'longitude' in payload.location) {
-                const loc = payload.location as { latitude: number; longitude: number };
-                lat = loc.latitude;
-                lon = loc.longitude;
-              }
-            }
-            
-            if (lat !== null && lon !== null && isValidCoordinate(lat, lon)) {
-              updateFromCoordinates(lat, lon);
-              setMapCoords([lat, lon]);
-              
-              if (minimapTimeout.current) {
-                clearTimeout(minimapTimeout.current);
-              }
-              if (!currentSettings.current.showMinimap) {
-                minimapTimeout.current = setTimeout(() => {
-                  setMapCoords(null);
-                }, TIMERS.MINIMAP_HIDE_DELAY);
-              }
-            } else {
-              OverlayLogger.warn('RTIRL GPS data invalid');
-            }
-          });
-        } else {
-          OverlayLogger.warn('RealtimeIRL API not available or missing API key');
-        }
-      };
-    }, 1000);
+    // Load RTIRL script immediately without delay
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
+    script.async = true;
+    document.body.appendChild(script);
     
-    return () => clearTimeout(initTimeout);
+    script.onload = () => {
+      OverlayLogger.overlay('RTIRL script loaded, initializing connection...');
+      if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
+        OverlayLogger.overlay('RTIRL API available, setting up listener...');
+        window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
+          if (!p || typeof p !== 'object') return;
+          const payload = p as RTIRLPayload;
+          
+          // Handle speed data immediately
+          if (typeof payload.speed === 'number') {
+            setSpeed(payload.speed);
+          }
+          
+          // Handle timezone from RTIRL FIRST (before API calls)
+          if (payload.location?.timezone && payload.location.timezone !== currentTimezone.current) {
+            try {
+              createDateTimeFormatters(payload.location.timezone);
+              setTimezone(payload.location.timezone);
+              setLoadingState('timezone', false);
+              OverlayLogger.overlay('Timezone updated from RTIRL', { timezone: payload.location.timezone });
+            } catch (error) {
+              OverlayLogger.error('Failed to set timezone from RTIRL', error);
+              setLoadingState('timezone', false);
+            }
+          }
+          
+          // Extract GPS coordinates
+          let lat: number | null = null;
+          let lon: number | null = null;
+          if (payload.location) {
+            if ('lat' in payload.location && 'lon' in payload.location) {
+              lat = payload.location.lat;
+              lon = payload.location.lon;
+            } else if ('latitude' in payload.location && 'longitude' in payload.location) {
+              const loc = payload.location as { latitude: number; longitude: number };
+              lat = loc.latitude;
+              lon = loc.longitude;
+            }
+          }
+          
+          if (lat !== null && lon !== null && isValidCoordinate(lat, lon)) {
+            OverlayLogger.overlay('RTIRL GPS data received', { lat, lon, isFirstLoad: isFirstLoad.current });
+            
+            // Update map coordinates immediately
+            setMapCoords([lat, lon]);
+            
+            // Handle minimap timeout
+            if (minimapTimeout.current) {
+              clearTimeout(minimapTimeout.current);
+            }
+            if (!currentSettings.current.showMinimap) {
+              minimapTimeout.current = setTimeout(() => {
+                setMapCoords(null);
+              }, TIMERS.MINIMAP_HIDE_DELAY);
+            }
+            
+            // Now fetch additional data (location name, weather) from APIs
+            updateFromCoordinates(lat, lon);
+          } else {
+            OverlayLogger.warn('RTIRL GPS data invalid');
+          }
+        });
+      } else {
+        OverlayLogger.warn('RealtimeIRL API not available or missing API key');
+      }
+    };
+    
+    // Cleanup function
+    return () => {
+      // Note: We can't easily remove the script, but the listener will be cleaned up
+    };
   }, [updateFromCoordinates]);
 
   useEffect(() => {
@@ -709,16 +829,27 @@ export default function OverlayPage() {
                           {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
                         </div>
                       </div>
-                      <Image
-                        src={`https://openweathermap.org/img/wn/${getWeatherIcon(weather.icon, timezone, sunrise, sunset)}@4x.png`}
-                        alt={`Weather: ${capitalizeWords(weather.desc)}`}
-                        width={24}
-                        height={24}
-                        unoptimized
-                        priority
-                        loading="eager"
-                        className="weather-icon"
-                      />
+                      <div className="weather-icon">
+                        <Image
+                          src={`https://openweathermap.org/img/wn/${weatherIcon}@4x.png`}
+                          alt={`Weather: ${weather.desc}`}
+                          width={24}
+                          height={24}
+                          unoptimized
+                          priority
+                          loading="eager"
+                          className="weather-icon"
+                          onError={(e) => {
+                            // Fallback to a simple text representation if image fails
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const fallback = document.createElement('div');
+                            fallback.textContent = getWeatherFallback(weather.icon);
+                            fallback.className = 'weather-icon-fallback';
+                            target.parentNode?.appendChild(fallback);
+                          }}
+                        />
+                      </div>
                     </div>
                   ) : null}
                 </div>

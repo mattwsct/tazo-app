@@ -1,9 +1,8 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
-// Maximum character length for country names before using country code
 const MAX_COUNTRY_NAME_LENGTH = 12;
+const MAX_LOCATION_FIELD_LENGTH = 16;
 
-// Interface for location data
 export interface LocationData {
   country?: string;
   countryCode?: string;
@@ -18,24 +17,16 @@ export interface LocationData {
 }
 
 /**
- * Smart country name shortening for overlay display
- * Uses full name if short enough, otherwise uses country code
+ * Shortens country name if too long, otherwise uses country code
  */
 export function shortenCountryName(countryName: string, countryCode = ''): string {
   if (!countryName) return '';
   
-  // If country name is short enough, use it as is
   if (countryName.length <= MAX_COUNTRY_NAME_LENGTH) {
     return countryName;
   }
   
-  // If country name is too long and we have a country code, use the code
-  if (countryCode) {
-    return countryCode.toUpperCase();
-  }
-  
-  // Fallback: use the original country name even if it's long
-  return countryName;
+  return countryCode ? countryCode.toUpperCase() : countryName;
 }
 
 /**
@@ -57,44 +48,37 @@ export function formatLocation(location: LocationData, displayMode: 'city' | 'st
   }
   
   const shortenedCountry = shortenCountryName(location.country || '', location.countryCode || '');
+  const fullCountry = location.country || location.countryCode?.toUpperCase() || '';
   
   if (displayMode === 'city') {
-    if (location.city) {
+    if (location.city && location.city.length <= MAX_LOCATION_FIELD_LENGTH) {
       return `${location.city}, ${shortenedCountry}`;
     }
     
-    // Fallback to state if no city
-    if (location.state) {
+    if (location.state && location.state.length <= MAX_LOCATION_FIELD_LENGTH) {
       return `${location.state}, ${shortenedCountry}`;
     }
     
-    // Final fallback: just country
-    return shortenedCountry;
+    return fullCountry;
   }
   
   if (displayMode === 'state') {
-    if (location.state) {
+    if (location.state && location.state.length <= MAX_LOCATION_FIELD_LENGTH) {
       return `${location.state}, ${shortenedCountry}`;
     }
     
-    // Fallback to city if no state
-    if (location.city) {
-      return `${location.city}, ${shortenedCountry}`;
-    }
-    
-    // Final fallback: just country
-    return shortenedCountry;
+    return fullCountry;
   }
   
   if (displayMode === 'country') {
-    return shortenedCountry;
+    return fullCountry;
   }
   
   return '';
 }
 
 /**
- * Calculates distance between two coordinates in meters
+ * Calculates distance between two coordinates in meters using Haversine formula
  */
 export function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000; // Earth's radius in meters
@@ -107,89 +91,11 @@ export function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2:
   return R * c;
 }
 
-// === 📝 TEXT UTILITIES ===
-
 /**
  * Capitalizes the first letter of each word
  */
 export function capitalizeWords(str: string): string {
   return str.replace(/\b\w/g, c => c.toUpperCase());
-}
-
-// === 🌤️ WEATHER UTILITIES ===
-
-/**
- * Maps WMO Weather Code to OpenWeather icon format
- */
-export function mapWMOToOpenWeatherIcon(wmoCode: number): string {
-  const iconMap: Record<number, string> = {
-    0: '01d',    // Clear sky
-    1: '02d',    // Mainly clear
-    2: '03d',    // Partly cloudy
-    3: '04d',    // Overcast
-    45: '50d',   // Fog
-    48: '50d',   // Depositing rime fog
-    51: '09d',   // Light drizzle
-    53: '09d',   // Moderate drizzle
-    55: '09d',   // Dense drizzle
-    56: '13d',   // Light freezing drizzle
-    57: '13d',   // Dense freezing drizzle
-    61: '10d',   // Slight rain
-    63: '10d',   // Moderate rain
-    65: '10d',   // Heavy rain
-    66: '13d',   // Light freezing rain
-    67: '13d',   // Heavy freezing rain
-    71: '13d',   // Slight snow fall
-    73: '13d',   // Moderate snow fall
-    75: '13d',   // Heavy snow fall
-    77: '13d',   // Snow grains
-    80: '09d',   // Slight rain showers
-    81: '09d',   // Moderate rain showers
-    82: '09d',   // Violent rain showers
-    85: '13d',   // Slight snow showers
-    86: '13d',   // Heavy snow showers
-    95: '11d',   // Thunderstorm
-    96: '11d',   // Thunderstorm with slight hail
-    99: '11d',   // Thunderstorm with heavy hail
-  };
-  return iconMap[wmoCode] || '01d';
-}
-
-/**
- * Maps WMO Weather Code to human-readable description
- */
-export function mapWMOToDescription(wmoCode: number): string {
-  const descMap: Record<number, string> = {
-    0: 'clear sky',
-    1: 'mainly clear',
-    2: 'partly cloudy',
-    3: 'overcast',
-    45: 'fog',
-    48: 'depositing rime fog',
-    51: 'light drizzle',
-    53: 'moderate drizzle',
-    55: 'dense drizzle',
-    56: 'light freezing drizzle',
-    57: 'dense freezing drizzle',
-    61: 'slight rain',
-    63: 'moderate rain',
-    65: 'heavy rain',
-    66: 'light freezing rain',
-    67: 'heavy freezing rain',
-    71: 'slight snow fall',
-    73: 'moderate snow fall',
-    75: 'heavy snow fall',
-    77: 'snow grains',
-    80: 'slight rain showers',
-    81: 'moderate rain showers',
-    82: 'violent rain showers',
-    85: 'slight snow showers',
-    86: 'heavy snow showers',
-    95: 'thunderstorm',
-    96: 'thunderstorm with slight hail',
-    99: 'thunderstorm with heavy hail',
-  };
-  return descMap[wmoCode] || 'unknown';
 }
 
 // === 🔄 RATE LIMITING ===
@@ -202,8 +108,8 @@ interface RateLimit {
 }
 
 export const RATE_LIMITS: Record<string, RateLimit> = {
-  openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 600 }, // 600/min free tier
-  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 }, // 2/sec official limit
+  openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 600 },
+  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 },
 } as const;
 
 /**
@@ -213,23 +119,18 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
   const limit = RATE_LIMITS[api];
   const now = Date.now();
   
-  // Reset counter if interval has passed
   if (now - limit.lastReset > limit.resetInterval) {
     limit.calls = 0;
     limit.lastReset = now;
   }
   
-  // Check if limit exceeded
   if (limit.calls >= limit.max) {
     return false;
   }
   
-  // Increment counter and allow
   limit.calls++;
   return true;
 }
-
-
 
 /**
  * Validates coordinate values are within valid ranges

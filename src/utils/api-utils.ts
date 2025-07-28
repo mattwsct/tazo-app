@@ -44,6 +44,12 @@ class SimpleCache {
 
 const apiCache = new SimpleCache();
 
+// Clear cache on page load to ensure fresh data
+if (typeof window !== 'undefined') {
+  // Clear cache when page loads/refreshes
+  apiCache.clear();
+}
+
 // === ⏱️ API CONFIGURATION ===
 const API_CONFIG = {
   TIMEOUT: 10000, // 10 seconds
@@ -88,6 +94,45 @@ async function fetchWithRetry(
   }
 }
 
+// === 🌤️ WEATHER UTILITIES ===
+
+/**
+ * Maps WMO Weather Code to human-readable description
+ */
+function getWeatherDescription(wmoCode: number): string {
+  const descMap: Record<number, string> = {
+    0: 'clear sky',
+    1: 'mainly clear',
+    2: 'partly cloudy',
+    3: 'overcast',
+    45: 'fog',
+    48: 'depositing rime fog',
+    51: 'light drizzle',
+    53: 'moderate drizzle',
+    55: 'dense drizzle',
+    56: 'light freezing drizzle',
+    57: 'dense freezing drizzle',
+    61: 'slight rain',
+    63: 'moderate rain',
+    65: 'heavy rain',
+    66: 'light freezing rain',
+    67: 'heavy freezing rain',
+    71: 'slight snow fall',
+    73: 'moderate snow fall',
+    75: 'heavy snow fall',
+    77: 'snow grains',
+    80: 'slight rain showers',
+    81: 'moderate rain showers',
+    82: 'violent rain showers',
+    85: 'slight snow showers',
+    86: 'heavy snow showers',
+    95: 'thunderstorm',
+    96: 'thunderstorm with slight hail',
+    99: 'thunderstorm with heavy hail',
+  };
+  return descMap[wmoCode] || 'unknown';
+}
+
 // === 🌤️ WEATHER TYPES ===
 export interface WeatherData {
   temp: number;
@@ -114,7 +159,8 @@ export async function fetchLocationFromLocationIQ(
   apiKey: string
 ): Promise<LocationData | null> {
   // Check cache first (30 minute cache for location data)
-  const cacheKey = `location_${lat.toFixed(3)}_${lon.toFixed(3)}`;
+  // Use more precise cache key (6 decimal places instead of 3)
+  const cacheKey = `location_${lat.toFixed(6)}_${lon.toFixed(6)}`;
   const cached = apiCache.get<LocationData>(cacheKey);
   if (cached) {
     ApiLogger.info('locationiq', 'Using cached location data', { lat, lon });
@@ -132,8 +178,17 @@ export async function fetchLocationFromLocationIQ(
   try {
     ApiLogger.info('locationiq', 'Fetching location data', { lat, lon });
     
+    // Add cache busting timestamp and headers to prevent browser caching
+    const timestamp = Date.now();
     const response = await fetchWithRetry(
-      `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&accept-language=en`
+      `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&accept-language=en&_t=${timestamp}`,
+      {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      }
     );
     
     if (!response.ok) {
@@ -235,8 +290,8 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
       
       weather = {
         temp: Math.round(data.current.temperature_2m),
-        icon: mapWMOToOpenWeatherIcon(data.current.weather_code),
-        desc: mapWMOToDescription(data.current.weather_code),
+        icon: data.current.weather_code.toString(), // WMO code for day/night logic
+        desc: getWeatherDescription(data.current.weather_code), // Proper description
       };
       
       ApiLogger.info('openmeteo', 'Weather data received', weather);
