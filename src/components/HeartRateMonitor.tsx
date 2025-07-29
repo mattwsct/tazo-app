@@ -54,10 +54,9 @@ function getHeartRateZone(bpm: number) {
 interface HeartRateMonitorProps {
   pulsoidToken?: string;
   onConnected?: () => void;
-  onVisibilityChange?: (isVisible: boolean) => void;
 }
 
-export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibilityChange }: HeartRateMonitorProps) {
+export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRateMonitorProps) {
   // Heart rate state
   const [heartRate, setHeartRate] = useState<HeartRateState>({
     bpm: 0,
@@ -241,6 +240,22 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
           if (isDestroyed) return;
           
           HeartRateLogger.info('Pulsoid WebSocket connection closed');
+          
+          // Immediately clear heart rate data when connection is lost
+          setHeartRate(prev => ({ ...prev, bpm: 0, isConnected: false }));
+          setSmoothHeartRate(0);
+          setStableAnimationBpm(0);
+          
+          // Clear any existing timeouts
+          if (heartRateTimeout.current) {
+            clearTimeout(heartRateTimeout.current);
+            heartRateTimeout.current = null;
+          }
+          if (animationUpdateTimeout.current) {
+            clearTimeout(animationUpdateTimeout.current);
+            animationUpdateTimeout.current = null;
+          }
+          
           updateConnectionState(false);
           isConnecting = false;
           
@@ -317,11 +332,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected, onVisibili
     };
       }, [pulsoidToken, onConnected, updateConnectionState]); // Include onConnected dependency
 
-  // Notify parent about visibility changes
-  useEffect(() => {
-    const isVisible = heartRate.isConnected && heartRate.bpm > 0;
-    onVisibilityChange?.(isVisible);
-  }, [heartRate.isConnected, heartRate.bpm, onVisibilityChange]);
+
 
   // Don't render if not connected or no BPM data
   if (!heartRate.isConnected || heartRate.bpm <= 0) {

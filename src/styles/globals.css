@@ -196,11 +196,6 @@ body.overlay-page {
   gap: var(--gap-sm);
 }
 
-/* When heart rate is visible, reduce gap for tighter spacing */
-.overlay-container.has-heart-rate {
-  gap: var(--gap-xs);
-}
-
 .heart-rate {
   color: white;
   /* Simplified text-shadow for OBS compatibility */
@@ -356,6 +351,13 @@ body.overlay-page {
   letter-spacing: 0.1em;
   opacity: 0.8;
   margin-right: -0.1em;
+  /* Simplified text-shadow for OBS compatibility */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .weather-icon,
@@ -365,6 +367,11 @@ body.overlay-page {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Simplified filter for OBS compatibility */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+  /* OBS-friendly rendering */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .weather-icon-fallback {

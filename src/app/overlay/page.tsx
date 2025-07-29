@@ -810,17 +810,6 @@ export default function OverlayPage() {
             
             <HeartRateMonitor 
               pulsoidToken={API_KEYS.PULSOID} 
-              onVisibilityChange={(isVisible) => {
-                // Add/remove class to overlay container based on heart rate visibility
-                const container = document.querySelector('.overlay-container');
-                if (container) {
-                  if (isVisible) {
-                    container.classList.add('has-heart-rate');
-                  } else {
-                    container.classList.remove('has-heart-rate');
-                  }
-                }
-              }}
             />
           </div>
         </div>

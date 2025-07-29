@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { kv } from '@vercel/kv';
 import { verifyAuth } from '@/lib/api-auth';
-import { addConnection, removeConnection, getConnectionInfo } from '@/lib/settings-broadcast';
+import { addConnection, removeConnection, getConnectionInfo, connections } from '@/lib/settings-broadcast';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
 export async function GET(request: NextRequest): Promise<Response> {
@@ -54,9 +54,16 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Function to send SSE data
       const sendSSE = (data: string) => {
         try {
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          // Check if connection is still valid before sending
+          if (connections.has(connectionId)) {
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+          } else {
+            console.log(`[SSE] Connection ${connectionId} no longer exists, skipping send`);
+          }
         } catch (error) {
           console.error(`[SSE] Failed to send data to ${connectionId}:`, error);
+          // Remove dead connection
+          removeConnection(connectionId);
         }
       };
       
