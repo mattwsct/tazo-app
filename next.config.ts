@@ -14,10 +14,9 @@ const nextConfig: NextConfig = {
     },
   }),
   
-  // Optimize images
+  // Disable image optimization to prevent Vercel transformations
   images: {
-    formats: ['image/webp', 'image/avif'],
-    minimumCacheTTL: 60,
+    unoptimized: true, // Disable Next.js image optimization
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },

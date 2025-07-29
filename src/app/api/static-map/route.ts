@@ -5,6 +5,27 @@ import { checkRateLimit } from '@/utils/overlay-utils';
 const mapCache = new Map<string, { data: ArrayBuffer; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Bandwidth tracking
+let totalBandwidthBytes = 0;
+const bandwidthStartTime = Date.now();
+
+function logBandwidthUsage(bytes: number) {
+  totalBandwidthBytes += bytes;
+  const hoursSinceStart = (Date.now() - bandwidthStartTime) / (1000 * 60 * 60);
+  const bytesPerHour = totalBandwidthBytes / hoursSinceStart;
+  const gbPerMonth = (bytesPerHour * 24 * 30) / (1024 * 1024 * 1024);
+  
+  if (totalBandwidthBytes % (1024 * 1024) === 0) { // Log every MB
+    console.log(`📊 Bandwidth: ${(totalBandwidthBytes / (1024 * 1024)).toFixed(1)}MB total`);
+    console.log(`📊 Bandwidth Rate: ${(bytesPerHour / (1024 * 1024)).toFixed(1)}MB/hour`);
+    console.log(`📊 Monthly Projection: ${gbPerMonth.toFixed(1)}GB (limit: 100GB)`);
+    
+    if (gbPerMonth > 80) {
+      console.warn(`🚨 HIGH BANDWIDTH PROJECTION: ${gbPerMonth.toFixed(1)}GB/month (limit: 100GB)`);
+    }
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const lat = searchParams.get('lat');
@@ -34,6 +55,7 @@ export async function GET(request: NextRequest) {
   const cached = mapCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
     console.log('Using cached map image for:', cacheKey);
+    logBandwidthUsage(cached.data.byteLength);
     return new NextResponse(cached.data, {
       headers: {
         'Content-Type': 'image/png',
@@ -62,24 +84,27 @@ export async function GET(request: NextRequest) {
     // Get the image data
     const imageBuffer = await response.arrayBuffer();
     
-    // Cache the result
-    mapCache.set(cacheKey, { data: imageBuffer, timestamp: Date.now() });
-    
-    // Clean up old cache entries (keep only last 100)
-    if (mapCache.size > 100) {
-      const entries = Array.from(mapCache.entries());
-      entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
-      entries.slice(100).forEach(([key]) => mapCache.delete(key));
-    }
-    
-    // Return the image with proper headers
-    return new NextResponse(imageBuffer, {
-      headers: {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
-        'X-Cache': 'MISS',
-      },
-    });
+                    // Cache the result
+                mapCache.set(cacheKey, { data: imageBuffer, timestamp: Date.now() });
+                
+                // Clean up old cache entries (keep only last 100)
+                if (mapCache.size > 100) {
+                  const entries = Array.from(mapCache.entries());
+                  entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+                  entries.slice(100).forEach(([key]) => mapCache.delete(key));
+                }
+                
+                // Track bandwidth usage
+                logBandwidthUsage(imageBuffer.byteLength);
+                
+                // Return the image with proper headers
+                return new NextResponse(imageBuffer, {
+                  headers: {
+                    'Content-Type': 'image/png',
+                    'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+                    'X-Cache': 'MISS',
+                  },
+                });
     
   } catch (error) {
     console.error('Static map proxy error:', error);

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from 'next/image';
 import { useState } from 'react';
 
 interface MapboxMinimapProps {
@@ -79,7 +78,7 @@ export default function MapboxMinimap({ lat, lon, isVisible }: MapboxMinimapProp
         justifyContent: "center",
       }}
     >
-      <Image
+      <img
         src={url}
         alt="Map preview"
         width={imageSize}

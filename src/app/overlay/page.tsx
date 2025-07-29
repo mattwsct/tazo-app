@@ -11,7 +11,6 @@ declare global {
 }
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
@@ -833,14 +832,11 @@ export default function OverlayPage() {
                 <div className="location">
                   {location.label}
                   {location.countryCode && (
-                    <Image
+                    <img
                       src={`https://flagcdn.com/${location.countryCode}.svg`}
                       alt={`Country: ${location.label}`}
                       width={32}
                       height={20}
-                      unoptimized
-                      priority
-                      loading="eager"
                       className="location-flag"
                     />
                   )}
@@ -867,16 +863,13 @@ export default function OverlayPage() {
                         </div>
                       </div>
                       <div className="weather-icon">
-                        <Image
+                        <img
                           src={`https://openweathermap.org/img/wn/${weatherIcon || '01d'}@4x.png`}
                           alt={`Weather: ${weather.desc}`}
                           width={24}
                           height={24}
-                          unoptimized
-                          priority
-                          loading="eager"
                           className="weather-icon"
-                          onError={(e) => {
+                          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                             // Fallback to a simple text representation if image fails
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';

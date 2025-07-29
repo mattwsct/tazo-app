@@ -61,7 +61,8 @@ async function handleGET() {
     
     // Combine settings with sub goal data
     const combinedSettings = {
-      ...(settings || DEFAULT_OVERLAY_SETTINGS),
+      ...DEFAULT_OVERLAY_SETTINGS,
+      ...(settings || {}),
       ...(subGoalData && { _subGoalData: subGoalData })
     };
     
@@ -83,20 +84,28 @@ async function handleGET() {
       }
     }
     
-    // Only update KV if we have new sub goal data that's different
+    // Only update KV if we have new sub goal data that's different AND it's been more than 5 minutes since last update
     if (shouldUpdateKV && subGoalData) {
-      const settingsWithSubGoal = {
-        ...(settings || DEFAULT_OVERLAY_SETTINGS),
-        _subGoalData: subGoalData
-      };
+      const lastModified = await kv.get('overlay_settings_modified') as number;
+      const timeSinceLastUpdate = Date.now() - (lastModified || 0);
+      const minUpdateInterval = 5 * 60 * 1000; // 5 minutes
       
-      // Batch KV operations to reduce calls
-      await Promise.all([
-        kv.set('overlay_settings', settingsWithSubGoal),
-        kv.set('overlay_settings_modified', Date.now())
-      ]);
-      logKVUsage('write');
-      console.log('🔍 Get-settings API: Updated KV with new sub goal data');
+      if (timeSinceLastUpdate > minUpdateInterval) {
+        const settingsWithSubGoal = {
+          ...(settings || DEFAULT_OVERLAY_SETTINGS),
+          _subGoalData: subGoalData
+        };
+        
+        // Batch KV operations to reduce calls
+        await Promise.all([
+          kv.set('overlay_settings', settingsWithSubGoal),
+          kv.set('overlay_settings_modified', Date.now())
+        ]);
+        logKVUsage('write');
+        console.log('🔍 Get-settings API: Updated KV with new sub goal data');
+      } else {
+        console.log('🔍 Get-settings API: Skipped KV update (too recent)');
+      }
     }
     
     console.log('🔍 Get-settings API: Final combined settings:', combinedSettings);
@@ -105,7 +114,8 @@ async function handleGET() {
     
     return NextResponse.json(combinedSettings);
   } catch {
-    return NextResponse.json({ error: 'Failed to load settings' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to load settings' },
+      { status: 500 });
   }
 }
 
