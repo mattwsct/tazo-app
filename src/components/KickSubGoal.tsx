@@ -241,16 +241,9 @@ export default function KickSubGoal({
       timestamp: subGoalData.lastUpdate || Date.now()
     } : null) : latestSub;
 
-
-
-  // Note: Kick.com webhook and events stream endpoints were removed during cleanup
-  // This component now only displays static data for demonstration purposes
   useEffect(() => {
     if (!isVisible || !channelName) return;
 
-    // For now, we'll just simulate some connection status
-    // setIsConnected(false); // This line was removed as per the edit hint
-    
     OverlayLogger.overlay('Kick.com integration disabled - endpoints removed during cleanup', { channelName });
   }, [isVisible, channelName]);
 

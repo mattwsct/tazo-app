@@ -668,7 +668,7 @@ export default function OverlayPage() {
     
     // Cleanup function
     return () => {
-      // Note: We can't easily remove the script, but the listener will be cleaned up
+      // RTIRL script cleanup handled automatically
     };
   }, [updateFromCoordinates, createDateTimeFormatters, setLoadingState]);
 

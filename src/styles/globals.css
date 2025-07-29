@@ -80,20 +80,27 @@ body.overlay-page {
 /* === SHARED CONTAINER STYLES === */
 .overlay-container {
   background: linear-gradient(135deg, 
-    rgba(30, 20, 60, 0.65) 0%, 
-    rgba(20, 30, 50, 0.65) 50%, 
-    rgba(40, 20, 80, 0.65) 100%);
-  backdrop-filter: blur(16px);
+    rgba(30, 20, 60, 0.85) 0%, 
+    rgba(20, 30, 50, 0.85) 50%, 
+    rgba(40, 20, 80, 0.85) 100%);
+  /* Removed backdrop-filter for OBS compatibility */
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   padding: var(--gap-xl) var(--gap-3xl);
   color: white;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+  /* Simplified text-shadow for OBS compatibility */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+  /* Simplified box-shadow for OBS compatibility */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   width: fit-content;
   font-weight: 600;
   display: flex;
   flex-direction: column;
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* Hide container when it has no visible children */
@@ -196,7 +203,8 @@ body.overlay-page {
 
 .heart-rate {
   color: white;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+  /* Simplified text-shadow for OBS compatibility */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -205,6 +213,11 @@ body.overlay-page {
   line-height: 1.2;
   min-height: var(--font-size-lg);
   width: 100%;
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .heart-rate-content {
@@ -225,6 +238,20 @@ body.overlay-page {
   width: var(--font-size-lg);
   flex-shrink: 0;
   transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Ensure SVG renders crisp in OBS */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.heart-rate-icon svg {
+  width: 100%;
+  height: 100%;
+  /* Ensure SVG renders properly in OBS */
+  shape-rendering: geometricPrecision;
+  text-rendering: optimizeLegibility;
 }
 
 .heart-rate-icon.beating {
@@ -245,8 +272,13 @@ body.overlay-page {
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
-  transition: color 0.5s ease, text-shadow 0.5s ease;
+  transition: color 0.5s ease;
   margin: 0;
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .heart-rate-label {
@@ -277,7 +309,11 @@ body.overlay-page {
   width: 40px;
   height: 25px;
   border-radius: var(--radius-sm);
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
+  /* Simplified filter for OBS compatibility */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+  /* OBS-friendly rendering */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* === WEATHER DISPLAY STYLES === */
@@ -527,20 +563,27 @@ body.overlay-page {
 
 .kick-sub-goal-container {
   background: linear-gradient(135deg, 
-    rgba(30, 20, 60, 0.65) 0%, 
-    rgba(20, 30, 50, 0.65) 50%, 
-    rgba(40, 20, 80, 0.65) 100%);
-  backdrop-filter: blur(16px);
+    rgba(30, 20, 60, 0.85) 0%, 
+    rgba(20, 30, 50, 0.85) 50%, 
+    rgba(40, 20, 80, 0.85) 100%);
+  /* Removed backdrop-filter for OBS compatibility */
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   padding: var(--gap-xl) var(--gap-3xl);
   color: white;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+  /* Simplified text-shadow for OBS compatibility */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+  /* Simplified box-shadow for OBS compatibility */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   font-weight: 600;
   display: flex;
   flex-direction: column;
   gap: var(--gap-md);
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .kick-sub-goal-header {
@@ -604,8 +647,14 @@ body.overlay-page {
   color: white;
   font-weight: 700;
   font-size: var(--font-size-sm);
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+  /* Simplified text-shadow for OBS compatibility */
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
   min-width: 60px;
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .progress-fill.goal-reached {
@@ -796,7 +845,13 @@ body.overlay-page {
   font-size: 14px;
   font-weight: 700;
   color: #00ff88;
-  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+  /* Simplified text-shadow for OBS compatibility */
+  text-shadow: 0 0 5px rgba(0, 255, 136, 0.8);
+  /* OBS-friendly rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* Animations */

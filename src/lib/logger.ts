@@ -7,6 +7,8 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 const LOG_CONFIG = {
   level: (process.env.NODE_ENV === 'production' ? 'warn' : 'debug') as LogLevel,
   enableConsole: process.env.NODE_ENV !== 'test',
+  // Reduce logging frequency in production
+  productionLogInterval: 100, // Log every 100th operation in production
 } as const;
 
 // Log level priorities
@@ -17,11 +19,22 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
+// Production logging counter
+let productionLogCounter = 0;
+
 /**
  * Check if log level should be output
  */
 function shouldLog(level: LogLevel): boolean {
-  return LOG_LEVELS[level] >= LOG_LEVELS[LOG_CONFIG.level];
+  const baseCheck = LOG_LEVELS[level] >= LOG_LEVELS[LOG_CONFIG.level];
+  
+  // In production, reduce frequency of info/debug logs
+  if (process.env.NODE_ENV === 'production' && level === 'info') {
+    productionLogCounter++;
+    return baseCheck && (productionLogCounter % LOG_CONFIG.productionLogInterval === 0);
+  }
+  
+  return baseCheck;
 }
 
 /**
