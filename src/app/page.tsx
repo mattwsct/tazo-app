@@ -23,14 +23,32 @@ export default function AdminPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await authenticatedFetch('/api/get-settings');
+        // Add timeout to prevent infinite loading
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        const res = await authenticatedFetch('/api/get-settings', {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
         if (res.ok) {
           setIsAuthenticated(true);
         } else if (res.status === 401) {
           router.push('/login');
           return;
+        } else {
+          // Handle other HTTP errors
+          console.error('Authentication check failed with status:', res.status);
+          router.push('/login');
+          return;
         }
-      } catch {
+      } catch (error) {
+        console.error('Authentication check error:', error);
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.error('Authentication check timed out');
+        }
         router.push('/login');
         return;
       }
@@ -41,7 +59,16 @@ export default function AdminPage() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const res = await authenticatedFetch('/api/get-settings');
+      // Add timeout to prevent infinite loading
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      const res = await authenticatedFetch('/api/get-settings', {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
       if (!res.ok) {
         if (res.status === 401) {
           router.push('/login');
@@ -59,6 +86,9 @@ export default function AdminPage() {
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.error('Settings load timed out');
+      }
     } finally {
       setIsLoading(false);
     }
