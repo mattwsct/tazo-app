@@ -7,6 +7,7 @@ export interface OverlaySettings {
   showWeather: boolean;
   showMinimap: boolean;
   minimapSpeedBased: boolean;
+  showSpeed: boolean;
   showKickSubGoal: boolean;
   kickDailySubGoal: number;
   kickChannelName: string;
@@ -22,6 +23,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showWeather: true,
   showMinimap: false,
   minimapSpeedBased: false,
+  showSpeed: true,
   showKickSubGoal: false,
   kickDailySubGoal: 10,
   kickChannelName: 'Tazo',
@@ -37,6 +39,7 @@ export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'
   showWeather: 'boolean',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',
+  showSpeed: 'boolean',
   showKickSubGoal: 'boolean',
   kickDailySubGoal: 'number',
   kickChannelName: 'string',

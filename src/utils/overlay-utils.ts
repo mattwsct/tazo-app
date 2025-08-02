@@ -106,9 +106,15 @@ interface RateLimit {
 }
 
 export const RATE_LIMITS: Record<string, RateLimit> = {
-  openmeteo: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 300 }, // Reduced from 600 to 300
-  locationiq: { calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 1 }, // Reduced from 2 to 1
-  mapbox: { calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 30 }, // 30 requests per minute
+  openmeteo: { 
+    calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 600 // 600 per minute (10 per second)
+  },
+  locationiq: { 
+    calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2 // 2 per second (free tier limit)
+  },
+  mapbox: { 
+    calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 30 // 30 per minute
+  },
 } as const;
 
 /**
@@ -118,11 +124,13 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
   const limit = RATE_LIMITS[api];
   const now = Date.now();
   
+  // Reset limits when interval expires
   if (now - limit.lastReset > limit.resetInterval) {
     limit.calls = 0;
     limit.lastReset = now;
   }
   
+  // Check if limit reached
   if (limit.calls >= limit.max) {
     return false;
   }

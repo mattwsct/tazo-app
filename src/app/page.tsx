@@ -325,6 +325,23 @@ export default function AdminPage() {
             </div>
           </section>
 
+          {/* Speed Section */}
+          <section className="settings-section">
+            <h2>🏃 Speed Indicator</h2>
+            
+            <Toggle
+              checked={settings.showSpeed}
+              onChange={(checked) => handleSettingsChange({ showSpeed: checked })}
+              label="Show Speed Indicator"
+            />
+            
+            {settings.showSpeed && (
+              <div className="setting-info">
+                <p>Speed indicator will only appear when traveling above 10 km/h for 2 consecutive readings.</p>
+              </div>
+            )}
+          </section>
+
           {/* Kick Integration Section */}
           <section className="settings-section">
             <h2>🎯 Kick.com Integration</h2>

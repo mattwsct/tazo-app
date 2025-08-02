@@ -28,24 +28,19 @@ const HEART_RATE_CONFIG = {
 
 
 
-// Heart rate zones and color mapping
+// Heart rate zones and color mapping - Medical research-based zones (optimized for dark overlays)
 const HEART_RATE_ZONES = {
-  NEUTRAL: { min: 0, max: 40, color: '#808080', name: 'Neutral' },       // Gray (neutral/error state)
-  RESTING: { min: 40, max: 60, color: '#87CEEB', name: 'Resting' },      // Light blue
-  NORMAL: { min: 60, max: 100, color: '#FFFFFF', name: 'Normal' },       // White
-  ELEVATED: { min: 100, max: 120, color: '#FFFF99', name: 'Elevated' },  // Light yellow
-  HIGH: { min: 120, max: 140, color: '#FFA500', name: 'High' },          // Orange
-  VERY_HIGH: { min: 140, max: 200, color: '#FF0000', name: 'Very High' }, // Red
+  VERY_LOW: { min: 0, max: 49, color: '#3B82F6', name: 'Very Low' },     // Brighter blue for better visibility
+  RESTING: { min: 50, max: 59, color: '#60A5FA', name: 'Resting' },      // Light blue for better contrast
+  NORMAL: { min: 60, max: 99, color: '#FFFFFF', name: 'Normal' },        // White
+  ELEVATED: { min: 100, max: 139, color: '#FFB3B3', name: 'Elevated' },  // Light red
+  HIGH: { min: 140, max: 179, color: '#FF6B6B', name: 'High' },          // Red
+  VERY_HIGH: { min: 180, max: 200, color: '#DC2626', name: 'Very High' }, // Dark red
 } as const;
 
 // Function to get heart rate zone and color
 function getHeartRateZone(bpm: number) {
-  if (bpm < HEART_RATE_ZONES.NEUTRAL.max) return HEART_RATE_ZONES.NEUTRAL;
-  if (bpm < HEART_RATE_ZONES.RESTING.max) return HEART_RATE_ZONES.RESTING;
-  if (bpm < HEART_RATE_ZONES.NORMAL.max) return HEART_RATE_ZONES.NORMAL;
-  if (bpm < HEART_RATE_ZONES.ELEVATED.max) return HEART_RATE_ZONES.ELEVATED;
-  if (bpm < HEART_RATE_ZONES.HIGH.max) return HEART_RATE_ZONES.HIGH;
-  return HEART_RATE_ZONES.VERY_HIGH;
+  return Object.values(HEART_RATE_ZONES).find(zone => bpm >= zone.min && bpm <= zone.max) || HEART_RATE_ZONES.VERY_HIGH;
 }
 
 
@@ -353,7 +348,10 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     <ErrorBoundary>
       <div className="heart-rate-wrapper">
         <div className="heart-rate">
-          <div className="heart-rate-content">
+          <div 
+            className="heart-rate-content"
+            style={{ color: heartRateZone.color }}
+          >
             <div 
               className="heart-rate-icon beating"
               style={{
@@ -365,21 +363,17 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 height="24" 
                 viewBox="0 0 24 24" 
                 fill="currentColor"
-                style={{ color: heartRateZone.color }}
               >
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </div>
             <div className="heart-rate-text">
-              <span 
-                className="heart-rate-value"
-                style={{ 
-                  color: heartRateZone.color
-                }}
-              >
+              <span className="heart-rate-value">
                 {currentBpm}
               </span>
-              <span className="heart-rate-label">BPM</span>
+              <span className="heart-rate-label">
+                BPM
+              </span>
             </div>
           </div>
         </div>

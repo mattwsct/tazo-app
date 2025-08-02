@@ -38,45 +38,55 @@ const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
   loading: () => <div />
 });
 
-function getWeatherIcon(wmoCode: string, timezone: string | null, sunrise: string | null, sunset: string | null): string {
-  // Convert WMO code to OpenWeather format for proper icons
-  const wmoToOpenWeather: Record<string, string> = {
-    '0': '01',    // Clear sky
-    '1': '02',    // Mainly clear
-    '2': '03',    // Partly cloudy
-    '3': '04',    // Overcast
-    '45': '50',   // Fog
-    '48': '50',   // Depositing rime fog
-    '51': '09',   // Light drizzle
-    '53': '09',   // Moderate drizzle
-    '55': '09',   // Dense drizzle
-    '56': '13',   // Light freezing drizzle
-    '57': '13',   // Dense freezing drizzle
-    '61': '10',   // Slight rain
-    '63': '10',   // Moderate rain
-    '65': '10',   // Heavy rain
-    '66': '13',   // Light freezing rain
-    '67': '13',   // Heavy freezing rain
-    '71': '13',   // Slight snow fall
-    '73': '13',   // Moderate snow fall
-    '75': '13',   // Heavy snow fall
-    '77': '13',   // Snow grains
-    '80': '09',   // Slight rain showers
-    '81': '09',   // Moderate rain showers
-    '82': '09',   // Violent rain showers
-    '85': '13',   // Slight snow showers
-    '86': '13',   // Heavy snow showers
-    '95': '11',   // Thunderstorm
-    '96': '11',   // Thunderstorm with slight hail
-    '99': '11',   // Thunderstorm with heavy hail
-  };
+// Move static objects outside component to prevent recreation on every render
+const WMO_TO_OPENWEATHER: Record<string, string> = {
+  '0': '01',    // Clear sky
+  '1': '02',    // Mainly clear
+  '2': '03',    // Partly cloudy
+  '3': '04',    // Overcast
+  '45': '50',   // Fog
+  '48': '50',   // Depositing rime fog
+  '51': '09',   // Light drizzle
+  '53': '09',   // Moderate drizzle
+  '55': '09',   // Dense drizzle
+  '56': '13',   // Light freezing drizzle
+  '57': '13',   // Dense freezing drizzle
+  '61': '10',   // Slight rain
+  '63': '10',   // Moderate rain
+  '65': '10',   // Heavy rain
+  '66': '13',   // Light freezing rain
+  '67': '13',   // Heavy freezing rain
+  '71': '13',   // Slight snow fall
+  '73': '13',   // Moderate snow fall
+  '75': '13',   // Heavy snow fall
+  '77': '13',   // Snow grains
+  '80': '09',   // Slight rain showers
+  '81': '09',   // Moderate rain showers
+  '82': '09',   // Violent rain showers
+  '85': '13',   // Slight snow showers
+  '86': '13',   // Heavy snow showers
+  '95': '11',   // Thunderstorm
+  '96': '11',   // Thunderstorm with slight hail
+  '99': '11',   // Thunderstorm with heavy hail
+} as const;
 
-  const baseIcon = wmoToOpenWeather[wmoCode] || '01';
+const WEATHER_FALLBACK_MAP: Record<string, string> = {
+  '0': '☀️', '1': '🌤️', '2': '⛅', '3': '☁️',
+  '45': '🌫️', '48': '🌫️', '51': '🌦️', '53': '🌦️', '55': '🌧️',
+  '56': '🌨️', '57': '🌨️', '61': '🌧️', '63': '🌧️', '65': '🌧️',
+  '66': '🌨️', '67': '🌨️', '71': '🌨️', '73': '🌨️', '75': '🌨️',
+  '77': '🌨️', '80': '🌦️', '81': '🌧️', '82': '🌧️', '85': '🌨️',
+  '86': '🌨️', '95': '⛈️', '96': '⛈️', '99': '⛈️'
+} as const;
+
+function getWeatherIcon(wmoCode: string, timezone: string | null, sunrise: string | null, sunset: string | null): string {
+  const baseIcon = WMO_TO_OPENWEATHER[wmoCode] || '01';
   
   // Determine if it's day or night
   if (!timezone) return baseIcon + 'd';
 
   try {
+    // Get current time in the location's timezone for accurate day/night detection
     const now = new Date();
     const currentLocal = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
     let isDay = true;
@@ -96,25 +106,32 @@ function getWeatherIcon(wmoCode: string, timezone: string | null, sunrise: strin
   }
 }
 
+// Temperature zones and color mapping - Research-based comfort zones
+const TEMPERATURE_ZONES = {
+  VERY_COLD: { min: -50, max: 9, color: '#1E3A8A', name: 'Very Cold' },      // Dark blue
+  COLD: { min: 10, max: 17, color: '#4A90E2', name: 'Cold' },                // Blue
+  COMFORTABLE: { min: 18, max: 23, color: '#FFFFFF', name: 'Comfortable' },  // White
+  WARM: { min: 24, max: 27, color: '#FFB3B3', name: 'Warm' },                // Light red
+  HOT: { min: 28, max: 34, color: '#FF6B6B', name: 'Hot' },                  // Red
+  VERY_HOT: { min: 35, max: 50, color: '#DC2626', name: 'Very Hot' },        // Dark red
+} as const;
+
+// Function to get temperature zone and color
+function getTemperatureZone(temp: number) {
+  return Object.values(TEMPERATURE_ZONES).find(zone => temp >= zone.min && temp <= zone.max) || TEMPERATURE_ZONES.VERY_HOT;
+}
+
 function getWeatherFallback(wmoCode: string): string {
-  // Simple fallback symbols for when weather icons fail to load
-  const fallbackMap: Record<string, string> = {
-    '0': '☀️', '1': '🌤️', '2': '⛅', '3': '☁️',
-    '45': '🌫️', '48': '🌫️', '51': '🌦️', '53': '🌦️', '55': '🌧️',
-    '56': '🌨️', '57': '🌨️', '61': '🌧️', '63': '🌧️', '65': '🌧️',
-    '66': '🌨️', '67': '🌨️', '71': '🌨️', '73': '🌨️', '75': '🌨️',
-    '77': '🌨️', '80': '🌦️', '81': '🌧️', '82': '🌧️', '85': '🌨️',
-    '86': '🌨️', '95': '⛈️', '96': '⛈️', '99': '⛈️'
-  };
-  return fallbackMap[wmoCode] || '🌤️';
+  return WEATHER_FALLBACK_MAP[wmoCode] || '🌤️';
 }
 
 const TIMERS = {
   WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes (unchanged - Open-Meteo is generous: 600/min)
   LOCATION_UPDATE: 60000, // 60s - LocationIQ is very strict (2/sec, so we're conservative)
   OVERLAY_FADE_TIMEOUT: 5000,
-  MINIMAP_HIDE_DELAY: 15000, // 15s - reduced from 30s for faster hiding
-  SPEED_HIDE_DELAY: 3000, // 3s - reduced from 5s for more responsive hiding
+  MINIMAP_HIDE_DELAY: 10000, // 10s - consistent with speed indicator
+  SPEED_HIDE_DELAY: 10000, // 10s - consistent with minimap
+  SPEED_DATA_TIMEOUT: 10000, // 10s - hide minimap if no speed data for 10 seconds
   API_COOLDOWN: 60000, // 60s - more conservative for LocationIQ rate limits (2/sec)
   FIRST_LOAD_API_COOLDOWN: 10000, // 10s for first load - more conservative for rate limits
 } as const;
@@ -146,13 +163,15 @@ export default function OverlayPage() {
   // Filter out RTIRL Firebase cookie warnings to clean up console
   useEffect(() => {
     const originalWarn = console.warn;
-    console.warn = (...args) => {
+    const filteredWarn = (...args: Parameters<typeof console.warn>) => {
       const message = args[0];
       if (typeof message === 'string' && message.includes('Cookie "" has been rejected as third-party')) {
         return; // Suppress RTIRL cookie warnings
       }
       originalWarn.apply(console, args);
     };
+    
+    console.warn = filteredWarn;
 
     return () => {
       console.warn = originalWarn;
@@ -164,6 +183,7 @@ export default function OverlayPage() {
   const [location, setLocation] = useState<{ label: string; countryCode: string; originalData?: LocationData } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
   const [speed, setSpeed] = useState(0);
+  const [speedIndicatorVisible, setSpeedIndicatorVisible] = useState(false);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [sunrise, setSunrise] = useState<string | null>(null);
   const [sunset, setSunset] = useState<string | null>(null);
@@ -187,9 +207,28 @@ export default function OverlayPage() {
   const lastWeatherCoords = useRef<[number, number] | null>(null);
   const lastLocationUpdate = useRef(0);
   const minimapTimeout = useRef<NodeJS.Timeout | null>(null);
-  const speedBasedVisible = useRef(false);
-  const speedAboveThresholdCount = useRef(0);
-  const speedHideTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Minimap state management
+  const minimapState = useRef({
+    speedBasedVisible: false,
+    speedAboveThresholdCount: 0,
+    lastSpeedUpdate: 0,
+    currentMode: 'hidden' as 'hidden' | 'manual' | 'speed-based'
+  });
+  
+  // Speed indicator state management
+  const speedIndicatorState = useRef({
+    visible: false,
+    aboveThresholdCount: 0,
+    lastSpeedUpdate: 0
+  });
+  
+  // Timeout management
+  const timeouts = useRef({
+    speedHide: null as NodeJS.Timeout | null,
+    speedData: null as NodeJS.Timeout | null,
+    speedIndicatorHide: null as NodeJS.Timeout | null,
+    minimap: null as NodeJS.Timeout | null
+  });
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
   const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
   const currentSettings = useRef(settings);
@@ -198,8 +237,124 @@ export default function OverlayPage() {
   const lastWeatherAPICall = useRef(0);
   const lastLocationAPICall = useRef(0);
   const isFirstLoad = useRef(true); // Track if this is the first load
+  const timeIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const safeSettings = useMemo(() => ({ ...DEFAULT_OVERLAY_SETTINGS, ...settings }), [settings]);
+
+  // Helper functions for minimap state management
+  const clearAllTimeouts = useCallback(() => {
+    Object.values(timeouts.current).forEach(timeout => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    });
+    timeouts.current = {
+      speedHide: null,
+      speedData: null,
+      speedIndicatorHide: null,
+      minimap: null
+    };
+  }, []);
+
+  // Optimized timeout cleanup for specific timeout types
+  const clearTimeoutByType = useCallback((type: keyof typeof timeouts.current) => {
+    if (timeouts.current[type]) {
+      clearTimeout(timeouts.current[type]!);
+      timeouts.current[type] = null;
+    }
+  }, []);
+
+  const resetMinimapState = useCallback((mode: 'hidden' | 'manual' | 'speed-based') => {
+    minimapState.current = {
+      speedBasedVisible: false,
+      speedAboveThresholdCount: 0,
+      lastSpeedUpdate: minimapState.current.lastSpeedUpdate,
+      currentMode: mode
+    };
+    clearAllTimeouts();
+    
+    OverlayLogger.overlay(`Minimap state reset to mode: ${mode}`, {
+      previousMode: minimapState.current.currentMode,
+      newMode: mode
+    });
+  }, [clearAllTimeouts]);
+
+  const updateSpeedData = useCallback((newSpeed: number) => {
+    const now = Date.now();
+    minimapState.current.lastSpeedUpdate = now;
+    
+    // Clear any existing speed data timeout
+    if (timeouts.current.speedData) {
+      clearTimeout(timeouts.current.speedData);
+      timeouts.current.speedData = null;
+    }
+    
+    OverlayLogger.overlay('Speed data updated', {
+      speed: newSpeed,
+      timestamp: now
+    });
+  }, []);
+
+  const checkSpeedDataStale = useCallback(() => {
+    const timeSinceLastUpdate = Date.now() - minimapState.current.lastSpeedUpdate;
+    const isStale = timeSinceLastUpdate > TIMERS.SPEED_DATA_TIMEOUT;
+    
+    if (isStale) {
+      OverlayLogger.overlay('Speed data is stale', {
+        timeSinceLastUpdate,
+        timeout: TIMERS.SPEED_DATA_TIMEOUT,
+        isStale
+      });
+    }
+    
+    return { isStale, timeSinceLastUpdate };
+  }, []);
+
+  // Shared speed utilities
+  const getSpeedKmh = useCallback((speedMs: number) => speedMs * 3.6, []);
+  const isAboveSpeedThreshold = useCallback((speedKmh: number, threshold: number = 10) => speedKmh >= threshold, []);
+
+  // Shared logging function for speed visibility changes
+  const logSpeedVisibility = useCallback((action: 'shown' | 'hidden', element: 'Minimap' | 'Speed indicator', kmh: number) => {
+    const reason = action === 'shown' ? 'speed threshold' : 'speed drop';
+    OverlayLogger.overlay(`${element} ${action} due to ${reason}`, { 
+      speed: kmh, 
+      threshold: THRESHOLDS.SPEED_SHOW 
+    });
+  }, []);
+
+  // Speed indicator helper functions
+  const resetSpeedIndicatorState = useCallback(() => {
+    speedIndicatorState.current = {
+      visible: false,
+      aboveThresholdCount: 0,
+      lastSpeedUpdate: speedIndicatorState.current.lastSpeedUpdate
+    };
+    
+    if (timeouts.current.speedIndicatorHide) {
+      clearTimeout(timeouts.current.speedIndicatorHide);
+      timeouts.current.speedIndicatorHide = null;
+    }
+    
+    OverlayLogger.overlay('Speed indicator state reset', {
+      previousVisible: speedIndicatorState.current.visible,
+      newVisible: false
+    });
+  }, []);
+
+  const updateSpeedIndicatorData = useCallback((newSpeed: number) => {
+    const now = Date.now();
+    speedIndicatorState.current.lastSpeedUpdate = now;
+    
+    OverlayLogger.overlay('Speed indicator data updated', {
+      speed: newSpeed,
+      timestamp: now
+    });
+  }, []);
+
+  // Memoized speed values to prevent unnecessary recalculations
+  const speedKmh = useMemo(() => getSpeedKmh(speed), [speed, getSpeedKmh]);
+  const speedRounded = useMemo(() => Math.round(speedKmh), [speedKmh]);
 
   // Calculate adaptive distance threshold based on speed
   const getAdaptiveDistanceThreshold = useCallback((speedKmh: number): number => {
@@ -397,7 +552,7 @@ export default function OverlayPage() {
     
     // If speed-based mode is enabled, show only when moving
     if (settings.minimapSpeedBased) {
-      return speedBasedVisible.current && mapCoords;
+      return minimapState.current.speedBasedVisible && mapCoords;
     }
     
     // If manual mode is enabled, show when we have coordinates
@@ -441,7 +596,7 @@ export default function OverlayPage() {
           setSettings(data);
         }
       } catch (error) {
-        console.error('Overlay: Failed to parse SSE message:', error);
+        OverlayLogger.error('Failed to parse SSE message:', error);
       }
     };
     
@@ -468,35 +623,24 @@ export default function OverlayPage() {
 
   useEffect(() => {
     // Reset minimap state when settings change
-    if (settings.minimapSpeedBased) {
-      // Speed-based mode: start hidden
-      speedBasedVisible.current = false;
-      speedAboveThresholdCount.current = 0;
+    if (settings.locationDisplay === 'hidden') {
+      // Location is hidden: force hide minimap and reset all speed state
+      resetMinimapState('hidden');
       setMinimapOpacity(0);
-      if (speedHideTimeout.current) {
-        clearTimeout(speedHideTimeout.current);
-        speedHideTimeout.current = null;
-      }
+    } else if (settings.minimapSpeedBased) {
+      // Speed-based mode: start hidden
+      resetMinimapState('speed-based');
+      setMinimapOpacity(0);
     } else if (settings.showMinimap) {
       // Manual mode: start visible if we have coordinates
-      speedBasedVisible.current = false;
-      speedAboveThresholdCount.current = 0;
+      resetMinimapState('manual');
       setMinimapOpacity(1);
-      if (speedHideTimeout.current) {
-        clearTimeout(speedHideTimeout.current);
-        speedHideTimeout.current = null;
-      }
     } else {
       // Hidden mode: ensure hidden
-      speedBasedVisible.current = false;
-      speedAboveThresholdCount.current = 0;
+      resetMinimapState('hidden');
       setMinimapOpacity(0);
-      if (speedHideTimeout.current) {
-        clearTimeout(speedHideTimeout.current);
-        speedHideTimeout.current = null;
-      }
     }
-  }, [settings.minimapSpeedBased, settings.showMinimap, settings.locationDisplay]);
+  }, [settings.minimapSpeedBased, settings.showMinimap, settings.locationDisplay, resetMinimapState]);
 
   useEffect(() => {
     const hasRequiredSettings = settings.locationDisplay !== undefined && 
@@ -551,14 +695,21 @@ export default function OverlayPage() {
           }
         }, 60000);
         
-        return interval;
+        // Store interval reference for cleanup
+        timeIntervalRef.current = interval;
       }, msUntilNextMinute);
       
       return syncTimeout;
     }
     
     const timeout = setupNextSync();
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      if (timeIntervalRef.current) {
+        clearInterval(timeIntervalRef.current);
+        timeIntervalRef.current = null;
+      }
+    };
   }, [timezone]);
 
   useEffect(() => {
@@ -606,6 +757,8 @@ export default function OverlayPage() {
           // Handle speed data immediately
           if (typeof payload.speed === 'number') {
             setSpeed(payload.speed);
+            updateSpeedData(payload.speed);
+            updateSpeedIndicatorData(payload.speed);
           }
           
           // Handle timezone from RTIRL FIRST (before API calls)
@@ -670,7 +823,7 @@ export default function OverlayPage() {
     return () => {
       // RTIRL script cleanup handled automatically
     };
-  }, [updateFromCoordinates, createDateTimeFormatters, setLoadingState]);
+  }, [updateFromCoordinates, createDateTimeFormatters, setLoadingState, updateSpeedData, updateSpeedIndicatorData]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -688,7 +841,7 @@ export default function OverlayPage() {
           setSettings(DEFAULT_OVERLAY_SETTINGS);
         }
       } catch (error) {
-        console.error('Overlay: Failed to load settings, using defaults:', error);
+        OverlayLogger.error('Failed to load settings, using defaults:', error);
         setSettings(DEFAULT_OVERLAY_SETTINGS);
       }
     };
@@ -712,59 +865,184 @@ export default function OverlayPage() {
   }, [settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, mapCoords, shouldShowMinimap]);
 
   useEffect(() => {
-    // Reset speed-based state when mode changes
-    if (!settings.minimapSpeedBased) {
-      speedBasedVisible.current = false;
-      speedAboveThresholdCount.current = 0;
-      setMinimapOpacity(1);
-      if (speedHideTimeout.current) {
-        clearTimeout(speedHideTimeout.current);
-        speedHideTimeout.current = null;
-      }
+    // Reset speed-based state when mode changes or location is disabled
+    if (!settings.minimapSpeedBased || settings.locationDisplay === 'hidden') {
+      resetMinimapState('hidden');
+      setMinimapOpacity(0);
       return;
     }
 
-    // Only process speed-based logic if speed-based mode is enabled
-    if (settings.minimapSpeedBased) {
-      const kmh = speed * 3.6;
-      const isAboveThreshold = kmh >= THRESHOLDS.SPEED_SHOW;
+    // Only process speed-based logic if speed-based mode is enabled AND location is enabled
+    if (settings.minimapSpeedBased && settings.locationDisplay && (settings.locationDisplay === 'city' || settings.locationDisplay === 'state')) {
+      const kmh = getSpeedKmh(speed);
+      const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
 
       if (isAboveThreshold) {
-        speedAboveThresholdCount.current++;
+        minimapState.current.speedAboveThresholdCount++;
         
         // Show minimap when speed threshold is met (requires 2 readings to prevent false positives)
-        if (speedAboveThresholdCount.current >= 2) {
-          if (speedHideTimeout.current) {
-            clearTimeout(speedHideTimeout.current);
-            speedHideTimeout.current = null;
-          }
+        if (minimapState.current.speedAboveThresholdCount >= 2) {
+          clearTimeoutByType('speedHide');
           
-          if (!speedBasedVisible.current) {
-            speedBasedVisible.current = true;
+          if (!minimapState.current.speedBasedVisible) {
+            minimapState.current.speedBasedVisible = true;
             setMinimapOpacity(1);
+            logSpeedVisibility('shown', 'Minimap', kmh);
           }
         }
       } else {
-        speedAboveThresholdCount.current = 0;
+        minimapState.current.speedAboveThresholdCount = 0;
         
         // Hide minimap after brief delay when speed drops below threshold
-        if (speedBasedVisible.current && !speedHideTimeout.current) {
-          speedHideTimeout.current = setTimeout(() => {
-            speedBasedVisible.current = false;
+        if (minimapState.current.speedBasedVisible && !timeouts.current.speedHide) {
+          timeouts.current.speedHide = setTimeout(() => {
+            minimapState.current.speedBasedVisible = false;
             setMinimapOpacity(0);
-            speedHideTimeout.current = null;
+            timeouts.current.speedHide = null;
+            logSpeedVisibility('hidden', 'Minimap', kmh);
           }, TIMERS.SPEED_HIDE_DELAY);
         }
       }
     }
-  }, [speed, settings.minimapSpeedBased]);
+  }, [speed, settings.minimapSpeedBased, settings.locationDisplay, resetMinimapState, clearTimeoutByType, getSpeedKmh, isAboveSpeedThreshold, logSpeedVisibility]);
+
+  // Speed data timeout effect - hide minimap if no speed data for too long
+  useEffect(() => {
+    // Only apply timeout logic if speed-based mode is enabled and location is enabled
+    if (!settings.minimapSpeedBased || settings.locationDisplay === 'hidden') {
+      // Clear any existing timeout
+      if (timeouts.current.speedData) {
+        clearTimeout(timeouts.current.speedData);
+        timeouts.current.speedData = null;
+      }
+      return;
+    }
+
+    // Check if speed data is stale using helper function
+    const { isStale, timeSinceLastUpdate } = checkSpeedDataStale();
+
+    if (isStale && minimapState.current.speedBasedVisible) {
+      // Speed data is stale and minimap is visible - hide it
+      OverlayLogger.overlay('Speed data timeout - hiding minimap due to stale data', { 
+        timeSinceLastUpdate,
+        timeout: TIMERS.SPEED_DATA_TIMEOUT 
+      });
+      
+      minimapState.current.speedBasedVisible = false;
+      minimapState.current.speedAboveThresholdCount = 0;
+      setMinimapOpacity(0);
+      
+      // Clear any existing hide timeout
+      if (timeouts.current.speedHide) {
+        clearTimeout(timeouts.current.speedHide);
+        timeouts.current.speedHide = null;
+      }
+    } else if (!isStale && minimapState.current.speedBasedVisible) {
+      // Speed data is fresh and minimap is visible - set up timeout for next check
+      if (timeouts.current.speedData) {
+        clearTimeout(timeouts.current.speedData);
+      }
+      
+      timeouts.current.speedData = setTimeout(() => {
+        // This will trigger the effect again to check if data is stale
+        setSpeed(prev => prev); // Force re-evaluation
+      }, TIMERS.SPEED_DATA_TIMEOUT);
+    }
+
+    return () => {
+      if (timeouts.current.speedData) {
+        clearTimeout(timeouts.current.speedData);
+        timeouts.current.speedData = null;
+      }
+    };
+  }, [speed, settings.minimapSpeedBased, settings.locationDisplay, checkSpeedDataStale]);
+
+  // Speed indicator visibility logic
+  useEffect(() => {
+    // Reset speed indicator state when setting is disabled
+    if (!settings.showSpeed) {
+      resetSpeedIndicatorState();
+      setSpeedIndicatorVisible(false);
+      return;
+    }
+
+    // Only process speed indicator logic if speed setting is enabled
+    if (settings.showSpeed) {
+      const kmh = getSpeedKmh(speed);
+      const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
+
+      if (isAboveThreshold) {
+        speedIndicatorState.current.aboveThresholdCount++;
+        
+        // Show speed indicator when threshold is met (requires 2 readings to prevent false positives)
+        if (speedIndicatorState.current.aboveThresholdCount >= 2) {
+          clearTimeoutByType('speedIndicatorHide');
+          
+          if (!speedIndicatorState.current.visible) {
+            speedIndicatorState.current.visible = true;
+            setSpeedIndicatorVisible(true);
+            logSpeedVisibility('shown', 'Speed indicator', kmh);
+          }
+        }
+      } else {
+        speedIndicatorState.current.aboveThresholdCount = 0;
+        
+        // Hide speed indicator after brief delay when speed drops below threshold
+        if (speedIndicatorState.current.visible && !timeouts.current.speedIndicatorHide) {
+          timeouts.current.speedIndicatorHide = setTimeout(() => {
+            speedIndicatorState.current.visible = false;
+            setSpeedIndicatorVisible(false);
+            timeouts.current.speedIndicatorHide = null;
+            logSpeedVisibility('hidden', 'Speed indicator', kmh);
+          }, TIMERS.SPEED_HIDE_DELAY);
+        }
+      }
+    }
+  }, [speed, settings.showSpeed, resetSpeedIndicatorState, clearTimeoutByType, getSpeedKmh, isAboveSpeedThreshold, logSpeedVisibility]);
+
+  // Speed indicator timeout effect - hide if no speed data for too long
+  useEffect(() => {
+    // Only apply timeout logic if speed setting is enabled
+    if (!settings.showSpeed) {
+      return;
+    }
+
+    // Check if speed data is stale (no updates for SPEED_DATA_TIMEOUT)
+    const timeSinceLastSpeedUpdate = Date.now() - speedIndicatorState.current.lastSpeedUpdate;
+    const isSpeedDataStale = timeSinceLastSpeedUpdate > TIMERS.SPEED_DATA_TIMEOUT;
+
+    if (isSpeedDataStale && speedIndicatorState.current.visible) {
+      // Speed data is stale and indicator is visible - hide it
+      OverlayLogger.overlay('Speed indicator timeout - hiding due to stale data', { 
+        timeSinceLastUpdate: timeSinceLastSpeedUpdate,
+        timeout: TIMERS.SPEED_DATA_TIMEOUT 
+      });
+      
+      speedIndicatorState.current.visible = false;
+      speedIndicatorState.current.aboveThresholdCount = 0;
+      setSpeedIndicatorVisible(false);
+      
+      // Clear any existing hide timeout
+      if (timeouts.current.speedIndicatorHide) {
+        clearTimeout(timeouts.current.speedIndicatorHide);
+        timeouts.current.speedIndicatorHide = null;
+      }
+    }
+
+    return () => {
+      if (timeouts.current.speedIndicatorHide) {
+        clearTimeout(timeouts.current.speedIndicatorHide);
+        timeouts.current.speedIndicatorHide = null;
+      }
+    };
+  }, [speed, settings.showSpeed]);
 
   useEffect(() => {
     const overlayTimeout = setTimeout(() => {
       const hasConfiguredElements = currentSettings.current.locationDisplay || 
                                    currentSettings.current.showWeather || 
                                    (currentSettings.current.showMinimap || 
-                                    (currentSettings.current.minimapSpeedBased && speedBasedVisible.current));
+                                    (currentSettings.current.minimapSpeedBased && minimapState.current.speedBasedVisible));
       
       const dataReady = !currentIsLoading.current.weather && 
                        !currentIsLoading.current.location && 
@@ -784,9 +1062,9 @@ export default function OverlayPage() {
     return () => {
       clearTimeout(overlayTimeout);
       if (minimapTimeout.current) clearTimeout(minimapTimeout.current);
-      if (speedHideTimeout.current) clearTimeout(speedHideTimeout.current);
+      clearAllTimeouts();
     };
-  }, []);
+  }, [clearAllTimeouts]);
 
   return (
     <ErrorBoundary>
@@ -847,7 +1125,13 @@ export default function OverlayPage() {
                         <div className="weather-description">
                           {weather.desc.toUpperCase()}
                         </div>
-                        <div className="weather-temperature">
+                        <div 
+                          className="weather-temperature"
+                          style={{ 
+                            color: getTemperatureZone(weather.temp).color,
+                            transition: 'color 0.5s ease'
+                          }}
+                        >
                           {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
                         </div>
                       </div>
@@ -878,6 +1162,15 @@ export default function OverlayPage() {
                       </div>
                     </div>
                   ) : null}
+                </div>
+              )}
+              
+              {/* Speed Indicator */}
+              {settings.showSpeed && speedIndicatorVisible && (
+                <div className="speed-indicator">
+                  <div className="speed-value">
+                    {speedRounded} km/h
+                  </div>
                 </div>
               )}
             </div>

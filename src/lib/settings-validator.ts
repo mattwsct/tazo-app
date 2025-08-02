@@ -60,6 +60,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
               showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
               showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
               minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
+              showSpeed: cleanSettings.showSpeed ?? DEFAULT_OVERLAY_SETTINGS.showSpeed,
               showKickSubGoal: cleanSettings.showKickSubGoal ?? DEFAULT_OVERLAY_SETTINGS.showKickSubGoal,
               kickDailySubGoal: cleanSettings.kickDailySubGoal ?? DEFAULT_OVERLAY_SETTINGS.kickDailySubGoal,
               kickChannelName: cleanSettings.kickChannelName ?? DEFAULT_OVERLAY_SETTINGS.kickChannelName,
