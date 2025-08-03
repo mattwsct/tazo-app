@@ -37,6 +37,13 @@ export function celsiusToFahrenheit(celsius: number): number {
 }
 
 /**
+ * Converts kilometers per hour to miles per hour
+ */
+export function kmhToMph(kmh: number): number {
+  return Math.round(kmh * 0.621371);
+}
+
+/**
  * Formats location data for overlay display
  * Follows user preference: City, Country OR State, Country (max 16 chars per field)
  */

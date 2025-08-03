@@ -163,7 +163,7 @@ body.overlay-page {
 /* === DATE DISPLAY STYLES === */
 .date {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
   line-height: 1;
   text-transform: uppercase;
@@ -278,7 +278,7 @@ body.overlay-page {
 
 .heart-rate-label {
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: 700;
   opacity: 0.9;
   line-height: 1;
   text-transform: uppercase;
@@ -343,7 +343,7 @@ body.overlay-page {
 .weather-description,
 .weather-temperature {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
   line-height: 1;
   display: flex;
@@ -385,7 +385,7 @@ body.overlay-page {
 /* === SPEED INDICATOR STYLES === */
 .speed-indicator {
   font-size: var(--font-size-base);
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
   line-height: 1.2;
   text-align: right;
@@ -404,7 +404,7 @@ body.overlay-page {
 
 .speed-value {
   font-size: var(--font-size-base);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
   margin: 0;

@@ -27,6 +27,7 @@ import {
   distanceInMeters,
   isValidCoordinate,
   celsiusToFahrenheit,
+  kmhToMph,
   LocationData,
 } from '@/utils/overlay-utils';
 import { OverlayLogger } from '@/lib/logger';
@@ -106,14 +107,14 @@ function getWeatherIcon(wmoCode: string, timezone: string | null, sunrise: strin
   }
 }
 
-// Temperature zones and color mapping - Research-based comfort zones
+// Temperature zones and color mapping - High contrast for dark overlays
 const TEMPERATURE_ZONES = {
-  VERY_COLD: { min: -50, max: 9, color: '#1E3A8A', name: 'Very Cold' },      // Dark blue
-  COLD: { min: 10, max: 17, color: '#4A90E2', name: 'Cold' },                // Blue
+  VERY_COLD: { min: -50, max: 9, color: '#87CEEB', name: 'Very Cold' },      // Light cyan
+  COLD: { min: 10, max: 17, color: '#ADD8E6', name: 'Cold' },                // Light blue
   COMFORTABLE: { min: 18, max: 23, color: '#FFFFFF', name: 'Comfortable' },  // White
-  WARM: { min: 24, max: 27, color: '#FFB3B3', name: 'Warm' },                // Light red
-  HOT: { min: 28, max: 34, color: '#FF6B6B', name: 'Hot' },                  // Red
-  VERY_HOT: { min: 35, max: 50, color: '#DC2626', name: 'Very Hot' },        // Dark red
+  WARM: { min: 24, max: 27, color: '#FFB347', name: 'Warm' },                // Light orange
+  HOT: { min: 28, max: 34, color: '#FF8C00', name: 'Hot' },                  // Orange
+  VERY_HOT: { min: 35, max: 50, color: '#FF4444', name: 'Very Hot' },        // Bright red
 } as const;
 
 // Function to get temperature zone and color
@@ -1169,7 +1170,7 @@ export default function OverlayPage() {
               {settings.showSpeed && speedIndicatorVisible && (
                 <div className="speed-indicator">
                   <div className="speed-value">
-                    {speedRounded} km/h
+                    {speedRounded} km/h / {kmhToMph(speedRounded)} mph
                   </div>
                 </div>
               )}

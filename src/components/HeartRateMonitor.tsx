@@ -28,14 +28,14 @@ const HEART_RATE_CONFIG = {
 
 
 
-// Heart rate zones and color mapping - Medical research-based zones (optimized for dark overlays)
+// Heart rate zones and color mapping - High contrast for dark overlays
 const HEART_RATE_ZONES = {
-  VERY_LOW: { min: 0, max: 49, color: '#3B82F6', name: 'Very Low' },     // Brighter blue for better visibility
-  RESTING: { min: 50, max: 59, color: '#60A5FA', name: 'Resting' },      // Light blue for better contrast
+  VERY_LOW: { min: 0, max: 49, color: '#87CEEB', name: 'Very Low' },     // Light cyan
+  RESTING: { min: 50, max: 59, color: '#ADD8E6', name: 'Resting' },      // Light blue
   NORMAL: { min: 60, max: 99, color: '#FFFFFF', name: 'Normal' },        // White
-  ELEVATED: { min: 100, max: 139, color: '#FFB3B3', name: 'Elevated' },  // Light red
-  HIGH: { min: 140, max: 179, color: '#FF6B6B', name: 'High' },          // Red
-  VERY_HIGH: { min: 180, max: 200, color: '#DC2626', name: 'Very High' }, // Dark red
+  ELEVATED: { min: 100, max: 139, color: '#FFB347', name: 'Elevated' },  // Light orange
+  HIGH: { min: 140, max: 179, color: '#FF8C00', name: 'High' },          // Orange
+  VERY_HIGH: { min: 180, max: 200, color: '#FF4444', name: 'Very High' }, // Bright red
 } as const;
 
 // Function to get heart rate zone and color
