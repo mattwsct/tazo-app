@@ -54,5 +54,5 @@ export function getWeatherFallback(wmoCode: string): string {
 
 // Temperature conversion
 export function celsiusToFahrenheit(celsius: number): number {
-  return (celsius * 9/5) + 32;
+  return Math.round((celsius * 9/5) + 32);
 } 
