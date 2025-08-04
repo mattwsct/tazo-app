@@ -11,7 +11,7 @@ export default function AdminPage() {
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [toast, setToast] = useState<{ type: 'saving' | 'saved' | 'error'; message: string } | null>(null);
 
   // Manual input states
   const [manualSubCount, setManualSubCount] = useState('');
@@ -119,7 +119,7 @@ export default function AdminPage() {
     }
     
     setSettings(mergedSettings);
-    setSaveStatus('saving');
+    setToast({ type: 'saving', message: 'Saving settings...' });
     try {
       const res = await authenticatedFetch('/api/save-settings', {
         method: 'POST',
@@ -127,11 +127,11 @@ export default function AdminPage() {
         body: JSON.stringify(mergedSettings),
       });
       if (!res.ok) throw new Error();
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 1500);
+      setToast({ type: 'saved', message: 'Settings saved successfully!' });
+      setTimeout(() => setToast(null), 2000);
     } catch {
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      setToast({ type: 'error', message: 'Failed to save settings' });
+      setTimeout(() => setToast(null), 3000);
     }
   }, [settings]);
 
@@ -147,9 +147,14 @@ export default function AdminPage() {
       if (res.ok) {
         setCurrentSubCount(count);
         setManualSubCount('');
+        setToast({ type: 'saved', message: 'Sub count updated!' });
+        setTimeout(() => setToast(null), 2000);
         loadSettings();
       }
-    } catch {}
+    } catch {
+      setToast({ type: 'error', message: 'Failed to update sub count' });
+      setTimeout(() => setToast(null), 3000);
+    }
   }, [manualSubCount, loadSettings]);
 
   const handleManualLatestSubUpdate = useCallback(async () => {
@@ -163,9 +168,14 @@ export default function AdminPage() {
       if (res.ok) {
         setCurrentLatestSub(manualLatestSub.trim());
         setManualLatestSub('');
+        setToast({ type: 'saved', message: 'Latest sub updated!' });
+        setTimeout(() => setToast(null), 2000);
         loadSettings();
       }
-    } catch {}
+    } catch {
+      setToast({ type: 'error', message: 'Failed to update latest sub' });
+      setTimeout(() => setToast(null), 3000);
+    }
   }, [manualLatestSub, loadSettings]);
 
   const openPreview = () => {
@@ -255,12 +265,17 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Status Bar */}
-      {saveStatus !== 'idle' && (
-        <div className={`status-bar ${saveStatus}`}>
-          {saveStatus === 'saving' && 'Saving changes...'}
-          {saveStatus === 'saved' && '✅ Settings saved!'}
-          {saveStatus === 'error' && '❌ Failed to save settings'}
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          <div className="toast-content">
+            <span className="toast-icon">
+              {toast.type === 'saving' && '⏳'}
+              {toast.type === 'saved' && '✅'}
+              {toast.type === 'error' && '❌'}
+            </span>
+            <span className="toast-message">{toast.message}</span>
+          </div>
         </div>
       )}
 
