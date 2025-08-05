@@ -32,14 +32,14 @@ export function getWeatherIcon(
   }
 }
 
-// Temperature zones and color mapping - High contrast for dark overlays
+// Temperature zones and color mapping - Matching heart rate colors exactly
 const TEMPERATURE_ZONES = {
-  VERY_COLD: { min: -50, max: 9, color: '#87CEEB', name: 'Very Cold' },      // Light cyan
-  COLD: { min: 10, max: 17, color: '#ADD8E6', name: 'Cold' },                // Light blue
-  COMFORTABLE: { min: 18, max: 23, color: '#FFFFFF', name: 'Comfortable' },  // White
-  WARM: { min: 24, max: 27, color: '#FFB347', name: 'Warm' },                // Light orange
-  HOT: { min: 28, max: 34, color: '#FF8C00', name: 'Hot' },                  // Orange
-  VERY_HOT: { min: 35, max: 50, color: '#FF4444', name: 'Very Hot' },        // Bright red
+  VERY_COLD: { min: -50, max: 9, color: '#87CEEB', name: 'Very Cold' },      // Light cyan (same as VERY_LOW)
+  COLD: { min: 10, max: 17, color: '#ADD8E6', name: 'Cold' },                // Light blue (same as RESTING)
+  COMFORTABLE: { min: 18, max: 23, color: '#FFFFFF', name: 'Comfortable' },  // White (same as NORMAL)
+  WARM: { min: 24, max: 27, color: '#FFB347', name: 'Warm' },                // Light orange (same as ELEVATED)
+  HOT: { min: 28, max: 34, color: '#FF8C00', name: 'Hot' },                  // Orange (same as HIGH)
+  VERY_HOT: { min: 35, max: 50, color: '#FF4444', name: 'Very Hot' },        // Bright red (same as VERY_HIGH)
 } as const;
 
 // Temperature zone detection

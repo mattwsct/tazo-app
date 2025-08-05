@@ -2,8 +2,38 @@ import { THRESHOLDS, SPEED_ANIMATION } from './overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
 
 // Speed conversion utilities
-export const getSpeedKmh = (speedMs: number): number => speedMs * 3.6;
-export const kmhToMph = (kmh: number): number => kmh * 0.621371;
+// RTIRL provides speed in meters per second (m/s)
+// Conversion: m/s * 3.6 = km/h
+export const getSpeedKmh = (speedMs: number): number => {
+  // Validate input
+  if (typeof speedMs !== 'number' || isNaN(speedMs) || speedMs < 0) {
+    OverlayLogger.warn('Invalid speed value received', { speedMs });
+    return 0;
+  }
+  
+  // Convert m/s to km/h
+  const kmh = speedMs * 3.6;
+  
+  // Log conversion for debugging
+  if (kmh > 10) { // Only log when speed is significant
+    OverlayLogger.overlay('Speed conversion', {
+      rawSpeedMs: speedMs,
+      convertedKmh: Math.round(kmh * 10) / 10
+    });
+  }
+  
+  return kmh;
+};
+
+export const kmhToMph = (kmh: number): number => {
+  // Validate input
+  if (typeof kmh !== 'number' || isNaN(kmh) || kmh < 0) {
+    return 0;
+  }
+  
+  // Convert km/h to mph
+  return kmh * 0.621371;
+};
 
 // Speed threshold utilities
 export const isAboveSpeedThreshold = (speedKmh: number, threshold: number = THRESHOLDS.SPEED_SHOW): boolean => 

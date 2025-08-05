@@ -676,6 +676,18 @@ export default function OverlayPage() {
           
           // Handle speed data immediately
           if (typeof payload.speed === 'number') {
+            // Debug logging for speed calculation
+            const rawSpeed = payload.speed;
+            const speedKmh = rawSpeed * 3.6;
+            const speedMph = speedKmh * 0.621371;
+            
+            OverlayLogger.overlay('RTIRL Speed Data Debug', {
+              rawSpeed,
+              speedKmh: Math.round(speedKmh * 10) / 10,
+              speedMph: Math.round(speedMph * 10) / 10,
+              timestamp: Date.now()
+            });
+            
             setSpeed(payload.speed);
             updateSpeedData(payload.speed);
             updateSpeedIndicatorData(payload.speed);
@@ -784,6 +796,7 @@ export default function OverlayPage() {
     }
   }, [settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, mapCoords, shouldShowMinimap]);
 
+  // Minimap visibility logic - requires 2 successful polls and hides after timeout
   useEffect(() => {
     // Reset speed-based state when mode changes or location is disabled
     if (!settings.minimapSpeedBased || settings.locationDisplay === 'hidden') {
@@ -800,8 +813,8 @@ export default function OverlayPage() {
       if (isAboveThreshold) {
         speedBasedElements.current.minimap.aboveThresholdCount++;
         
-        // Show minimap when speed threshold is met (requires 2 readings to prevent false positives)
-        if (speedBasedElements.current.minimap.aboveThresholdCount >= 2) {
+        // Show minimap when threshold is met (requires 2 readings to prevent false positives)
+        if (speedBasedElements.current.minimap.aboveThresholdCount >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
           clearTimeoutByType('speedHide');
           
           if (!speedBasedElements.current.minimap.visible) {
@@ -877,7 +890,7 @@ export default function OverlayPage() {
     };
   }, [speed, settings.minimapSpeedBased, settings.locationDisplay, checkSpeedDataStale]);
 
-  // Speed indicator visibility logic
+  // Speed indicator visibility logic - requires 2 successful polls and hides after timeout
   useEffect(() => {
     // Reset speed indicator state when setting is disabled
     if (!settings.showSpeed) {
@@ -895,7 +908,7 @@ export default function OverlayPage() {
         speedBasedElements.current.speedIndicator.aboveThresholdCount++;
         
         // Show speed indicator when threshold is met (requires 2 readings to prevent false positives)
-        if (speedBasedElements.current.speedIndicator.aboveThresholdCount >= 2) {
+        if (speedBasedElements.current.speedIndicator.aboveThresholdCount >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
           clearTimeoutByType('speedIndicatorHide');
           
           if (!speedBasedElements.current.speedIndicator.visible) {
@@ -920,19 +933,6 @@ export default function OverlayPage() {
     }
   }, [speed, settings.showSpeed, resetSpeedIndicatorState, clearTimeoutByType]);
 
-  // Optimized smooth speed transitions
-  useEffect(() => {
-    if (speed > 0 && speedIndicatorVisible) {
-      const currentSpeed = smoothSpeed || speed;
-      const targetSpeed = speed;
-      
-      // Use optimized animation function
-      const cleanup = animateSpeed(currentSpeed, targetSpeed);
-      
-      return cleanup;
-    }
-  }, [speed, speedIndicatorVisible, smoothSpeed, animateSpeed]);
-
   // Speed indicator timeout effect - hide if no speed data for too long
   useEffect(() => {
     if (!settings.showSpeed) return;
@@ -953,6 +953,21 @@ export default function OverlayPage() {
       clearTimeoutByType('speedIndicatorHide');
     }
   }, [speed, settings.showSpeed, clearTimeoutByType]);
+
+  // Optimized smooth speed transitions
+  useEffect(() => {
+    if (speed > 0 && speedIndicatorVisible) {
+      const currentSpeed = smoothSpeed || speed;
+      const targetSpeed = speed;
+      
+      // Use optimized animation function
+      const cleanup = animateSpeed(currentSpeed, targetSpeed);
+      
+      return cleanup;
+    }
+  }, [speed, speedIndicatorVisible, smoothSpeed, animateSpeed]);
+
+
 
   // Overlay visibility timeout
   useEffect(() => {
@@ -1081,19 +1096,19 @@ export default function OverlayPage() {
                 <div className="speed-indicator">
                   <div className="speed-content">
                     <div className="speed-value">
-                      {smoothSpeedKmh}
+                      {smoothSpeedMph}
                     </div>
                     <div className="speed-label">
-                      KM/H
+                      MPH
                     </div>
                   </div>
                   <div className="speed-separator">/</div>
                   <div className="speed-content">
                     <div className="speed-value">
-                      {smoothSpeedMph}
+                      {smoothSpeedKmh}
                     </div>
                     <div className="speed-label">
-                      MPH
+                      KM/H
                     </div>
                   </div>
                 </div>
