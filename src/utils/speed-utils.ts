@@ -1,4 +1,4 @@
-import { THRESHOLDS, SPEED_ANIMATION } from './overlay-constants';
+import { THRESHOLDS } from './overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
 
 // Speed conversion utilities
@@ -48,41 +48,6 @@ export const getAdaptiveDistanceThreshold = (speedKmh: number): number => {
   } else {
     return THRESHOLDS.LOCATION_DISTANCE; // Standard threshold
   }
-};
-
-// Speed animation utilities
-export const createSpeedAnimation = (
-  fromSpeed: number, 
-  toSpeed: number, 
-  onStep: (speed: number) => void,
-  onComplete: () => void
-): (() => void) => {
-  const speedDifference = Math.abs(toSpeed - fromSpeed);
-  
-  // Skip animation for small changes
-  if (speedDifference < SPEED_ANIMATION.THRESHOLD) {
-    onStep(toSpeed);
-    onComplete();
-    return () => {}; // No cleanup needed
-  }
-
-  const steps = SPEED_ANIMATION.STEPS;
-  const stepSize = (toSpeed - fromSpeed) / steps;
-  const stepDuration = SPEED_ANIMATION.STEP_DURATION;
-  
-  let step = 0;
-  const interval = setInterval(() => {
-    step++;
-    const newSpeed = fromSpeed + (stepSize * step);
-    onStep(newSpeed);
-    
-    if (step >= steps) {
-      clearInterval(interval);
-      onComplete();
-    }
-  }, stepDuration);
-  
-  return () => clearInterval(interval);
 };
 
 // Speed visibility logging

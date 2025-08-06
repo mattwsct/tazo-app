@@ -42,10 +42,8 @@ import {
 import {
   kmhToMph,
   getAdaptiveDistanceThreshold,
-  createSpeedAnimation,
   getSpeedKmh,
-  isAboveSpeedThreshold,
-  logSpeedVisibility
+  isAboveSpeedThreshold
 } from '@/utils/speed-utils';
 import {
   getWeatherIcon,
@@ -92,7 +90,6 @@ export default function OverlayPage() {
   const [location, setLocation] = useState<{ label: string; countryCode: string; originalData?: LocationData } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
   const [speed, setSpeed] = useState(0);
-  const [smoothSpeed, setSmoothSpeed] = useState(0);
   const [speedIndicatorVisible, setSpeedIndicatorVisible] = useState(false);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [sunrise, setSunrise] = useState<string | null>(null);
@@ -116,32 +113,9 @@ export default function OverlayPage() {
   const lastAPICoords = useRef<[number, number] | null>(null);
   const lastWeatherCoords = useRef<[number, number] | null>(null);
   const lastLocationUpdate = useRef(0);
-  // Unified state management for speed-based elements
-  const speedBasedElements = useRef({
-    minimap: {
-      visible: false,
-      aboveThresholdCount: 0,
-      lastSpeedUpdate: 0,
-      currentMode: 'hidden' as 'hidden' | 'manual' | 'speed-based'
-    },
-    speedIndicator: {
-      visible: false,
-      aboveThresholdCount: 0,
-      lastSpeedUpdate: 0
-    }
-  });
+
   
-  // Unified timeout management
-  const timeouts = useRef({
-    speedHide: null as NodeJS.Timeout | null,
-    speedData: null as NodeJS.Timeout | null,
-    speedIndicatorHide: null as NodeJS.Timeout | null,
-    minimap: null as NodeJS.Timeout | null,
-    overlay: null as NodeJS.Timeout | null
-  });
-  
-  // Animation management
-  const speedAnimationRef = useRef<(() => void) | null>(null);
+
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
   const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
   const currentSettings = useRef(settings);
@@ -152,140 +126,13 @@ export default function OverlayPage() {
   const isFirstLoad = useRef(true); // Track if this is the first load
   const timeIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Helper functions for minimap state management
-  const clearAllTimeouts = useCallback(() => {
-    Object.values(timeouts.current).forEach(timeout => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-    });
-    timeouts.current = {
-      speedHide: null,
-      speedData: null,
-      speedIndicatorHide: null,
-      minimap: null,
-      overlay: null
-    };
-    
-    // Clear speed animation
-    if (speedAnimationRef.current) {
-      speedAnimationRef.current();
-      speedAnimationRef.current = null;
-    }
-  }, []);
-
-  // Optimized timeout cleanup for specific timeout types
-  const clearTimeoutByType = useCallback((type: keyof typeof timeouts.current) => {
-    if (timeouts.current[type]) {
-      clearTimeout(timeouts.current[type]!);
-      timeouts.current[type] = null;
-    }
-  }, []);
-
-  const resetMinimapState = useCallback((mode: 'hidden' | 'manual' | 'speed-based') => {
-    speedBasedElements.current.minimap = {
-      visible: false,
-      aboveThresholdCount: 0,
-      lastSpeedUpdate: speedBasedElements.current.minimap.lastSpeedUpdate,
-      currentMode: mode
-    };
-    clearAllTimeouts();
-    
-    OverlayLogger.overlay(`Minimap state reset to mode: ${mode}`, {
-      previousMode: speedBasedElements.current.minimap.currentMode,
-      newMode: mode
-    });
-  }, [clearAllTimeouts]);
-
-  const updateSpeedData = useCallback((newSpeed: number) => {
-    const now = Date.now();
-    speedBasedElements.current.minimap.lastSpeedUpdate = now;
-    speedBasedElements.current.speedIndicator.lastSpeedUpdate = now;
-    
-    // Clear any existing speed data timeout
-    if (timeouts.current.speedData) {
-      clearTimeout(timeouts.current.speedData);
-      timeouts.current.speedData = null;
-    }
-    
-    OverlayLogger.overlay('Speed data updated', {
-      speed: newSpeed,
-      timestamp: now
-    });
-  }, []);
-
-  const checkSpeedDataStale = useCallback(() => {
-    const timeSinceLastUpdate = Date.now() - speedBasedElements.current.minimap.lastSpeedUpdate;
-    const isStale = timeSinceLastUpdate > TIMERS.SPEED_DATA_TIMEOUT;
-    
-    if (isStale) {
-      OverlayLogger.overlay('Speed data is stale', {
-        timeSinceLastUpdate,
-        timeout: TIMERS.SPEED_DATA_TIMEOUT,
-        isStale
-      });
-    }
-    
-    return { isStale, timeSinceLastUpdate };
-  }, []);
+  
 
 
-
-  // Speed indicator helper functions
-  const resetSpeedIndicatorState = useCallback(() => {
-    speedBasedElements.current.speedIndicator = {
-      visible: false,
-      aboveThresholdCount: 0,
-      lastSpeedUpdate: speedBasedElements.current.speedIndicator.lastSpeedUpdate
-    };
-    
-    if (timeouts.current.speedIndicatorHide) {
-      clearTimeout(timeouts.current.speedIndicatorHide);
-      timeouts.current.speedIndicatorHide = null;
-    }
-    
-    OverlayLogger.overlay('Speed indicator state reset', {
-      previousVisible: speedBasedElements.current.speedIndicator.visible,
-      newVisible: false
-    });
-  }, []);
-
-  // Simplified speed animation using utility
-  const animateSpeed = useCallback((fromSpeed: number, toSpeed: number) => {
-    // Clear any existing animation
-    if (speedAnimationRef.current) {
-      speedAnimationRef.current();
-      speedAnimationRef.current = null;
-    }
-    
-    const cleanup = createSpeedAnimation(
-      fromSpeed,
-      toSpeed,
-      setSmoothSpeed,
-      () => setSmoothSpeed(toSpeed)
-    );
-    
-    // Store cleanup function reference
-    speedAnimationRef.current = cleanup;
-    
-    return cleanup;
-  }, []);
-
-  const updateSpeedIndicatorData = useCallback((newSpeed: number) => {
-    const now = Date.now();
-    speedBasedElements.current.speedIndicator.lastSpeedUpdate = now;
-    
-    OverlayLogger.overlay('Speed indicator data updated', {
-      speed: newSpeed,
-      timestamp: now
-    });
-  }, []);
 
 
   
-  // Memoized smooth speed display values
-  const smoothSpeedKmh = useMemo(() => Math.round(smoothSpeed), [smoothSpeed]);
-  const smoothSpeedMph = useMemo(() => Math.round(kmhToMph(smoothSpeed)), [smoothSpeed]);
+
 
 
 
@@ -471,7 +318,7 @@ export default function OverlayPage() {
     
     // If speed-based mode is enabled, show only when moving
     if (settings.minimapSpeedBased) {
-      return speedBasedElements.current.minimap.visible && mapCoords;
+      return minimapOpacity > 0 && mapCoords;
     }
     
     // If manual mode is enabled, show when we have coordinates
@@ -481,7 +328,7 @@ export default function OverlayPage() {
     
     // Default: don't show
     return false;
-  }, [mapCoords, settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay]);
+  }, [mapCoords, settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, minimapOpacity]);
 
   const isLocationEnabled = settings.locationDisplay && settings.locationDisplay !== 'hidden';
   const isOverlayReady = useMemo(() => !isLoading.timezone, [isLoading.timezone]);
@@ -490,7 +337,7 @@ export default function OverlayPage() {
   const weatherIcon = useMemo(() => {
     if (!weather?.icon || !timezone) return null;
     return getWeatherIcon(weather.icon, timezone, sunrise, sunset);
-  }, [weather?.icon, timezone, sunrise, sunset]);
+  }, [weather?.icon, timezone, sunrise, sunset, time]); // Add time dependency to refresh on time changes
 
   useEffect(() => {
     const eventSource = new EventSource('/api/settings-stream');
@@ -541,25 +388,21 @@ export default function OverlayPage() {
   }, [timezone]);
 
   useEffect(() => {
-    // Reset minimap state when settings change
+    // Update minimap visibility when settings change
     if (settings.locationDisplay === 'hidden') {
-      // Location is hidden: force hide minimap and reset all speed state
-      resetMinimapState('hidden');
+      // Location is hidden: force hide minimap
       setMinimapOpacity(0);
     } else if (settings.minimapSpeedBased) {
-      // Speed-based mode: start hidden
-      resetMinimapState('speed-based');
-      setMinimapOpacity(0);
+      // Speed-based mode: visibility controlled by speed threshold
+      // (handled by the speed effect)
     } else if (settings.showMinimap) {
-      // Manual mode: start visible if we have coordinates
-      resetMinimapState('manual');
-      setMinimapOpacity(1);
+      // Manual mode: show if we have coordinates
+      setMinimapOpacity(mapCoords ? 1 : 0);
     } else {
       // Hidden mode: ensure hidden
-      resetMinimapState('hidden');
       setMinimapOpacity(0);
     }
-  }, [settings.minimapSpeedBased, settings.showMinimap, settings.locationDisplay, resetMinimapState]);
+  }, [settings.minimapSpeedBased, settings.showMinimap, settings.locationDisplay, mapCoords]);
 
   useEffect(() => {
     const hasRequiredSettings = settings.locationDisplay !== undefined && 
@@ -688,8 +531,6 @@ export default function OverlayPage() {
             });
             
             setSpeed(payload.speed);
-            updateSpeedData(payload.speed);
-            updateSpeedIndicatorData(payload.speed);
           }
           
           // Handle timezone from RTIRL FIRST (before API calls)
@@ -725,15 +566,7 @@ export default function OverlayPage() {
             // Update map coordinates immediately
             setMapCoords([lat, lon]);
             
-            // Handle minimap timeout
-            if (timeouts.current.minimap) {
-              clearTimeout(timeouts.current.minimap);
-            }
-            if (!currentSettings.current.showMinimap) {
-              timeouts.current.minimap = setTimeout(() => {
-                setMapCoords(null);
-              }, TIMERS.MINIMAP_HIDE_DELAY);
-            }
+
             
             // Now fetch additional data (location name, weather) from APIs
             updateFromCoordinates(lat, lon);
@@ -754,7 +587,7 @@ export default function OverlayPage() {
     return () => {
       // RTIRL script cleanup handled automatically
     };
-  }, [updateFromCoordinates, createDateTimeFormatters, setLoadingState, updateSpeedData, updateSpeedIndicatorData]);
+  }, [updateFromCoordinates, createDateTimeFormatters, setLoadingState]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -780,193 +613,70 @@ export default function OverlayPage() {
     loadSettings();
   }, []);
 
+
+
+  // Simplified speed indicator visibility - just show when above threshold
   useEffect(() => {
-    // Clear any existing timeout when settings change
-    if (timeouts.current.minimap) {
-      clearTimeout(timeouts.current.minimap);
-      timeouts.current.minimap = null;
+    if (!settings.showSpeed) {
+      setSpeedIndicatorVisible(false);
+      return;
     }
+
+    const kmh = getSpeedKmh(speed);
+    const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
     
-    // If minimap should be hidden and we have coordinates, set a timeout to clear them
-    if (!shouldShowMinimap() && mapCoords) {
-      timeouts.current.minimap = setTimeout(() => {
-        setMapCoords(null);
-      }, TIMERS.MINIMAP_HIDE_DELAY);
-    }
-  }, [settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, mapCoords, shouldShowMinimap]);
+    setSpeedIndicatorVisible(isAboveThreshold);
+  }, [speed, settings.showSpeed]);
 
-  // Minimap visibility logic - requires 2 successful polls and hides after timeout
+  // Simplified minimap visibility - just show when above threshold
   useEffect(() => {
-    // Reset speed-based state when mode changes or location is disabled
     if (!settings.minimapSpeedBased || settings.locationDisplay === 'hidden') {
-      resetMinimapState('hidden');
       setMinimapOpacity(0);
       return;
     }
 
-    // Only process speed-based logic if speed-based mode is enabled AND location is enabled
-    if (settings.minimapSpeedBased && settings.locationDisplay && (settings.locationDisplay === 'city' || settings.locationDisplay === 'state')) {
-      const kmh = getSpeedKmh(speed);
-      const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
+    const kmh = getSpeedKmh(speed);
+    const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
+    
+    setMinimapOpacity(isAboveThreshold ? 1 : 0);
+  }, [speed, settings.minimapSpeedBased, settings.locationDisplay]);
 
-      if (isAboveThreshold) {
-        speedBasedElements.current.minimap.aboveThresholdCount++;
-        
-        // Show minimap when threshold is met (requires 2 readings to prevent false positives)
-        if (speedBasedElements.current.minimap.aboveThresholdCount >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
-          clearTimeoutByType('speedHide');
-          
-          if (!speedBasedElements.current.minimap.visible) {
-            speedBasedElements.current.minimap.visible = true;
-            setMinimapOpacity(1);
-            logSpeedVisibility('shown', 'Minimap', kmh);
-          }
-        }
-      } else {
-        speedBasedElements.current.minimap.aboveThresholdCount = 0;
-        
-        // Hide minimap after brief delay when speed drops below threshold
-        if (speedBasedElements.current.minimap.visible && !timeouts.current.speedHide) {
-          timeouts.current.speedHide = setTimeout(() => {
-            speedBasedElements.current.minimap.visible = false;
-            setMinimapOpacity(0);
-            timeouts.current.speedHide = null;
-            logSpeedVisibility('hidden', 'Minimap', kmh);
-          }, TIMERS.SPEED_HIDE_DELAY);
-        }
-      }
-    }
-  }, [speed, settings.minimapSpeedBased, settings.locationDisplay, resetMinimapState, clearTimeoutByType]);
+  // Simplified speed display - no animation, just show raw speed
+  const currentSpeedKmh = useMemo(() => getSpeedKmh(speed), [speed]);
+  const currentSpeedMph = useMemo(() => Math.round(kmhToMph(currentSpeedKmh)), [currentSpeedKmh]);
+  const displaySpeedKmh = useMemo(() => Math.round(currentSpeedKmh), [currentSpeedKmh]);
 
-  // Speed data timeout effect - hide minimap if no speed data for too long
+  // Force weather icon refresh around sunrise/sunset times
   useEffect(() => {
-    // Only apply timeout logic if speed-based mode is enabled and location is enabled
-    if (!settings.minimapSpeedBased || settings.locationDisplay === 'hidden') {
-      // Clear any existing timeout
-      if (timeouts.current.speedData) {
-        clearTimeout(timeouts.current.speedData);
-        timeouts.current.speedData = null;
-      }
-      return;
-    }
+    if (!timezone || !sunrise || !sunset) return;
 
-    // Check if speed data is stale using helper function
-    const { isStale, timeSinceLastUpdate } = checkSpeedDataStale();
-
-    if (isStale && speedBasedElements.current.minimap.visible) {
-      // Speed data is stale and minimap is visible - hide it
-      OverlayLogger.overlay('Speed data timeout - hiding minimap due to stale data', { 
-        timeSinceLastUpdate,
-        timeout: TIMERS.SPEED_DATA_TIMEOUT 
-      });
-      
-      speedBasedElements.current.minimap.visible = false;
-      speedBasedElements.current.minimap.aboveThresholdCount = 0;
-      setMinimapOpacity(0);
-      
-      // Clear any existing hide timeout
-      if (timeouts.current.speedHide) {
-        clearTimeout(timeouts.current.speedHide);
-        timeouts.current.speedHide = null;
-      }
-    } else if (!isStale && speedBasedElements.current.minimap.visible) {
-      // Speed data is fresh and minimap is visible - set up timeout for next check
-      if (timeouts.current.speedData) {
-        clearTimeout(timeouts.current.speedData);
-      }
-      
-      timeouts.current.speedData = setTimeout(() => {
-        // This will trigger the effect again to check if data is stale
-        setSpeed(prev => prev); // Force re-evaluation
-      }, TIMERS.SPEED_DATA_TIMEOUT);
-    }
-
-    return () => {
-      if (timeouts.current.speedData) {
-        clearTimeout(timeouts.current.speedData);
-        timeouts.current.speedData = null;
+    const checkDayNightTransition = () => {
+      try {
+        const now = new Date();
+        const currentLocal = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+        const sunriseTime = new Date(sunrise);
+        const sunsetTime = new Date(sunset);
+        
+        // Check if we're within 30 minutes of sunrise or sunset
+        const timeToSunrise = Math.abs(currentLocal.getTime() - sunriseTime.getTime());
+        const timeToSunset = Math.abs(currentLocal.getTime() - sunsetTime.getTime());
+        const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+        
+        if (timeToSunrise < thirtyMinutes || timeToSunset < thirtyMinutes) {
+          // Force a time update to trigger weather icon refresh
+          setTime(prev => prev); // This will trigger the time update effect
+          OverlayLogger.overlay('Weather icon refresh triggered for day/night transition');
+        }
+      } catch (error) {
+        OverlayLogger.error('Error checking day/night transition:', error);
       }
     };
-  }, [speed, settings.minimapSpeedBased, settings.locationDisplay, checkSpeedDataStale]);
 
-  // Speed indicator visibility logic - requires 2 successful polls and hides after timeout
-  useEffect(() => {
-    // Reset speed indicator state when setting is disabled
-    if (!settings.showSpeed) {
-      resetSpeedIndicatorState();
-      setSpeedIndicatorVisible(false);
-      return;
-    }
-
-    // Only process speed indicator logic if speed setting is enabled
-    if (settings.showSpeed) {
-      const kmh = getSpeedKmh(speed);
-      const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
-
-      if (isAboveThreshold) {
-        speedBasedElements.current.speedIndicator.aboveThresholdCount++;
-        
-        // Show speed indicator when threshold is met (requires 2 readings to prevent false positives)
-        if (speedBasedElements.current.speedIndicator.aboveThresholdCount >= THRESHOLDS.SPEED_READINGS_REQUIRED) {
-          clearTimeoutByType('speedIndicatorHide');
-          
-          if (!speedBasedElements.current.speedIndicator.visible) {
-            speedBasedElements.current.speedIndicator.visible = true;
-            setSpeedIndicatorVisible(true);
-            logSpeedVisibility('shown', 'Speed indicator', kmh);
-          }
-        }
-      } else {
-        speedBasedElements.current.speedIndicator.aboveThresholdCount = 0;
-        
-        // Hide speed indicator after brief delay when speed drops below threshold
-        if (speedBasedElements.current.speedIndicator.visible && !timeouts.current.speedIndicatorHide) {
-          timeouts.current.speedIndicatorHide = setTimeout(() => {
-            speedBasedElements.current.speedIndicator.visible = false;
-            setSpeedIndicatorVisible(false);
-            timeouts.current.speedIndicatorHide = null;
-            logSpeedVisibility('hidden', 'Speed indicator', kmh);
-          }, TIMERS.SPEED_HIDE_DELAY);
-        }
-      }
-    }
-  }, [speed, settings.showSpeed, resetSpeedIndicatorState, clearTimeoutByType]);
-
-  // Speed indicator timeout effect - hide if no speed data for too long
-  useEffect(() => {
-    if (!settings.showSpeed) return;
-
-    const timeSinceLastUpdate = Date.now() - speedBasedElements.current.speedIndicator.lastSpeedUpdate;
-    const isStale = timeSinceLastUpdate > TIMERS.SPEED_DATA_TIMEOUT;
-
-    if (isStale && speedBasedElements.current.speedIndicator.visible) {
-      OverlayLogger.overlay('Speed indicator timeout - hiding due to stale data', { 
-        timeSinceLastUpdate,
-        timeout: TIMERS.SPEED_DATA_TIMEOUT 
-      });
-      
-      speedBasedElements.current.speedIndicator.visible = false;
-      speedBasedElements.current.speedIndicator.aboveThresholdCount = 0;
-      setSpeedIndicatorVisible(false);
-      
-      clearTimeoutByType('speedIndicatorHide');
-    }
-  }, [speed, settings.showSpeed, clearTimeoutByType]);
-
-  // Optimized smooth speed transitions
-  useEffect(() => {
-    if (speed > 0 && speedIndicatorVisible) {
-      const currentSpeed = smoothSpeed || speed;
-      const targetSpeed = speed;
-      
-      // Use optimized animation function
-      const cleanup = animateSpeed(currentSpeed, targetSpeed);
-      
-      return cleanup;
-    }
-  }, [speed, speedIndicatorVisible, smoothSpeed, animateSpeed]);
-
-
+    // Check every 5 minutes for day/night transitions
+    const interval = setInterval(checkDayNightTransition, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [timezone, sunrise, sunset]);
 
   // Overlay visibility timeout
   useEffect(() => {
@@ -974,7 +684,7 @@ export default function OverlayPage() {
       const hasConfiguredElements = currentSettings.current.locationDisplay || 
                                    currentSettings.current.showWeather || 
                                    (currentSettings.current.showMinimap || 
-                                    (currentSettings.current.minimapSpeedBased && speedBasedElements.current.minimap.visible));
+                                    (currentSettings.current.minimapSpeedBased && minimapOpacity > 0));
       
       const dataReady = !currentIsLoading.current.weather && 
                        !currentIsLoading.current.location && 
@@ -987,9 +697,8 @@ export default function OverlayPage() {
 
     return () => {
       clearTimeout(overlayTimeout);
-      clearAllTimeouts();
     };
-  }, [clearAllTimeouts]);
+  }, [minimapOpacity]);
 
   return (
     <ErrorBoundary>
@@ -1089,7 +798,7 @@ export default function OverlayPage() {
                 <div className="speed-indicator">
                   <div className="speed-content">
                     <div className="speed-value">
-                      {smoothSpeedMph}
+                      {currentSpeedMph}
                     </div>
                     <div className="speed-label">
                       MPH
@@ -1098,7 +807,7 @@ export default function OverlayPage() {
                   <div className="speed-separator">/</div>
                   <div className="speed-content">
                     <div className="speed-value">
-                      {smoothSpeedKmh}
+                      {displaySpeedKmh}
                     </div>
                     <div className="speed-label">
                       KM/H

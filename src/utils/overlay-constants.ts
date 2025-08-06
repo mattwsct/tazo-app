@@ -10,13 +10,6 @@ export const TIMERS = {
   FIRST_LOAD_API_COOLDOWN: 10000, // 10s
 } as const;
 
-export const SPEED_ANIMATION = {
-  DURATION: 1500, // 1.5 seconds
-  STEPS: 30, // 30 steps = 50ms per step
-  STEP_DURATION: 50, // 50ms per step
-  THRESHOLD: 5, // Only animate for changes > 5 km/h
-} as const;
-
 export const THRESHOLDS = {
   LOCATION_DISTANCE: 100, // 100m
   SPEED_SHOW: 10, // 10 km/h
