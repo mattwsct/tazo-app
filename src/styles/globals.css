@@ -267,7 +267,6 @@ body.overlay-page {
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
-  transition: color 0.5s ease;
   margin: 0;
   /* OBS-friendly rendering */
   -webkit-font-smoothing: antialiased;

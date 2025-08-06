@@ -26,25 +26,6 @@ const HEART_RATE_CONFIG = {
   CONNECTION_DEBOUNCE: 30000, // 30 seconds - optimal for IRL streams with brief connection drops (tunnels, rural areas)
 } as const;
 
-
-
-// Heart rate zones and color mapping - High contrast for dark overlays
-const HEART_RATE_ZONES = {
-  VERY_LOW: { min: 0, max: 49, color: '#87CEEB', name: 'Very Low' },     // Light cyan
-  RESTING: { min: 50, max: 59, color: '#ADD8E6', name: 'Resting' },      // Light blue
-  NORMAL: { min: 60, max: 99, color: '#FFFFFF', name: 'Normal' },        // White
-  ELEVATED: { min: 100, max: 139, color: '#FFB347', name: 'Elevated' },  // Light orange
-  HIGH: { min: 140, max: 179, color: '#FF8C00', name: 'High' },          // Orange
-  VERY_HIGH: { min: 180, max: 200, color: '#FF4444', name: 'Very High' }, // Bright red
-} as const;
-
-// Function to get heart rate zone and color
-function getHeartRateZone(bpm: number) {
-  return Object.values(HEART_RATE_ZONES).find(zone => bpm >= zone.min && bpm <= zone.max) || HEART_RATE_ZONES.VERY_HIGH;
-}
-
-
-
 // === 💗 HEART RATE MONITOR COMPONENT ===
 interface HeartRateMonitorProps {
   pulsoidToken?: string;
@@ -327,22 +308,13 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     };
       }, [pulsoidToken, onConnected, updateConnectionState]); // Include onConnected dependency
 
-
-
   // Don't render if not connected or no BPM data
   if (!heartRate.isConnected || heartRate.bpm <= 0) {
     return null;
   }
 
-  // Get current heart rate zone and color
+  // Get current heart rate
   const currentBpm = Math.round(smoothHeartRate || heartRate.bpm);
-  const heartRateZone = getHeartRateZone(currentBpm);
-  
-  // Log zone changes (only when zone actually changes)
-  const previousZone = getHeartRateZone(Math.round(smoothHeartRate || 0));
-  if (previousZone.name !== heartRateZone.name && currentBpm > 0) {
-    HeartRateLogger.info(`Heart rate zone changed: ${previousZone.name} → ${heartRateZone.name} (${currentBpm} BPM)`);
-  }
 
   return (
     <ErrorBoundary>
@@ -366,11 +338,8 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </div>
-            {/* Numbers and text - color based on heart rate zone */}
-            <div 
-              className="heart-rate-text"
-              style={{ color: heartRateZone.color }}
-            >
+            {/* Numbers and text - always white */}
+            <div className="heart-rate-text">
               <span className="heart-rate-value">
                 {currentBpm}
               </span>

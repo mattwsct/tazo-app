@@ -49,7 +49,6 @@ import {
 } from '@/utils/speed-utils';
 import {
   getWeatherIcon,
-  getTemperatureZone,
   getWeatherFallback,
   celsiusToFahrenheit
 } from '@/utils/weather-utils';
@@ -1051,13 +1050,7 @@ export default function OverlayPage() {
                         <div className="weather-description">
                           {weather.desc.toUpperCase()}
                         </div>
-                        <div 
-                          className="weather-temperature"
-                          style={{ 
-                            color: getTemperatureZone(weather.temp).color,
-                            transition: 'color 0.5s ease'
-                          }}
-                        >
+                        <div className="weather-temperature">
                           {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
                         </div>
                       </div>
