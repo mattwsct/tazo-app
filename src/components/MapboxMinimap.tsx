@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 interface MapboxMinimapProps {
   lat: number;
   lon: number;
   isVisible: boolean;
+  speedKmh?: number; // Optional speed for smart coordinate rounding
 }
 
 const MINIMAP_CONFIG = {
@@ -15,8 +16,14 @@ const MINIMAP_CONFIG = {
   MARKER_GLOW: "#22c55e80",
 } as const;
 
-export default function MapboxMinimap({ lat, lon, isVisible }: MapboxMinimapProps) {
+export default function MapboxMinimap({ lat, lon, isVisible, speedKmh = 0 }: MapboxMinimapProps) {
   const [imageError, setImageError] = useState(false);
+  const lastUpdateRef = useRef(0);
+  
+  // Prevent excessive API calls with minimum update interval
+  const now = Date.now();
+  const minUpdateInterval = speedKmh > 50 ? 5000 : 2000; // 5s for high speed, 2s for low speed
+  const shouldUpdate = (now - lastUpdateRef.current) >= minUpdateInterval;
   
   if (!isVisible) return null;
 
@@ -27,11 +34,38 @@ export default function MapboxMinimap({ lat, lon, isVisible }: MapboxMinimapProp
   // Request a larger image to ensure copyright is visible but will be cropped by the circle
   const imageSize = Math.ceil(size * 1.2); // 20% larger to ensure copyright is included
   
-  // Round coordinates to reduce cache misses (3 decimal places = ~100m precision)
-  const roundedLat = parseFloat(lat.toFixed(3));
-  const roundedLon = parseFloat(lon.toFixed(3));
+  // Smart coordinate rounding based on speed to balance update frequency with API limits
+  // At higher speeds, use less precision to reduce API calls
+  // At lower speeds, use more precision for better tracking
+  let precision: number;
+  if (speedKmh > 80) {
+    precision = 2; // ~1km precision for highway speeds
+  } else if (speedKmh > 30) {
+    precision = 3; // ~100m precision for city driving
+  } else {
+    precision = 4; // ~10m precision for slow movement
+  }
+  
+  const roundedLat = parseFloat(lat.toFixed(precision));
+  const roundedLon = parseFloat(lon.toFixed(precision));
+  
+  // Debug logging for coordinate precision (only in development and occasionally)
+  if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) { // 5% chance to log
+    console.log('🗺️ Minimap coordinate precision:', {
+      original: { lat: lat.toFixed(6), lon: lon.toFixed(6) },
+      rounded: { lat: roundedLat, lon: roundedLon },
+      precision,
+      speedKmh: Math.round(speedKmh),
+      distance: Math.sqrt(Math.pow(lat - roundedLat, 2) + Math.pow(lon - roundedLon, 2)) * 111000 // Approximate meters
+    });
+  }
   
   const url = `/api/static-map?lat=${roundedLat}&lon=${roundedLon}&zoom=${MINIMAP_CONFIG.ZOOM_LEVEL}&size=${imageSize}`;
+  
+  // Update timestamp if we're going to make an API call
+  if (shouldUpdate) {
+    lastUpdateRef.current = now;
+  }
 
   if (imageError) {
     return (
@@ -94,7 +128,10 @@ export default function MapboxMinimap({ lat, lon, isVisible }: MapboxMinimapProp
           transform: "translate(-50%, -50%)", // Center the larger image
         }}
         draggable={false}
-        onError={() => setImageError(true)}
+        onError={(e) => {
+          console.error('Map image error:', e);
+          setImageError(true);
+        }}
       />
       {/* Center green dot with simplified glow for OBS compatibility */}
       <div
