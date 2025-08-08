@@ -4,49 +4,9 @@ import {
 } from './overlay-utils';
 import { ApiLogger } from '@/lib/logger';
 
-// === 🗄️ SIMPLE CACHE SYSTEM ===
-interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-  ttl: number;
-}
 
-class SimpleCache {
-  private cache = new Map<string, CacheEntry<unknown>>();
 
-  set<T>(key: string, data: T, ttlMs: number): void {
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-      ttl: ttlMs
-    });
-  }
 
-  get<T>(key: string): T | null {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    const now = Date.now();
-    if (now - entry.timestamp > entry.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.data as T;
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-}
-
-const apiCache = new SimpleCache();
-
-// Clear cache on page load to ensure fresh data
-if (typeof window !== 'undefined') {
-  // Clear cache when page loads/refreshes
-  apiCache.clear();
-}
 
 // === ⏱️ API CONFIGURATION ===
 const API_CONFIG = {
@@ -156,15 +116,6 @@ export async function fetchLocationFromLocationIQ(
   lon: number, 
   apiKey: string
 ): Promise<LocationData | null> {
-  // Check cache first (30 minute cache for location data)
-  // Use more precise cache key (6 decimal places instead of 3)
-  const cacheKey = `location_${lat.toFixed(6)}_${lon.toFixed(6)}`;
-  const cached = apiCache.get<LocationData>(cacheKey);
-  if (cached) {
-    ApiLogger.info('locationiq', 'Using cached location data', { lat, lon });
-    return cached;
-  }
-
   if (!apiKey || !checkRateLimit('locationiq')) {
     ApiLogger.warn('locationiq', 'API call skipped', { 
       hasKey: !!apiKey, 
@@ -215,9 +166,6 @@ export async function fetchLocationFromLocationIQ(
       
       ApiLogger.info('locationiq', 'Location data received', result);
       
-      // Cache the result for 30 minutes
-      apiCache.set(cacheKey, result, 30 * 60 * 1000);
-      
       return result;
     }
     
@@ -239,14 +187,6 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
   lat: number, 
   lon: number
 ): Promise<WeatherTimezoneResponse | null> {
-  // Check cache first (5 minute cache for weather data)
-  const cacheKey = `weather_${lat.toFixed(3)}_${lon.toFixed(3)}`;
-  const cached = apiCache.get<WeatherTimezoneResponse>(cacheKey);
-  if (cached) {
-    ApiLogger.info('openmeteo', 'Using cached weather data', { lat, lon });
-    return cached;
-  }
-
   if (!checkRateLimit('openmeteo')) {
     ApiLogger.warn('openmeteo', 'Rate limit exceeded, skipping API call');
     return null;
@@ -302,9 +242,6 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
     }
     
     const result = { weather, timezone, sunrise, sunset };
-    
-    // Cache the result for 5 minutes
-    apiCache.set(cacheKey, result, 5 * 60 * 1000);
     
     return result;
     

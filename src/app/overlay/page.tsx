@@ -41,7 +41,6 @@ import {
 } from '@/utils/overlay-constants';
 import {
   kmhToMph,
-  getAdaptiveDistanceThreshold,
   getSpeedKmh,
   isAboveSpeedThreshold,
   checkSpeedDataStale
@@ -117,17 +116,15 @@ export default function OverlayPage() {
   const speedHideTimeout = useRef<NodeJS.Timeout | null>(null);
   const minimapHideTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const lastAPICoords = useRef<[number, number] | null>(null);
   const lastWeatherCoords = useRef<[number, number] | null>(null);
-  const lastLocationUpdate = useRef(0);
+  const lastLocationCoords = useRef<[number, number] | null>(null);
+  const lastLocationAPICall = useRef(0);
 
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
   const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
   const currentSettings = useRef(settings);
   const currentIsLoading = useRef(isLoading);
   const currentTimezone = useRef(timezone);
-  const lastWeatherAPICall = useRef(0);
-  const lastLocationAPICall = useRef(0);
   const isFirstLoad = useRef(true); // Track if this is the first load
   const timeIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -196,75 +193,42 @@ export default function OverlayPage() {
       return;
     }
     
-    const hadCoords = lastWeatherCoords.current !== null;
+    // Store coordinates for location updates
     lastWeatherCoords.current = [lat, lon];
     
-    // On first load, always fetch fresh data regardless of cooldowns
+    // On first load, always fetch fresh data
     const isFirstLoadNow = isFirstLoad.current;
     if (isFirstLoadNow) {
       isFirstLoad.current = false;
       OverlayLogger.overlay('First load detected - fetching fresh API data immediately', { lat, lon });
-    }
-    
-    // Fetch weather data (if we don't have it or it's first load)
-    if (!hadCoords || isFirstLoadNow) {
-      const currentTime = Date.now();
-      const cooldown = isFirstLoadNow ? TIMERS.FIRST_LOAD_API_COOLDOWN : TIMERS.API_COOLDOWN;
       
-      if ((currentTime - lastWeatherAPICall.current) >= cooldown) {
-        lastWeatherAPICall.current = currentTime;
-        try {
-          OverlayLogger.overlay('Fetching weather data from API', { lat, lon });
-          const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
-          await processWeatherResult(result, isFirstLoadNow);
-        } catch (error) {
-          OverlayLogger.error('Weather update failed', error);
-          setWeather(null);
-          setLoadingState('weather', false);
-        }
-      } else {
-        const remainingCooldown = cooldown - (currentTime - lastWeatherAPICall.current);
-        OverlayLogger.overlay('Weather API call skipped due to cooldown', { remainingMs: remainingCooldown });
+      // Fetch initial weather data
+      try {
+        OverlayLogger.overlay('Fetching initial weather data from API', { lat, lon });
+        const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
+        await processWeatherResult(result, true);
+      } catch (error) {
+        OverlayLogger.error('Initial weather update failed', error);
+        setWeather(null);
         setLoadingState('weather', false);
       }
     }
     
-    // Fetch location name data (if we don't have it or it's first load or moved enough)
+    // Fetch location name data (every 100m but no more than once per minute)
     const now = Date.now();
+    const distanceThreshold = 100; // 100m threshold
+    const timeThreshold = 60000; // 1 minute cooldown
     
-    // Calculate adaptive distance threshold based on current speed
-    const speedKmh = speed * 3.6; // Convert m/s to km/h
-    const adaptiveDistanceThreshold = getAdaptiveDistanceThreshold(speedKmh);
-    
-    const shouldUpdateLocation = isFirstLoadNow || !lastAPICoords.current || (
-      distanceInMeters(lat, lon, lastAPICoords.current![0], lastAPICoords.current![1]) >= adaptiveDistanceThreshold &&
-      (now - lastLocationUpdate.current) >= TIMERS.LOCATION_UPDATE
+    const shouldUpdateLocation = isFirstLoadNow || !lastLocationCoords.current || (
+      distanceInMeters(lat, lon, lastLocationCoords.current![0], lastLocationCoords.current![1]) >= distanceThreshold &&
+      (now - lastLocationAPICall.current) >= timeThreshold
     );
     
-    if (!shouldUpdateLocation) {
-      if (lastAPICoords.current) {
-        const distance = distanceInMeters(lat, lon, lastAPICoords.current[0], lastAPICoords.current[1]);
-        const timeSinceUpdate = now - lastLocationUpdate.current;
-        OverlayLogger.overlay('Location update skipped', { 
-          distance, 
-          adaptiveThreshold: adaptiveDistanceThreshold,
-          speedKmh,
-          timeSinceUpdate,
-          timeThreshold: TIMERS.LOCATION_UPDATE
-        });
-      } else {
-        OverlayLogger.overlay('Location update skipped - no previous coordinates');
-      }
-      return;
-    }
-    
-    lastAPICoords.current = [lat, lon];
-    
-    if (API_KEYS.LOCATIONIQ) {
-      const cooldown = isFirstLoadNow ? TIMERS.FIRST_LOAD_API_COOLDOWN : TIMERS.API_COOLDOWN;
+    if (shouldUpdateLocation) {
+      lastLocationCoords.current = [lat, lon];
+      lastLocationAPICall.current = now;
       
-      if ((now - lastLocationAPICall.current) >= cooldown) {
-        lastLocationAPICall.current = now;
+      if (API_KEYS.LOCATIONIQ) {
         try {
           OverlayLogger.overlay('Fetching location name from API', { lat, lon });
           const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
@@ -272,7 +236,6 @@ export default function OverlayPage() {
             const label = formatLocation(loc, settings.locationDisplay);
             setLocation({ label, countryCode: loc.countryCode || '', originalData: loc });
             setLoadingState('location', false);
-            lastLocationUpdate.current = now;
             
             // Only update timezone from LocationIQ if RTIRL didn't provide one
             if (loc.timezone && !currentTimezone.current && loc.timezone !== currentTimezone.current) {
@@ -295,15 +258,11 @@ export default function OverlayPage() {
           setLoadingState('location', false);
         }
       } else {
-        const remainingCooldown = cooldown - (now - lastLocationAPICall.current);
-        OverlayLogger.overlay('Location API call skipped due to cooldown', { remainingMs: remainingCooldown });
-        // Don't set loading to false here - keep it loading until we get data
+        OverlayLogger.warn('LocationIQ API key not available');
+        setLoadingState('location', false);
       }
-    } else {
-      OverlayLogger.warn('LocationIQ API key not available');
-      setLoadingState('location', false);
     }
-  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters, speed]);
+  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters]);
 
   const shouldShowMinimap = useCallback(() => {
     // If location is hidden, never show minimap
@@ -469,24 +428,22 @@ export default function OverlayPage() {
     };
   }, [timezone]);
 
+  // Simple periodic weather updates every 5 minutes
   useEffect(() => {
     if (!lastWeatherCoords.current) return;
     
     const interval = setInterval(async () => {
-      const now = Date.now();
-      if ((now - lastWeatherAPICall.current) >= TIMERS.WEATHER_TIMEZONE_UPDATE) {
-        lastWeatherAPICall.current = now;
-        const [lat, lon] = lastWeatherCoords.current!;
-        
-        try {
-          const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
-          await processWeatherResult(result);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          OverlayLogger.error(`Weather update failed: ${errorMessage}`);
-          setWeather(null);
-          setLoadingState('weather', false);
-        }
+      const [lat, lon] = lastWeatherCoords.current!;
+      
+      try {
+        OverlayLogger.overlay('Periodic weather update', { lat, lon });
+        const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
+        await processWeatherResult(result);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        OverlayLogger.error(`Periodic weather update failed: ${errorMessage}`);
+        setWeather(null);
+        setLoadingState('weather', false);
       }
     }, TIMERS.WEATHER_TIMEZONE_UPDATE);
     
