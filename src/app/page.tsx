@@ -19,7 +19,7 @@ export default function AdminPage() {
   const [currentSubCount, setCurrentSubCount] = useState(0);
   const [currentLatestSub, setCurrentLatestSub] = useState('');
 
-  // Check authentication status
+  // Check authentication status and refresh session
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -35,6 +35,9 @@ export default function AdminPage() {
         
         if (res.ok) {
           setIsAuthenticated(true);
+          
+          // Refresh session periodically to prevent expiry
+          refreshSession();
         } else if (res.status === 401) {
           router.push('/login');
           return;
@@ -56,6 +59,27 @@ export default function AdminPage() {
 
     checkAuth();
   }, [router]);
+
+  // Session refresh function
+  const refreshSession = async () => {
+    try {
+      await authenticatedFetch('/api/refresh-session', {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.warn('Session refresh error:', error);
+    }
+  };
+
+  // Periodic session refresh to prevent expiry
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Refresh session every 6 hours (before 7-day expiry)
+    const refreshInterval = setInterval(refreshSession, 6 * 60 * 60 * 1000); // 6 hours
+
+    return () => clearInterval(refreshInterval);
+  }, [isAuthenticated]);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -120,18 +144,26 @@ export default function AdminPage() {
     
     setSettings(mergedSettings);
     setToast({ type: 'saving', message: 'Saving settings...' });
+    
     try {
       const res = await authenticatedFetch('/api/save-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mergedSettings),
       });
-      if (!res.ok) throw new Error();
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Save settings failed:', res.status, errorText);
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
+      }
+      
       setToast({ type: 'saved', message: 'Settings saved successfully!' });
       setTimeout(() => setToast(null), 2000);
-    } catch {
-      setToast({ type: 'error', message: 'Failed to save settings' });
-      setTimeout(() => setToast(null), 3000);
+    } catch (error) {
+      console.error('Save settings error:', error);
+      setToast({ type: 'error', message: `Failed to save settings: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      setTimeout(() => setToast(null), 5000);
     }
   }, [settings]);
 
@@ -181,6 +213,8 @@ export default function AdminPage() {
   const openPreview = () => {
     window.open('/overlay', '_blank');
   };
+
+
 
   // Simple Toggle Component
   const Toggle = ({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label: string }) => (

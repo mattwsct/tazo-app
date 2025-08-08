@@ -49,16 +49,7 @@ export default function MapboxMinimap({ lat, lon, isVisible, speedKmh = 0 }: Map
   const roundedLat = parseFloat(lat.toFixed(precision));
   const roundedLon = parseFloat(lon.toFixed(precision));
   
-  // Debug logging for coordinate precision (only in development and occasionally)
-  if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) { // 5% chance to log
-    console.log('🗺️ Minimap coordinate precision:', {
-      original: { lat: lat.toFixed(6), lon: lon.toFixed(6) },
-      rounded: { lat: roundedLat, lon: roundedLon },
-      precision,
-      speedKmh: Math.round(speedKmh),
-      distance: Math.sqrt(Math.pow(lat - roundedLat, 2) + Math.pow(lon - roundedLon, 2)) * 111000 // Approximate meters
-    });
-  }
+
   
   const url = `/api/static-map?lat=${roundedLat}&lon=${roundedLon}&zoom=${MINIMAP_CONFIG.ZOOM_LEVEL}&size=${imageSize}`;
   

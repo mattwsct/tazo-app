@@ -328,11 +328,11 @@ export default function OverlayPage() {
   const isLocationEnabled = settings.locationDisplay && settings.locationDisplay !== 'hidden';
   const isOverlayReady = useMemo(() => !isLoading.timezone, [isLoading.timezone]);
 
-  // Memoize weather icon to prevent unnecessary recalculations
+  // Memoize weather icon - only recalculates when weather data changes
   const weatherIcon = useMemo(() => {
     if (!weather?.icon || !timezone) return null;
     return getWeatherIcon(weather.icon, timezone, sunrise, sunset);
-  }, [weather?.icon, timezone, sunrise, sunset]); // Removed unnecessary time dependency
+  }, [weather?.icon, timezone, sunrise, sunset]); // Removed time dependency for efficiency
 
   useEffect(() => {
     const eventSource = new EventSource('/api/settings-stream');
@@ -514,14 +514,7 @@ export default function OverlayPage() {
           }
           const payload = p as RTIRLPayload;
           
-          // Log when we receive any data from RTIRL (development only)
-          if (process.env.NODE_ENV === 'development') {
-            OverlayLogger.overlay('RTIRL data received', {
-              hasSpeed: typeof payload.speed === 'number',
-              hasLocation: !!payload.location,
-              timestamp: Date.now()
-            });
-          }
+
           
 
           
@@ -586,14 +579,7 @@ export default function OverlayPage() {
             // Track minimap update timestamp for auto-hide
             lastMinimapUpdate.current = Date.now();
             
-            // Debug logging for minimap updates (only in development)
-            if (process.env.NODE_ENV === 'development') {
-              OverlayLogger.overlay('Minimap coordinates updated', {
-                lat: lat.toFixed(6),
-                lon: lon.toFixed(6),
-                timestamp: Date.now()
-              });
-            }
+
             
             // Clear any existing minimap hide timeout since we got new data
             if (minimapHideTimeout.current) {
@@ -634,6 +620,8 @@ export default function OverlayPage() {
           if (data._subGoalData) {
             setSubGoalData(data._subGoalData);
           }
+          
+
         } else {
           setSettings(DEFAULT_OVERLAY_SETTINGS);
         }
@@ -664,6 +652,8 @@ export default function OverlayPage() {
     const { isStale: speedStale } = checkSpeedDataStale(lastSpeedUpdate.current);
     const { isStale: minimapStale } = checkSpeedDataStale(lastMinimapUpdate.current);
 
+
+
     // Speed indicator visibility logic
     if (!settings.showSpeed) {
       setSpeedIndicatorVisible(false);
@@ -684,9 +674,10 @@ export default function OverlayPage() {
     }
 
     // Minimap visibility logic
-    if (!settings.minimapSpeedBased || settings.locationDisplay === 'hidden') {
+    if (settings.locationDisplay === 'hidden') {
       setMinimapOpacity(0);
-    } else {
+    } else if (settings.minimapSpeedBased) {
+      // Speed-based mode: show only when moving
       const kmh = getSpeedKmh(speed);
       const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
       
@@ -700,6 +691,12 @@ export default function OverlayPage() {
       } else {
         setMinimapOpacity(0);
       }
+    } else if (settings.showMinimap) {
+      // Manual mode: show when we have coordinates
+      setMinimapOpacity(mapCoords ? 1 : 0);
+    } else {
+      // Hidden mode
+      setMinimapOpacity(0);
     }
 
     // Cleanup function
@@ -711,23 +708,15 @@ export default function OverlayPage() {
         clearTimeout(minimapHideTimeout.current);
       }
     };
-  }, [speed, settings.showSpeed, settings.minimapSpeedBased, settings.locationDisplay]);
+  }, [speed, settings.showSpeed, settings.minimapSpeedBased, settings.locationDisplay, settings.showMinimap, mapCoords]);
 
   // Periodic stale data check to trigger auto-hide
   useEffect(() => {
     const staleDataCheck = setInterval(() => {
-      const { isStale: speedStale, timeSinceLastUpdate: speedTimeSince } = checkSpeedDataStale(lastSpeedUpdate.current);
-      const { isStale: minimapStale, timeSinceLastUpdate: minimapTimeSince } = checkSpeedDataStale(lastMinimapUpdate.current);
+      const { isStale: speedStale } = checkSpeedDataStale(lastSpeedUpdate.current);
+      const { isStale: minimapStale } = checkSpeedDataStale(lastMinimapUpdate.current);
       
-      // Debug logging for data staleness (development only)
-      if (process.env.NODE_ENV === 'development' && (speedStale || minimapStale)) {
-        OverlayLogger.overlay('Data staleness check', {
-          speedStale,
-          minimapStale,
-          speedTimeSince: Math.round(speedTimeSince / 1000),
-          minimapTimeSince: Math.round(minimapTimeSince / 1000)
-        });
-      }
+
       
       if (speedStale && speedIndicatorVisible) {
         setSpeedIndicatorVisible(false);
@@ -767,8 +756,8 @@ export default function OverlayPage() {
         const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
         
         if (timeToSunrise < thirtyMinutes || timeToSunset < thirtyMinutes) {
-          // Force a time update to trigger weather icon refresh
-          setTime(prev => prev); // This will trigger the time update effect
+          // Force a weather icon refresh by updating a dependency
+          setWeather(prev => prev ? { ...prev } : null);
           OverlayLogger.overlay('Weather icon refresh triggered for day/night transition');
         }
       } catch (error) {

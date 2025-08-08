@@ -24,19 +24,25 @@ async function handlePOST(request: NextRequest) {
     const maliciousKeys = detectMaliciousKeys(rawSettings);
     if (maliciousKeys.length > 0) {
       console.warn('🚨 SECURITY ALERT: Malicious settings keys detected:', maliciousKeys);
-      console.warn('🚨 Raw payload:', rawSettings);
       // Continue processing but only save validated settings
     }
     
     // Validate and sanitize the settings
     const settings = validateAndSanitizeSettings(rawSettings);
+    
     const startTime = Date.now();
     
-    console.log('💾 Save-settings API: Saving settings to KV:', settings);
-    console.log('💾 Save-settings API: showKickSubGoal =', settings.showKickSubGoal);
-    console.log('💾 Save-settings API: kickDailySubGoal =', settings.kickDailySubGoal);
-    
-    // Reduced logging to prevent spam
+    // Test KV connection first
+    try {
+      await kv.set('test_connection', 'test_value');
+      await kv.del('test_connection'); // Clean up test
+    } catch (error) {
+      console.error('💾 Save-settings API: KV connection test failed:', error);
+      return NextResponse.json({ 
+        error: 'KV connection failed', 
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }, { status: 500 });
+    }
     
     // Batch KV operations to reduce calls
     const kvResult = await Promise.allSettled([
@@ -47,25 +53,19 @@ async function handlePOST(request: NextRequest) {
         logKVUsage('write');
         invalidateSSECache(); // Invalidate cache after successful save
         return true;
+      }).catch((error) => {
+        console.error('💾 Save-settings API: KV operation failed:', error);
+        throw error;
       })
     ]);
     
     // SSE broadcast handles real-time updates
-    
-    // Fast polling system handles updates immediately (no KV usage for broadcasting)
-    // SSE broadcast is kept as fallback but not retried aggressively
     const broadcastResult = await Promise.allSettled([
       broadcastSettings(settings)
     ]);
     
     const broadcastSuccess = broadcastResult[0].status === 'fulfilled' && 
                             broadcastResult[0].value?.success;
-    
-    if (broadcastSuccess) {
-      console.log(`✅ SSE broadcast successful (fallback)`);
-    } else {
-      console.log(`⚠️  SSE broadcast failed, but fast polling will handle updates`);
-    }
     
     const saveTime = Date.now() - startTime;
     
@@ -75,10 +75,6 @@ async function handlePOST(request: NextRequest) {
     if (!kvSuccess) {
       console.error('🚨 KV save failed:', kvResult[0].status === 'rejected' ? 
         kvResult[0].reason : 'Unknown error');
-    }
-    
-    if (!broadcastSuccess) {
-      console.error('🚨 Broadcast failed after 3 attempts');
     }
     
     return NextResponse.json({ 
@@ -97,6 +93,7 @@ async function handlePOST(request: NextRequest) {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Verify authentication - require it for admin access
   const isAuthenticated = await verifyAuth();
+  
   if (!isAuthenticated) {
     console.warn('Unauthenticated access attempt to save settings');
     return new NextResponse('Unauthorized', { status: 401 });

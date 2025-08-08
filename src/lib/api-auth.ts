@@ -13,8 +13,6 @@ export async function verifyAuth(): Promise<boolean> {
   const cookieStore = await cookies();
   const authToken = cookieStore.get('auth-token');
   
-
-  
   if (!authToken) {
     return false;
   }

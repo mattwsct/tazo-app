@@ -17,12 +17,16 @@ export async function POST(request: NextRequest) {
     if (password === ADMIN_PASSWORD) {
       const response = NextResponse.json({ success: true });
       
-      // Set authentication cookie
+      // Set authentication cookie with longer duration for development
+      const maxAge = process.env.NODE_ENV === 'development' 
+        ? 60 * 60 * 24 * 30 // 30 days for development
+        : 60 * 60 * 24 * 7; // 7 days for production
+        
       response.cookies.set('auth-token', 'authenticated', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: 60 * 60 * 24 * 7, // 7 days
+        maxAge: maxAge,
       });
 
       return response;
