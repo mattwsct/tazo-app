@@ -15,7 +15,6 @@ import dynamic from 'next/dynamic';
 
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import HeartRateMonitor from '@/components/HeartRateMonitor';
-import KickSubGoal from '@/components/KickSubGoal';
 
 import { 
   fetchWeatherAndTimezoneFromOpenMeteo,
@@ -46,8 +45,6 @@ import {
   checkSpeedDataStale
 } from '@/utils/speed-utils';
 import {
-  getWeatherIcon,
-  getWeatherFallback,
   celsiusToFahrenheit
 } from '@/utils/weather-utils';
 
@@ -88,12 +85,10 @@ export default function OverlayPage() {
   const [time, setTime] = useState('Loading...');
   const [date, setDate] = useState('Loading...');
   const [location, setLocation] = useState<{ label: string; countryCode: string; originalData?: LocationData } | null>(null);
-  const [weather, setWeather] = useState<{ temp: number; icon: string; desc: string } | null>(null);
+  const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
   const [speed, setSpeed] = useState(0);
   const [speedIndicatorVisible, setSpeedIndicatorVisible] = useState(false);
   const [timezone, setTimezone] = useState<string | null>(null);
-  const [sunrise, setSunrise] = useState<string | null>(null);
-  const [sunset, setSunset] = useState<string | null>(null);
   const [minimapOpacity, setMinimapOpacity] = useState(1);
   const [isLoading, setIsLoading] = useState({
     weather: true,
@@ -101,11 +96,6 @@ export default function OverlayPage() {
     timezone: true
   });
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
-  const [subGoalData, setSubGoalData] = useState<{
-    currentSubs?: number;
-    latestSub?: string | null;
-    lastUpdate?: number;
-  } | null>(null);
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
 
@@ -119,6 +109,8 @@ export default function OverlayPage() {
   const lastWeatherCoords = useRef<[number, number] | null>(null);
   const lastLocationCoords = useRef<[number, number] | null>(null);
   const lastLocationAPICall = useRef(0);
+  const weatherTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const weatherPollMsRef = useRef<number>(TIMERS.WEATHER_TIMEZONE_UPDATE);
 
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
   const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
@@ -163,10 +155,7 @@ export default function OverlayPage() {
       setLoadingState('weather', false);
     }
     
-    if (result.sunrise && result.sunset) {
-      setSunrise(result.sunrise);
-      setSunset(result.sunset);
-    }
+    
     
     if (result.timezone && result.timezone !== timezone) {
       try {
@@ -194,6 +183,7 @@ export default function OverlayPage() {
     }
     
     // Store coordinates for location updates
+    const previousWeatherCoords = lastWeatherCoords.current;
     lastWeatherCoords.current = [lat, lon];
     
     // On first load, always fetch fresh data
@@ -214,10 +204,25 @@ export default function OverlayPage() {
       }
     }
     
-    // Fetch location name data (every 100m but no more than once per minute)
+    // If we've moved a large distance, force a weather refresh immediately
+    if (previousWeatherCoords) {
+      const movedMeters = distanceInMeters(lat, lon, previousWeatherCoords[0], previousWeatherCoords[1]);
+      if (movedMeters >= THRESHOLDS.WEATHER_DISTANCE_KM * 1000) {
+        try {
+          OverlayLogger.overlay('Large movement detected, refreshing weather now', { movedMeters });
+          const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
+          await processWeatherResult(result);
+          weatherPollMsRef.current = TIMERS.WEATHER_TIMEZONE_UPDATE;
+        } catch (error) {
+          OverlayLogger.error('Immediate weather refresh after movement failed', error);
+        }
+      }
+    }
+
+    // Fetch location name data (distance + cooldown gate)
     const now = Date.now();
-    const distanceThreshold = 100; // 100m threshold
-    const timeThreshold = 60000; // 1 minute cooldown
+    const distanceThreshold = THRESHOLDS.LOCATION_DISTANCE; // meters
+    const timeThreshold = TIMERS.LOCATION_UPDATE; // ms
     
     const shouldUpdateLocation = isFirstLoadNow || !lastLocationCoords.current || (
       distanceInMeters(lat, lon, lastLocationCoords.current![0], lastLocationCoords.current![1]) >= distanceThreshold &&
@@ -287,11 +292,7 @@ export default function OverlayPage() {
   const isLocationEnabled = settings.locationDisplay && settings.locationDisplay !== 'hidden';
   const isOverlayReady = useMemo(() => !isLoading.timezone, [isLoading.timezone]);
 
-  // Memoize weather icon - only recalculates when weather data changes
-  const weatherIcon = useMemo(() => {
-    if (!weather?.icon || !timezone) return null;
-    return getWeatherIcon(weather.icon, timezone, sunrise, sunset);
-  }, [weather?.icon, timezone, sunrise, sunset]); // Removed time dependency for efficiency
+  
 
   useEffect(() => {
     const eventSource = new EventSource('/api/settings-stream');
@@ -300,9 +301,7 @@ export default function OverlayPage() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'settings_update') {
-          if (data._subGoalData) {
-            setSubGoalData(data._subGoalData);
-          }
+          
           
           // Only update settings if they've actually changed
           const hasMinimapChanges = data.showMinimap !== settings.showMinimap || 
@@ -428,26 +427,50 @@ export default function OverlayPage() {
     };
   }, [timezone]);
 
-  // Simple periodic weather updates every 5 minutes
+  // Periodic weather updates with backoff
   useEffect(() => {
-    if (!lastWeatherCoords.current) return;
-    
-    const interval = setInterval(async () => {
-      const [lat, lon] = lastWeatherCoords.current!;
-      
+    function clearWeatherTimer() {
+      if (weatherTimerRef.current) {
+        clearTimeout(weatherTimerRef.current);
+        weatherTimerRef.current = null;
+      }
+    }
+
+    async function tick() {
+      if (!lastWeatherCoords.current) return;
+      const [lat, lon] = lastWeatherCoords.current;
       try {
-        OverlayLogger.overlay('Periodic weather update', { lat, lon });
+        OverlayLogger.overlay('Scheduled weather update', { lat, lon });
         const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
         await processWeatherResult(result);
+        // Reset poll interval on success
+        weatherPollMsRef.current = TIMERS.WEATHER_TIMEZONE_UPDATE;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        OverlayLogger.error(`Periodic weather update failed: ${errorMessage}`);
+        OverlayLogger.error(`Scheduled weather update failed: ${errorMessage}`);
         setWeather(null);
         setLoadingState('weather', false);
+        // Exponential backoff within bounds
+        const next = Math.min(
+          Math.max(weatherPollMsRef.current * 2, TIMERS.WEATHER_BACKOFF_MIN),
+          TIMERS.WEATHER_BACKOFF_MAX
+        );
+        weatherPollMsRef.current = next;
+      } finally {
+        // Schedule next
+        clearWeatherTimer();
+        weatherTimerRef.current = setTimeout(tick, weatherPollMsRef.current + Math.floor(Math.random() * 0.1 * weatherPollMsRef.current));
       }
-    }, TIMERS.WEATHER_TIMEZONE_UPDATE);
-    
-    return () => clearInterval(interval);
+    }
+
+    // Start schedule when coords first available
+    if (lastWeatherCoords.current && !weatherTimerRef.current) {
+      weatherTimerRef.current = setTimeout(tick, TIMERS.WEATHER_TIMEZONE_UPDATE);
+    }
+
+    return () => {
+      clearWeatherTimer();
+    };
   }, [processWeatherResult, setLoadingState]);
 
   useEffect(() => {
@@ -574,9 +597,6 @@ export default function OverlayPage() {
         const data = await res.json();
         if (data) {
           setSettings(data);
-          if (data._subGoalData) {
-            setSubGoalData(data._subGoalData);
-          }
           
 
         } else {
@@ -696,37 +716,7 @@ export default function OverlayPage() {
   const currentSpeedMph = useMemo(() => Math.round(kmhToMph(currentSpeedKmh)), [currentSpeedKmh]);
   const displaySpeedKmh = useMemo(() => Math.round(currentSpeedKmh), [currentSpeedKmh]);
 
-  // Force weather icon refresh around sunrise/sunset times
-  useEffect(() => {
-    if (!timezone || !sunrise || !sunset) return;
-
-    const checkDayNightTransition = () => {
-      try {
-        const now = new Date();
-        const currentLocal = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-        const sunriseTime = new Date(sunrise);
-        const sunsetTime = new Date(sunset);
-        
-        // Check if we're within 30 minutes of sunrise or sunset
-        const timeToSunrise = Math.abs(currentLocal.getTime() - sunriseTime.getTime());
-        const timeToSunset = Math.abs(currentLocal.getTime() - sunsetTime.getTime());
-        const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
-        
-        if (timeToSunrise < thirtyMinutes || timeToSunset < thirtyMinutes) {
-          // Force a weather icon refresh by updating a dependency
-          setWeather(prev => prev ? { ...prev } : null);
-          OverlayLogger.overlay('Weather icon refresh triggered for day/night transition');
-        }
-      } catch (error) {
-        OverlayLogger.error('Error checking day/night transition:', error);
-      }
-    };
-
-    // Check every 5 minutes for day/night transitions
-    const interval = setInterval(checkDayNightTransition, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, [timezone, sunrise, sunset]);
+  
 
   // Overlay visibility timeout - simplified
   useEffect(() => {
@@ -811,31 +801,6 @@ export default function OverlayPage() {
                           {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
                         </div>
                       </div>
-                      <div className="weather-icon">
-                        <img
-                          src={`https://openweathermap.org/img/wn/${weatherIcon || '01d'}@4x.png`}
-                          alt={`Weather: ${weather.desc}`}
-                          width={24}
-                          height={24}
-                          className="weather-icon"
-                          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                            // Fallback to a simple text representation if image fails
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            
-                            // Show loading briefly, then fallback
-                            const fallback = document.createElement('div');
-                            fallback.className = 'weather-icon-fallback';
-                            fallback.textContent = '⏳'; // Loading indicator
-                            target.parentNode?.appendChild(fallback);
-                            
-                            // Replace with actual fallback after brief delay
-                            setTimeout(() => {
-                              fallback.textContent = weather?.icon ? getWeatherFallback(weather.icon) : '🌤️';
-                            }, 100);
-                          }}
-                        />
-                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -888,17 +853,6 @@ export default function OverlayPage() {
             )}
           </div>
         )}
-
-                 <KickSubGoal 
-           channelName={settings.kickChannelName}
-           dailyGoal={settings.kickDailySubGoal}
-           isVisible={settings.showKickSubGoal}
-           showLatestSub={settings.showLatestSub}
-           showLeaderboard={settings.showSubLeaderboard}
-           enableRollingSubGoal={settings.enableRollingSubGoal}
-           rollingSubGoalIncrement={settings.rollingSubGoalIncrement}
-           subGoalData={subGoalData}
-         />
       </div>
     </ErrorBoundary>
   );

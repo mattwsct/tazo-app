@@ -8,13 +8,6 @@ export interface OverlaySettings {
   showMinimap: boolean;
   minimapSpeedBased: boolean;
   showSpeed: boolean;
-  showKickSubGoal: boolean;
-  kickDailySubGoal: number;
-  kickChannelName: string;
-  showLatestSub: boolean;
-  showSubLeaderboard: boolean;
-  enableRollingSubGoal: boolean;
-  rollingSubGoalIncrement: number;
 }
 
 // Default settings (single source of truth)
@@ -24,13 +17,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showMinimap: false,
   minimapSpeedBased: false,
   showSpeed: true,
-  showKickSubGoal: false,
-  kickDailySubGoal: 10,
-  kickChannelName: 'Tazo',
-  showLatestSub: false,
-  showSubLeaderboard: false,
-  enableRollingSubGoal: false,
-  rollingSubGoalIncrement: 5
 };
 
 // Valid settings schema for validation
@@ -39,14 +25,7 @@ export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string'
   showWeather: 'boolean',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',
-  showSpeed: 'boolean',
-  showKickSubGoal: 'boolean',
-  kickDailySubGoal: 'number',
-  kickChannelName: 'string',
-  showLatestSub: 'boolean',
-  showSubLeaderboard: 'boolean',
-  enableRollingSubGoal: 'boolean',
-  rollingSubGoalIncrement: 'number'
+  showSpeed: 'boolean'
 };
 
 // SSE message types

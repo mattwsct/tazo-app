@@ -25,7 +25,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
   
   // Always allow access to SSE, authenticated or not
-  if (!isAuthenticated) {
+  if (!isAuthenticated && process.env.NODE_ENV === 'development') {
     console.log('SSE: Not authenticated, will use default settings');
   }
 
@@ -37,19 +37,25 @@ export async function GET(request: NextRequest): Promise<Response> {
       let lastModified = 0;
       const connectionId = `sse_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      console.log(`[SSE] New connection established: ${connectionId} (authenticated: ${isAuthenticated})`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[SSE] New connection established: ${connectionId} (authenticated: ${isAuthenticated})`);
+      }
       
       // Register this connection with the broadcast system
       addConnection(controller, connectionId);
       
-      console.log(`[SSE] Connection ${connectionId} registered with broadcast system`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[SSE] Connection ${connectionId} registered with broadcast system`);
+      }
       
       // Log connection status after a short delay to verify registration
-      setTimeout(() => {
-        const connectionInfo = getConnectionInfo();
-        console.log(`[SSE] Connection ${connectionId} status check - registered: ${connectionInfo.ids.includes(connectionId)}, total: ${connectionInfo.count}`);
-        console.log(`[SSE] All connections:`, connectionInfo.ids);
-      }, 200);
+      if (process.env.NODE_ENV === 'development') {
+        setTimeout(() => {
+          const connectionInfo = getConnectionInfo();
+          console.log(`[SSE] Connection ${connectionId} status check - registered: ${connectionInfo.ids.includes(connectionId)}, total: ${connectionInfo.count}`);
+          console.log(`[SSE] All connections:`, connectionInfo.ids);
+        }, 200);
+      }
       
       // Function to send SSE data
       const sendSSE = (data: string) => {
@@ -58,10 +64,14 @@ export async function GET(request: NextRequest): Promise<Response> {
           if (connections.has(connectionId)) {
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
           } else {
-            console.log(`[SSE] Connection ${connectionId} no longer exists, skipping send`);
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[SSE] Connection ${connectionId} no longer exists, skipping send`);
+            }
           }
         } catch (error) {
-          console.error(`[SSE] Failed to send data to ${connectionId}:`, error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error(`[SSE] Failed to send data to ${connectionId}:`, error);
+          }
           // Remove dead connection
           removeConnection(connectionId);
         }
@@ -119,7 +129,9 @@ export async function GET(request: NextRequest): Promise<Response> {
       
       // Cleanup on close
       request.signal.addEventListener('abort', () => {
+      if (process.env.NODE_ENV === 'development') {
         console.log(`[SSE] Connection closed: ${connectionId}`);
+      }
         clearInterval(interval);
         removeConnection(connectionId);
         controller.close();

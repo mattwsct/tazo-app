@@ -14,10 +14,7 @@ export default function AdminPage() {
   const [toast, setToast] = useState<{ type: 'saving' | 'saved' | 'error'; message: string } | null>(null);
 
   // Manual input states
-  const [manualSubCount, setManualSubCount] = useState('');
-  const [manualLatestSub, setManualLatestSub] = useState('');
-  const [currentSubCount, setCurrentSubCount] = useState(0);
-  const [currentLatestSub, setCurrentLatestSub] = useState('');
+  
 
   // Check authentication status and refresh session
   useEffect(() => {
@@ -100,14 +97,10 @@ export default function AdminPage() {
         }
         throw new Error(`HTTP ${res.status}`);
       }
-      const data = await res.json();
-      if (data) {
-        setSettings(data);
-        if (data._subGoalData) {
-          setCurrentSubCount(data._subGoalData.currentSubs || 0);
-          setCurrentLatestSub(data._subGoalData.latestSub || '');
-        }
-      }
+          const data = await res.json();
+          if (data) {
+            setSettings(data);
+          }
     } catch (error) {
       console.error('Failed to load settings:', error);
       if (error instanceof Error && error.name === 'AbortError') {
@@ -167,48 +160,7 @@ export default function AdminPage() {
     }
   }, [settings]);
 
-  const handleManualSubCountUpdate = useCallback(async () => {
-    const count = parseInt(manualSubCount);
-    if (isNaN(count) || count < 0) return;
-    try {
-      const res = await authenticatedFetch('/api/update-sub-goal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentSubs: count }),
-      });
-      if (res.ok) {
-        setCurrentSubCount(count);
-        setManualSubCount('');
-        setToast({ type: 'saved', message: 'Sub count updated!' });
-        setTimeout(() => setToast(null), 2000);
-        loadSettings();
-      }
-    } catch {
-      setToast({ type: 'error', message: 'Failed to update sub count' });
-      setTimeout(() => setToast(null), 3000);
-    }
-  }, [manualSubCount, loadSettings]);
-
-  const handleManualLatestSubUpdate = useCallback(async () => {
-    if (!manualLatestSub.trim()) return;
-    try {
-      const res = await authenticatedFetch('/api/update-sub-goal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ latestSub: manualLatestSub.trim() }),
-      });
-      if (res.ok) {
-        setCurrentLatestSub(manualLatestSub.trim());
-        setManualLatestSub('');
-        setToast({ type: 'saved', message: 'Latest sub updated!' });
-        setTimeout(() => setToast(null), 2000);
-        loadSettings();
-      }
-    } catch {
-      setToast({ type: 'error', message: 'Failed to update latest sub' });
-      setTimeout(() => setToast(null), 3000);
-    }
-  }, [manualLatestSub, loadSettings]);
+  
 
   const openPreview = () => {
     window.open('/overlay', '_blank');
@@ -216,14 +168,17 @@ export default function AdminPage() {
 
 
 
-  // Simple Toggle Component
+  // Simple Toggle Component (mobile-friendly)
   const Toggle = ({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label: string }) => (
     <div className="toggle-item">
-      <span className="toggle-label">{label}</span>
+      <span className="toggle-label" id={`${label.replace(/\s+/g, '-').toLowerCase()}-label`}>{label}</span>
       <button 
         className={`toggle ${checked ? 'active' : ''}`}
         onClick={() => onChange(!checked)}
         aria-label={label}
+        role="switch"
+        aria-checked={checked}
+        aria-labelledby={`${label.replace(/\s+/g, '-').toLowerCase()}-label`}
       >
         <div className="toggle-slider"></div>
       </button>
@@ -240,12 +195,15 @@ export default function AdminPage() {
     value: string; 
     onChange: (value: string) => void; 
   }) => (
-    <div className="radio-group">
+    <div className="radio-group segmented">
       {options.map((option) => (
         <button
           key={option.value}
           className={`radio-option ${value === option.value ? 'active' : ''}`}
           onClick={() => onChange(option.value)}
+          role="radio"
+          aria-checked={value === option.value}
+          aria-label={option.label}
         >
           <span className="radio-icon">{option.icon}</span>
           <span className="radio-label">{option.label}</span>
@@ -316,17 +274,31 @@ export default function AdminPage() {
       {/* Main Content */}
       <main className="main-content">
         <div className="settings-container">
-          
-          {/* Location & Weather Section */}
+          {/* Quick Controls */}
           <section className="settings-section">
-            <h2>📍 Location & Weather</h2>
-            
-            <Toggle
-              checked={settings.locationDisplay !== 'hidden'}
-              onChange={(checked) => handleSettingsChange({ locationDisplay: checked ? 'city' : 'hidden' })}
-              label="Show Location"
-            />
-            
+            <h2>⚡ Quick Controls</h2>
+            <div className="setting-group">
+              <Toggle
+                checked={settings.locationDisplay !== 'hidden'}
+                onChange={(checked) => handleSettingsChange({ locationDisplay: checked ? 'city' : 'hidden' })}
+                label="Show Location"
+              />
+              <Toggle
+                checked={settings.showWeather}
+                onChange={(checked) => handleSettingsChange({ showWeather: checked })}
+                label="Show Weather"
+              />
+              <Toggle
+                checked={settings.showSpeed}
+                onChange={(checked) => handleSettingsChange({ showSpeed: checked })}
+                label="Show Speed"
+              />
+            </div>
+          </section>
+
+          {/* Location */}
+          <section className="settings-section">
+            <h2>📍 Location</h2>
             {settings.locationDisplay !== 'hidden' && (
               <div className="setting-group">
                 <label className="group-label">Location Format</label>
@@ -340,18 +312,11 @@ export default function AdminPage() {
                 />
               </div>
             )}
-            
-            <Toggle
-              checked={settings.showWeather}
-              onChange={(checked) => handleSettingsChange({ showWeather: checked })}
-              label="Show Weather"
-            />
           </section>
 
-          {/* Minimap Section */}
+          {/* Minimap */}
           <section className="settings-section">
             <h2>🗺️ Minimap</h2>
-            
             <div className="setting-group">
               <label className="group-label">Display Mode</label>
               <RadioGroup
@@ -368,158 +333,34 @@ export default function AdminPage() {
                 options={[
                   { value: 'hidden', label: 'Hidden', icon: '🚫' },
                   { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'speed', label: 'Auto-show on Movement', icon: '🏃' }
+                  { value: 'speed', label: 'Auto on Movement', icon: '🏃' }
                 ]}
               />
             </div>
           </section>
 
-          {/* Speed Section */}
-          <section className="settings-section">
-            <h2>🏃 Speed Indicator</h2>
-            
-            <Toggle
-              checked={settings.showSpeed}
-              onChange={(checked) => handleSettingsChange({ showSpeed: checked })}
-              label="Show Speed Indicator"
-            />
-            
-            {settings.showSpeed && (
-              <div className="setting-info">
-                <p>Speed indicator will only appear when traveling above 10 km/h for 2 consecutive readings.</p>
-              </div>
-            )}
-          </section>
+          {/* Kick removed */}
 
-          {/* Kick Integration Section */}
-          <section className="settings-section">
-            <h2>🎯 Kick.com Integration</h2>
-            
-            <Toggle
-              checked={settings.showKickSubGoal || settings.showLatestSub || settings.showSubLeaderboard}
-              onChange={(checked) => {
-                if (checked) {
-                  handleSettingsChange({ showKickSubGoal: true });
-                } else {
-                  handleSettingsChange({ 
-                    showKickSubGoal: false, 
-                    showLatestSub: false, 
-                    showSubLeaderboard: false 
-                  });
-                }
-              }}
-              label="Enable Kick Overlay"
-            />
-            
-            <div className="setting-group">
-              <label className="setting-label">Daily Sub Goal</label>
-              <input
-                type="number"
-                value={settings.kickDailySubGoal?.toString() || ''}
-                onChange={(e) => handleSettingsChange({ kickDailySubGoal: parseInt(e.target.value) || 0 })}
-                className="input"
-                min="0"
-                placeholder="Enter goal"
-              />
-            </div>
-            
-            <Toggle
-              checked={settings.showKickSubGoal}
-              onChange={(checked) => handleSettingsChange({ showKickSubGoal: checked })}
-              label="Show Sub Goal"
-            />
-            
-            <Toggle
-              checked={settings.showLatestSub}
-              onChange={(checked) => handleSettingsChange({ showLatestSub: checked })}
-              label="Show Latest Sub"
-            />
-            
-            <Toggle
-              checked={settings.showSubLeaderboard}
-              onChange={(checked) => handleSettingsChange({ showSubLeaderboard: checked })}
-              label="Show Leaderboard"
-            />
-            
-            <Toggle
-              checked={settings.enableRollingSubGoal}
-              onChange={(checked) => handleSettingsChange({ enableRollingSubGoal: checked })}
-              label="Enable Rolling Goal"
-            />
-            
-            {settings.enableRollingSubGoal && (
-              <div className="setting-group">
-                <label className="setting-label">Goal Increment</label>
-                <input
-                  type="number"
-                  value={settings.rollingSubGoalIncrement?.toString() || ''}
-                  onChange={(e) => handleSettingsChange({ rollingSubGoalIncrement: parseInt(e.target.value) || 1 })}
-                  className="input"
-                  min="1"
-                  placeholder="Enter increment"
-                />
-              </div>
-            )}
-          </section>
-
-          {/* Manual Updates Section */}
-          <section className="settings-section">
-            <h2>✏️ Manual Updates</h2>
-            
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-label">Current Sub Count</div>
-                <div className="stat-value">{currentSubCount}</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Latest Sub</div>
-                <div className="stat-value">{currentLatestSub || 'None'}</div>
-              </div>
-            </div>
-            
-            <div className="setting-group">
-              <label className="setting-label">Update Sub Count</label>
-              <div className="input-group">
-                <input
-                  type="number"
-                  value={manualSubCount}
-                  onChange={(e) => setManualSubCount(e.target.value)}
-                  className="input"
-                  placeholder="Enter new count"
-                  min="0"
-                />
-                <button 
-                  className="btn btn-primary"
-                  onClick={handleManualSubCountUpdate}
-                  disabled={!manualSubCount.trim()}
-                >
-                  Update
-                </button>
-              </div>
-            </div>
-            
-            <div className="setting-group">
-              <label className="setting-label">Update Latest Sub</label>
-              <div className="input-group">
-                <input
-                  type="text"
-                  value={manualLatestSub}
-                  onChange={(e) => setManualLatestSub(e.target.value)}
-                  className="input"
-                  placeholder="Enter username"
-                />
-                <button 
-                  className="btn btn-primary"
-                  onClick={handleManualLatestSubUpdate}
-                  disabled={!manualLatestSub.trim()}
-                >
-                  Update
-                </button>
-              </div>
-            </div>
-          </section>
+          {/* Manual updates removed (Kick not in use) */}
         </div>
       </main>
+
+      {/* Sticky actions for mobile */}
+      <div className="admin-sticky-actions">
+        <button className="btn btn-secondary" onClick={openPreview}>👁️ Preview</button>
+        <button 
+          className="btn btn-primary" 
+          onClick={async () => {
+            try {
+              await fetch('/api/logout', { method: 'GET', credentials: 'include' });
+              router.push('/login');
+            } catch (error) {
+              console.error('Logout error:', error);
+              router.push('/login');
+            }
+          }}
+        >🚪 Logout</button>
+      </div>
     </div>
   );
 } 

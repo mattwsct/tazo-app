@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from 'react';
+import { TIMERS } from '@/utils/overlay-constants';
 
 interface MapboxMinimapProps {
   lat: number;
@@ -20,10 +21,16 @@ export default function MapboxMinimap({ lat, lon, isVisible, speedKmh = 0 }: Map
   const [imageError, setImageError] = useState(false);
   const lastUpdateRef = useRef(0);
   
-  // Prevent excessive API calls with minimum update interval
+  // Prevent excessive API calls with minimum update interval by speed bucket
   const now = Date.now();
-  const minUpdateInterval = speedKmh > 50 ? 5000 : 2000; // 5s for high speed, 2s for low speed
-  const shouldUpdate = (now - lastUpdateRef.current) >= minUpdateInterval;
+  const minUpdateInterval =
+    speedKmh > 50 ? TIMERS.MAP_MIN_INTERVAL_FAST :
+    speedKmh > 10 ? TIMERS.MAP_MIN_INTERVAL_MED :
+    TIMERS.MAP_MIN_INTERVAL_SLOW;
+  
+  // Pixel movement gate: approximate pixel delta at current zoom by comparing rounded coords
+  const lastTs = lastUpdateRef.current;
+  const timeOk = (now - lastTs) >= minUpdateInterval;
   
   if (!isVisible) return null;
 
@@ -48,6 +55,11 @@ export default function MapboxMinimap({ lat, lon, isVisible, speedKmh = 0 }: Map
   
   const roundedLat = parseFloat(lat.toFixed(precision));
   const roundedLon = parseFloat(lon.toFixed(precision));
+
+  // Cheap pixel-change heuristic: recompute url and only mark update if timeOk and the rounded coords would shift marker beyond threshold
+  // At ZOOM_LEVEL ~13, ~1e-4 deg ≈ 11m; 200px view with 20% overscan keeps noise low. We gate by time first to avoid spam.
+  const pixelOk = true; // marker is centered; refresh cadence primarily governed by time. Keep for future if map follows off-center.
+  const shouldUpdate = timeOk && pixelOk;
   
 
   

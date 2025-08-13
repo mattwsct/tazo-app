@@ -16,6 +16,18 @@ const API_CONFIG = {
   MAX_RETRY_DELAY: 10000, // 10 seconds max delay
 } as const;
 
+// === 🧠 SIMPLE IN-MEMORY CACHE (client/runtime scoped) ===
+const WEATHER_CACHE_TTL_MS = 60 * 1000; // 60s
+type WeatherCacheKey = string; // `${lat.toFixed(3)},${lon.toFixed(3)}`
+const weatherCache = new Map<WeatherCacheKey, { timestamp: number; data: WeatherTimezoneResponse | null }>();
+
+function getWeatherCacheKey(lat: number, lon: number): WeatherCacheKey {
+  // Round to reduce cache fragmentation while keeping useful precision
+  const rLat = lat.toFixed(3);
+  const rLon = lon.toFixed(3);
+  return `${rLat},${rLon}`;
+}
+
 // === 🔄 RETRY UTILITY ===
 async function fetchWithRetry(
   url: string, 
@@ -94,15 +106,12 @@ function getWeatherDescription(wmoCode: number): string {
 // === 🌤️ WEATHER TYPES ===
 export interface WeatherData {
   temp: number;
-  icon: string;
   desc: string;
 }
 
 export interface WeatherTimezoneResponse {
   weather: WeatherData | null;
   timezone: string | null;
-  sunrise?: string;
-  sunset?: string;
 }
 
 // === 📍 LOCATION API (LocationIQ) ===
@@ -187,6 +196,13 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
   lat: number, 
   lon: number
 ): Promise<WeatherTimezoneResponse | null> {
+  // Check short-lived cache first
+  const cacheKey = getWeatherCacheKey(lat, lon);
+  const cached = weatherCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < WEATHER_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   if (!checkRateLimit('openmeteo')) {
     ApiLogger.warn('openmeteo', 'Rate limit exceeded, skipping API call');
     return null;
@@ -195,7 +211,7 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
   try {
     ApiLogger.info('openmeteo', 'Fetching weather and timezone data', { lat, lon });
     
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=sunrise,sunset&temperature_unit=celsius&timezone=auto&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto`;
     
     const response = await fetchWithRetry(url);
     
@@ -211,8 +227,6 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
     
     let weather: WeatherData | null = null;
     let timezone: string | null = null;
-    let sunrise: string | undefined;
-    let sunset: string | undefined;
     
     // Extract weather data
     if (data.current && 
@@ -221,8 +235,7 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
       
       weather = {
         temp: Math.round(data.current.temperature_2m),
-        icon: data.current.weather_code.toString(), // WMO code for day/night logic
-        desc: getWeatherDescription(data.current.weather_code), // Proper description
+        desc: getWeatherDescription(data.current.weather_code),
       };
       
       ApiLogger.info('openmeteo', 'Weather data received', weather);
@@ -234,19 +247,16 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
       ApiLogger.info('openmeteo', 'Timezone data received', { timezone });
     }
     
-    // Extract sunrise/sunset data
-    if (data.daily && data.daily.sunrise && data.daily.sunset) {
-      sunrise = data.daily.sunrise[0]; // First day's sunrise
-      sunset = data.daily.sunset[0];   // First day's sunset
-      ApiLogger.info('openmeteo', 'Sunrise/sunset data received', { sunrise, sunset });
-    }
-    
-    const result = { weather, timezone, sunrise, sunset };
+    const result = { weather, timezone };
+    // Store in cache (even null) to avoid immediate retries on failures
+    weatherCache.set(cacheKey, { timestamp: Date.now(), data: result });
     
     return result;
     
   } catch (error) {
     ApiLogger.error('openmeteo', 'Failed to fetch weather/timezone', error);
+    // Cache null result briefly to back off repeated failing calls
+    weatherCache.set(cacheKey, { timestamp: Date.now(), data: null });
     return null;
   }
 } 
