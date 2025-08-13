@@ -160,7 +160,7 @@ body.overlay-page {
 /* === DATE DISPLAY STYLES === */
 .date {
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: 800;
   margin: 0;
   line-height: 1;
   text-transform: uppercase;
@@ -342,7 +342,7 @@ body.overlay-page {
 .weather-description,
 .weather-temperature {
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: 800;
   margin: 0;
   line-height: 1;
   display: flex;
