@@ -153,11 +153,12 @@ export async function fetchLocationFromLocationIQ(
     }
     
     if (data.address) {
-      // Parse address components with fallbacks
+      // Parse address components with better city prioritization
+      // Try to get the most recognizable city name, not just the smallest administrative unit
       const city = data.address.city || 
-                  data.address.town || 
-                  data.address.municipality ||
-                  data.address.suburb;  // Use suburb as fallback for city-level
+                  data.address.municipality ||  // Municipality is often the actual city
+                  data.address.town ||          // Town is usually a proper city
+                  data.address.suburb;          // Suburb as last resort (often just neighborhood names)
       
       const state = data.address.province ||  // Japanese prefectures are in 'province' field
                    data.address.state || 
@@ -171,6 +172,13 @@ export async function fetchLocationFromLocationIQ(
         countryCode: data.address.country_code ? data.address.country_code.toLowerCase() : '',
         timezone: data.address.timezone,
         displayName: data.display_name,
+        // Store the raw address components for better city detection
+        town: data.address.town,
+        municipality: data.address.municipality,
+        suburb: data.address.suburb,
+        province: data.address.province,
+        region: data.address.region,
+        county: data.address.county,
       };
       
       ApiLogger.info('locationiq', 'Location data received', result);

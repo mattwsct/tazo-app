@@ -219,11 +219,12 @@ export default function OverlayPage() {
       }
     }
 
-    // Fetch location name data (distance + cooldown gate)
+    // Fetch location name data - ALWAYS fetch on first load, then use thresholds
     const now = Date.now();
     const distanceThreshold = THRESHOLDS.LOCATION_DISTANCE; // meters
     const timeThreshold = TIMERS.LOCATION_UPDATE; // ms
     
+    // Force location update on first load, regardless of thresholds
     const shouldUpdateLocation = isFirstLoadNow || !lastLocationCoords.current || (
       distanceInMeters(lat, lon, lastLocationCoords.current![0], lastLocationCoords.current![1]) >= distanceThreshold &&
       (now - lastLocationAPICall.current) >= timeThreshold
@@ -268,6 +269,31 @@ export default function OverlayPage() {
       }
     }
   }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters]);
+
+  // Update location display when display mode changes
+  useEffect(() => {
+    if (location?.originalData) {
+      const label = formatLocation(location.originalData, settings.locationDisplay);
+      setLocation(prev => prev ? { ...prev, label } : null);
+    }
+  }, [settings.locationDisplay, location?.originalData]);
+
+  // Force location refresh when display mode changes (e.g., switching from State to City mode)
+  useEffect(() => {
+    if (mapCoords && location?.originalData) {
+      OverlayLogger.overlay('Location display mode changed - refreshing location data', { 
+        newMode: settings.locationDisplay,
+        coords: mapCoords 
+      });
+      
+      // Force a fresh location API call by clearing the cache
+      lastLocationCoords.current = null;
+      lastLocationAPICall.current = 0;
+      
+      // Trigger location update with current coordinates
+      updateFromCoordinates(mapCoords[0], mapCoords[1]);
+    }
+  }, [settings.locationDisplay, mapCoords, location?.originalData, updateFromCoordinates]);
 
   const shouldShowMinimap = useCallback(() => {
     // If location is hidden, never show minimap
@@ -375,6 +401,18 @@ export default function OverlayPage() {
       setOverlayVisible(false);
     }
   }, [isOverlayReady, overlayVisible]);
+
+  // Force fresh location data fetch when page loads
+  useEffect(() => {
+    // Reset first load flag when component mounts
+    isFirstLoad.current = true;
+    
+    // Clear any cached location data
+    lastLocationCoords.current = null;
+    lastLocationAPICall.current = 0;
+    
+    OverlayLogger.overlay('Page loaded - forcing fresh location data fetch on next coordinates');
+  }, []);
 
   useEffect(() => {
     if (!timezone || !formatter.current || !dateFormatter.current) return;

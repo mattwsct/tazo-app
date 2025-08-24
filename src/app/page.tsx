@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode } from '@/types/settings';
 import '@/styles/admin.css';
 
 export default function AdminPage() {
@@ -278,11 +278,7 @@ export default function AdminPage() {
           <section className="settings-section">
             <h2>⚡ Quick Controls</h2>
             <div className="setting-group">
-              <Toggle
-                checked={settings.locationDisplay !== 'hidden'}
-                onChange={(checked) => handleSettingsChange({ locationDisplay: checked ? 'city' : 'hidden' })}
-                label="Show Location"
-              />
+
               <Toggle
                 checked={settings.showWeather}
                 onChange={(checked) => handleSettingsChange({ showWeather: checked })}
@@ -299,19 +295,31 @@ export default function AdminPage() {
           {/* Location */}
           <section className="settings-section">
             <h2>📍 Location</h2>
-            {settings.locationDisplay !== 'hidden' && (
-              <div className="setting-group">
-                <label className="group-label">Location Format</label>
-                <RadioGroup
-                  value={settings.locationDisplay}
-                  onChange={(value) => handleSettingsChange({ locationDisplay: value as 'city' | 'state' })}
-                  options={[
-                    { value: 'city', label: 'City, Country', icon: '🏙️' },
-                    { value: 'state', label: 'State, Country', icon: '🗺️' }
-                  ]}
-                />
-              </div>
-            )}
+            <div className="setting-group">
+              <label className="group-label">Location Display</label>
+              <RadioGroup
+                value={settings.locationDisplay}
+                onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
+                options={[
+                  { value: 'city', label: 'Area', icon: '🏙️' },
+                  { value: 'municipality', label: 'City', icon: '🏛️' },
+                  { value: 'state', label: 'State', icon: '🗺️' },
+                  { value: 'country', label: 'Country', icon: '🌍' },
+                  { value: 'hidden', label: 'Hidden', icon: '👁️‍🗨️' }
+                ]}
+              />
+              
+
+              
+              {settings.locationDisplay !== 'hidden' && (
+                <div className="setting-help">
+                  {settings.locationDisplay === 'city' && 'Shows specific area you\'re in (e.g., "Paradise" or "Shibuya")'}
+                  {settings.locationDisplay === 'municipality' && 'Shows broader context/district (e.g., "Las Vegas Strip" or "Tokyo")'}
+                  {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "Nevada" or "California")'}
+                  {settings.locationDisplay === 'country' && 'Shows country only (e.g., "United States" or "Japan")'}
+                </div>
+              )}
+            </div>
           </section>
 
           {/* Minimap */}

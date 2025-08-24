@@ -1,6 +1,6 @@
 // Centralized settings types and constants
 
-export type LocationDisplayMode = 'city' | 'state' | 'hidden';
+export type LocationDisplayMode = 'city' | 'municipality' | 'state' | 'country' | 'hidden';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;

@@ -23,7 +23,8 @@ const nextConfig: NextConfig = {
   
   // Performance optimizations
   experimental: {
-    optimizePackageImports: ['@vercel/kv', 'mapbox-gl', 'leaflet'],
+    // Temporarily disabled due to build hanging
+    // optimizePackageImports: ['@vercel/kv', 'mapbox-gl', 'leaflet'],
   },
   
   // Compression
