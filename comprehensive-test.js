@@ -60,10 +60,9 @@ testScenarios.forEach((scenario, i) => {
   console.log();
   
   console.log('Results:');
-  console.log(`  Area mode: "${formatLocation(scenario.data, 'city')}"`);
-  console.log(`  City mode: "${formatLocation(scenario.data, 'municipality')}"`);
+  console.log(`  Suburb mode: "${formatLocation(scenario.data, 'suburb')}"`);
+  console.log(`  City mode: "${formatLocation(scenario.data, 'city')}"`);
   console.log(`  State mode: "${formatLocation(scenario.data, 'state')}"`);
-  console.log(`  Country mode: "${formatLocation(scenario.data, 'country')}"`);
   console.log(`  Hidden mode: "${formatLocation(scenario.data, 'hidden')}"`);
   console.log();
   

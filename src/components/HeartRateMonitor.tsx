@@ -139,7 +139,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
         animationUpdateTimeout.current = null;
       }
     }
-  }, [heartRate.bpm, heartRate.isConnected, smoothHeartRate, stableAnimationBpm, updateConnectionState]);
+  }, [heartRate.bpm, heartRate.isConnected, stableAnimationBpm, updateConnectionState, smoothHeartRate]);
 
   // === 💗 PULSOID WEBSOCKET CONNECTION ===
   useEffect(() => {

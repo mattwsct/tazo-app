@@ -19,6 +19,7 @@ import HeartRateMonitor from '@/components/HeartRateMonitor';
 import { 
   fetchWeatherAndTimezoneFromOpenMeteo,
   fetchLocationFromLocationIQ,
+  fetchLocationFromMapbox,
   WeatherTimezoneResponse,
 } from '@/utils/api-utils';
 import {
@@ -84,7 +85,12 @@ export default function OverlayPage() {
 
   const [time, setTime] = useState('Loading...');
   const [date, setDate] = useState('Loading...');
-  const [location, setLocation] = useState<{ label: string; countryCode: string; originalData?: LocationData } | null>(null);
+  const [location, setLocation] = useState<{ 
+    label: string; 
+    line2?: string;
+    countryCode: string; 
+    originalData?: LocationData 
+  } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
   const [speed, setSpeed] = useState(0);
   const [speedIndicatorVisible, setSpeedIndicatorVisible] = useState(false);
@@ -224,24 +230,46 @@ export default function OverlayPage() {
     const distanceThreshold = THRESHOLDS.LOCATION_DISTANCE; // meters
     const timeThreshold = TIMERS.LOCATION_UPDATE; // ms
     
+    // Add additional debounce to prevent rapid successive calls
+    const minTimeBetweenCalls = 10000; // Minimum 10 seconds between any location API calls
+    const timeSinceLastCall = now - lastLocationAPICall.current;
+    
+    // Check if user is moving too fast (which could cause rapid coordinate changes)
+    const isMovingFast = lastLocationCoords.current && 
+      distanceInMeters(lat, lon, lastLocationCoords.current![0], lastLocationCoords.current![1]) > 5000; // 5km threshold
+    
     // Force location update on first load, regardless of thresholds
+    // But be more conservative if moving fast to prevent rate limit issues
     const shouldUpdateLocation = isFirstLoadNow || !lastLocationCoords.current || (
       distanceInMeters(lat, lon, lastLocationCoords.current![0], lastLocationCoords.current![1]) >= distanceThreshold &&
-      (now - lastLocationAPICall.current) >= timeThreshold
+      timeSinceLastCall >= timeThreshold &&
+      timeSinceLastCall >= minTimeBetweenCalls && // Additional debounce
+      !isMovingFast // Don't update if moving too fast
     );
     
     if (shouldUpdateLocation) {
       lastLocationCoords.current = [lat, lon];
       lastLocationAPICall.current = now;
       
+      OverlayLogger.overlay('Location update conditions met', {
+        isFirstLoad: isFirstLoadNow,
+        distanceMoved: lastLocationCoords.current ? 
+          distanceInMeters(lat, lon, lastLocationCoords.current[0], lastLocationCoords.current[1]) : 0,
+        timeSinceLastCall,
+        isMovingFast: isMovingFast || false
+      });
+      
       if (API_KEYS.LOCATIONIQ) {
         try {
-          OverlayLogger.overlay('Fetching location name from API', { lat, lon });
+          OverlayLogger.overlay('Fetching location name from LocationIQ (primary)', { lat, lon, service: 'LocationIQ' });
           const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
           if (loc) {
-            const label = formatLocation(loc, settings.locationDisplay);
-            setLocation({ label, countryCode: loc.countryCode || '', originalData: loc });
-            setLoadingState('location', false);
+            setLocation({ 
+              label: formatLocation(loc, settings.locationDisplay).line1, 
+              line2: formatLocation(loc, settings.locationDisplay).line2,
+              countryCode: loc.countryCode || '', 
+              originalData: loc 
+            });
             
             // Only update timezone from LocationIQ if RTIRL didn't provide one
             if (loc.timezone && !currentTimezone.current && loc.timezone !== currentTimezone.current) {
@@ -256,42 +284,100 @@ export default function OverlayPage() {
               }
             }
           } else {
-            setLoadingState('location', false);
+            // LocationIQ returned null (likely rate limited) - fallback will be used
+            OverlayLogger.overlay('LocationIQ returned null - Mapbox fallback will be used', { 
+              reason: 'Rate limited or daily limit reached',
+              fallback: 'Mapbox'
+            });
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          OverlayLogger.error(`Location API failed: ${errorMessage}`);
-          setLoadingState('location', false);
+          OverlayLogger.error(`LocationIQ API failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-      } else {
-        OverlayLogger.warn('LocationIQ API key not available');
-        setLoadingState('location', false);
       }
+      
+      // Try Mapbox as fallback if LocationIQ failed or isn't available
+      if (API_KEYS.MAPBOX) {
+        try {
+          OverlayLogger.overlay('Trying Mapbox fallback for location data', { 
+            lat, 
+            lon, 
+            reason: 'LocationIQ failed or rate limited',
+            fallbackService: 'Mapbox'
+          });
+          const loc = await fetchLocationFromMapbox(lat, lon, API_KEYS.MAPBOX);
+          if (loc) {
+            setLocation({ 
+              label: formatLocation(loc, settings.locationDisplay).line1, 
+              line2: formatLocation(loc, settings.locationDisplay).line2,
+              countryCode: loc.countryCode || '', 
+              originalData: loc 
+            });
+            OverlayLogger.overlay('Location data received from Mapbox fallback', { 
+              location: loc,
+              service: 'Mapbox',
+              fallback: true
+            });
+            return; // Success, exit early
+          } else {
+            OverlayLogger.warn('Mapbox fallback also returned null');
+          }
+        } catch (error) {
+          OverlayLogger.error(`Mapbox API failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // If both APIs failed, set loading to false
+      if (!API_KEYS.LOCATIONIQ && !API_KEYS.MAPBOX) {
+        OverlayLogger.warn('No location API keys available');
+      } else {
+        OverlayLogger.warn('All location APIs failed');
+      }
+      setLoadingState('location', false);
     }
-  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters]);
+  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters, setLocation]);
 
   // Update location display when display mode changes
   useEffect(() => {
     if (location?.originalData) {
-      const label = formatLocation(location.originalData, settings.locationDisplay);
-      setLocation(prev => prev ? { ...prev, label } : null);
+      const locationDisplay = formatLocation(location.originalData, settings.locationDisplay);
+      setLocation(prev => prev ? { 
+        ...prev, 
+        label: locationDisplay.line1,
+        line2: locationDisplay.line2
+      } : null);
     }
   }, [settings.locationDisplay, location?.originalData]);
+
+
 
   // Force location refresh when display mode changes (e.g., switching from State to City mode)
   useEffect(() => {
     if (mapCoords && location?.originalData) {
-      OverlayLogger.overlay('Location display mode changed - refreshing location data', { 
-        newMode: settings.locationDisplay,
-        coords: mapCoords 
-      });
+      // Add debounce to prevent rapid mode changes from triggering multiple API calls
+      const now = Date.now();
+      const timeSinceLastModeChange = now - lastLocationAPICall.current;
+      const minTimeForModeChange = 30000; // 30 seconds minimum between mode change refreshes
       
-      // Force a fresh location API call by clearing the cache
-      lastLocationCoords.current = null;
-      lastLocationAPICall.current = 0;
-      
-      // Trigger location update with current coordinates
-      updateFromCoordinates(mapCoords[0], mapCoords[1]);
+      if (timeSinceLastModeChange >= minTimeForModeChange) {
+        OverlayLogger.overlay('Location display mode changed - refreshing location data', { 
+          newMode: settings.locationDisplay,
+          coords: mapCoords,
+          timeSinceLastCall: timeSinceLastModeChange
+        });
+        
+        // Force a fresh location API call by clearing the cache
+        lastLocationCoords.current = null;
+        lastLocationAPICall.current = 0;
+        
+        // Trigger location update with current coordinates
+        updateFromCoordinates(mapCoords[0], mapCoords[1]);
+      } else {
+        OverlayLogger.overlay('Location display mode changed but skipping refresh due to recent API call', {
+          newMode: settings.locationDisplay,
+          timeSinceLastCall: timeSinceLastModeChange,
+          minTimeRequired: minTimeForModeChange
+        });
+      }
     }
   }, [settings.locationDisplay, mapCoords, location?.originalData, updateFromCoordinates]);
 
@@ -317,42 +403,6 @@ export default function OverlayPage() {
 
   const isLocationEnabled = settings.locationDisplay && settings.locationDisplay !== 'hidden';
   const isOverlayReady = useMemo(() => !isLoading.timezone, [isLoading.timezone]);
-
-  
-
-  useEffect(() => {
-    const eventSource = new EventSource('/api/settings-stream');
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'settings_update') {
-          
-          
-          // Only update settings if they've actually changed
-          const hasMinimapChanges = data.showMinimap !== settings.showMinimap || 
-                                   data.minimapSpeedBased !== settings.minimapSpeedBased ||
-                                   data.locationDisplay !== settings.locationDisplay;
-          
-          if (hasMinimapChanges) {
-            OverlayLogger.settings(`Minimap settings updated: showMinimap=${data.showMinimap}, speedBased=${data.minimapSpeedBased}, locationDisplay=${data.locationDisplay}`);
-          }
-          
-          setSettings(data);
-        }
-      } catch (error) {
-        OverlayLogger.error('Failed to parse SSE message:', error);
-      }
-    };
-    
-    eventSource.onerror = () => {
-      setTimeout(() => eventSource.close(), 5000);
-    };
-    
-    return () => {
-      eventSource.close();
-    };
-  }, [settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay]);
 
   useEffect(() => {
     currentSettings.current = settings;
@@ -808,6 +858,7 @@ export default function OverlayPage() {
               {settings.locationDisplay && settings.locationDisplay !== 'hidden' && location && location.label && (
                 <div className="location">
                   {location.label}
+                  {location.line2 && `, ${location.line2}`}
                   {location.countryCode && (
                     <img
                       src={`https://flagcdn.com/${location.countryCode}.svg`}

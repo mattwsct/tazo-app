@@ -1,5 +1,8 @@
 import { 
   checkRateLimit, 
+  getRemainingDailyCalls,
+  getCachedLocation,
+  cacheLocation,
   type LocationData 
 } from './overlay-utils';
 import { ApiLogger } from '@/lib/logger';
@@ -119,22 +122,53 @@ export interface WeatherTimezoneResponse {
 /**
  * Fetches location name from coordinates using LocationIQ API
  * Optimized for English street names globally (including Japan)
+ * Includes caching to reduce API calls and respect daily limits
  */
 export async function fetchLocationFromLocationIQ(
   lat: number, 
   lon: number, 
   apiKey: string
 ): Promise<LocationData | null> {
-  if (!apiKey || !checkRateLimit('locationiq')) {
-    ApiLogger.warn('locationiq', 'API call skipped', { 
-      hasKey: !!apiKey, 
-      rateLimitOk: checkRateLimit('locationiq') 
-    });
+  if (!apiKey) {
+    ApiLogger.warn('locationiq', 'API key not provided');
+    return null;
+  }
+
+  // Check cache first
+  const cached = getCachedLocation(lat, lon);
+  if (cached) {
+    ApiLogger.info('locationiq', 'Using cached location data', { lat, lon });
+    return cached;
+  }
+
+  // Check rate limits (both per-second and daily)
+  if (!checkRateLimit('locationiq')) {
+    const remaining = getRemainingDailyCalls('locationiq');
+    if (remaining === 0) {
+      ApiLogger.warn('locationiq', 'Daily API limit reached', { 
+        dailyLimit: 1000,
+        message: 'LocationIQ daily limit exceeded. Consider upgrading plan or wait until tomorrow.',
+        currentDailyCalls: 1000 - remaining,
+        resetTime: new Date(Date.now() + (86400000 - (Date.now() % 86400000))).toISOString()
+      });
+    } else {
+      ApiLogger.warn('locationiq', 'Rate limit exceeded', { 
+        remainingDaily: remaining,
+        message: 'Too many requests per second. Please wait a moment.',
+        currentDailyCalls: 1000 - remaining,
+        timeUntilReset: new Date(Date.now() + (86400000 - (Date.now() % 86400000))).toISOString()
+      });
+    }
     return null;
   }
 
   try {
-    ApiLogger.info('locationiq', 'Fetching location data', { lat, lon });
+    const remaining = getRemainingDailyCalls('locationiq');
+    ApiLogger.info('locationiq', 'Fetching location data', { 
+      lat, 
+      lon, 
+      remainingDaily: remaining 
+    });
     
     // Add cache busting timestamp to prevent browser caching
     const timestamp = Date.now();
@@ -143,7 +177,24 @@ export async function fetchLocationFromLocationIQ(
     );
     
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (response.status === 429) {
+        // Rate limit exceeded - this is expected and handled by fallback
+        ApiLogger.info('locationiq', 'Rate limit exceeded - fallback will be used', { 
+          status: response.status,
+          message: 'Rate limit exceeded - Mapbox fallback will be used'
+        });
+        return null; // Return null instead of throwing error
+      } else if (response.status === 402) {
+        ApiLogger.warn('locationiq', 'Daily API limit reached', { 
+          dailyLimit: 1000,
+          message: 'LocationIQ daily limit exceeded. Consider upgrading plan or wait until tomorrow.',
+          currentDailyCalls: 1000 - remaining,
+          resetTime: new Date(Date.now() + (86400000 - (Date.now() % 86400000))).toISOString()
+        });
+        return null; // Return null for daily limit too
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
     }
     
     const data = await response.json();
@@ -171,7 +222,6 @@ export async function fetchLocationFromLocationIQ(
         country: data.address.country,
         countryCode: data.address.country_code ? data.address.country_code.toLowerCase() : '',
         timezone: data.address.timezone,
-        displayName: data.display_name,
         // Store the raw address components for better city detection
         town: data.address.town,
         municipality: data.address.municipality,
@@ -181,7 +231,10 @@ export async function fetchLocationFromLocationIQ(
         county: data.address.county,
       };
       
-      ApiLogger.info('locationiq', 'Location data received', result);
+      // Cache the result to reduce future API calls
+      cacheLocation(lat, lon, result);
+      
+      ApiLogger.info('locationiq', 'Location data received and cached', result);
       
       return result;
     }
@@ -190,6 +243,124 @@ export async function fetchLocationFromLocationIQ(
     
   } catch (error) {
     ApiLogger.error('locationiq', 'Failed to fetch location', error);
+    return null;
+  }
+}
+
+// === 🗺️ LOCATION API FALLBACK (Mapbox) ===
+
+/**
+ * Fetches location name from coordinates using Mapbox API as fallback
+ * Used when LocationIQ hits rate limits or fails
+ */
+export async function fetchLocationFromMapbox(
+  lat: number, 
+  lon: number, 
+  apiKey: string
+): Promise<LocationData | null> {
+  if (!apiKey) {
+    ApiLogger.warn('mapbox', 'API key not provided');
+    return null;
+  }
+
+  // Check cache first
+  const cached = getCachedLocation(lat, lon);
+  if (cached) {
+    ApiLogger.info('mapbox', 'Using cached location data', { lat, lon });
+    return cached;
+  }
+
+  // Check rate limits
+  if (!checkRateLimit('mapbox')) {
+    ApiLogger.warn('mapbox', 'Rate limit exceeded, skipping API call');
+    return null;
+  }
+
+  try {
+    ApiLogger.info('mapbox', 'Fetching location data (fallback)', { lat, lon });
+    
+    // Mapbox reverse geocoding API
+    const response = await fetchWithRetry(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${apiKey}&types=place,region,country&language=en&limit=1`
+    );
+    
+    if (!response.ok) {
+      if (response.status === 429) {
+        // Rate limit exceeded - this is expected
+        ApiLogger.info('mapbox', 'Rate limit exceeded', { 
+          status: response.status,
+          message: 'Mapbox rate limit exceeded'
+        });
+        return null; // Return null instead of throwing error
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(`Mapbox Error: ${data.error}`);
+    }
+    
+    if (data.features && data.features.length > 0) {
+      const feature = data.features[0];
+      const context = feature.context || [];
+      
+      // Extract location components from Mapbox response
+      let city: string | undefined;
+      let state: string | undefined;
+      let country: string | undefined;
+      let countryCode: string | undefined;
+      
+      // Parse context array for administrative levels
+      for (const item of context) {
+        if (item.id.startsWith('place')) {
+          city = item.text;
+        } else if (item.id.startsWith('region')) {
+          state = item.text;
+        } else if (item.id.startsWith('country')) {
+          country = item.text;
+          countryCode = item.short_code;
+        }
+      }
+      
+      // If no city in context, use the main feature name
+      if (!city && feature.place_type.includes('place')) {
+        city = feature.text;
+      }
+      
+      // If no state in context, try to extract from feature name
+      if (!state && feature.place_type.includes('region')) {
+        state = feature.text;
+      }
+      
+      const result: LocationData = {
+        city: city,
+        state: state,
+        country: country,
+        countryCode: countryCode?.toLowerCase(),
+        // Mapbox doesn't provide as granular data, so we'll use what we have
+        town: city,
+        municipality: city,
+        suburb: city,
+        province: state,
+        region: state,
+        county: state,
+      };
+      
+      // Cache the result to reduce future API calls
+      cacheLocation(lat, lon, result);
+      
+      ApiLogger.info('mapbox', 'Location data received and cached (fallback)', result);
+      
+      return result;
+    }
+    
+    throw new Error('No location features in response');
+    
+  } catch (error) {
+    ApiLogger.error('mapbox', 'Failed to fetch location (fallback)', error);
     return null;
   }
 }

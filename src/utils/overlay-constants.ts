@@ -5,8 +5,8 @@ export const TIMERS = {
   WEATHER_BACKOFF_MIN: 1200000, // 20 minutes
   WEATHER_BACKOFF_MAX: 3600000, // 60 minutes
 
-  // LocationIQ reverse geocoding
-  LOCATION_UPDATE: 180000, // 3 minutes minimum interval
+  // LocationIQ reverse geocoding - more conservative to prevent rate limits
+  LOCATION_UPDATE: 300000, // 5 minutes minimum interval (was 3 minutes)
   OVERLAY_FADE_TIMEOUT: 5000,
   MINIMAP_HIDE_DELAY: 10000, // 10s
   SPEED_HIDE_DELAY: 10000, // 10s
@@ -21,7 +21,7 @@ export const TIMERS = {
 } as const;
 
 export const THRESHOLDS = {
-  LOCATION_DISTANCE: 750, // meters, gate for reverse geocoding
+  LOCATION_DISTANCE: 1500, // meters, increased from 750 to reduce API calls
   WEATHER_DISTANCE_KM: 10, // km, trigger weather refresh on large moves
   SPEED_SHOW: 10, // 10 km/h
   SPEED_READINGS_REQUIRED: 2,

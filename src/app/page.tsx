@@ -301,10 +301,9 @@ export default function AdminPage() {
                 value={settings.locationDisplay}
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
-                  { value: 'city', label: 'Area', icon: '🏙️' },
-                  { value: 'municipality', label: 'City', icon: '🏛️' },
+                  { value: 'suburb', label: 'Suburb', icon: '🏙️' },
+                  { value: 'city', label: 'City', icon: '🏛️' },
                   { value: 'state', label: 'State', icon: '🗺️' },
-                  { value: 'country', label: 'Country', icon: '🌍' },
                   { value: 'hidden', label: 'Hidden', icon: '👁️‍🗨️' }
                 ]}
               />
@@ -313,10 +312,9 @@ export default function AdminPage() {
               
               {settings.locationDisplay !== 'hidden' && (
                 <div className="setting-help">
-                  {settings.locationDisplay === 'city' && 'Shows specific area you\'re in (e.g., "Paradise" or "Shibuya")'}
-                  {settings.locationDisplay === 'municipality' && 'Shows broader context/district (e.g., "Las Vegas Strip" or "Tokyo")'}
-                  {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "Nevada" or "California")'}
-                  {settings.locationDisplay === 'country' && 'Shows country only (e.g., "United States" or "Japan")'}
+                  {settings.locationDisplay === 'suburb' && 'Shows most specific area available (e.g., "Paradise" or "Shibuya")'}
+                  {settings.locationDisplay === 'city' && 'Shows city-level information (e.g., "Las Vegas" or "Tokyo")'}
+                  {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "Nevada" or "Tokyo")'}
                 </div>
               )}
             </div>

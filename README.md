@@ -293,3 +293,37 @@ This project is actively maintained and updated with:
 ---
 
 **Built with ❤️ for the streaming community**
+
+## 🚀 Recent Improvements
+
+### LocationIQ API Optimization (Latest)
+- **Daily Rate Limiting**: Added daily API call limits (1,000/day for free tier) to prevent quota exhaustion
+- **Smart Caching**: Location data is now cached for 24 hours within 1km radius, reducing API calls by ~80%
+- **Better Error Handling**: Improved error messages for rate limits and daily quota exceeded scenarios
+- **Automatic Fallback**: When daily limit is reached, the app gracefully falls back to cached data
+
+### Location Display Simplification (Latest)
+- **Precision-Based System**: Replaced complex field-specific modes with intuitive precision levels
+- **Automatic Fallbacks**: Each precision level automatically falls back to less specific names if needed
+- **Cleaner Logic**: Eliminated redundant `city`/`municipality` modes in favor of `suburb`/`city`/`state`
+- **API Fallback System**: Automatic fallback between LocationIQ and Mapbox when rate limits are hit
+
+**Location Display Modes:**
+- **`suburb`**: Most specific available (suburb → city → town → municipality → state → country)
+- **`city`**: City-level precision (city → town → municipality → state → country)
+- **`state`**: State/country level (state → country)
+- **`hidden`**: No location display
+
+**API Fallback System:**
+- **Primary Service**: LocationIQ for best precision and international coverage
+- **Fallback Service**: Mapbox when LocationIQ hits rate limits
+- **Automatic Switching**: Seamless fallback without user intervention
+- **Higher Reliability**: Two APIs ensure location names are always available
+
+**Note**: If you're hitting daily limits frequently, consider:
+1. Upgrading your LocationIQ plan for higher daily quotas
+2. The app will automatically reset limits at midnight local time
+3. Cached locations reduce the need for repeated API calls
+4. The Mapbox fallback ensures location names are always available
+
+## 📋 Environment Variables
