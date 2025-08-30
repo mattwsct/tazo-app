@@ -274,24 +274,6 @@ export default function AdminPage() {
       {/* Main Content */}
       <main className="main-content">
         <div className="settings-container">
-          {/* Quick Controls */}
-          <section className="settings-section">
-            <h2>⚡ Quick Controls</h2>
-            <div className="setting-group">
-
-              <Toggle
-                checked={settings.showWeather}
-                onChange={(checked) => handleSettingsChange({ showWeather: checked })}
-                label="Show Weather"
-              />
-              <Toggle
-                checked={settings.showSpeed}
-                onChange={(checked) => handleSettingsChange({ showSpeed: checked })}
-                label="Show Speed"
-              />
-            </div>
-          </section>
-
           {/* Location */}
           <section className="settings-section">
             <h2>📍 Location</h2>
@@ -307,8 +289,6 @@ export default function AdminPage() {
                   { value: 'hidden', label: 'Hidden', icon: '👁️‍🗨️' }
                 ]}
               />
-              
-
               
               {settings.locationDisplay !== 'hidden' && (
                 <div className="setting-help">
@@ -342,6 +322,18 @@ export default function AdminPage() {
                   { value: 'speed', label: 'Auto on Movement', icon: '🏃' }
                 ]}
               />
+              
+              <div className="setting-separator"></div>
+              
+              <Toggle
+                checked={settings.showSpeed}
+                onChange={(checked) => handleSettingsChange({ showSpeed: checked })}
+                label="Show Speed Indicator"
+              />
+              
+              <div className="setting-help">
+                Speed indicator appears when moving and auto-hides when stationary
+              </div>
             </div>
           </section>
 

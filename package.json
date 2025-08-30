@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "clean": "Remove-Item -Recurse -Force .next",
+    "clean": "rm -rf .next && rm -rf node_modules/.cache",
+    "clean:win": "Remove-Item -Recurse -Force .next",
     "dev:debug": "npm run dev | tee dev.log",
     "analyze": "cross-env ANALYZE=true npm run build"
   },
@@ -17,7 +18,7 @@
     "@vercel/kv": "^3.0.0",
     "leaflet": "^1.9.4",
     "mapbox-gl": "^3.13.0",
-    "next": "15.4.1",
+    "next": "^15.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

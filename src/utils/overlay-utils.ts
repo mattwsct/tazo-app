@@ -1,7 +1,7 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
 const MAX_COUNTRY_NAME_LENGTH = 12;
-const MAX_LOCATION_FIELD_LENGTH = 20; // New constant for location field length
+const MAX_LOCATION_FIELD_LENGTH = 20;
 
 export interface LocationData {
   country?: string;
@@ -28,76 +28,26 @@ export interface LocationDisplay {
   line2?: string; // Administrative context (only when multiple variables exist)
 }
 
-/**
- * Gets the best city name by intelligently selecting the most appropriate city
- * This solves the issue where APIs return smaller administrative units instead of main city names
- */
-export function getBestCityName(location: LocationData): string {
-  // Priority order for city names (API's preferred order)
-  const cityCandidates = [
-    location.city,           // Primary city field - trust the API's choice
-    location.municipality,   // Municipality (often the main city for larger areas)
-    location.town,           // Town (usually a proper city)
-    location.suburb          // Suburb (last resort, often just neighborhood names)
-  ].filter((city): city is string => Boolean(city)); // Remove undefined/null values with proper typing
-  
-  if (cityCandidates.length === 0) {
-    return '';
-  }
-  
-  // If we only have one candidate, use it
-  if (cityCandidates.length === 1) {
-    return cityCandidates[0];
-  }
-  
-  // First, respect the API's priority order if there are no obvious redundancies
-  // Only apply redundancy logic when it's clearly beneficial
-  
-  // Check for redundant names with administrative suffixes
-  // Prefer shorter base names over longer ones with suffixes (e.g., "Tokyo" over "Tokyo Prefecture")
-  for (let i = 0; i < cityCandidates.length; i++) {
-    for (let j = i + 1; j < cityCandidates.length; j++) {
-      if (areRedundantNames(cityCandidates[i], cityCandidates[j])) {
-        // For compound names like "Las Vegas" vs "Vegas", prefer the compound name
-        // For administrative suffixes like "Tokyo" vs "Tokyo Prefecture", prefer the shorter one
-        const isCompound1 = cityCandidates[i].includes(' ');
-        const isCompound2 = cityCandidates[j].includes(' ');
-        
-        if (isCompound1 && !isCompound2) {
-          return cityCandidates[i]; // "Las Vegas" over "Vegas"
-        }
-        if (isCompound2 && !isCompound1) {
-          return cityCandidates[j]; // "Las Vegas" over "Vegas"
-        }
-        
-        // For non-compound names, prefer the shorter one (likely the base name)
-        return cityCandidates[i].length <= cityCandidates[j].length ? 
-               cityCandidates[i] : cityCandidates[j];
-      }
-    }
-  }
-  
-  // Handle specific edge cases only
-  if (cityCandidates.length === 2) {
-    const [first, second] = cityCandidates;
-    
-    // Edge case: If one contains spaces (compound names like "Las Vegas")
-    // and the other doesn't, prefer the compound name ONLY for specific cases
-    const firstHasSpaces = first.includes(' ');
-    const secondHasSpaces = second.includes(' ');
-    
-    // Only prefer compound names when they're clearly better (like "Las Vegas" vs "Paradise")
-    if (firstHasSpaces && !secondHasSpaces && first.length > second.length + 2) {
-      return first; // "Las Vegas" over "Paradise"
-    }
-    if (secondHasSpaces && !firstHasSpaces && second.length > first.length + 2) {
-      return second; // "Las Vegas" over "Paradise"
-    }
-  }
-  
-  // Default: Trust the API's prioritization and return the first (primary) candidate
-  // This respects the user's preference for specific names like "Manhattan" over "New York"
-  return cityCandidates[0];
+// === 🎯 LOCATION PRECISION LEVELS ===
+
+type LocationPrecision = 'suburb' | 'city' | 'state';
+
+interface PrecisionFallback {
+  precision: LocationPrecision;
+  fallback: LocationPrecision | null;
+}
+
+const PRECISION_FALLBACKS: Record<LocationPrecision, PrecisionFallback> = {
+  suburb: { precision: 'suburb', fallback: 'city' },
+  city: { precision: 'city', fallback: 'state' },
+  state: { precision: 'state', fallback: null }
+} as const;
+
+// === 🔍 DUPLICATE DETECTION ===
+
+interface DuplicateCheckResult {
+  isDuplicate: boolean;
+  fallbackLevel: string | null;
 }
 
 /**
@@ -106,19 +56,29 @@ export function getBestCityName(location: LocationData): string {
 function areRedundantNames(name1: string, name2: string): boolean {
   if (!name1 || !name2) return false;
   
-  const lower1 = name1.toLowerCase();
-  const lower2 = name2.toLowerCase();
+  const lower1 = name1.toLowerCase().trim();
+  const lower2 = name2.toLowerCase().trim();
   
   // Exact match
   if (lower1 === lower2) return true;
   
   // Check if one name is contained within the other (e.g., "Vegas" in "Las Vegas")
   if (lower1.includes(lower2) || lower2.includes(lower1)) {
-    return true;
+    // But be careful not to flag legitimate cases like "New York" vs "York"
+    // Only flag if the shorter name is 3+ characters and the longer name is significantly longer
+    const shorter = lower1.length <= lower2.length ? lower1 : lower2;
+    const longer = lower1.length <= lower2.length ? lower2 : lower1;
+    
+    if (shorter.length >= 3 && longer.length >= shorter.length + 2) {
+      return true;
+    }
   }
   
-  // Common redundant patterns
-  const redundantSuffixes = ['prefecture', 'province', 'county', 'district', 'city', 'municipality'];
+  // Common redundant patterns with administrative suffixes
+  const redundantSuffixes = [
+    'prefecture', 'province', 'county', 'district', 'city', 'municipality',
+    'state', 'region', 'territory', 'autonomous region', 'special region'
+  ];
   
   for (const suffix of redundantSuffixes) {
     // Check if one is just the other + suffix (e.g., "Tokyo" vs "Tokyo Prefecture")
@@ -126,9 +86,229 @@ function areRedundantNames(name1: string, name2: string): boolean {
         (lower2 === lower1.replace(` ${suffix}`, ''))) {
       return true;
     }
+    
+    // Check for variations with common separators
+    if ((lower1 === lower2.replace(`-${suffix}`, '')) || 
+        (lower2 === lower1.replace(`-${suffix}`, ''))) {
+      return true;
+    }
   }
   
   return false;
+}
+
+/**
+ * Checks for duplicate names and returns appropriate fallback level
+ */
+function checkForDuplicates(
+  primaryName: string, 
+  secondaryName: string, 
+  currentPrecision: LocationPrecision,
+  location: LocationData
+): DuplicateCheckResult {
+  if (!areRedundantNames(primaryName, secondaryName)) {
+    return { isDuplicate: false, fallbackLevel: null };
+  }
+  
+  // Handle different precision levels with appropriate fallbacks
+  switch (currentPrecision) {
+    case 'suburb':
+      return { isDuplicate: true, fallbackLevel: location.state || null };
+    
+    case 'city':
+      return { 
+        isDuplicate: true, 
+        fallbackLevel: location.country ? formatCountryName(location.country, location.countryCode) : null 
+      };
+    
+    case 'state':
+      return { 
+        isDuplicate: true, 
+        fallbackLevel: location.country ? formatCountryName(location.country, location.countryCode) : null 
+      };
+    
+    default:
+      return { isDuplicate: false, fallbackLevel: null };
+  }
+}
+
+// === 🗺️ LOCATION DATA EXTRACTION ===
+
+/**
+ * Gets location data by precision level with smart fallbacks
+ */
+function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
+  const fallbackChain = {
+    suburb: [location.suburb, location.city, location.town, location.municipality, location.state],
+    city: [location.city, location.town, location.municipality, location.state],
+    state: [location.state]
+  };
+  
+  return fallbackChain[precision].find(Boolean) || '';
+}
+
+/**
+ * Gets the next administrative level up for context
+ */
+function getNextAdministrativeLevel(location: LocationData, currentPrecision: LocationPrecision): string | null {
+  const { fallback } = PRECISION_FALLBACKS[currentPrecision];
+  
+  if (!fallback) {
+    // State level - try to add country as context
+    return location.country ? formatCountryName(location.country, location.countryCode) : null;
+  }
+  
+  const nextLevel = getLocationByPrecision(location, fallback);
+  if (!nextLevel) return null;
+  
+  // Check for duplicates and get appropriate fallback
+  const primaryName = getLocationByPrecision(location, currentPrecision);
+  const duplicateCheck = checkForDuplicates(primaryName, nextLevel, currentPrecision, location);
+  
+  if (duplicateCheck.isDuplicate) {
+    return duplicateCheck.fallbackLevel;
+  }
+  
+  return nextLevel;
+}
+
+// === 🌍 COUNTRY NAME FORMATTING ===
+
+/**
+ * Intelligently formats country names for display
+ */
+export function formatCountryName(countryName: string, countryCode = ''): string {
+  if (!countryName && !countryCode) return '';
+  
+  // Common long country names that can be shortened
+  const countryShortenings: Record<string, string> = {
+    'united states of america': 'USA',
+    'united states': 'USA',
+    'united kingdom of great britain and northern ireland': 'UK',
+    'united kingdom': 'UK',
+    'russian federation': 'Russia',
+    'peoples republic of china': 'China',
+    'republic of south africa': 'South Africa',
+    'federative republic of brazil': 'Brazil',
+    'republic of india': 'India',
+    'republic of indonesia': 'Indonesia',
+    'kingdom of saudi arabia': 'Saudi Arabia',
+    'republic of korea': 'South Korea',
+    'democratic peoples republic of korea': 'North Korea',
+    'republic of the philippines': 'Philippines',
+    'socialist republic of vietnam': 'Vietnam',
+    'kingdom of thailand': 'Thailand',
+    'republic of turkey': 'Turkey',
+    'islamic republic of iran': 'Iran',
+    'republic of iraq': 'Iraq',
+    'republic of egypt': 'Egypt',
+    'republic of sudan': 'Sudan',
+    'republic of south sudan': 'South Sudan',
+    'republic of chad': 'Chad',
+    'republic of niger': 'Niger',
+    'republic of mali': 'Mali',
+    'republic of burkina faso': 'Burkina Faso',
+    'republic of senegal': 'Senegal',
+    'republic of guinea': 'Guinea',
+    'republic of sierra leone': 'Sierra Leone',
+    'republic of liberia': 'Liberia',
+    'republic of ivory coast': 'Ivory Coast',
+    'republic of ghana': 'Ghana',
+    'republic of togo': 'Togo',
+    'republic of benin': 'Benin',
+    'republic of nigeria': 'Nigeria',
+    'republic of cameroon': 'Cameroon',
+    'republic of central african republic': 'Central African Republic',
+    'republic of congo': 'Congo',
+    'democratic republic of the congo': 'DR Congo',
+    'republic of gabon': 'Gabon',
+    'republic of equatorial guinea': 'Equatorial Guinea',
+    'republic of angola': 'Angola',
+    'republic of zambia': 'Zambia',
+    'republic of zimbabwe': 'Zimbabwe',
+    'republic of botswana': 'Botswana',
+    'republic of namibia': 'Namibia',
+    'republic of mozambique': 'Mozambique',
+    'republic of madagascar': 'Madagascar',
+    'republic of mauritius': 'Mauritius',
+    'republic of seychelles': 'Seychelles',
+    'republic of comoros': 'Comoros',
+    'republic of djibouti': 'Djibouti',
+    'republic of somalia': 'Somalia',
+    'republic of kenya': 'Kenya',
+    'republic of uganda': 'Uganda',
+    'republic of rwanda': 'Rwanda',
+    'republic of burundi': 'Burundi',
+    'republic of tanzania': 'Tanzania',
+    'republic of malawi': 'Malawi',
+    'republic of lesotho': 'Lesotho',
+    'kingdom of eswatini': 'Eswatini'
+  };
+  
+  if (countryName) {
+    const lowerCountryName = countryName.toLowerCase();
+    
+    // Check if we have a shortening for this country
+    if (countryShortenings[lowerCountryName]) {
+      return countryShortenings[lowerCountryName];
+    }
+    
+    // If the name is still too long, use country code
+    if (countryName.length > MAX_COUNTRY_NAME_LENGTH) {
+      return countryCode ? countryCode.toUpperCase() : countryName;
+    }
+    
+    return countryName;
+  }
+  
+  // If no country name but we have country code, return the code
+  return countryCode ? countryCode.toUpperCase() : '';
+}
+
+// === 📏 UTILITY FUNCTIONS ===
+
+/**
+ * Checks if a location name is too long for display
+ */
+function isLocationNameTooLong(name: string): boolean {
+  return name.length > MAX_LOCATION_FIELD_LENGTH;
+}
+
+/**
+ * Gets the best city name by intelligently selecting the most appropriate city
+ */
+export function getBestCityName(location: LocationData): string {
+  // Priority order for city names (API's preferred order)
+  const cityCandidates = [
+    location.city,           // Primary city field - trust the API's choice
+    location.municipality,   // Municipality (often the main city for larger areas)
+    location.town,           // Town (usually a proper city)
+    location.suburb          // Suburb (last resort, often just neighborhood names)
+  ].filter((city): city is string => Boolean(city));
+  
+  if (cityCandidates.length === 0) return '';
+  if (cityCandidates.length === 1) return cityCandidates[0];
+  
+  // Check for redundant names with administrative suffixes
+  for (let i = 0; i < cityCandidates.length; i++) {
+    for (let j = i + 1; j < cityCandidates.length; j++) {
+      if (areRedundantNames(cityCandidates[i], cityCandidates[j])) {
+        // For compound names like "Las Vegas" vs "Vegas", prefer the compound name
+        const isCompound1 = cityCandidates[i].includes(' ');
+        const isCompound2 = cityCandidates[j].includes(' ');
+        
+        if (isCompound1 && !isCompound2) return cityCandidates[i];
+        if (isCompound2 && !isCompound1) return cityCandidates[j];
+        
+        // For non-compound names, prefer the shorter one (likely the base name)
+        return cityCandidates[i].length <= cityCandidates[j].length ? 
+               cityCandidates[i] : cityCandidates[j];
+      }
+    }
+  }
+  
+  // Default: Trust the API's prioritization
+  return cityCandidates[0];
 }
 
 /**
@@ -145,8 +325,119 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
     return countryCode ? countryCode.toUpperCase() : countryName;
   }
   
-  // If no country name but we have country code, return the code
   return countryCode ? countryCode.toUpperCase() : '';
+}
+
+// === 🎨 MAIN LOCATION FORMATTING ===
+
+/**
+ * Formats location data for overlay display with two-line precision-based logic
+ */
+export function formatLocation(
+  location: LocationData | null, 
+  displayMode: 'suburb' | 'city' | 'state' | 'hidden' = 'suburb'
+): LocationDisplay {
+  // Early returns for edge cases
+  if (!location) return { line1: '', line2: undefined };
+  if (displayMode === 'hidden') return { line1: 'Location Hidden', line2: undefined };
+  
+  // Get primary location and handle length-based fallbacks
+  const primaryLocation = getLocationByPrecision(location, displayMode);
+  let nextLevel: string | null = null;
+  
+  // Handle length-based fallbacks
+  if (primaryLocation && isLocationNameTooLong(primaryLocation)) {
+    const fallbackResult = handleLengthBasedFallback(location, displayMode);
+    if (fallbackResult) {
+      return fallbackResult;
+    }
+  }
+  
+  // Handle missing primary location fallbacks
+  if (!primaryLocation) {
+    const missingFallbackResult = handleMissingPrimaryFallback(location, displayMode);
+    if (missingFallbackResult) {
+      return missingFallbackResult;
+    }
+    return { line1: '', line2: undefined };
+  }
+  
+  // Get next level if not already set
+  if (nextLevel === null) {
+    nextLevel = getNextAdministrativeLevel(location, displayMode);
+  }
+  
+  return {
+    line1: primaryLocation,
+    line2: nextLevel || undefined
+  };
+}
+
+/**
+ * Handles fallbacks when primary location is too long
+ */
+function handleLengthBasedFallback(
+  location: LocationData, 
+  displayMode: LocationPrecision
+): LocationDisplay | null {
+  const { fallback } = PRECISION_FALLBACKS[displayMode];
+  
+  if (!fallback) return null;
+  
+  const fallbackLocation = getLocationByPrecision(location, fallback);
+  if (!fallbackLocation || isLocationNameTooLong(fallbackLocation)) {
+    // Try next fallback level
+    const nextFallback = PRECISION_FALLBACKS[fallback]?.fallback;
+    if (nextFallback) {
+      const nextFallbackLocation = getLocationByPrecision(location, nextFallback);
+      if (nextFallbackLocation && !isLocationNameTooLong(nextFallbackLocation)) {
+        return { line1: nextFallbackLocation, line2: undefined };
+      }
+    }
+    
+    // Fall back to original precision but single line only
+    const originalLocation = getLocationByPrecision(location, displayMode);
+    return { line1: originalLocation, line2: undefined };
+  }
+  
+  // Use fallback level
+  const nextLevel = getNextAdministrativeLevel(location, fallback);
+  return {
+    line1: fallbackLocation,
+    line2: nextLevel || undefined
+  };
+}
+
+/**
+ * Handles fallbacks when primary location is missing
+ */
+function handleMissingPrimaryFallback(
+  location: LocationData, 
+  displayMode: LocationPrecision
+): LocationDisplay | null {
+  const { fallback } = PRECISION_FALLBACKS[displayMode];
+  
+  if (!fallback) return null;
+  
+  const fallbackLocation = getLocationByPrecision(location, fallback);
+  if (fallbackLocation) {
+    const nextLevel = getNextAdministrativeLevel(location, fallback);
+    return {
+      line1: fallbackLocation,
+      line2: nextLevel || undefined
+    };
+  }
+  
+  // Try next fallback level
+  const nextFallback = PRECISION_FALLBACKS[fallback]?.fallback;
+  if (nextFallback) {
+    const nextFallbackLocation = getLocationByPrecision(location, nextFallback);
+    if (nextFallbackLocation) {
+      return { line1: nextFallbackLocation, line2: undefined };
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -161,186 +452,6 @@ export function celsiusToFahrenheit(celsius: number): number {
  */
 export function kmhToMph(kmh: number): number {
   return Math.round(kmh * 0.621371);
-}
-
-/**
- * Gets location data by precision level with smart fallbacks
- * Always returns the most precise available data for the requested level
- */
-function getLocationByPrecision(location: LocationData, precision: 'suburb' | 'city' | 'state'): string {
-  if (precision === 'suburb') {
-    // Most specific to least specific - suburb fallback chain
-    return location.suburb || location.city || location.town || location.municipality || location.state || '';
-  }
-  
-  if (precision === 'city') {
-    // City-level focus with fallbacks
-    return location.city || location.town || location.municipality || location.state || '';
-  }
-  
-  if (precision === 'state') {
-    // State level - state only
-    return location.state || '';
-  }
-  
-  // Fallback to empty if nothing else works
-  return '';
-}
-
-/**
- * Gets the next administrative level up for context
- * Used for line2 when we have multiple variables available
- * Checks for duplicates and falls back to next level if needed
- */
-function getNextAdministrativeLevel(location: LocationData, currentPrecision: 'suburb' | 'city' | 'state'): string | null {
-  if (currentPrecision === 'suburb') {
-    // If we're showing suburb, next level is city
-    const cityLevel = location.city || location.town || location.municipality || location.state || null;
-    
-    // Check if city level is the same as suburb to avoid "Houston Houston"
-    if (cityLevel && location.suburb && cityLevel.toLowerCase() === location.suburb.toLowerCase()) {
-      // Fall back to state level to avoid duplicates
-      return location.state || null;
-    }
-    
-    return cityLevel;
-  }
-  
-  if (currentPrecision === 'city') {
-    // If we're showing city, next level is state
-    const stateLevel = location.state || null;
-    
-    // Check if state level is the same as city to avoid "Tokyo Tokyo"
-    if (stateLevel && location.city && stateLevel.toLowerCase() === location.city.toLowerCase()) {
-      // No next level available, return null for single line display
-      return null;
-    }
-    
-    return stateLevel;
-  }
-  
-  if (currentPrecision === 'state') {
-    // If we're showing state, no next level (single line display)
-    return null;
-  }
-  
-  return null;
-}
-
-/**
- * Checks if a location name is too long for display
- * Uses the MAX_LOCATION_FIELD_LENGTH constant
- */
-function isLocationNameTooLong(name: string): boolean {
-  return name.length > MAX_LOCATION_FIELD_LENGTH;
-}
-
-/**
- * Formats location data for overlay display with two-line precision-based logic
- * 
- * @param location - Location data from API
- * @param displayMode - Precision level: suburb (most specific), city (balanced), state (less specific), or hidden
- * @returns LocationDisplay object with line1 (required) and line2 (optional)
- * 
- * **Display Logic:**
- * - Respects user's precision setting with smart fallbacks
- * - Always shows exactly 2 variables when available
- * - Single line when only one variable exists
- * - Never shows country names
- * - Always precise → broad when showing 2 lines
- * - **NEW: Length-based fallbacks** - falls back to next precision if names are too long
- * - **NEW: Final fallback protection** - if state is too long, shows only single precision level
- */
-export function formatLocation(
-  location: LocationData | null, 
-  displayMode: 'suburb' | 'city' | 'state' | 'hidden' = 'suburb'
-): LocationDisplay {
-  // If no location data, return empty
-  if (!location) {
-    return { line1: '', line2: undefined };
-  }
-  
-  if (displayMode === 'hidden') {
-    return { line1: 'Location Hidden', line2: undefined };
-  }
-  
-  // Get the primary location name for the requested precision level
-  let primaryLocation = getLocationByPrecision(location, displayMode);
-  let nextLevel: string | null = null;
-  
-  // If primary location is too long, try fallback to next precision level
-  if (primaryLocation && isLocationNameTooLong(primaryLocation)) {
-    if (displayMode === 'suburb') {
-      // Fall back to city precision
-      const cityLocation = getLocationByPrecision(location, 'city');
-      if (cityLocation && !isLocationNameTooLong(cityLocation)) {
-        primaryLocation = cityLocation;
-        nextLevel = getNextAdministrativeLevel(location, 'city');
-      } else if (cityLocation && isLocationNameTooLong(cityLocation)) {
-        // City is also too long, try state
-        const stateLocation = getLocationByPrecision(location, 'state');
-        if (stateLocation && !isLocationNameTooLong(stateLocation)) {
-          primaryLocation = stateLocation;
-          nextLevel = null; // Single line for state
-        } else if (stateLocation && isLocationNameTooLong(stateLocation)) {
-          // State is also too long - fall back to original precision but single line only
-          const originalLocation = getLocationByPrecision(location, displayMode);
-          return { line1: originalLocation, line2: undefined };
-        }
-      }
-    } else if (displayMode === 'city') {
-      // Fall back to state precision
-      const stateLocation = getLocationByPrecision(location, 'state');
-      if (stateLocation && !isLocationNameTooLong(stateLocation)) {
-        primaryLocation = stateLocation;
-        nextLevel = null; // Single line for state
-      } else if (stateLocation && isLocationNameTooLong(stateLocation)) {
-        // State is too long - fall back to original precision but single line only
-        const originalLocation = getLocationByPrecision(location, displayMode);
-        return { line1: originalLocation, line2: undefined };
-      }
-    }
-  }
-  
-  // If no primary location available, try fallback to next precision level
-  if (!primaryLocation) {
-    if (displayMode === 'suburb') {
-      // Fall back to city precision
-      const cityLocation = getLocationByPrecision(location, 'city');
-      if (cityLocation) {
-        nextLevel = getNextAdministrativeLevel(location, 'city');
-        return {
-          line1: cityLocation,
-          line2: nextLevel || undefined
-        };
-      }
-      // Fall back to state precision
-      const stateLocation = getLocationByPrecision(location, 'state');
-      if (stateLocation) {
-        return { line1: stateLocation, line2: undefined };
-      }
-    } else if (displayMode === 'city') {
-      // Fall back to state precision
-      const stateLocation = getLocationByPrecision(location, 'state');
-      if (stateLocation) {
-        return { line1: stateLocation, line2: undefined };
-      }
-    }
-    
-    // No location data available at any precision level
-    return { line1: '', line2: undefined };
-  }
-  
-  // If we haven't set nextLevel yet, get it now
-  if (nextLevel === null) {
-    nextLevel = getNextAdministrativeLevel(location, displayMode);
-  }
-  
-  // Return structured display object
-  return {
-    line1: primaryLocation,
-    line2: nextLevel || undefined
-  };
 }
 
 /**
@@ -365,87 +476,6 @@ export function capitalizeWords(str: string): string {
 }
 
 // === 🔄 RATE LIMITING ===
-
-// Location cache to reduce API calls
-interface CachedLocation {
-  lat: number;
-  lon: number;
-  data: LocationData;
-  timestamp: number;
-  expiresAt: number;
-}
-
-const locationCache = new Map<string, CachedLocation>();
-const LOCATION_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
-const LOCATION_CACHE_DISTANCE_THRESHOLD = 1000; // 1km - cache locations within this distance
-
-/**
- * Generates a cache key for coordinates
- */
-function getLocationCacheKey(lat: number, lon: number): string {
-  // Round to 3 decimal places (~100m precision) for caching
-  const latRounded = Math.round(lat * 1000) / 1000;
-  const lonRounded = Math.round(lon * 1000) / 1000;
-  return `${latRounded},${lonRounded}`;
-}
-
-/**
- * Checks if coordinates are close enough to use cached location
- */
-function isLocationCacheable(lat1: number, lon1: number, lat2: number, lon2: number): boolean {
-  return distanceInMeters(lat1, lon1, lat2, lon2) <= LOCATION_CACHE_DISTANCE_THRESHOLD;
-}
-
-/**
- * Gets cached location data if available and valid
- */
-export function getCachedLocation(lat: number, lon: number): LocationData | null {
-  const now = Date.now();
-  
-  // Only clean expired entries occasionally (every 10th call) to improve performance
-  if (Math.random() < 0.1) {
-    for (const [key, cached] of locationCache.entries()) {
-      if (now > cached.expiresAt) {
-        locationCache.delete(key);
-      }
-    }
-  }
-  
-  // Check if we have a cached location for nearby coordinates
-  for (const [key, cached] of locationCache.entries()) {
-    if (isLocationCacheable(lat, lon, cached.lat, cached.lon)) {
-      if (now <= cached.expiresAt) {
-        return cached.data;
-      } else {
-        locationCache.delete(key);
-      }
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Caches location data for future use
- */
-export function cacheLocation(lat: number, lon: number, data: LocationData): void {
-  const key = getLocationCacheKey(lat, lon);
-  const now = Date.now();
-  
-  locationCache.set(key, {
-    lat,
-    lon,
-    data,
-    timestamp: now,
-    expiresAt: now + LOCATION_CACHE_DURATION
-  });
-  
-  // Limit cache size to prevent memory issues
-  if (locationCache.size > 100) {
-    const oldestKey = Array.from(locationCache.keys())[0];
-    locationCache.delete(oldestKey);
-  }
-}
 
 interface RateLimit {
   calls: number;

@@ -14,7 +14,6 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
-import HeartRateMonitor from '@/components/HeartRateMonitor';
 
 import { 
   fetchWeatherAndTimezoneFromOpenMeteo,
@@ -26,7 +25,7 @@ import {
   formatLocation,
   distanceInMeters,
   isValidCoordinate,
-  LocationData,
+  LocationData
 } from '@/utils/overlay-utils';
 import { OverlayLogger } from '@/lib/logger';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -51,7 +50,12 @@ import {
 
 const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
   ssr: false,
-  loading: () => <div />
+  loading: () => <div className="minimap-placeholder" />
+});
+
+const HeartRateMonitor = dynamic(() => import('@/components/HeartRateMonitor'), {
+  ssr: false,
+  loading: () => null
 });
 
 
@@ -117,6 +121,14 @@ export default function OverlayPage() {
   const lastLocationAPICall = useRef(0);
   const weatherTimerRef = useRef<NodeJS.Timeout | null>(null);
   const weatherPollMsRef = useRef<number>(TIMERS.WEATHER_TIMEZONE_UPDATE);
+  
+  // Centralized timer management
+  const activeTimers = useRef<Set<NodeJS.Timeout>>(new Set());
+  
+  const clearAllTimers = useCallback(() => {
+    activeTimers.current.forEach(clearTimeout);
+    activeTimers.current.clear();
+  }, []);
 
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
   const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
@@ -336,17 +348,30 @@ export default function OverlayPage() {
     }
   }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters, setLocation]);
 
+  // Memoize formatted location to prevent unnecessary re-renders
+  const formattedLocation = useMemo(() => {
+    if (!location?.originalData) return null;
+    return formatLocation(location.originalData, settings.locationDisplay);
+  }, [location?.originalData, settings.locationDisplay]);
+  
   // Update location display when display mode changes
   useEffect(() => {
-    if (location?.originalData) {
-      const locationDisplay = formatLocation(location.originalData, settings.locationDisplay);
+    if (formattedLocation) {
       setLocation(prev => prev ? { 
         ...prev, 
-        label: locationDisplay.line1,
-        line2: locationDisplay.line2
+        label: formattedLocation.line1,
+        line2: formattedLocation.line2
       } : null);
+      
+      // Log display mode change for debugging
+      if (mapCoords) {
+        OverlayLogger.overlay('Display mode changed locally', {
+          newMode: settings.locationDisplay,
+          coords: mapCoords
+        });
+      }
     }
-  }, [settings.locationDisplay, location?.originalData]);
+  }, [formattedLocation, mapCoords]);
 
 
 
@@ -365,7 +390,7 @@ export default function OverlayPage() {
           timeSinceLastCall: timeSinceLastModeChange
         });
         
-        // Force a fresh location API call by clearing the cache
+        // Force a fresh location API call
         lastLocationCoords.current = null;
         lastLocationAPICall.current = 0;
         
@@ -381,7 +406,7 @@ export default function OverlayPage() {
     }
   }, [settings.locationDisplay, mapCoords, location?.originalData, updateFromCoordinates]);
 
-  const shouldShowMinimap = useCallback(() => {
+  const shouldShowMinimap = useMemo(() => {
     // If location is hidden, never show minimap
     if (settings.locationDisplay === 'hidden') {
       return false;
@@ -401,7 +426,7 @@ export default function OverlayPage() {
     return false;
   }, [mapCoords, settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, minimapOpacity]);
 
-  const isLocationEnabled = settings.locationDisplay && settings.locationDisplay !== 'hidden';
+  // Location is enabled if display mode is not hidden
   const isOverlayReady = useMemo(() => !isLoading.timezone, [isLoading.timezone]);
 
   useEffect(() => {
@@ -463,6 +488,13 @@ export default function OverlayPage() {
     
     OverlayLogger.overlay('Page loaded - forcing fresh location data fetch on next coordinates');
   }, []);
+  
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      clearAllTimers();
+    };
+  }, [clearAllTimers]);
 
   useEffect(() => {
     if (!timezone || !formatter.current || !dateFormatter.current) return;
@@ -697,6 +729,45 @@ export default function OverlayPage() {
     };
     
     loadSettings();
+    
+    // Connect to settings stream for real-time updates
+    const eventSource = new EventSource('/api/settings-stream');
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'settings_update') {
+          // Only update if settings actually changed
+          setSettings(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(data)) {
+              return prev; // No change
+            }
+            
+            OverlayLogger.overlay('Settings updated via stream', data);
+            
+            // If location display mode changed, log the change
+            if (data.locationDisplay && data.locationDisplay !== prev.locationDisplay) {
+              OverlayLogger.overlay('Location display mode changed via stream', {
+                oldMode: prev.locationDisplay,
+                newMode: data.locationDisplay
+              });
+            }
+            
+            return data;
+          });
+        }
+      } catch (error) {
+        OverlayLogger.error('Failed to parse settings stream message', error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      OverlayLogger.error('Settings stream error', error);
+    };
+    
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
 
@@ -846,102 +917,102 @@ export default function OverlayPage() {
               </div>
             )}
             
-            <HeartRateMonitor 
-              pulsoidToken={API_KEYS.PULSOID} 
-            />
+            {API_KEYS.PULSOID && (
+              <HeartRateMonitor 
+                pulsoidToken={API_KEYS.PULSOID} 
+              />
+            )}
           </div>
         </div>
 
-        {(isLocationEnabled || settings.showWeather || (settings.showMinimap || settings.minimapSpeedBased)) && (
-          <div className="top-right">
-            <div className="overlay-container">
-              {settings.locationDisplay && settings.locationDisplay !== 'hidden' && location && location.label && (
-                <div className="location">
-                  {location.label}
-                  {location.line2 && `, ${location.line2}`}
-                  {location.countryCode && (
-                    <img
-                      src={`https://flagcdn.com/${location.countryCode}.svg`}
-                      alt={`Country: ${location.label}`}
-                      width={32}
-                      height={20}
-                      className="location-flag"
-                    />
-                  )}
+        {/* Top-right section - always shown since weather is always displayed */}
+        <div className="top-right">
+          <div className="overlay-container">
+            {settings.locationDisplay && settings.locationDisplay !== 'hidden' && location && location.label && (
+              <div className="location">
+                {location.label}
+                {location.line2 && `, ${location.line2}`}
+                {location.countryCode && (
+                  <img
+                    src={`https://flagcdn.com/${location.countryCode}.svg`}
+                    alt={`Country: ${location.label}`}
+                    width={32}
+                    height={20}
+                    className="location-flag"
+                  />
+                )}
+              </div>
+            )}
+            
+            {/* Weather - always shown by default */}
+            <div className="weather">
+              {isLoading.weather ? (
+                <div className="weather-container">
+                  <div className="weather-content">
+                    <div className="weather-description">Loading weather...</div>
+                    <div className="weather-temperature">--°C / --°F</div>
+                  </div>
                 </div>
-              )}
-              
-              {settings.showWeather && (
-                <div className="weather">
-                  {isLoading.weather ? (
-                    <div className="weather-container">
-                      <div className="weather-content">
-                        <div className="weather-description">Loading weather...</div>
-                        <div className="weather-temperature">--°C / --°F</div>
-                      </div>
+              ) : weather ? (
+                <div className="weather-container">
+                  <div className="weather-content">
+                    <div className="weather-description">
+                      {weather.desc.toUpperCase()}
                     </div>
-                  ) : weather ? (
-                    <div className="weather-container">
-                      <div className="weather-content">
-                        <div className="weather-description">
-                          {weather.desc.toUpperCase()}
-                        </div>
-                        <div className="weather-temperature">
-                          {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              )}
-              
-              {/* Speed Indicator */}
-              {settings.showSpeed && speedIndicatorVisible && (
-                <div className="speed-indicator">
-                  <div className="speed-content">
-                    <div className="speed-value">
-                      {currentSpeedMph}
-                    </div>
-                    <div className="speed-label">
-                      MPH
+                    <div className="weather-temperature">
+                      {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
                     </div>
                   </div>
-                  <div className="speed-separator">/</div>
-                  <div className="speed-content">
-                    <div className="speed-value">
-                      {displaySpeedKmh}
-                    </div>
-                    <div className="speed-label">
-                      KM/H
+                </div>
+              ) : null}
+            </div>
+            
+            {/* Speed Indicator */}
+            {settings.showSpeed && speedIndicatorVisible && (
+              <div className="speed-indicator">
+                <div className="speed-content">
+                  <div className="speed-value">
+                    {currentSpeedMph}
+                  </div>
+                  <div className="speed-label">
+                    MPH
+                  </div>
+                </div>
+                <div className="speed-separator">/</div>
+                <div className="speed-content">
+                  <div className="speed-value">
+                    {displaySpeedKmh}
+                  </div>
+                  <div className="speed-label">
+                    KM/H
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {shouldShowMinimap && (
+            <div className="minimap" style={{ opacity: minimapOpacity, transition: 'opacity 0.2s ease-in-out' }}>
+              {mapCoords ? (
+                <MapboxMinimap 
+                  lat={mapCoords[0]} 
+                  lon={mapCoords[1]} 
+                  isVisible={true}
+                  speedKmh={currentSpeedKmh}
+                />
+              ) : (
+                <div className="minimap-placeholder">
+                  <div className="placeholder-content">
+                    <div className="placeholder-icon">🗺️</div>
+                    <div className="placeholder-text">
+                      {settings.minimapSpeedBased ? 'Waiting for movement...' : 'Waiting for GPS...'}
                     </div>
                   </div>
                 </div>
               )}
             </div>
-
-            {shouldShowMinimap() && (
-              <div className="minimap" style={{ opacity: minimapOpacity, transition: 'opacity 0.2s ease-in-out' }}>
-                {mapCoords ? (
-                  <MapboxMinimap 
-                    lat={mapCoords[0]} 
-                    lon={mapCoords[1]} 
-                    isVisible={true}
-                    speedKmh={currentSpeedKmh}
-                  />
-                ) : (
-                  <div className="minimap-placeholder">
-                    <div className="placeholder-content">
-                      <div className="placeholder-icon">🗺️</div>
-                      <div className="placeholder-text">
-                        {settings.minimapSpeedBased ? 'Waiting for movement...' : 'Waiting for GPS...'}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </ErrorBoundary>
   );

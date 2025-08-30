@@ -1,8 +1,6 @@
 import { 
   checkRateLimit, 
   getRemainingDailyCalls,
-  getCachedLocation,
-  cacheLocation,
   type LocationData 
 } from './overlay-utils';
 import { ApiLogger } from '@/lib/logger';
@@ -134,12 +132,7 @@ export async function fetchLocationFromLocationIQ(
     return null;
   }
 
-  // Check cache first
-  const cached = getCachedLocation(lat, lon);
-  if (cached) {
-    ApiLogger.info('locationiq', 'Using cached location data', { lat, lon });
-    return cached;
-  }
+
 
   // Check rate limits (both per-second and daily)
   if (!checkRateLimit('locationiq')) {
@@ -231,10 +224,7 @@ export async function fetchLocationFromLocationIQ(
         county: data.address.county,
       };
       
-      // Cache the result to reduce future API calls
-      cacheLocation(lat, lon, result);
-      
-      ApiLogger.info('locationiq', 'Location data received and cached', result);
+      ApiLogger.info('locationiq', 'Location data received', result);
       
       return result;
     }
@@ -263,12 +253,7 @@ export async function fetchLocationFromMapbox(
     return null;
   }
 
-  // Check cache first
-  const cached = getCachedLocation(lat, lon);
-  if (cached) {
-    ApiLogger.info('mapbox', 'Using cached location data', { lat, lon });
-    return cached;
-  }
+
 
   // Check rate limits
   if (!checkRateLimit('mapbox')) {
@@ -349,10 +334,7 @@ export async function fetchLocationFromMapbox(
         county: state,
       };
       
-      // Cache the result to reduce future API calls
-      cacheLocation(lat, lon, result);
-      
-      ApiLogger.info('mapbox', 'Location data received and cached (fallback)', result);
+      ApiLogger.info('mapbox', 'Location data received (fallback)', result);
       
       return result;
     }
