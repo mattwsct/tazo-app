@@ -91,7 +91,7 @@ export default function OverlayPage() {
   const [date, setDate] = useState('Loading...');
   const [location, setLocation] = useState<{ 
     label: string; 
-    line2?: string;
+    context?: string;
     countryCode: string; 
     originalData?: LocationData 
   } | null>(null);
@@ -121,6 +121,7 @@ export default function OverlayPage() {
   const lastLocationAPICall = useRef(0);
   const weatherTimerRef = useRef<NodeJS.Timeout | null>(null);
   const weatherPollMsRef = useRef<number>(TIMERS.WEATHER_TIMEZONE_UPDATE);
+  const settingsUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
   
   // Centralized timer management
   const activeTimers = useRef<Set<NodeJS.Timeout>>(new Set());
@@ -128,6 +129,17 @@ export default function OverlayPage() {
   const clearAllTimers = useCallback(() => {
     activeTimers.current.forEach(clearTimeout);
     activeTimers.current.clear();
+  }, []);
+
+  // Debounced settings update to prevent rapid location API calls
+  const debouncedSetSettings = useCallback((newSettings: OverlaySettings) => {
+    if (settingsUpdateTimeout.current) {
+      clearTimeout(settingsUpdateTimeout.current);
+    }
+    
+    settingsUpdateTimeout.current = setTimeout(() => {
+      setSettings(newSettings);
+    }, 500); // 500ms debounce
   }, []);
 
   const formatter = useRef<Intl.DateTimeFormat | null>(null);
@@ -242,20 +254,26 @@ export default function OverlayPage() {
     const distanceThreshold = THRESHOLDS.LOCATION_DISTANCE; // meters
     const timeThreshold = TIMERS.LOCATION_UPDATE; // ms
     
-    // Add additional debounce to prevent rapid successive calls
-    const minTimeBetweenCalls = 10000; // Minimum 10 seconds between any location API calls
+    // Optimized location update logic with movement-based intelligence
     const timeSinceLastCall = now - lastLocationAPICall.current;
+    const distanceMoved = lastLocationCoords.current ? 
+      distanceInMeters(lat, lon, lastLocationCoords.current[0], lastLocationCoords.current[1]) : 0;
+    
+    // Check if user is stationary (moved less than 100m)
+    const isStationary = distanceMoved < 100;
     
     // Check if user is moving too fast (which could cause rapid coordinate changes)
-    const isMovingFast = lastLocationCoords.current && 
-      distanceInMeters(lat, lon, lastLocationCoords.current![0], lastLocationCoords.current![1]) > 5000; // 5km threshold
+    const isMovingFast = distanceMoved > 5000; // 5km threshold
+    
+    // Dynamic minimum time between calls based on movement
+    const minTimeBetweenCalls = isStationary ? 30000 : 15000; // 30s if stationary, 15s if moving
     
     // Force location update on first load, regardless of thresholds
     // But be more conservative if moving fast to prevent rate limit issues
     const shouldUpdateLocation = isFirstLoadNow || !lastLocationCoords.current || (
-      distanceInMeters(lat, lon, lastLocationCoords.current![0], lastLocationCoords.current![1]) >= distanceThreshold &&
+      distanceMoved >= distanceThreshold &&
       timeSinceLastCall >= timeThreshold &&
-      timeSinceLastCall >= minTimeBetweenCalls && // Additional debounce
+      timeSinceLastCall >= minTimeBetweenCalls && // Dynamic debounce
       !isMovingFast // Don't update if moving too fast
     );
     
@@ -277,8 +295,8 @@ export default function OverlayPage() {
           const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
           if (loc) {
             setLocation({ 
-              label: formatLocation(loc, settings.locationDisplay).line1, 
-              line2: formatLocation(loc, settings.locationDisplay).line2,
+              label: formatLocation(loc, settings.locationDisplay).primary, 
+              context: formatLocation(loc, settings.locationDisplay).context,
               countryCode: loc.countryCode || '', 
               originalData: loc 
             });
@@ -295,6 +313,8 @@ export default function OverlayPage() {
                 setLoadingState('timezone', false);
               }
             }
+            
+            return; // Exit early after successful LocationIQ response
           } else {
             // LocationIQ returned null (likely rate limited) - fallback will be used
             OverlayLogger.overlay('LocationIQ returned null - Mapbox fallback will be used', { 
@@ -319,8 +339,8 @@ export default function OverlayPage() {
           const loc = await fetchLocationFromMapbox(lat, lon, API_KEYS.MAPBOX);
           if (loc) {
             setLocation({ 
-              label: formatLocation(loc, settings.locationDisplay).line1, 
-              line2: formatLocation(loc, settings.locationDisplay).line2,
+              label: formatLocation(loc, settings.locationDisplay).primary, 
+              context: formatLocation(loc, settings.locationDisplay).context,
               countryCode: loc.countryCode || '', 
               originalData: loc 
             });
@@ -359,8 +379,8 @@ export default function OverlayPage() {
     if (formattedLocation) {
       setLocation(prev => prev ? { 
         ...prev, 
-        label: formattedLocation.line1,
-        line2: formattedLocation.line2
+        label: formattedLocation.primary,
+        context: formattedLocation.context
       } : null);
       
       // Log display mode change for debugging
@@ -371,7 +391,7 @@ export default function OverlayPage() {
         });
       }
     }
-  }, [formattedLocation, mapCoords]);
+  }, [formattedLocation, mapCoords, settings.locationDisplay]);
 
 
 
@@ -407,10 +427,6 @@ export default function OverlayPage() {
   }, [settings.locationDisplay, mapCoords, location?.originalData, updateFromCoordinates]);
 
   const shouldShowMinimap = useMemo(() => {
-    // If location is hidden, never show minimap
-    if (settings.locationDisplay === 'hidden') {
-      return false;
-    }
     
     // If speed-based mode is enabled, show only when moving
     if (settings.minimapSpeedBased) {
@@ -424,9 +440,8 @@ export default function OverlayPage() {
     
     // Default: don't show
     return false;
-  }, [mapCoords, settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, minimapOpacity]);
+  }, [mapCoords, settings.showMinimap, settings.minimapSpeedBased, minimapOpacity]);
 
-  // Location is enabled if display mode is not hidden
   const isOverlayReady = useMemo(() => !isLoading.timezone, [isLoading.timezone]);
 
   useEffect(() => {
@@ -443,17 +458,14 @@ export default function OverlayPage() {
 
   useEffect(() => {
     // Update minimap visibility when settings change
-    if (settings.locationDisplay === 'hidden') {
-      // Location is hidden: force hide minimap
-      setMinimapOpacity(0);
-    } else if (settings.minimapSpeedBased) {
+    if (settings.minimapSpeedBased) {
       // Speed-based mode: visibility controlled by speed threshold
       // (handled by the speed effect)
     } else if (settings.showMinimap) {
       // Manual mode: show if we have coordinates
       setMinimapOpacity(mapCoords ? 1 : 0);
     } else {
-      // Hidden mode: ensure hidden
+      // Manual mode: hide minimap
       setMinimapOpacity(0);
     }
   }, [settings.minimapSpeedBased, settings.showMinimap, settings.locationDisplay, mapCoords]);
@@ -738,23 +750,27 @@ export default function OverlayPage() {
         const data = JSON.parse(event.data);
         if (data.type === 'settings_update') {
           // Only update if settings actually changed
-          setSettings(prev => {
-            if (JSON.stringify(prev) === JSON.stringify(data)) {
-              return prev; // No change
-            }
-            
-            OverlayLogger.overlay('Settings updated via stream', data);
-            
-            // If location display mode changed, log the change
-            if (data.locationDisplay && data.locationDisplay !== prev.locationDisplay) {
-              OverlayLogger.overlay('Location display mode changed via stream', {
-                oldMode: prev.locationDisplay,
-                newMode: data.locationDisplay
-              });
-            }
-            
-            return data;
-          });
+          const prevSettings = settings;
+          if (JSON.stringify(prevSettings) === JSON.stringify(data)) {
+            return; // No change
+          }
+          
+          OverlayLogger.overlay('Settings updated via stream', data);
+          
+          // If location display mode changed, log the change
+          if (data.locationDisplay && data.locationDisplay !== prevSettings.locationDisplay) {
+            OverlayLogger.overlay('Location display mode changed via stream', {
+              oldMode: prevSettings.locationDisplay,
+              newMode: data.locationDisplay
+            });
+          }
+          
+          // Use debounced update for location-related settings to prevent rapid API calls
+          if (data.locationDisplay !== prevSettings.locationDisplay) {
+            debouncedSetSettings(data);
+          } else {
+            setSettings(data);
+          }
         }
       } catch (error) {
         OverlayLogger.error('Failed to parse settings stream message', error);
@@ -768,7 +784,7 @@ export default function OverlayPage() {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [debouncedSetSettings]); // Remove 'settings' from dependencies to prevent connection spam
 
 
 
@@ -810,9 +826,7 @@ export default function OverlayPage() {
     }
 
     // Minimap visibility logic
-    if (settings.locationDisplay === 'hidden') {
-      setMinimapOpacity(0);
-    } else if (settings.minimapSpeedBased) {
+    if (settings.minimapSpeedBased) {
       // Speed-based mode: show only when moving
       const kmh = getSpeedKmh(speed);
       const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
@@ -897,6 +911,48 @@ export default function OverlayPage() {
     return () => clearTimeout(overlayTimeout);
   }, [minimapOpacity]);
 
+  // Memoize location display to prevent unnecessary re-renders
+  const locationDisplay = useMemo(() => {
+    if (settings.locationDisplay === 'hidden') {
+      return null;
+    }
+    
+    // Handle custom location
+    if (settings.locationDisplay === 'custom') {
+      if (!settings.customLocation || settings.customLocation.trim() === '') {
+        return null;
+      }
+      return {
+        text: settings.customLocation.trim(),
+        countryCode: location?.countryCode || null, // Use current GPS location's country flag
+        countryName: location?.originalData?.country || null
+      };
+    }
+    
+    // Handle GPS-based location
+    if (!location || !location.label) {
+      return null;
+    }
+    
+    return {
+      text: `${location.label}${location.context ? `, ${location.context}` : ''}`,
+      countryCode: location.countryCode,
+      countryName: location.originalData?.country || 'Unknown'
+    };
+  }, [location, settings.locationDisplay, settings.customLocation]);
+
+  // Memoize weather display to prevent unnecessary re-renders
+  const weatherDisplay = useMemo(() => {
+    if (isLoading.weather || !weather) {
+      return null;
+    }
+    
+    return {
+      description: weather.desc.toUpperCase(),
+      temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`
+    };
+  }, [weather, isLoading.weather]);
+
   return (
     <ErrorBoundary>
       <div id="overlay" className={overlayVisible ? 'show' : ''}>
@@ -928,19 +984,11 @@ export default function OverlayPage() {
         {/* Top-right section - always shown since weather is always displayed */}
         <div className="top-right">
           <div className="overlay-container">
-            {settings.locationDisplay && settings.locationDisplay !== 'hidden' && location && location.label && (
+            {locationDisplay && (
               <div className="location">
-                {location.label}
-                {location.line2 && `, ${location.line2}`}
-                {location.countryCode && (
-                  <img
-                    src={`https://flagcdn.com/${location.countryCode}.svg`}
-                    alt={`Country: ${location.label}`}
-                    width={32}
-                    height={20}
-                    className="location-flag"
-                  />
-                )}
+                <div className="location-text">
+                  {locationDisplay.text}
+                </div>
               </div>
             )}
             
@@ -953,16 +1001,28 @@ export default function OverlayPage() {
                     <div className="weather-temperature">--°C / --°F</div>
                   </div>
                 </div>
-              ) : weather ? (
+              ) : weatherDisplay ? (
                 <div className="weather-container">
                   <div className="weather-content">
                     <div className="weather-description">
-                      {weather.desc.toUpperCase()}
+                      {weatherDisplay.description}
                     </div>
                     <div className="weather-temperature">
-                      {weather.temp}°C / {celsiusToFahrenheit(weather.temp)}°F
+                      {weatherDisplay.temperature}
                     </div>
                   </div>
+                  {/* Country flag next to weather */}
+                  {locationDisplay?.countryCode && (
+                    <div className="weather-flag-container">
+                      <img
+                        src={`https://flagcdn.com/${locationDisplay.countryCode}.svg`}
+                        alt={`Country: ${locationDisplay.countryName}`}
+                        width={32}
+                        height={20}
+                        className="weather-flag"
+                      />
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>

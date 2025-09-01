@@ -1,9 +1,10 @@
 // Centralized settings types and constants
 
-export type LocationDisplayMode = 'suburb' | 'city' | 'state' | 'hidden';
+export type LocationDisplayMode = 'suburb' | 'city' | 'state' | 'hidden' | 'custom';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
+  customLocation?: string;
   showWeather: boolean;
   showMinimap: boolean;
   minimapSpeedBased: boolean;
@@ -13,6 +14,7 @@ export interface OverlaySettings {
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   locationDisplay: 'suburb',
+  customLocation: '',
   showWeather: true,
   showMinimap: false,
   minimapSpeedBased: false,
@@ -22,6 +24,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 // Valid settings schema for validation
 export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
+  customLocation: 'string',
   showWeather: 'boolean',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',

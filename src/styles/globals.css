@@ -294,12 +294,24 @@ body.overlay-page {
   font-size: var(--font-size-base);
   font-weight: 600;
   margin: 0;
-  line-height: 1.2;
   text-align: right;
   display: flex;
-  align-items: center;
+  align-items: center; /* Center flag relative to text height */
   justify-content: flex-end;
   gap: var(--gap-lg);
+}
+
+.location-text {
+  line-height: 1.1;
+  white-space: pre-line;
+  word-wrap: break-word;
+}
+
+.location-flag-container {
+  flex-shrink: 0; /* Prevent flag from shrinking */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .location-flag {
@@ -332,6 +344,18 @@ body.overlay-page {
   align-items: center;
   justify-content: flex-end;
   gap: var(--gap-lg);
+}
+
+.weather-flag-container {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weather-flag {
+  border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .weather-content {

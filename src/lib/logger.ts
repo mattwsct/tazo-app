@@ -38,18 +38,85 @@ function shouldLog(level: LogLevel): boolean {
 }
 
 /**
- * Format log message with timestamp and context
+ * Format log message with enhanced visual styling
  */
 function formatMessage(level: LogLevel, context: string, message: string): string {
-  const timestamp = new Date().toISOString();
-  const emoji = {
-    debug: '🔍',
-    info: 'ℹ️',
-    warn: '⚠️',
-    error: '❌',
-  }[level];
+  const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', '');
   
-  return `${emoji} [${timestamp}] [${context.toUpperCase()}] ${message}`;
+  // Enhanced emojis and colors for different contexts
+  const contextStyles = {
+    'API-LOCATIONIQ': { emoji: '🗺️', color: '#4A90E2' },
+    'API-MAPBOX': { emoji: '🗺️', color: '#7ED321' },
+    'API-OPENMETEO': { emoji: '🌤️', color: '#50E3C2' },
+    'OVERLAY': { emoji: '📺', color: '#F5A623' },
+    'WEATHER': { emoji: '🌦️', color: '#50E3C2' },
+    'LOCATION': { emoji: '📍', color: '#4A90E2' },
+    'SETTINGS': { emoji: '⚙️', color: '#9013FE' },
+    'HEART-RATE': { emoji: '💓', color: '#D0021B' },
+    'BROADCAST': { emoji: '📡', color: '#7ED321' },
+    'ERROR': { emoji: '❌', color: '#D0021B' },
+    'WARNING': { emoji: '⚠️', color: '#F5A623' },
+  };
+  
+  const contextStyle = contextStyles[context as keyof typeof contextStyles] || { emoji: '📝', color: '#9B9B9B' };
+  
+  // Create styled components
+  const timestampStr = `%c${timestamp}`;
+  const contextStr = `%c${contextStyle.emoji} ${context.toUpperCase()}`;
+  const messageStr = `%c${message}`;
+  
+  // Return formatted string with CSS styles
+  return `${timestampStr} ${contextStr} ${messageStr}`;
+}
+
+/**
+ * Get CSS styles for formatted log message
+ */
+function getLogStyles(level: LogLevel, context: string): string[] {
+  const contextStyles = {
+    'API-LOCATIONIQ': { emoji: '🗺️', color: '#4A90E2' },
+    'API-MAPBOX': { emoji: '🗺️', color: '#7ED321' },
+    'API-OPENMETEO': { emoji: '🌤️', color: '#50E3C2' },
+    'OVERLAY': { emoji: '📺', color: '#F5A623' },
+    'WEATHER': { emoji: '🌦️', color: '#50E3C2' },
+    'LOCATION': { emoji: '📍', color: '#4A90E2' },
+    'SETTINGS': { emoji: '⚙️', color: '#9013FE' },
+    'HEART-RATE': { emoji: '💓', color: '#D0021B' },
+    'BROADCAST': { emoji: '📡', color: '#7ED321' },
+    'ERROR': { emoji: '❌', color: '#D0021B' },
+    'WARNING': { emoji: '⚠️', color: '#F5A623' },
+  };
+  
+  const levelStyles = {
+    debug: { emoji: '🔍', color: '#9B9B9B' },
+    info: { emoji: 'ℹ️', color: '#4A90E2' },
+    warn: { emoji: '⚠️', color: '#F5A623' },
+    error: { emoji: '❌', color: '#D0021B' },
+  };
+  
+  const contextStyle = contextStyles[context as keyof typeof contextStyles] || { emoji: '📝', color: '#9B9B9B' };
+  const levelStyle = levelStyles[level];
+  
+  return [
+    `color: #9B9B9B; font-size: 11px; font-weight: normal;`, // timestamp
+    `color: ${contextStyle.color}; font-weight: bold; font-size: 12px;`, // context
+    `color: ${levelStyle.color}; font-weight: 500;`, // message
+  ];
+}
+
+/**
+ * Format data objects for better readability
+ */
+function formatData(data: unknown): string {
+  if (data === null || data === undefined) return '';
+  if (typeof data === 'string') return data;
+  if (typeof data === 'number' || typeof data === 'boolean') return String(data);
+  
+  try {
+    return JSON.stringify(data, null, 2);
+  } catch {
+    return String(data);
+  }
 }
 
 /**
@@ -64,22 +131,30 @@ export class Logger {
 
   debug(message: string, data?: unknown): void {
     if (!shouldLog('debug') || !LOG_CONFIG.enableConsole) return;
-    console.log(formatMessage('debug', this.context, message), data || '');
+    const styles = getLogStyles('debug', this.context);
+    const formattedData = data ? formatData(data) : '';
+    console.log(formatMessage('debug', this.context, message), ...styles, formattedData);
   }
 
   info(message: string, data?: unknown): void {
     if (!shouldLog('info') || !LOG_CONFIG.enableConsole) return;
-    console.log(formatMessage('info', this.context, message), data || '');
+    const styles = getLogStyles('info', this.context);
+    const formattedData = data ? formatData(data) : '';
+    console.log(formatMessage('info', this.context, message), ...styles, formattedData);
   }
 
   warn(message: string, data?: unknown): void {
     if (!shouldLog('warn') || !LOG_CONFIG.enableConsole) return;
-    console.warn(formatMessage('warn', this.context, message), data || '');
+    const styles = getLogStyles('warn', this.context);
+    const formattedData = data ? formatData(data) : '';
+    console.warn(formatMessage('warn', this.context, message), ...styles, formattedData);
   }
 
   error(message: string, error?: unknown): void {
     if (!shouldLog('error') || !LOG_CONFIG.enableConsole) return;
-    console.error(formatMessage('error', this.context, message), error || '');
+    const styles = getLogStyles('error', this.context);
+    const formattedData = error ? formatData(error) : '';
+    console.error(formatMessage('error', this.context, message), ...styles, formattedData);
   }
 }
 
@@ -145,4 +220,37 @@ export const BroadcastLogger = {
   
   error: (message: string, error?: unknown) => 
     new Logger('BROADCAST').error(message, error),
+} as const;
+
+/**
+ * Visual separator for log sections
+ */
+export const LogSeparator = {
+  section: (title: string) => {
+    const styles = [
+      'color: #9013FE; font-weight: bold; font-size: 14px;',
+      'color: #9B9B9B; font-size: 11px;',
+    ];
+    console.log(`%c━━━ ${title} ━━━%c`, ...styles);
+  },
+  
+  divider: () => {
+    console.log('%c─────────────────────────────────────────', 'color: #E0E0E0; font-size: 10px;');
+  },
+  
+  success: (message: string) => {
+    const styles = [
+      'color: #7ED321; font-weight: bold; font-size: 12px;',
+      'color: #7ED321; font-weight: 500;',
+    ];
+    console.log(`%c✅ %c${message}`, ...styles);
+  },
+  
+  highlight: (message: string) => {
+    const styles = [
+      'color: #F5A623; font-weight: bold; font-size: 12px;',
+      'color: #F5A623; font-weight: 500;',
+    ];
+    console.log(`%c🔆 %c${message}`, ...styles);
+  },
 } as const; 

@@ -48,12 +48,13 @@ export async function GET(request: NextRequest): Promise<Response> {
         console.log(`[SSE] Connection ${connectionId} registered with broadcast system`);
       }
       
-      // Log connection status after a short delay to verify registration
+      // Log connection status after a short delay to verify registration (only for first few connections)
       if (process.env.NODE_ENV === 'development') {
         setTimeout(() => {
           const connectionInfo = getConnectionInfo();
-          console.log(`[SSE] Connection ${connectionId} status check - registered: ${connectionInfo.ids.includes(connectionId)}, total: ${connectionInfo.count}`);
-          console.log(`[SSE] All connections:`, connectionInfo.ids);
+          if (connectionInfo.count <= 3) {
+            console.log(`[SSE] Connection ${connectionId} status check - registered: ${connectionInfo.ids.includes(connectionId)}, total: ${connectionInfo.count}`);
+          }
         }, 200);
       }
       

@@ -25,16 +25,21 @@ export function addConnection(controller: ReadableStreamDefaultController, id?: 
     id: connectionId,
     connectedAt: Date.now()
   });
-  console.log(`[BROADCAST] Added connection ${connectionId}, total: ${connections.size}`);
-  console.log(`[BROADCAST] Current connections:`, Array.from(connections.keys()));
-  console.log(`[BROADCAST] Connection map size:`, connections.size);
+  
+  // Only log in development and limit frequency
+  if (process.env.NODE_ENV === 'development' && connections.size <= 5) {
+    console.log(`[BROADCAST] Added connection ${connectionId}, total: ${connections.size}`);
+  }
   return connectionId;
 }
 
 export function removeConnection(connectionId: string) {
   const removed = connections.delete(connectionId);
-  console.log(`[BROADCAST] Removed connection ${connectionId}, success: ${removed}, remaining: ${connections.size}`);
-  console.log(`[BROADCAST] Remaining connections:`, Array.from(connections.keys()));
+  
+  // Only log in development and limit frequency
+  if (process.env.NODE_ENV === 'development' && connections.size <= 5) {
+    console.log(`[BROADCAST] Removed connection ${connectionId}, success: ${removed}, remaining: ${connections.size}`);
+  }
 }
 
 export function getConnectionCount(): number {
@@ -58,7 +63,10 @@ export async function broadcastSettings(settings: OverlaySettings) {
   };
   const data = JSON.stringify(broadcastData);
   
-  console.log(`[BROADCAST] Starting broadcast to ${connections.size} connected clients:`, broadcastData);
+  // Only log in development and limit frequency
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[BROADCAST] Starting broadcast to ${connections.size} connected clients`);
+  }
   
   // If no connections, wait longer for overlay to connect, then try again
   if (connections.size === 0) {
@@ -87,7 +95,6 @@ export async function broadcastSettings(settings: OverlaySettings) {
     try {
       connectionInfo.controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       successCount++;
-      console.log(`[BROADCAST] ✅ Sent to connection ${connectionId}`);
     } catch (error) {
       // Connection closed, mark for removal
       deadConnections.push(connectionId);
@@ -101,7 +108,10 @@ export async function broadcastSettings(settings: OverlaySettings) {
     connections.delete(connectionId);
   });
   
-  console.log(`[BROADCAST] Complete: ${successCount} successful, ${failureCount} failed, ${connections.size} remaining active connections`);
+  // Only log in development and limit frequency
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[BROADCAST] Complete: ${successCount} successful, ${failureCount} failed, ${connections.size} remaining active connections`);
+  }
   
   return { 
     success: successCount > 0, 

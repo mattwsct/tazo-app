@@ -19,10 +19,20 @@ const API_CONFIG = {
 
 // === 🧠 SIMPLE IN-MEMORY CACHE (client/runtime scoped) ===
 const WEATHER_CACHE_TTL_MS = 60 * 1000; // 60s
+const LOCATION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 type WeatherCacheKey = string; // `${lat.toFixed(3)},${lon.toFixed(3)}`
+type LocationCacheKey = string; // `${lat.toFixed(3)},${lon.toFixed(3)}`
 const weatherCache = new Map<WeatherCacheKey, { timestamp: number; data: WeatherTimezoneResponse | null }>();
+const locationCache = new Map<LocationCacheKey, { timestamp: number; data: LocationData | null }>();
 
 function getWeatherCacheKey(lat: number, lon: number): WeatherCacheKey {
+  // Round to reduce cache fragmentation while keeping useful precision
+  const rLat = lat.toFixed(3);
+  const rLon = lon.toFixed(3);
+  return `${rLat},${rLon}`;
+}
+
+function getLocationCacheKey(lat: number, lon: number): LocationCacheKey {
   // Round to reduce cache fragmentation while keeping useful precision
   const rLat = lat.toFixed(3);
   const rLon = lon.toFixed(3);
@@ -132,6 +142,18 @@ export async function fetchLocationFromLocationIQ(
     return null;
   }
 
+  // Check cache first
+  const cacheKey = getLocationCacheKey(lat, lon);
+  const cached = locationCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < LOCATION_CACHE_TTL_MS) {
+    ApiLogger.info('locationiq', 'Location data served from cache', { 
+      lat, 
+      lon, 
+      cacheAge: Date.now() - cached.timestamp 
+    });
+    return cached.data;
+  }
+
 
 
   // Check rate limits (both per-second and daily)
@@ -226,6 +248,16 @@ export async function fetchLocationFromLocationIQ(
       
       ApiLogger.info('locationiq', 'Location data received', result);
       
+      // Cache the result
+      locationCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      
+      // Clean up old cache entries (keep only last 100)
+      if (locationCache.size > 100) {
+        const entries = Array.from(locationCache.entries());
+        entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+        entries.slice(100).forEach(([key]) => locationCache.delete(key));
+      }
+      
       return result;
     }
     
@@ -251,6 +283,18 @@ export async function fetchLocationFromMapbox(
   if (!apiKey) {
     ApiLogger.warn('mapbox', 'API key not provided');
     return null;
+  }
+
+  // Check cache first (shared with LocationIQ)
+  const cacheKey = getLocationCacheKey(lat, lon);
+  const cached = locationCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < LOCATION_CACHE_TTL_MS) {
+    ApiLogger.info('mapbox', 'Location data served from cache (fallback)', { 
+      lat, 
+      lon, 
+      cacheAge: Date.now() - cached.timestamp 
+    });
+    return cached.data;
   }
 
 
@@ -335,6 +379,16 @@ export async function fetchLocationFromMapbox(
       };
       
       ApiLogger.info('mapbox', 'Location data received (fallback)', result);
+      
+      // Cache the result (shared with LocationIQ)
+      locationCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      
+      // Clean up old cache entries (keep only last 100)
+      if (locationCache.size > 100) {
+        const entries = Array.from(locationCache.entries());
+        entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+        entries.slice(100).forEach(([key]) => locationCache.delete(key));
+      }
       
       return result;
     }

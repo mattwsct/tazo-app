@@ -3,6 +3,8 @@
 const MAX_COUNTRY_NAME_LENGTH = 12;
 const MAX_LOCATION_FIELD_LENGTH = 20;
 
+
+
 export interface LocationData {
   country?: string;
   countryCode?: string;
@@ -24,34 +26,26 @@ export interface LocationData {
 }
 
 export interface LocationDisplay {
-  line1: string;  // Most precise available location
-  line2?: string; // Administrative context (only when multiple variables exist)
+  primary: string;  // Most precise available location
+  context?: string; // Administrative context (only when not redundant)
 }
 
 // === 🎯 LOCATION PRECISION LEVELS ===
 
 type LocationPrecision = 'suburb' | 'city' | 'state';
 
-interface PrecisionFallback {
-  precision: LocationPrecision;
-  fallback: LocationPrecision | null;
-}
-
-const PRECISION_FALLBACKS: Record<LocationPrecision, PrecisionFallback> = {
-  suburb: { precision: 'suburb', fallback: 'city' },
-  city: { precision: 'city', fallback: 'state' },
-  state: { precision: 'state', fallback: null }
+const PRECISION_FALLBACKS: Record<LocationPrecision, LocationPrecision | null> = {
+  suburb: 'city',
+  city: 'state', 
+  state: null
 } as const;
 
 // === 🔍 DUPLICATE DETECTION ===
 
-interface DuplicateCheckResult {
-  isDuplicate: boolean;
-  fallbackLevel: string | null;
-}
-
 /**
- * Checks if two location names are redundant (e.g., "Tokyo" and "Tokyo Prefecture")
+ * Checks if two location names are redundant (bidirectional containment)
+ * Examples: "New York City" contains "New York" -> redundant
+ *           "Tokyo Prefecture" contains "Tokyo" -> redundant
  */
 function areRedundantNames(name1: string, name2: string): boolean {
   if (!name1 || !name2) return false;
@@ -59,77 +53,7 @@ function areRedundantNames(name1: string, name2: string): boolean {
   const lower1 = name1.toLowerCase().trim();
   const lower2 = name2.toLowerCase().trim();
   
-  // Exact match
-  if (lower1 === lower2) return true;
-  
-  // Check if one name is contained within the other (e.g., "Vegas" in "Las Vegas")
-  if (lower1.includes(lower2) || lower2.includes(lower1)) {
-    // But be careful not to flag legitimate cases like "New York" vs "York"
-    // Only flag if the shorter name is 3+ characters and the longer name is significantly longer
-    const shorter = lower1.length <= lower2.length ? lower1 : lower2;
-    const longer = lower1.length <= lower2.length ? lower2 : lower1;
-    
-    if (shorter.length >= 3 && longer.length >= shorter.length + 2) {
-      return true;
-    }
-  }
-  
-  // Common redundant patterns with administrative suffixes
-  const redundantSuffixes = [
-    'prefecture', 'province', 'county', 'district', 'city', 'municipality',
-    'state', 'region', 'territory', 'autonomous region', 'special region'
-  ];
-  
-  for (const suffix of redundantSuffixes) {
-    // Check if one is just the other + suffix (e.g., "Tokyo" vs "Tokyo Prefecture")
-    if ((lower1 === lower2.replace(` ${suffix}`, '')) || 
-        (lower2 === lower1.replace(` ${suffix}`, ''))) {
-      return true;
-    }
-    
-    // Check for variations with common separators
-    if ((lower1 === lower2.replace(`-${suffix}`, '')) || 
-        (lower2 === lower1.replace(`-${suffix}`, ''))) {
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-/**
- * Checks for duplicate names and returns appropriate fallback level
- */
-function checkForDuplicates(
-  primaryName: string, 
-  secondaryName: string, 
-  currentPrecision: LocationPrecision,
-  location: LocationData
-): DuplicateCheckResult {
-  if (!areRedundantNames(primaryName, secondaryName)) {
-    return { isDuplicate: false, fallbackLevel: null };
-  }
-  
-  // Handle different precision levels with appropriate fallbacks
-  switch (currentPrecision) {
-    case 'suburb':
-      return { isDuplicate: true, fallbackLevel: location.state || null };
-    
-    case 'city':
-      return { 
-        isDuplicate: true, 
-        fallbackLevel: location.country ? formatCountryName(location.country, location.countryCode) : null 
-      };
-    
-    case 'state':
-      return { 
-        isDuplicate: true, 
-        fallbackLevel: location.country ? formatCountryName(location.country, location.countryCode) : null 
-      };
-    
-    default:
-      return { isDuplicate: false, fallbackLevel: null };
-  }
+  return lower1.includes(lower2) || lower2.includes(lower1);
 }
 
 // === 🗺️ LOCATION DATA EXTRACTION ===
@@ -139,37 +63,51 @@ function checkForDuplicates(
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
   const fallbackChain = {
-    suburb: [location.suburb, location.city, location.town, location.municipality, location.state],
-    city: [location.city, location.town, location.municipality, location.state],
+    suburb: [location.suburb, location.town, location.municipality, location.city, location.state],
+    city: [location.municipality, location.city, location.state],
     state: [location.state]
   };
   
-  return fallbackChain[precision].find(Boolean) || '';
+  // Find the first non-empty location that's not too long
+  return fallbackChain[precision].find(loc => loc && !isLocationNameTooLong(loc)) || '';
 }
 
 /**
- * Gets the next administrative level up for context
+ * Gets context for a location, checking for duplicates at all levels
  */
-function getNextAdministrativeLevel(location: LocationData, currentPrecision: LocationPrecision): string | null {
-  const { fallback } = PRECISION_FALLBACKS[currentPrecision];
+function getContext(location: LocationData, primaryName: string, currentPrecision: LocationPrecision): string | null {
+  const fallback = PRECISION_FALLBACKS[currentPrecision];
+  if (!fallback) return null; // State level has no context
   
-  if (!fallback) {
-    // State level - try to add country as context
-    return location.country ? formatCountryName(location.country, location.countryCode) : null;
+  const contextName = getLocationByPrecision(location, fallback);
+  if (!contextName) return null;
+  
+  // Check if primary and context are redundant
+  if (areRedundantNames(primaryName, contextName)) return null;
+  
+  // Check if context is redundant with even broader levels (cascading detection)
+  // If context is redundant with a broader level, use the broader level instead
+  let currentLevel = contextName;
+  let currentFallback = fallback;
+  
+  while (currentFallback) {
+    const furtherFallback = PRECISION_FALLBACKS[currentFallback];
+    if (furtherFallback) {
+      const furtherLevel = getLocationByPrecision(location, furtherFallback);
+      if (furtherLevel && areRedundantNames(furtherLevel, currentLevel)) {
+        // Context is redundant with broader level, use the broader level
+        currentLevel = furtherLevel;
+        currentFallback = furtherFallback;
+      } else {
+        // No redundancy found, keep current level
+        break;
+      }
+    } else {
+      break;
+    }
   }
   
-  const nextLevel = getLocationByPrecision(location, fallback);
-  if (!nextLevel) return null;
-  
-  // Check for duplicates and get appropriate fallback
-  const primaryName = getLocationByPrecision(location, currentPrecision);
-  const duplicateCheck = checkForDuplicates(primaryName, nextLevel, currentPrecision, location);
-  
-  if (duplicateCheck.isDuplicate) {
-    return duplicateCheck.fallbackLevel;
-  }
-  
-  return nextLevel;
+  return currentLevel;
 }
 
 // === 🌍 COUNTRY NAME FORMATTING ===
@@ -332,113 +270,42 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
 
 /**
  * Formats location data for overlay display with two-line precision-based logic
+ * 
+ * @example
+ * // Suburb mode: Shows most specific location with context
+ * formatLocation({ city: 'New York City', state: 'New York' }, 'suburb')
+ * // Returns: { primary: 'New York City', context: 'New York' }
+ * 
+ * @example
+ * // City mode: Shows city with state context (if not duplicate)
+ * formatLocation({ city: 'Tokyo', state: 'Tokyo Prefecture' }, 'city')
+ * // Returns: { primary: 'Tokyo', context: undefined } (duplicate detected)
+ * 
+ * @example
+ * // State mode: Shows state only (no country fallback)
+ * formatLocation({ state: 'California', country: 'United States' }, 'state')
+ * // Returns: { primary: 'California', context: undefined }
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'suburb' | 'city' | 'state' | 'hidden' = 'suburb'
+  displayMode: 'suburb' | 'city' | 'state' | 'hidden' | 'custom' = 'suburb'
 ): LocationDisplay {
-  // Early returns for edge cases
-  if (!location) return { line1: '', line2: undefined };
-  if (displayMode === 'hidden') return { line1: 'Location Hidden', line2: undefined };
+  if (!location || displayMode === 'hidden' || displayMode === 'custom') return { primary: '', context: undefined };
   
-  // Get primary location and handle length-based fallbacks
-  const primaryLocation = getLocationByPrecision(location, displayMode);
-  let nextLevel: string | null = null;
+  // Get primary location (automatically handles length limits via getLocationByPrecision)
+  const primary = getLocationByPrecision(location, displayMode);
+  if (!primary) return { primary: '', context: undefined };
   
-  // Handle length-based fallbacks
-  if (primaryLocation && isLocationNameTooLong(primaryLocation)) {
-    const fallbackResult = handleLengthBasedFallback(location, displayMode);
-    if (fallbackResult) {
-      return fallbackResult;
-    }
-  }
-  
-  // Handle missing primary location fallbacks
-  if (!primaryLocation) {
-    const missingFallbackResult = handleMissingPrimaryFallback(location, displayMode);
-    if (missingFallbackResult) {
-      return missingFallbackResult;
-    }
-    return { line1: '', line2: undefined };
-  }
-  
-  // Get next level if not already set
-  if (nextLevel === null) {
-    nextLevel = getNextAdministrativeLevel(location, displayMode);
-  }
+  // Get context with duplicate detection
+  const context = getContext(location, primary, displayMode);
   
   return {
-    line1: primaryLocation,
-    line2: nextLevel || undefined
+    primary,
+    context: context || undefined
   };
 }
 
-/**
- * Handles fallbacks when primary location is too long
- */
-function handleLengthBasedFallback(
-  location: LocationData, 
-  displayMode: LocationPrecision
-): LocationDisplay | null {
-  const { fallback } = PRECISION_FALLBACKS[displayMode];
-  
-  if (!fallback) return null;
-  
-  const fallbackLocation = getLocationByPrecision(location, fallback);
-  if (!fallbackLocation || isLocationNameTooLong(fallbackLocation)) {
-    // Try next fallback level
-    const nextFallback = PRECISION_FALLBACKS[fallback]?.fallback;
-    if (nextFallback) {
-      const nextFallbackLocation = getLocationByPrecision(location, nextFallback);
-      if (nextFallbackLocation && !isLocationNameTooLong(nextFallbackLocation)) {
-        return { line1: nextFallbackLocation, line2: undefined };
-      }
-    }
-    
-    // Fall back to original precision but single line only
-    const originalLocation = getLocationByPrecision(location, displayMode);
-    return { line1: originalLocation, line2: undefined };
-  }
-  
-  // Use fallback level
-  const nextLevel = getNextAdministrativeLevel(location, fallback);
-  return {
-    line1: fallbackLocation,
-    line2: nextLevel || undefined
-  };
-}
 
-/**
- * Handles fallbacks when primary location is missing
- */
-function handleMissingPrimaryFallback(
-  location: LocationData, 
-  displayMode: LocationPrecision
-): LocationDisplay | null {
-  const { fallback } = PRECISION_FALLBACKS[displayMode];
-  
-  if (!fallback) return null;
-  
-  const fallbackLocation = getLocationByPrecision(location, fallback);
-  if (fallbackLocation) {
-    const nextLevel = getNextAdministrativeLevel(location, fallback);
-    return {
-      line1: fallbackLocation,
-      line2: nextLevel || undefined
-    };
-  }
-  
-  // Try next fallback level
-  const nextFallback = PRECISION_FALLBACKS[fallback]?.fallback;
-  if (nextFallback) {
-    const nextFallbackLocation = getLocationByPrecision(location, nextFallback);
-    if (nextFallbackLocation) {
-      return { line1: nextFallbackLocation, line2: undefined };
-    }
-  }
-  
-  return null;
-}
 
 /**
  * Converts Celsius to Fahrenheit

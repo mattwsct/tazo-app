@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode } from '@/types/settings';
@@ -13,7 +13,9 @@ export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [toast, setToast] = useState<{ type: 'saving' | 'saved' | 'error'; message: string } | null>(null);
 
-  // Manual input states
+  // Custom location input state (for debouncing)
+  const [customLocationInput, setCustomLocationInput] = useState('');
+  const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
 
   // Check authentication status and refresh session
@@ -129,11 +131,7 @@ export default function AdminPage() {
       }
     }
     
-    // Handle location display logic
-    if (updates.locationDisplay === 'hidden') {
-      mergedSettings.showMinimap = false;
-      mergedSettings.minimapSpeedBased = false;
-    }
+
     
     setSettings(mergedSettings);
     setToast({ type: 'saving', message: 'Saving settings...' });
@@ -160,7 +158,34 @@ export default function AdminPage() {
     }
   }, [settings]);
 
-  
+  // Debounced custom location handler
+  const handleCustomLocationChange = useCallback((value: string) => {
+    setCustomLocationInput(value);
+    
+    // Clear existing timeout
+    if (customLocationTimeoutRef.current) {
+      clearTimeout(customLocationTimeoutRef.current);
+    }
+    
+    // Set new timeout to save after 1 second of no typing
+    customLocationTimeoutRef.current = setTimeout(() => {
+      handleSettingsChange({ customLocation: value });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (customLocationTimeoutRef.current) {
+        clearTimeout(customLocationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Sync custom location input with settings when they change
+  useEffect(() => {
+    setCustomLocationInput(settings.customLocation || '');
+  }, [settings.customLocation]);
 
   const openPreview = () => {
     window.open('/overlay', '_blank');
@@ -286,17 +311,36 @@ export default function AdminPage() {
                   { value: 'suburb', label: 'Suburb', icon: '🏙️' },
                   { value: 'city', label: 'City', icon: '🏛️' },
                   { value: 'state', label: 'State', icon: '🗺️' },
+                  { value: 'custom', label: 'Custom', icon: '✏️' },
                   { value: 'hidden', label: 'Hidden', icon: '👁️‍🗨️' }
                 ]}
               />
               
-              {settings.locationDisplay !== 'hidden' && (
-                <div className="setting-help">
-                  {settings.locationDisplay === 'suburb' && 'Shows most specific area available (e.g., "Paradise" or "Shibuya")'}
-                  {settings.locationDisplay === 'city' && 'Shows city-level information (e.g., "Las Vegas" or "Tokyo")'}
-                  {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "Nevada" or "Tokyo")'}
+              {/* Custom location input */}
+              {settings.locationDisplay === 'custom' && (
+                <div className="custom-location-input">
+                  <label className="input-label">Custom Location Text</label>
+                  <input
+                    type="text"
+                    value={customLocationInput}
+                    onChange={(e) => handleCustomLocationChange(e.target.value)}
+                    placeholder="Enter custom location (e.g., 'Tokyo, Japan' or 'Las Vegas Strip')"
+                    className="text-input"
+                    maxLength={50}
+                  />
+                  <div className="input-help">
+                    This will override GPS-based location detection. Saves automatically after 1 second of no typing.
+                  </div>
                 </div>
               )}
+              
+              <div className="setting-help">
+                {settings.locationDisplay === 'suburb' && 'Shows most specific area available (e.g., "Paradise" or "Shibuya")'}
+                {settings.locationDisplay === 'city' && 'Shows city-level information (e.g., "Las Vegas" or "Tokyo")'}
+                {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "Nevada" or "Tokyo")'}
+                {settings.locationDisplay === 'custom' && 'Displays custom text instead of GPS-based location'}
+                {settings.locationDisplay === 'hidden' && 'Hides location display completely'}
+              </div>
             </div>
           </section>
 
