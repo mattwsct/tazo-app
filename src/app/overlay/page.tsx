@@ -108,6 +108,14 @@ export default function OverlayPage() {
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
+  
+  // Ref to track current settings for SSE handler (prevents dependency cycling)
+  const currentSettingsRef = useRef<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
+  
+  // Keep ref updated with current settings
+  useEffect(() => {
+    currentSettingsRef.current = settings;
+  }, [settings]);
 
 
   // Add refs to track last update times for auto-hide functionality
@@ -291,12 +299,31 @@ export default function OverlayPage() {
       
       if (API_KEYS.LOCATIONIQ) {
         try {
-          OverlayLogger.overlay('Fetching location name from LocationIQ (primary)', { lat, lon, service: 'LocationIQ' });
+          OverlayLogger.overlay('🚀 STARTING LocationIQ API call', { lat, lon, service: 'LocationIQ' });
           const loc = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
           if (loc) {
+            // Debug: Log the raw API data
+            OverlayLogger.overlay('🔍 Raw LocationIQ API data received', {
+              town: loc.town,
+              suburb: loc.suburb,
+              municipality: loc.municipality,
+              city: loc.city,
+              state: loc.state,
+              country: loc.country,
+              fullData: loc
+            });
+            
+            const formatted = formatLocation(loc, settings.locationDisplay);
+            OverlayLogger.overlay('🔍 Formatted location result', {
+              mode: settings.locationDisplay,
+              primary: formatted.primary,
+              context: formatted.context,
+              display: formatted.context ? `${formatted.primary}, ${formatted.context}` : formatted.primary
+            });
+            
             setLocation({ 
-              label: formatLocation(loc, settings.locationDisplay).primary, 
-              context: formatLocation(loc, settings.locationDisplay).context,
+              label: formatted.primary, 
+              context: formatted.context,
               countryCode: loc.countryCode || '', 
               originalData: loc 
             });
@@ -338,9 +365,28 @@ export default function OverlayPage() {
           });
           const loc = await fetchLocationFromMapbox(lat, lon, API_KEYS.MAPBOX);
           if (loc) {
+            // Debug: Log the raw API data
+            OverlayLogger.overlay('🔍 Raw Mapbox API data received', {
+              town: loc.town,
+              suburb: loc.suburb,
+              municipality: loc.municipality,
+              city: loc.city,
+              state: loc.state,
+              country: loc.country,
+              fullData: loc
+            });
+            
+            const formatted = formatLocation(loc, settings.locationDisplay);
+            OverlayLogger.overlay('🔍 Formatted location result (Mapbox)', {
+              mode: settings.locationDisplay,
+              primary: formatted.primary,
+              context: formatted.context,
+              display: formatted.context ? `${formatted.primary}, ${formatted.context}` : formatted.primary
+            });
+            
             setLocation({ 
-              label: formatLocation(loc, settings.locationDisplay).primary, 
-              context: formatLocation(loc, settings.locationDisplay).context,
+              label: formatted.primary, 
+              context: formatted.context,
               countryCode: loc.countryCode || '', 
               originalData: loc 
             });
@@ -729,8 +775,6 @@ export default function OverlayPage() {
         const data = await res.json();
         if (data) {
           setSettings(data);
-          
-
         } else {
           setSettings(DEFAULT_OVERLAY_SETTINGS);
         }
@@ -742,15 +786,37 @@ export default function OverlayPage() {
     
     loadSettings();
     
-    // Connect to settings stream for real-time updates
-    const eventSource = new EventSource('/api/settings-stream');
+    // Periodic settings refresh (fallback for when SSE isn't connected)
+    const settingsRefreshInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/get-settings');
+        if (res.ok) {
+          const data = await res.json();
+          if (data) {
+            // Only update if settings actually changed
+            const currentSettingsString = JSON.stringify(currentSettingsRef.current);
+            const newSettingsString = JSON.stringify(data);
+            if (currentSettingsString !== newSettingsString) {
+              OverlayLogger.overlay('Settings updated via periodic refresh', data);
+              setSettings(data);
+            }
+          }
+        }
+      } catch (error) {
+        OverlayLogger.warn('Periodic settings refresh failed', error);
+      }
+    }, 30000); // Check every 30 seconds
+    
+      // Connect to settings stream for real-time updates
+  OverlayLogger.overlay('🔄 Creating new SSE connection and periodic refresh');
+  const eventSource = new EventSource('/api/settings-stream');
     
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'settings_update') {
           // Only update if settings actually changed
-          const prevSettings = settings;
+          const prevSettings = currentSettingsRef.current;
           if (JSON.stringify(prevSettings) === JSON.stringify(data)) {
             return; // No change
           }
@@ -782,9 +848,11 @@ export default function OverlayPage() {
     };
     
     return () => {
+      OverlayLogger.overlay('🧹 Cleaning up SSE connection and periodic refresh');
       eventSource.close();
+      clearInterval(settingsRefreshInterval);
     };
-  }, [debouncedSetSettings]); // Remove 'settings' from dependencies to prevent connection spam
+  }, [debouncedSetSettings]); // Remove settings dependency to prevent connection cycling
 
 
 
@@ -807,7 +875,7 @@ export default function OverlayPage() {
 
 
     // Speed indicator visibility logic
-    if (!settings.showSpeed) {
+    if (!currentSettingsRef.current.showSpeed) {
       setSpeedIndicatorVisible(false);
     } else {
       const kmh = getSpeedKmh(speed);
@@ -826,7 +894,7 @@ export default function OverlayPage() {
     }
 
     // Minimap visibility logic
-    if (settings.minimapSpeedBased) {
+    if (currentSettingsRef.current.minimapSpeedBased) {
       // Speed-based mode: show only when moving
       const kmh = getSpeedKmh(speed);
       const isAboveThreshold = isAboveSpeedThreshold(kmh, THRESHOLDS.SPEED_SHOW);
@@ -841,7 +909,7 @@ export default function OverlayPage() {
       } else {
         setMinimapOpacity(0);
       }
-    } else if (settings.showMinimap) {
+    } else if (currentSettingsRef.current.showMinimap) {
       // Manual mode: show when we have coordinates
       setMinimapOpacity(mapCoords ? 1 : 0);
     } else {
@@ -858,7 +926,7 @@ export default function OverlayPage() {
         clearTimeout(minimapHideTimeout.current);
       }
     };
-  }, [speed, settings.showSpeed, settings.minimapSpeedBased, settings.locationDisplay, settings.showMinimap, mapCoords]);
+  }, [speed, mapCoords]); // Use ref for settings to prevent dependency cycling
 
   // Periodic stale data check to trigger auto-hide
   useEffect(() => {

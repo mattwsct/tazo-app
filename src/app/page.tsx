@@ -12,6 +12,7 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [toast, setToast] = useState<{ type: 'saving' | 'saved' | 'error'; message: string } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'disconnected' | 'syncing'>('disconnected');
 
   // Custom location input state (for debouncing)
   const [customLocationInput, setCustomLocationInput] = useState('');
@@ -82,6 +83,7 @@ export default function AdminPage() {
 
   const loadSettings = useCallback(async () => {
     try {
+      setSyncStatus('syncing');
       // Add timeout to prevent infinite loading
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
@@ -102,12 +104,14 @@ export default function AdminPage() {
           const data = await res.json();
           if (data) {
             setSettings(data);
+            setSyncStatus('connected');
           }
     } catch (error) {
       console.error('Failed to load settings:', error);
       if (error instanceof Error && error.name === 'AbortError') {
         console.error('Settings load timed out');
       }
+      setSyncStatus('disconnected');
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +139,7 @@ export default function AdminPage() {
     
     setSettings(mergedSettings);
     setToast({ type: 'saving', message: 'Saving settings...' });
+    setSyncStatus('syncing');
     
     try {
       const res = await authenticatedFetch('/api/save-settings', {
@@ -150,10 +155,12 @@ export default function AdminPage() {
       }
       
       setToast({ type: 'saved', message: 'Settings saved successfully!' });
+      setSyncStatus('connected');
       setTimeout(() => setToast(null), 2000);
     } catch (error) {
       console.error('Save settings error:', error);
       setToast({ type: 'error', message: `Failed to save settings: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      setSyncStatus('disconnected');
       setTimeout(() => setToast(null), 5000);
     }
   }, [settings]);
@@ -259,6 +266,11 @@ export default function AdminPage() {
           <div className="header-title">
             <span className="title-icon">🎮</span>
             <h1>Overlay Admin</h1>
+            <div className={`sync-status ${syncStatus}`}>
+              {syncStatus === 'connected' && '🟢'}
+              {syncStatus === 'syncing' && '🟡'}
+              {syncStatus === 'disconnected' && '🔴'}
+            </div>
           </div>
           <div className="header-actions">
             <button className="btn btn-primary" onClick={openPreview}>
@@ -308,7 +320,7 @@ export default function AdminPage() {
                 value={settings.locationDisplay}
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
-                  { value: 'suburb', label: 'Suburb', icon: '🏙️' },
+                  { value: 'neighborhood', label: 'Neighborhood', icon: '🏙️' },
                   { value: 'city', label: 'City', icon: '🏛️' },
                   { value: 'state', label: 'State', icon: '🗺️' },
                   { value: 'custom', label: 'Custom', icon: '✏️' },
@@ -335,9 +347,9 @@ export default function AdminPage() {
               )}
               
               <div className="setting-help">
-                {settings.locationDisplay === 'suburb' && 'Shows most specific area available (e.g., "Paradise" or "Shibuya")'}
-                {settings.locationDisplay === 'city' && 'Shows city-level information (e.g., "Las Vegas" or "Tokyo")'}
-                {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "Nevada" or "Tokyo")'}
+                {settings.locationDisplay === 'neighborhood' && 'Shows most specific area available (e.g., "Hell\'s Kitchen" or "Shibuya")'}
+                {settings.locationDisplay === 'city' && 'Shows city-level information (e.g., "New York City" or "Tokyo")'}
+                {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "New York" or "Tokyo Prefecture")'}
                 {settings.locationDisplay === 'custom' && 'Displays custom text instead of GPS-based location'}
                 {settings.locationDisplay === 'hidden' && 'Hides location display completely'}
               </div>

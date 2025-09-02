@@ -17,27 +17,8 @@ const API_CONFIG = {
   MAX_RETRY_DELAY: 10000, // 10 seconds max delay
 } as const;
 
-// === 🧠 SIMPLE IN-MEMORY CACHE (client/runtime scoped) ===
-const WEATHER_CACHE_TTL_MS = 60 * 1000; // 60s
-const LOCATION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-type WeatherCacheKey = string; // `${lat.toFixed(3)},${lon.toFixed(3)}`
-type LocationCacheKey = string; // `${lat.toFixed(3)},${lon.toFixed(3)}`
-const weatherCache = new Map<WeatherCacheKey, { timestamp: number; data: WeatherTimezoneResponse | null }>();
-const locationCache = new Map<LocationCacheKey, { timestamp: number; data: LocationData | null }>();
-
-function getWeatherCacheKey(lat: number, lon: number): WeatherCacheKey {
-  // Round to reduce cache fragmentation while keeping useful precision
-  const rLat = lat.toFixed(3);
-  const rLon = lon.toFixed(3);
-  return `${rLat},${rLon}`;
-}
-
-function getLocationCacheKey(lat: number, lon: number): LocationCacheKey {
-  // Round to reduce cache fragmentation while keeping useful precision
-  const rLat = lat.toFixed(3);
-  const rLon = lon.toFixed(3);
-  return `${rLat},${rLon}`;
-}
+// === 🧠 CACHING REMOVED ===
+// Caching system removed to prevent stale data issues
 
 // === 🔄 RETRY UTILITY ===
 async function fetchWithRetry(
@@ -142,17 +123,7 @@ export async function fetchLocationFromLocationIQ(
     return null;
   }
 
-  // Check cache first
-  const cacheKey = getLocationCacheKey(lat, lon);
-  const cached = locationCache.get(cacheKey);
-  if (cached && (Date.now() - cached.timestamp) < LOCATION_CACHE_TTL_MS) {
-    ApiLogger.info('locationiq', 'Location data served from cache', { 
-      lat, 
-      lon, 
-      cacheAge: Date.now() - cached.timestamp 
-    });
-    return cached.data;
-  }
+  // No caching - always fetch fresh data
 
 
 
@@ -248,15 +219,19 @@ export async function fetchLocationFromLocationIQ(
       
       ApiLogger.info('locationiq', 'Location data received', result);
       
-      // Cache the result
-      locationCache.set(cacheKey, { data: result, timestamp: Date.now() });
-      
-      // Clean up old cache entries (keep only last 100)
-      if (locationCache.size > 100) {
-        const entries = Array.from(locationCache.entries());
-        entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
-        entries.slice(100).forEach(([key]) => locationCache.delete(key));
-      }
+      // Debug: Log the raw API response to see what fields are actually available
+      ApiLogger.info('locationiq', 'Raw API response address fields', {
+        town: data.address.town,
+        suburb: data.address.suburb,
+        municipality: data.address.municipality,
+        city: data.address.city,
+        state: data.address.state,
+        province: data.address.province,
+        region: data.address.region,
+        county: data.address.county,
+        country: data.address.country,
+        fullAddress: data.address
+      });
       
       return result;
     }
@@ -285,17 +260,7 @@ export async function fetchLocationFromMapbox(
     return null;
   }
 
-  // Check cache first (shared with LocationIQ)
-  const cacheKey = getLocationCacheKey(lat, lon);
-  const cached = locationCache.get(cacheKey);
-  if (cached && (Date.now() - cached.timestamp) < LOCATION_CACHE_TTL_MS) {
-    ApiLogger.info('mapbox', 'Location data served from cache (fallback)', { 
-      lat, 
-      lon, 
-      cacheAge: Date.now() - cached.timestamp 
-    });
-    return cached.data;
-  }
+  // No caching - always fetch fresh data
 
 
 
@@ -379,17 +344,6 @@ export async function fetchLocationFromMapbox(
       };
       
       ApiLogger.info('mapbox', 'Location data received (fallback)', result);
-      
-      // Cache the result (shared with LocationIQ)
-      locationCache.set(cacheKey, { data: result, timestamp: Date.now() });
-      
-      // Clean up old cache entries (keep only last 100)
-      if (locationCache.size > 100) {
-        const entries = Array.from(locationCache.entries());
-        entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
-        entries.slice(100).forEach(([key]) => locationCache.delete(key));
-      }
-      
       return result;
     }
     
@@ -411,12 +365,7 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
   lat: number, 
   lon: number
 ): Promise<WeatherTimezoneResponse | null> {
-  // Check short-lived cache first
-  const cacheKey = getWeatherCacheKey(lat, lon);
-  const cached = weatherCache.get(cacheKey);
-  if (cached && (Date.now() - cached.timestamp) < WEATHER_CACHE_TTL_MS) {
-    return cached.data;
-  }
+  // No caching - always fetch fresh data
 
   if (!checkRateLimit('openmeteo')) {
     ApiLogger.warn('openmeteo', 'Rate limit exceeded, skipping API call');
@@ -463,15 +412,10 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
     }
     
     const result = { weather, timezone };
-    // Store in cache (even null) to avoid immediate retries on failures
-    weatherCache.set(cacheKey, { timestamp: Date.now(), data: result });
-    
     return result;
     
   } catch (error) {
     ApiLogger.error('openmeteo', 'Failed to fetch weather/timezone', error);
-    // Cache null result briefly to back off repeated failing calls
-    weatherCache.set(cacheKey, { timestamp: Date.now(), data: null });
     return null;
   }
 } 

@@ -79,6 +79,30 @@ body {
   gap: 0.75rem;
 }
 
+.sync-status {
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.sync-status.connected {
+  opacity: 1;
+}
+
+.sync-status.syncing {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.sync-status.disconnected {
+  opacity: 0.6;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 .title-icon {
   font-size: 1.5rem;
 }

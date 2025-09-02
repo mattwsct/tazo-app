@@ -1,7 +1,6 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
 const MAX_COUNTRY_NAME_LENGTH = 12;
-const MAX_LOCATION_FIELD_LENGTH = 20;
 
 
 
@@ -32,12 +31,18 @@ export interface LocationDisplay {
 
 // === 🎯 LOCATION PRECISION LEVELS ===
 
-type LocationPrecision = 'suburb' | 'city' | 'state';
+type LocationPrecision = 'neighborhood' | 'city' | 'state';
 
+/**
+ * Defines the fallback hierarchy for location precision levels
+ * 
+ * When a location at one level is redundant, we fall back to the next level:
+ * neighborhood -> city -> state -> null (no more levels)
+ */
 const PRECISION_FALLBACKS: Record<LocationPrecision, LocationPrecision | null> = {
-  suburb: 'city',
-  city: 'state', 
-  state: null
+  neighborhood: 'city',    // If neighborhood is redundant, try city
+  city: 'state',           // If city is redundant, try state  
+  state: null              // State is the final level, no fallback
 } as const;
 
 // === 🔍 DUPLICATE DETECTION ===
@@ -59,55 +64,53 @@ function areRedundantNames(name1: string, name2: string): boolean {
 // === 🗺️ LOCATION DATA EXTRACTION ===
 
 /**
- * Gets location data by precision level with smart fallbacks
+ * Gets the best location name for a given precision level
+ * 
+ * Simple fallback chain: try each field in order until we find one that exists and isn't too long.
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
-  const fallbackChain = {
-    suburb: [location.suburb, location.town, location.municipality, location.city, location.state],
+  const fieldChains = {
+    neighborhood: [location.town, location.suburb, location.municipality, location.city, location.state],
     city: [location.municipality, location.city, location.state],
     state: [location.state]
   };
   
-  // Find the first non-empty location that's not too long
-  return fallbackChain[precision].find(loc => loc && !isLocationNameTooLong(loc)) || '';
+  const fields = fieldChains[precision];
+  return fields.find(field => field && field.length <= 20) || '';
 }
 
 /**
- * Gets context for a location, checking for duplicates at all levels
+ * Gets context for a location by finding the first non-redundant level
+ * 
+ * Simple logic: try each level in the fallback chain until we find one that's not redundant.
  */
 function getContext(location: LocationData, primaryName: string, currentPrecision: LocationPrecision): string | null {
-  const fallback = PRECISION_FALLBACKS[currentPrecision];
-  if (!fallback) return null; // State level has no context
+  const fallbackChain = getFallbackChain(currentPrecision);
   
-  const contextName = getLocationByPrecision(location, fallback);
-  if (!contextName) return null;
-  
-  // Check if primary and context are redundant
-  if (areRedundantNames(primaryName, contextName)) return null;
-  
-  // Check if context is redundant with even broader levels (cascading detection)
-  // If context is redundant with a broader level, use the broader level instead
-  let currentLevel = contextName;
-  let currentFallback = fallback;
-  
-  while (currentFallback) {
-    const furtherFallback = PRECISION_FALLBACKS[currentFallback];
-    if (furtherFallback) {
-      const furtherLevel = getLocationByPrecision(location, furtherFallback);
-      if (furtherLevel && areRedundantNames(furtherLevel, currentLevel)) {
-        // Context is redundant with broader level, use the broader level
-        currentLevel = furtherLevel;
-        currentFallback = furtherFallback;
-      } else {
-        // No redundancy found, keep current level
-        break;
-      }
-    } else {
-      break;
+  for (const precision of fallbackChain) {
+    const levelName = getLocationByPrecision(location, precision);
+    if (levelName && !areRedundantNames(primaryName, levelName)) {
+      return levelName;
     }
   }
   
-  return currentLevel;
+  return null;
+}
+
+/**
+ * Gets the fallback chain for a given precision level
+ * Example: neighborhood -> [city, state], city -> [state], state -> []
+ */
+function getFallbackChain(precision: LocationPrecision): LocationPrecision[] {
+  const chain: LocationPrecision[] = [];
+  let current = PRECISION_FALLBACKS[precision];
+  
+  while (current) {
+    chain.push(current);
+    current = PRECISION_FALLBACKS[current];
+  }
+  
+  return chain;
 }
 
 // === 🌍 COUNTRY NAME FORMATTING ===
@@ -205,12 +208,7 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 
 // === 📏 UTILITY FUNCTIONS ===
 
-/**
- * Checks if a location name is too long for display
- */
-function isLocationNameTooLong(name: string): boolean {
-  return name.length > MAX_LOCATION_FIELD_LENGTH;
-}
+
 
 /**
  * Gets the best city name by intelligently selecting the most appropriate city
@@ -272,9 +270,9 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  * Formats location data for overlay display with two-line precision-based logic
  * 
  * @example
- * // Suburb mode: Shows most specific location with context
- * formatLocation({ city: 'New York City', state: 'New York' }, 'suburb')
- * // Returns: { primary: 'New York City', context: 'New York' }
+ * // Neighborhood mode: Shows most specific location with context
+ * formatLocation({ town: "Hell's Kitchen", city: 'New York City', state: 'New York' }, 'neighborhood')
+ * // Returns: { primary: "Hell's Kitchen", context: 'New York' }
  * 
  * @example
  * // City mode: Shows city with state context (if not duplicate)
@@ -288,7 +286,7 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'suburb' | 'city' | 'state' | 'hidden' | 'custom' = 'suburb'
+  displayMode: 'neighborhood' | 'city' | 'state' | 'hidden' | 'custom' = 'neighborhood'
 ): LocationDisplay {
   if (!location || displayMode === 'hidden' || displayMode === 'custom') return { primary: '', context: undefined };
   
