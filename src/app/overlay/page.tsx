@@ -166,7 +166,7 @@ export default function OverlayPage() {
       timeZone: timezone,
     });
     dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-      month: 'long',
+      month: 'short',
       day: 'numeric',
       year: 'numeric',
       timeZone: timezone,
@@ -991,7 +991,8 @@ export default function OverlayPage() {
         return null;
       }
       return {
-        text: settings.customLocation.trim(),
+        primary: settings.customLocation.trim(),
+        context: undefined, // Custom locations don't have context
         countryCode: location?.countryCode || null, // Use current GPS location's country flag
         countryName: location?.originalData?.country || null
       };
@@ -1003,7 +1004,8 @@ export default function OverlayPage() {
     }
     
     return {
-      text: `${location.label}${location.context ? `, ${location.context}` : ''}`,
+      primary: location.label,
+      context: location.context,
       countryCode: location.countryCode,
       countryName: location.originalData?.country || 'Unknown'
     };
@@ -1055,7 +1057,10 @@ export default function OverlayPage() {
             {locationDisplay && (
               <div className="location">
                 <div className="location-text">
-                  {locationDisplay.text}
+                  <div className="location-primary">{locationDisplay.primary}</div>
+                  {locationDisplay.context && (
+                    <div className="location-context">{locationDisplay.context}</div>
+                  )}
                 </div>
               </div>
             )}

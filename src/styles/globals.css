@@ -305,6 +305,23 @@ body.overlay-page {
   line-height: 1.1;
   white-space: pre-line;
   word-wrap: break-word;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.location-primary {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.location-context {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  line-height: 1.1;
+  opacity: 0.9;
 }
 
 .location-flag-container {
