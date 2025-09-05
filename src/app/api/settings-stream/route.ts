@@ -125,8 +125,8 @@ export async function GET(request: NextRequest): Promise<Response> {
         }, 100);
       }
       
-      // Check for updates every 10 seconds (optimized for KV usage)
-      const interval = setInterval(checkForUpdates, 10000);
+      // Check for updates every 5 seconds (more responsive with Vercel Pro)
+      const interval = setInterval(checkForUpdates, 5000);
       
       // Cleanup on close
       request.signal.addEventListener('abort', () => {

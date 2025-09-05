@@ -1,4 +1,4 @@
-import { THRESHOLDS } from './overlay-constants';
+import { THRESHOLDS, DYNAMIC_TIMERS } from './overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
 
 // Speed conversion utilities
@@ -77,4 +77,72 @@ export const checkSpeedDataStale = (lastSpeedUpdate: number): { isStale: boolean
   }
   
   return { isStale, timeSinceLastUpdate };
+};
+
+// Movement-based intelligence functions
+/**
+ * Determines movement state based on speed
+ */
+export const getMovementState = (speedKmh: number): 'stationary' | 'moving' | 'high-speed' => {
+  if (speedKmh < THRESHOLDS.STATIONARY_THRESHOLD) {
+    return 'stationary';
+  } else if (speedKmh >= THRESHOLDS.HIGH_SPEED_MOVEMENT) {
+    return 'high-speed';
+  } else {
+    return 'moving';
+  }
+};
+
+/**
+ * Gets dynamic weather polling interval based on movement state
+ */
+export const getWeatherPollingInterval = (speedKmh: number): number => {
+  const movementState = getMovementState(speedKmh);
+  
+  switch (movementState) {
+    case 'stationary':
+      return DYNAMIC_TIMERS.WEATHER_STATIONARY;
+    case 'moving':
+      return DYNAMIC_TIMERS.WEATHER_MOVING;
+    case 'high-speed':
+      return DYNAMIC_TIMERS.WEATHER_HIGH_SPEED;
+    default:
+      return DYNAMIC_TIMERS.WEATHER_MOVING;
+  }
+};
+
+/**
+ * Gets dynamic location polling interval based on movement state
+ */
+export const getLocationPollingInterval = (speedKmh: number): number => {
+  const movementState = getMovementState(speedKmh);
+  
+  switch (movementState) {
+    case 'stationary':
+      return DYNAMIC_TIMERS.LOCATION_STATIONARY;
+    case 'moving':
+      return DYNAMIC_TIMERS.LOCATION_MOVING;
+    case 'high-speed':
+      return DYNAMIC_TIMERS.LOCATION_HIGH_SPEED;
+    default:
+      return DYNAMIC_TIMERS.LOCATION_MOVING;
+  }
+};
+
+/**
+ * Gets dynamic map update interval based on movement state
+ */
+export const getMapUpdateInterval = (speedKmh: number): number => {
+  const movementState = getMovementState(speedKmh);
+  
+  switch (movementState) {
+    case 'stationary':
+      return DYNAMIC_TIMERS.MAP_STATIONARY;
+    case 'moving':
+      return DYNAMIC_TIMERS.MAP_MOVING;
+    case 'high-speed':
+      return DYNAMIC_TIMERS.MAP_HIGH_SPEED;
+    default:
+      return DYNAMIC_TIMERS.MAP_MOVING;
+  }
 }; 

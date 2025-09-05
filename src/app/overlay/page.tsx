@@ -42,7 +42,9 @@ import {
   kmhToMph,
   getSpeedKmh,
   isAboveSpeedThreshold,
-  checkSpeedDataStale
+  checkSpeedDataStale,
+  getWeatherPollingInterval,
+  getLocationPollingInterval
 } from '@/utils/speed-utils';
 import {
   celsiusToFahrenheit
@@ -260,7 +262,10 @@ export default function OverlayPage() {
     // Fetch location name data - ALWAYS fetch on first load, then use thresholds
     const now = Date.now();
     const distanceThreshold = THRESHOLDS.LOCATION_DISTANCE; // meters
-    const timeThreshold = TIMERS.LOCATION_UPDATE; // ms
+    
+    // Get dynamic time threshold based on current speed
+    const currentSpeedKmh = getSpeedKmh(speed);
+    const timeThreshold = getLocationPollingInterval(currentSpeedKmh);
     
     // Optimized location update logic with movement-based intelligence
     const timeSinceLastCall = now - lastLocationAPICall.current;
@@ -294,7 +299,9 @@ export default function OverlayPage() {
         distanceMoved: lastLocationCoords.current ? 
           distanceInMeters(lat, lon, lastLocationCoords.current[0], lastLocationCoords.current[1]) : 0,
         timeSinceLastCall,
-        isMovingFast: isMovingFast || false
+        isMovingFast: isMovingFast || false,
+        currentSpeed: currentSpeedKmh,
+        dynamicThreshold: timeThreshold
       });
       
       if (API_KEYS.LOCATIONIQ) {
@@ -412,7 +419,7 @@ export default function OverlayPage() {
       }
       setLoadingState('location', false);
     }
-  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters, setLocation]);
+  }, [settings.locationDisplay, processWeatherResult, setLoadingState, createDateTimeFormatters, setLocation, speed]);
 
   // Memoize formatted location to prevent unnecessary re-renders
   const formattedLocation = useMemo(() => {
@@ -605,7 +612,7 @@ export default function OverlayPage() {
     };
   }, [timezone]);
 
-  // Periodic weather updates with backoff
+  // Periodic weather updates with dynamic intervals based on movement
   useEffect(() => {
     function clearWeatherTimer() {
       if (weatherTimerRef.current) {
@@ -621,8 +628,13 @@ export default function OverlayPage() {
         OverlayLogger.overlay('Scheduled weather update', { lat, lon });
         const result = await fetchWeatherAndTimezoneFromOpenMeteo(lat, lon);
         await processWeatherResult(result);
-        // Reset poll interval on success
-        weatherPollMsRef.current = TIMERS.WEATHER_TIMEZONE_UPDATE;
+        // Use dynamic polling interval based on current speed
+        const currentSpeedKmh = getSpeedKmh(speed);
+        weatherPollMsRef.current = getWeatherPollingInterval(currentSpeedKmh);
+        OverlayLogger.overlay('Weather polling interval updated', { 
+          speed: currentSpeedKmh, 
+          interval: weatherPollMsRef.current 
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         OverlayLogger.error(`Scheduled weather update failed: ${errorMessage}`);
@@ -643,13 +655,16 @@ export default function OverlayPage() {
 
     // Start schedule when coords first available
     if (lastWeatherCoords.current && !weatherTimerRef.current) {
-      weatherTimerRef.current = setTimeout(tick, TIMERS.WEATHER_TIMEZONE_UPDATE);
+      const currentSpeedKmh = getSpeedKmh(speed);
+      const initialInterval = getWeatherPollingInterval(currentSpeedKmh);
+      weatherPollMsRef.current = initialInterval;
+      weatherTimerRef.current = setTimeout(tick, initialInterval);
     }
 
     return () => {
       clearWeatherTimer();
     };
-  }, [processWeatherResult, setLoadingState]);
+  }, [processWeatherResult, setLoadingState, speed]);
 
   useEffect(() => {
     // Load RTIRL script immediately without delay

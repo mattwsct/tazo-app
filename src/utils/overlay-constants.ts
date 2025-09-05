@@ -1,12 +1,12 @@
 // Overlay configuration constants
 export const TIMERS = {
-  // Weather/Timezone updates
-  WEATHER_TIMEZONE_UPDATE: 600000, // 10 minutes
-  WEATHER_BACKOFF_MIN: 1200000, // 20 minutes
-  WEATHER_BACKOFF_MAX: 3600000, // 60 minutes
+  // Weather/Timezone updates - more aggressive with Vercel Pro
+  WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes (was 10 minutes)
+  WEATHER_BACKOFF_MIN: 600000, // 10 minutes (was 20 minutes)
+  WEATHER_BACKOFF_MAX: 1800000, // 30 minutes (was 60 minutes)
 
-  // LocationIQ reverse geocoding - more conservative to prevent rate limits
-  LOCATION_UPDATE: 300000, // 5 minutes minimum interval (was 3 minutes)
+  // LocationIQ reverse geocoding - more aggressive but still conservative
+  LOCATION_UPDATE: 180000, // 3 minutes minimum interval (was 5 minutes)
   OVERLAY_FADE_TIMEOUT: 5000,
   MINIMAP_HIDE_DELAY: 10000, // 10s
   SPEED_HIDE_DELAY: 10000, // 10s
@@ -14,10 +14,10 @@ export const TIMERS = {
   API_COOLDOWN: 60000, // 60s
   FIRST_LOAD_API_COOLDOWN: 10000, // 10s
 
-  // Static map refresh (by speed bucket)
-  MAP_MIN_INTERVAL_SLOW: 30000,  // <10 km/h
-  MAP_MIN_INTERVAL_MED: 15000,   // 10–50 km/h
-  MAP_MIN_INTERVAL_FAST: 8000,   // >50 km/h
+  // Static map refresh (by speed bucket) - more responsive
+  MAP_MIN_INTERVAL_SLOW: 20000,  // <10 km/h (was 30s)
+  MAP_MIN_INTERVAL_MED: 10000,   // 10–50 km/h (was 15s)
+  MAP_MIN_INTERVAL_FAST: 6000,   // >50 km/h (was 8s)
 } as const;
 
 export const THRESHOLDS = {
@@ -29,6 +29,29 @@ export const THRESHOLDS = {
   BULLET_TRAIN_SPEED: 200, // km/h
   // Static map gate
   MAP_PIXEL_CHANGE: 8, // minimum pixel movement to refresh image
+  
+  // Movement-based intelligence thresholds
+  STATIONARY_THRESHOLD: 5, // km/h - consider stationary below this speed
+  MOVING_THRESHOLD: 20, // km/h - consider actively moving above this speed
+  HIGH_SPEED_MOVEMENT: 80, // km/h - high speed movement
+} as const;
+
+// Dynamic polling intervals based on movement state
+export const DYNAMIC_TIMERS = {
+  // Weather polling based on movement
+  WEATHER_STATIONARY: 600000, // 10 minutes when stationary
+  WEATHER_MOVING: 300000, // 5 minutes when moving
+  WEATHER_HIGH_SPEED: 180000, // 3 minutes when moving fast
+  
+  // Location polling based on movement
+  LOCATION_STATIONARY: 600000, // 10 minutes when stationary
+  LOCATION_MOVING: 180000, // 3 minutes when moving
+  LOCATION_HIGH_SPEED: 120000, // 2 minutes when moving fast
+  
+  // Map updates based on speed
+  MAP_STATIONARY: 60000, // 1 minute when stationary
+  MAP_MOVING: 20000, // 20 seconds when moving
+  MAP_HIGH_SPEED: 10000, // 10 seconds when moving fast
 } as const;
 
 export const API_KEYS = {
