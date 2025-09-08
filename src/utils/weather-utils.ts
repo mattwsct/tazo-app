@@ -1,4 +1,2 @@
-// Temperature conversion
-export function celsiusToFahrenheit(celsius: number): number {
-  return Math.round((celsius * 9/5) + 32);
-} 
+// Re-export from centralized unit conversions
+export { celsiusToFahrenheit } from './unit-conversions'; 

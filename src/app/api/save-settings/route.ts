@@ -3,6 +3,7 @@ import { kv } from '@vercel/kv';
 import { validateAndSanitizeSettings, detectMaliciousKeys } from '@/lib/settings-validator';
 import { verifyAuth, logKVUsage } from '@/lib/api-auth';
 import { broadcastSettings } from '@/lib/settings-broadcast';
+import { OverlayLogger } from '@/lib/logger';
 
 // Invalidate SSE cache when settings are updated
 declare global {
@@ -23,7 +24,7 @@ async function handlePOST(request: NextRequest) {
     // Detect and log any malicious keys
     const maliciousKeys = detectMaliciousKeys(rawSettings);
     if (maliciousKeys.length > 0) {
-      console.warn('🚨 SECURITY ALERT: Malicious settings keys detected:', maliciousKeys);
+      OverlayLogger.warn('SECURITY ALERT: Malicious settings keys detected', maliciousKeys);
       // Continue processing but only save validated settings
     }
     
@@ -31,18 +32,6 @@ async function handlePOST(request: NextRequest) {
     const settings = validateAndSanitizeSettings(rawSettings);
     
     const startTime = Date.now();
-    
-    // Test KV connection first
-    try {
-      await kv.set('test_connection', 'test_value');
-      await kv.del('test_connection'); // Clean up test
-    } catch (error) {
-      console.error('💾 Save-settings API: KV connection test failed:', error);
-      return NextResponse.json({ 
-        error: 'KV connection failed', 
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }, { status: 500 });
-    }
     
     // Batch KV operations to reduce calls
     const kvResult = await Promise.allSettled([
@@ -54,7 +43,7 @@ async function handlePOST(request: NextRequest) {
         invalidateSSECache(); // Invalidate cache after successful save
         return true;
       }).catch((error) => {
-        console.error('💾 Save-settings API: KV operation failed:', error);
+        OverlayLogger.error('KV operation failed', error);
         throw error;
       })
     ]);
@@ -73,7 +62,7 @@ async function handlePOST(request: NextRequest) {
     const kvSuccess = kvResult[0].status === 'fulfilled';
     
     if (!kvSuccess) {
-      console.error('🚨 KV save failed:', kvResult[0].status === 'rejected' ? 
+      OverlayLogger.error('KV save failed', kvResult[0].status === 'rejected' ? 
         kvResult[0].reason : 'Unknown error');
     }
     
@@ -85,7 +74,7 @@ async function handlePOST(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('Settings save error:', error);
+    OverlayLogger.error('Settings save error', error);
     return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 });
   }
 }
@@ -95,7 +84,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const isAuthenticated = await verifyAuth();
   
   if (!isAuthenticated) {
-    console.warn('Unauthenticated access attempt to save settings');
+    OverlayLogger.warn('Unauthenticated access attempt to save settings');
     return new NextResponse('Unauthorized', { status: 401 });
   }
   

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { OverlayLogger } from '@/lib/logger';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check if admin password is configured
     if (!ADMIN_PASSWORD) {
-      console.error('❌ ADMIN_PASSWORD environment variable is not set');
+      OverlayLogger.error('ADMIN_PASSWORD environment variable is not set');
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 

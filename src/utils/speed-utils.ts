@@ -1,5 +1,6 @@
 import { THRESHOLDS, DYNAMIC_TIMERS } from './overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
+// import { kmhToMph } from './unit-conversions'; // Currently unused but kept for future use
 
 // Speed conversion utilities
 // RTIRL provides speed in meters per second (m/s)
@@ -25,15 +26,8 @@ export const getSpeedKmh = (speedMs: number): number => {
   return kmh;
 };
 
-export const kmhToMph = (kmh: number): number => {
-  // Validate input
-  if (typeof kmh !== 'number' || isNaN(kmh) || kmh < 0) {
-    return 0;
-  }
-  
-  // Convert km/h to mph
-  return kmh * 0.621371;
-};
+// Re-export from centralized unit conversions
+// export { kmhToMph } from './unit-conversions'; // Currently unused but kept for future use
 
 // Speed threshold utilities
 export const isAboveSpeedThreshold = (speedKmh: number, threshold: number = THRESHOLDS.SPEED_SHOW): boolean => 

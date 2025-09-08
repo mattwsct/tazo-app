@@ -142,13 +142,13 @@ body.overlay-page {
   line-height: 1;
 }
 
-.time-main {
+.time-value {
   font-size: var(--font-size-xl);
   font-weight: 600;
   line-height: 1;
 }
 
-.time-ampm {
+.time-period {
   font-size: 0.45em;
   font-weight: 700;
   text-transform: uppercase;
@@ -311,13 +311,13 @@ body.overlay-page {
   gap: 2px;
 }
 
-.location-primary {
+.location-main {
   font-size: var(--font-size-lg);
   font-weight: 600;
   line-height: 1.1;
 }
 
-.location-context {
+.location-sub {
   font-size: var(--font-size-base);
   font-weight: 600;
   line-height: 1.1;
@@ -368,11 +368,23 @@ body.overlay-page {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Remove any extra spacing */
+  margin: 0;
+  padding: 0;
 }
 
 .weather-flag {
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  /* Ensure proper aspect ratio and sizing */
+  width: 32px;
+  height: 20px;
+  object-fit: cover;
+  /* OBS-friendly rendering */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .weather-content {

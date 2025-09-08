@@ -44,10 +44,10 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
 
   if (rejectedKeys.length > 0) {
     // Check if these are just old chat bot settings that were removed
-    const oldChatBotKeys = ['enableChatBot', 'chatBotMessageTemplates', 'chatBotToken', 'kickClientId', 'kickClientSecret'];
-    const isOldSettings = rejectedKeys.every(key => oldChatBotKeys.includes(key));
+    const deprecatedChatBotKeys = ['enableChatBot', 'chatBotMessageTemplates', 'chatBotToken', 'kickClientId', 'kickClientSecret'];
+    const isDeprecatedSettings = rejectedKeys.every(key => deprecatedChatBotKeys.includes(key));
     
-    if (isOldSettings) {
+    if (isDeprecatedSettings) {
       console.log('ℹ️  Ignoring old chat bot settings (removed during cleanup):', rejectedKeys);
     } else {
       console.warn('🚨 Rejected malicious/invalid settings keys:', rejectedKeys);

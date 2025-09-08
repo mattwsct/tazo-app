@@ -19,7 +19,7 @@ globalThis.__sseConnections = connections;
 export { connections };
 
 export function addConnection(controller: ReadableStreamDefaultController, id?: string): string {
-  const connectionId = id || `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const connectionId = id || `conn_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   connections.set(connectionId, {
     controller,
     id: connectionId,
@@ -68,23 +68,10 @@ export async function broadcastSettings(settings: OverlaySettings) {
     console.log(`[BROADCAST] Starting broadcast to ${connections.size} connected clients`);
   }
   
-  // If no connections, wait longer for overlay to connect, then try again
+  // If no connections, don't wait - overlay will poll for updates
   if (connections.size === 0) {
-    console.warn(`[BROADCAST] ⚠️  No active SSE connections! Waiting for overlay to connect...`);
-    
-    // Wait up to 5 seconds for overlay to connect (increased from 3 seconds)
-    for (let i = 0; i < 50; i++) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      if (connections.size > 0) {
-        console.log(`[BROADCAST] ✅ Overlay connected after ${(i + 1) * 100}ms, proceeding with broadcast`);
-        break;
-      }
-    }
-    
-    if (connections.size === 0) {
-      console.warn(`[BROADCAST] ⚠️  Still no connections after waiting. Settings update will be lost unless overlay polls.`);
-      return { success: false, reason: 'no_connections' };
-    }
+    console.warn(`[BROADCAST] ⚠️  No active SSE connections! Settings will be available on next overlay poll.`);
+    return { success: true, reason: 'no_connections_but_saved' };
   }
   
   let successCount = 0;

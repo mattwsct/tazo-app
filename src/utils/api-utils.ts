@@ -1,8 +1,8 @@
 import { 
   checkRateLimit, 
-  getRemainingDailyCalls,
-  type LocationData 
-} from './overlay-utils';
+  getRemainingDailyCalls
+} from './rate-limiting';
+import { type LocationData } from './location-utils';
 import { ApiLogger } from '@/lib/logger';
 
 
@@ -212,23 +212,37 @@ export async function fetchLocationFromLocationIQ(
         town: data.address.town,
         municipality: data.address.municipality,
         suburb: data.address.suburb,
+        neighbourhood: data.address.neighbourhood, // British spelling from LocationIQ
         province: data.address.province,
         region: data.address.region,
         county: data.address.county,
+        house_number: data.address.house_number,
+        road: data.address.road,
+        postcode: data.address.postcode,
       };
       
       ApiLogger.info('locationiq', 'Location data received', result);
       
+      // Validate the result before returning
+      if (!result.city && !result.state && !result.country) {
+        ApiLogger.warn('locationiq', 'LocationIQ returned empty result, treating as failed');
+        return null;
+      }
+      
       // Debug: Log the raw API response to see what fields are actually available
       ApiLogger.info('locationiq', 'Raw API response address fields', {
-        town: data.address.town,
+        house_number: data.address.house_number,
+        road: data.address.road,
+        neighbourhood: data.address.neighbourhood,
         suburb: data.address.suburb,
+        town: data.address.town,
         municipality: data.address.municipality,
         city: data.address.city,
+        county: data.address.county,
         state: data.address.state,
         province: data.address.province,
         region: data.address.region,
-        county: data.address.county,
+        postcode: data.address.postcode,
         country: data.address.country,
         fullAddress: data.address
       });

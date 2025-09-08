@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import { logKVUsage } from '@/lib/api-auth';
 import { validateEnvironment } from '@/lib/env-validator';
+import { OverlayLogger } from '@/lib/logger';
  
 
 async function handleGET() {
@@ -11,7 +12,7 @@ async function handleGET() {
     
     // Only log in development
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Get-settings API: Raw settings from KV:', settings);
+      OverlayLogger.settings('Raw settings from KV', settings);
     }
     
     // Import the default settings to ensure all properties are included
@@ -24,7 +25,7 @@ async function handleGET() {
     
     
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Get-settings API: Final combined settings:', combinedSettings);
+      OverlayLogger.settings('Final combined settings', combinedSettings);
     }
     
     return NextResponse.json(combinedSettings);
@@ -38,7 +39,7 @@ export async function GET(): Promise<NextResponse> {
   // Validate environment (only KV storage is required)
   const envValidation = validateEnvironment();
   if (!envValidation.isValid) {
-    console.error('Environment validation failed:', envValidation.missing);
+    OverlayLogger.error('Environment validation failed', envValidation.missing);
     return new NextResponse('Server configuration error', { status: 500 });
   }
   

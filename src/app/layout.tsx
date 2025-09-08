@@ -17,6 +17,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   
   return (
     <html lang="en" className={montserrat.className}>
+      <head>
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+        <link rel="preconnect" href="https://flagcdn.com" />
+        <link rel="preconnect" href="https://api.open-meteo.com" />
+        <link rel="preconnect" href="https://api.mapbox.com" />
+      </head>
       <body>{children}</body>
     </html>
   );

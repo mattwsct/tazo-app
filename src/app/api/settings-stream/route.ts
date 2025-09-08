@@ -35,7 +35,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const stream = new ReadableStream({
     start(controller) {
       let lastModified = 0;
-      const connectionId = `sse_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const connectionId = `sse_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
       
       if (process.env.NODE_ENV === 'development') {
         console.log(`[SSE] New connection established: ${connectionId} (authenticated: ${isAuthenticated})`);
@@ -145,8 +145,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Credentials': 'true',
+      // If credentials are needed, specify exact origin; otherwise omit credentials header.
+      'Access-Control-Allow-Origin': '*'
     },
   });
 } 

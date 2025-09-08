@@ -43,17 +43,17 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
   
   // Refs for managing timeouts
-  const heartRateTimeout = useRef<NodeJS.Timeout | null>(null);
-  const animationUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
-  const connectionDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const heartRateTimer = useRef<NodeJS.Timeout | null>(null);
+  const animationTimer = useRef<NodeJS.Timeout | null>(null);
+  const connectionTimer = useRef<NodeJS.Timeout | null>(null);
   const currentBpmRef = useRef(0);
 
   // === 💗 DEBOUNCED CONNECTION STATE UPDATE ===
   const updateConnectionState = useCallback((isConnected: boolean) => {
     // Clear any existing debounce timeout
-    if (connectionDebounceTimeout.current) {
-      clearTimeout(connectionDebounceTimeout.current);
-      connectionDebounceTimeout.current = null;
+    if (connectionTimer.current) {
+      clearTimeout(connectionTimer.current);
+      connectionTimer.current = null;
     }
 
     // If connecting, update immediately
@@ -63,9 +63,9 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     }
 
     // If disconnecting, debounce to prevent rapid flashing
-    connectionDebounceTimeout.current = setTimeout(() => {
+    connectionTimer.current = setTimeout(() => {
       setHeartRate(prev => ({ ...prev, isConnected: false }));
-      connectionDebounceTimeout.current = null;
+      connectionTimer.current = null;
     }, HEART_RATE_CONFIG.CONNECTION_DEBOUNCE);
   }, []);
 
@@ -73,9 +73,9 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   useEffect(() => {
     if (heartRate.bpm > 0 && heartRate.isConnected) {
       // Clear any existing timeout since we have fresh data
-      if (heartRateTimeout.current) {
-        clearTimeout(heartRateTimeout.current);
-        heartRateTimeout.current = null;
+      if (heartRateTimer.current) {
+        clearTimeout(heartRateTimer.current);
+        heartRateTimer.current = null;
       }
       
       // Smoothly transition to new BPM over 2 seconds
@@ -98,20 +98,20 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
       }, stepDuration);
       
       // Update animation BPM with a delay to prevent abrupt changes
-      if (animationUpdateTimeout.current) {
-        clearTimeout(animationUpdateTimeout.current);
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
       }
       
       // Only update animation speed if the change is significant
       const bpmDifference = Math.abs(targetBpm - stableAnimationBpm);
       if (bpmDifference > HEART_RATE_CONFIG.CHANGE_THRESHOLD || stableAnimationBpm === 0) {
-        animationUpdateTimeout.current = setTimeout(() => {
+        animationTimer.current = setTimeout(() => {
           setStableAnimationBpm(targetBpm);
         }, HEART_RATE_CONFIG.ANIMATION_DELAY);
       }
       
       // Set timeout to hide heart rate if no new data after 5 seconds
-      heartRateTimeout.current = setTimeout(() => {
+      heartRateTimer.current = setTimeout(() => {
         HeartRateLogger.info('Heart rate data timeout - hiding monitor');
         updateConnectionState(false);
         setHeartRate(prev => ({ ...prev, bpm: 0 }));
@@ -130,13 +130,13 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
       setStableAnimationBpm(0);
       
       // Clear any existing timeouts
-      if (heartRateTimeout.current) {
-        clearTimeout(heartRateTimeout.current);
-        heartRateTimeout.current = null;
+      if (heartRateTimer.current) {
+        clearTimeout(heartRateTimer.current);
+        heartRateTimer.current = null;
       }
-      if (animationUpdateTimeout.current) {
-        clearTimeout(animationUpdateTimeout.current);
-        animationUpdateTimeout.current = null;
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+        animationTimer.current = null;
       }
     }
   }, [heartRate.bpm, heartRate.isConnected, stableAnimationBpm, updateConnectionState, smoothHeartRate]);
@@ -223,13 +223,13 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
           setStableAnimationBpm(0);
           
           // Clear any existing timeouts
-          if (heartRateTimeout.current) {
-            clearTimeout(heartRateTimeout.current);
-            heartRateTimeout.current = null;
+          if (heartRateTimer.current) {
+            clearTimeout(heartRateTimer.current);
+            heartRateTimer.current = null;
           }
-          if (animationUpdateTimeout.current) {
-            clearTimeout(animationUpdateTimeout.current);
-            animationUpdateTimeout.current = null;
+          if (animationTimer.current) {
+            clearTimeout(animationTimer.current);
+            animationTimer.current = null;
           }
           
           updateConnectionState(false);
@@ -291,19 +291,19 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
         reconnectTimeout = null;
       }
       
-      if (heartRateTimeout.current) {
-        clearTimeout(heartRateTimeout.current);
-        heartRateTimeout.current = null;
+      if (heartRateTimer.current) {
+        clearTimeout(heartRateTimer.current);
+        heartRateTimer.current = null;
       }
       
-      if (animationUpdateTimeout.current) {
-        clearTimeout(animationUpdateTimeout.current);
-        animationUpdateTimeout.current = null;
+      if (animationTimer.current) {
+        clearTimeout(animationTimer.current);
+        animationTimer.current = null;
       }
       
-      if (connectionDebounceTimeout.current) {
-        clearTimeout(connectionDebounceTimeout.current);
-        connectionDebounceTimeout.current = null;
+      if (connectionTimer.current) {
+        clearTimeout(connectionTimer.current);
+        connectionTimer.current = null;
       }
     };
       }, [pulsoidToken, onConnected, updateConnectionState]); // Include onConnected dependency

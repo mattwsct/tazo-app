@@ -3,13 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
+  // Skip authentication for login page and login API
+  if (pathname === '/login' || pathname === '/api/login') {
+    return NextResponse.next();
+  }
+  
   // Check if user is trying to access protected routes
   if (pathname === '/' || pathname.startsWith('/api/')) {
-    // Skip authentication for login page and login API
-    if (pathname === '/login' || pathname === '/api/login') {
-      return NextResponse.next();
-    }
-    
     // Check for auth cookie
     const authToken = request.cookies.get('auth-token');
     
