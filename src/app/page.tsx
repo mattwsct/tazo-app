@@ -321,6 +321,7 @@ export default function AdminPage() {
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
                   { value: 'neighborhood', label: 'Neighborhood', icon: '🏙️' },
+                  { value: 'suburb', label: 'Suburb', icon: '🏘️' },
                   { value: 'city', label: 'City', icon: '🏛️' },
                   { value: 'state', label: 'State', icon: '🗺️' },
                   { value: 'custom', label: 'Custom', icon: '✏️' },

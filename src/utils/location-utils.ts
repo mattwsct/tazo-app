@@ -33,16 +33,20 @@ export interface LocationDisplay {
 
 // === 🎯 LOCATION PRECISION LEVELS ===
 
-type LocationPrecision = 'neighborhood' | 'city' | 'state';
+type LocationPrecision = 'neighborhood' | 'suburb' | 'city' | 'state';
 
 /**
  * Defines the fallback hierarchy for location precision levels
  * 
- * When a location at one level is redundant, we fall back to the next level:
- * neighborhood -> city -> state -> null (no more levels)
+ * Each precision level only falls back to less precise levels:
+ * - neighborhood -> suburb -> city -> state
+ * - suburb -> city -> state  
+ * - city -> state
+ * - state -> (no fallback)
  */
 const PRECISION_FALLBACKS: Record<LocationPrecision, LocationPrecision | null> = {
-  neighborhood: 'city',    // If neighborhood is redundant, try city
+  neighborhood: 'suburb',  // If neighborhood is redundant, try suburb
+  suburb: 'city',          // If suburb is redundant, try city
   city: 'state',           // If city is redundant, try state  
   state: null              // State is the final level, no fallback
 } as const;
@@ -71,23 +75,26 @@ function areRedundantNames(name1: string, name2: string): boolean {
  * Simple fallback chain: try each field in order until we find one that exists and isn't too long.
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
+  // Each precision level only falls back to less precise levels
   const fieldChains = {
-    // Optimized order: most specific to least specific
     neighborhood: [
       location.neighbourhood,  // "Midtown West" - most specific neighborhood
-      location.suburb,         // "Manhattan" - borough level (more specific than city)
-      location.town,           // Town level
-      location.municipality,   // Municipality level
-      location.city,           // "New York" - city level
+      location.suburb,         // "Manhattan" - suburb fallback
+      location.city,           // "New York" - city fallback
+      location.state           // "New York" - state fallback
+    ],
+    suburb: [
+      location.suburb,         // "Manhattan" - primary suburb/borough
+      location.city,           // "New York" - city fallback
       location.state           // "New York" - state fallback
     ],
     city: [
       location.city,           // "New York" - primary city
-      location.municipality,   // Municipality fallback
-      location.suburb,         // "Manhattan" - borough as city fallback
-      location.state           // State fallback
+      location.state           // "New York" - state fallback
     ],
-    state: [location.state]    // "New York" - state only
+    state: [
+      location.state           // "New York" - state only
+    ]
   };
   
   const fields = fieldChains[precision];
@@ -288,6 +295,11 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  * // Returns: { primary: "Hell's Kitchen", context: 'New York' }
  * 
  * @example
+ * // Suburb mode: Shows suburb/borough with city context
+ * formatLocation({ suburb: 'Manhattan', city: 'New York City', state: 'New York' }, 'suburb')
+ * // Returns: { primary: 'Manhattan', context: 'New York' }
+ * 
+ * @example
  * // City mode: Shows city with state context (if not duplicate)
  * formatLocation({ city: 'Tokyo', state: 'Tokyo Prefecture' }, 'city')
  * // Returns: { primary: 'Tokyo', context: undefined } (duplicate detected)
@@ -299,7 +311,7 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'neighborhood' | 'city' | 'state' | 'hidden' | 'custom' = 'neighborhood'
+  displayMode: 'neighborhood' | 'suburb' | 'city' | 'state' | 'hidden' | 'custom' = 'neighborhood'
 ): LocationDisplay {
   if (!location || displayMode === 'hidden' || displayMode === 'custom') return { primary: '', context: undefined };
   

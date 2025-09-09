@@ -22,11 +22,11 @@ declare global {
   }
 }
 
-// MapboxMinimap component (currently unused but kept for future use)
-// const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
-//   ssr: false,
-//   loading: () => <div className="minimap-placeholder" />
-// });
+// MapboxMinimap component - Static map images
+const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
+  ssr: false,
+  loading: () => <div className="minimap-placeholder" />
+});
 
 const HeartRateMonitor = dynamic(() => import('@/components/HeartRateMonitor'), {
   ssr: false,
@@ -46,7 +46,8 @@ export default function OverlayPage() {
   } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
-  // const [mapCoords, setMapCoords] = useState<[number, number] | null>(null); // Currently unused but kept for future use
+  const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
+  const [currentSpeed, setCurrentSpeed] = useState(0);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   // Removed isLoading state - using Option 1: hide until ready
@@ -55,13 +56,14 @@ export default function OverlayPage() {
   const lastWeatherTime = useRef(0);
   const lastLocationTime = useRef(0);
   const lastCoords = useRef<[number, number] | null>(null);
+  const lastCoordsTime = useRef(0);
   const settingsRef = useRef(settings);
   
   // Update settings ref whenever settings change
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
-  
+
   // Debug: Force refresh on page load (remove in production)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
@@ -140,19 +142,40 @@ export default function OverlayPage() {
     if (!timezone || !timeFormatter.current || !dateFormatter.current) return;
     
     function updateTimeAndDate() {
+      try {
       const now = new Date();
-      const timeParts = timeFormatter.current!.formatToParts(now);
+        const timeParts = timeFormatter.current!.formatToParts(now);
       const timePart = timeParts.find(part => part.type === 'hour' || part.type === 'minute')?.value || '';
       const minutePart = timeParts.find(part => part.type === 'minute')?.value || '';
       const ampmPart = timeParts.find(part => part.type === 'dayPeriod')?.value || '';
       
       setTime(`${timePart}:${minutePart} ${ampmPart}`);
       setDate(dateFormatter.current!.format(now));
+      } catch (error) {
+        OverlayLogger.error('Time update failed', error);
+        // Fallback to basic time display
+        const now = new Date();
+        setTime(now.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          hour12: true,
+          timeZone: timezone || 'UTC'
+        }));
+        setDate(now.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric',
+          timeZone: timezone || 'UTC'
+        }));
+      }
     }
     
     updateTimeAndDate();
     
-    function setupNextSync() {
+    // Store all active timers for proper cleanup
+    const activeTimers = new Set<NodeJS.Timeout>();
+    
+    function setupNextSync(): NodeJS.Timeout {
       const now = new Date();
       const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
       
@@ -166,19 +189,32 @@ export default function OverlayPage() {
           
           if (updateCount >= 60) {
             clearInterval(interval);
-            setupNextSync();
+            activeTimers.delete(interval);
+            // Recursively set up next sync
+            const nextTimeout = setupNextSync();
+            activeTimers.add(nextTimeout);
           }
         }, 60000);
         
         timeUpdateTimer.current = interval;
+        activeTimers.add(interval);
       }, msUntilNextMinute);
       
+      activeTimers.add(syncTimeout);
       return syncTimeout;
     }
     
-    const timeout = setupNextSync();
+    const initialTimeout = setupNextSync();
+    activeTimers.add(initialTimeout);
+    
     return () => {
-      clearTimeout(timeout);
+      // Clean up all active timers
+      activeTimers.forEach(timer => {
+        clearTimeout(timer);
+        clearInterval(timer);
+      });
+      activeTimers.clear();
+      
       if (timeUpdateTimer.current) {
         clearInterval(timeUpdateTimer.current);
         timeUpdateTimer.current = null;
@@ -231,18 +267,18 @@ export default function OverlayPage() {
             // Heartbeat received, connection is alive
             OverlayLogger.settings('SSE heartbeat', { timestamp: data.timestamp });
           }
-        } catch (error) {
+      } catch (error) {
           OverlayLogger.error('Failed to parse SSE message', error);
         }
       };
       
       eventSource.onerror = (error) => {
         OverlayLogger.error('SSE connection error', error);
-        // Reconnect after 5 seconds
+        // Reconnect more aggressively - try immediately, then every 2 seconds
         setTimeout(() => {
           OverlayLogger.settings('Reconnecting SSE...');
           setupSSE();
-        }, 5000);
+        }, 1000);
       };
       
       return eventSource;
@@ -293,14 +329,15 @@ export default function OverlayPage() {
         OverlayLogger.overlay('Setting up RTIRL listener with key:', { key: API_KEYS.RTIRL.substring(0, 8) + '...' });
         listenerSetup = true;
         window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
-          if (process.env.NODE_ENV === 'development') {
-            OverlayLogger.overlay('RTIRL raw payload received', { payload: p, type: typeof p });
-          }
-          if (!p || typeof p !== 'object') {
-            OverlayLogger.warn('RTIRL received invalid payload', { payload: p });
-            return;
-          }
-          const payload = p as RTIRLPayload;
+          try {
+            if (process.env.NODE_ENV === 'development') {
+              OverlayLogger.overlay('RTIRL raw payload received', { payload: p, type: typeof p });
+            }
+            if (!p || typeof p !== 'object') {
+              OverlayLogger.warn('RTIRL received invalid payload', { payload: p });
+              return;
+            }
+            const payload = p as RTIRLPayload;
           
           // Handle timezone from RTIRL
           if (payload.location?.timezone && payload.location.timezone !== timezoneRef.current) {
@@ -333,13 +370,30 @@ export default function OverlayPage() {
             if (process.env.NODE_ENV === 'development') {
               OverlayLogger.overlay('RTIRL GPS data received', { lat, lon });
             }
-            // setMapCoords([lat, lon]); // Currently unused but kept for future use
+            setMapCoords([lat, lon]);
+            
+            // Calculate speed for minimap
+            const now = Date.now();
+            const prevCoords = lastCoords.current;
+            const prevTime = lastCoordsTime.current;
+            let speedKmh = 0;
+            
+            if (prevCoords && prevTime > 0) {
+              const movedMeters = distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]);
+              const timeDiffHours = (now - prevTime) / (1000 * 60 * 60);
+              if (timeDiffHours > 0) {
+                speedKmh = (movedMeters / 1000) / timeDiffHours;
+              }
+            }
+            
+            setCurrentSpeed(Math.round(speedKmh));
+            
+            lastCoords.current = [lat!, lon!];
+            lastCoordsTime.current = now;
+            
             // Kick off location + weather fetches on coordinate updates with gating
             (async () => {
-              const now = Date.now();
-              const prevCoords = lastCoords.current;
               const movedMeters = prevCoords ? distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]) : Infinity;
-              lastCoords.current = [lat!, lon!];
 
               // WEATHER: fetch immediately on first fix or large move; else respect interval
               const weatherElapsed = now - lastWeatherTime.current;
@@ -418,14 +472,18 @@ export default function OverlayPage() {
                 // Location fetch complete;
               }
             })();
-          } else {
+    } else {
             OverlayLogger.warn('RTIRL GPS data invalid');
+          }
+          } catch (error) {
+            OverlayLogger.error('RTIRL listener error', error);
+            // Don't break the entire component on RTIRL errors
           }
         });
       } else {
         if (!API_KEYS.RTIRL) {
           OverlayLogger.warn('RTIRL API key not available');
-        } else {
+    } else {
           OverlayLogger.warn('RealtimeIRL API not available');
         }
       }
@@ -567,7 +625,7 @@ export default function OverlayPage() {
             )}
             
             {weatherDisplay && (
-              <div className="weather">
+            <div className="weather">
                 <div className="weather-container">
                   <div className="weather-content">
                     <div className="weather-description">
@@ -591,7 +649,18 @@ export default function OverlayPage() {
                 </div>
               </div>
             )}
-          </div>
+
+            {mapCoords && (settings.showMinimap || (settings.minimapSpeedBased && currentSpeed > 0)) && (
+              <div className="minimap">
+                <MapboxMinimap 
+                  lat={mapCoords[0]} 
+                  lon={mapCoords[1]} 
+                  isVisible={overlayVisible}
+                  speedKmh={currentSpeed}
+                />
+                </div>
+              )}
+            </div>
         </div>
       </div>
     </ErrorBoundary>
