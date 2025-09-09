@@ -59,10 +59,79 @@ export default function OverlayPage() {
   const lastCoordsTime = useRef(0);
   const settingsRef = useRef(settings);
   
+  // Health monitoring
+  const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
+  const [isHealthy, setIsHealthy] = useState(true);
+  
   // Update settings ref whenever settings change
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+
+  // Safe API call wrapper to prevent silent failures
+  const safeApiCall = useCallback(async (apiCall: () => Promise<unknown>, context: string): Promise<unknown> => {
+    try {
+      const result = await apiCall();
+      return result;
+    } catch (error) {
+      OverlayLogger.error(`${context} failed`, error);
+      return null;
+    }
+  }, []);
+
+  // Health monitoring - detect when updates stop
+  useEffect(() => {
+    const healthCheck = setInterval(() => {
+      const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+      
+      if (timeSinceLastUpdate > 120000) { // 2 minutes without update
+        OverlayLogger.warn('Overlay appears unhealthy - no updates for 2+ minutes', {
+          timeSinceLastUpdate,
+          lastUpdate: new Date(lastUpdateTime).toISOString()
+        });
+        setIsHealthy(false);
+        
+        // Try to recover by refreshing the page after 5 minutes
+        if (timeSinceLastUpdate > 300000) { // 5 minutes
+          OverlayLogger.error('Overlay unhealthy for 5+ minutes, refreshing page');
+          window.location.reload();
+        }
+      } else {
+        setIsHealthy(true);
+      }
+    }, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(healthCheck);
+  }, [lastUpdateTime]);
+
+  // Update lastUpdateTime whenever time updates
+  useEffect(() => {
+    setLastUpdateTime(Date.now());
+  }, [time, date]);
+
+  // Debug panel for development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const debugInfo = {
+        timezone,
+        time,
+        date,
+        lastUpdate: new Date(lastUpdateTime).toISOString(),
+        isHealthy,
+        hasLocation: !!location,
+        hasWeather: !!weather,
+        hasMapCoords: !!mapCoords,
+        overlayVisible,
+        sseConnected: typeof window !== 'undefined' && 
+          (window as unknown as { eventSource?: EventSource }).eventSource?.readyState === EventSource.OPEN
+      };
+      
+      // Only log every 30 seconds to avoid spam
+      if (Date.now() % 30000 < 1000) {
+        OverlayLogger.overlay('Debug Info', debugInfo);
+      }
+    }
+  }, [time, date, timezone, lastUpdateTime, isHealthy, location, weather, mapCoords, overlayVisible]);
 
   // Debug: Force refresh on page load (remove in production)
   useEffect(() => {
@@ -137,20 +206,24 @@ export default function OverlayPage() {
     }
   }, [timezone, createDateTimeFormatters]);
 
-  // Time and date updates
+  // Time and date updates - simplified and more robust
   useEffect(() => {
     if (!timezone || !timeFormatter.current || !dateFormatter.current) return;
     
+    let isActive = true;
+    
     function updateTimeAndDate() {
-      try {
-      const now = new Date();
-        const timeParts = timeFormatter.current!.formatToParts(now);
-      const timePart = timeParts.find(part => part.type === 'hour' || part.type === 'minute')?.value || '';
-      const minutePart = timeParts.find(part => part.type === 'minute')?.value || '';
-      const ampmPart = timeParts.find(part => part.type === 'dayPeriod')?.value || '';
+      if (!isActive) return;
       
-      setTime(`${timePart}:${minutePart} ${ampmPart}`);
-      setDate(dateFormatter.current!.format(now));
+      try {
+        const now = new Date();
+        const timeParts = timeFormatter.current!.formatToParts(now);
+        const timePart = timeParts.find(part => part.type === 'hour' || part.type === 'minute')?.value || '';
+        const minutePart = timeParts.find(part => part.type === 'minute')?.value || '';
+        const ampmPart = timeParts.find(part => part.type === 'dayPeriod')?.value || '';
+        
+        setTime(`${timePart}:${minutePart} ${ampmPart}`);
+        setDate(dateFormatter.current!.format(now));
       } catch (error) {
         OverlayLogger.error('Time update failed', error);
         // Fallback to basic time display
@@ -170,51 +243,16 @@ export default function OverlayPage() {
       }
     }
     
+    // Update immediately
     updateTimeAndDate();
     
-    // Store all active timers for proper cleanup
-    const activeTimers = new Set<NodeJS.Timeout>();
-    
-    function setupNextSync(): NodeJS.Timeout {
-      const now = new Date();
-      const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-      
-      const syncTimeout = setTimeout(() => {
-        updateTimeAndDate();
-        
-        let updateCount = 0;
-        const interval = setInterval(() => {
-          updateTimeAndDate();
-          updateCount++;
-          
-          if (updateCount >= 60) {
-            clearInterval(interval);
-            activeTimers.delete(interval);
-            // Recursively set up next sync
-            const nextTimeout = setupNextSync();
-            activeTimers.add(nextTimeout);
-          }
-        }, 60000);
-        
-        timeUpdateTimer.current = interval;
-        activeTimers.add(interval);
-      }, msUntilNextMinute);
-      
-      activeTimers.add(syncTimeout);
-      return syncTimeout;
-    }
-    
-    const initialTimeout = setupNextSync();
-    activeTimers.add(initialTimeout);
+    // Set up simple interval - update every minute
+    const interval = setInterval(updateTimeAndDate, 60000);
+    timeUpdateTimer.current = interval;
     
     return () => {
-      // Clean up all active timers
-      activeTimers.forEach(timer => {
-        clearTimeout(timer);
-        clearInterval(timer);
-      });
-      activeTimers.clear();
-      
+      isActive = false;
+      clearInterval(interval);
       if (timeUpdateTimer.current) {
         clearInterval(timeUpdateTimer.current);
         timeUpdateTimer.current = null;
@@ -274,11 +312,14 @@ export default function OverlayPage() {
       
       eventSource.onerror = (error) => {
         OverlayLogger.error('SSE connection error', error);
-        // Reconnect more aggressively - try immediately, then every 2 seconds
+        // Close the current connection before reconnecting
+        eventSource.close();
+        // Reconnect with exponential backoff
+        const reconnectDelay = Math.min(1000 * Math.pow(2, 0), 10000); // Start with 1s, max 10s
         setTimeout(() => {
           OverlayLogger.settings('Reconnecting SSE...');
           setupSSE();
-        }, 1000);
+        }, reconnectDelay);
       };
       
       return eventSource;
@@ -399,77 +440,83 @@ export default function OverlayPage() {
               const weatherElapsed = now - lastWeatherTime.current;
               const largeMove = movedMeters >= THRESHOLDS.WEATHER_DISTANCE_KM * 1000;
               const shouldFetchWeather = lastWeatherTime.current === 0 || largeMove || weatherElapsed >= TIMERS.WEATHER_TIMEZONE_UPDATE;
-              try {
-                if (shouldFetchWeather) {
-                  // Starting weather fetch;
-                  const weatherResult = await fetchWeatherAndTimezoneFromOpenMeteo(lat!, lon!);
-                  lastWeatherTime.current = Date.now();
-                  if (weatherResult) {
-                    if (weatherResult.weather) {
-                      setWeather(weatherResult.weather);
-                      // Weather fetch complete;
-                    } else {
-                      setWeather(null);
-                      // Weather fetch complete;
-                    }
-                    if (weatherResult.timezone && weatherResult.timezone !== timezone) {
-                      createDateTimeFormatters(weatherResult.timezone);
-                      setTimezone(weatherResult.timezone);
-                      // Timezone ready;
-                    }
+              
+              if (shouldFetchWeather) {
+                const weatherResult = await safeApiCall(
+                  () => fetchWeatherAndTimezoneFromOpenMeteo(lat!, lon!),
+                  'Weather fetch'
+                );
+                
+                lastWeatherTime.current = Date.now();
+                if (weatherResult && typeof weatherResult === 'object' && 'weather' in weatherResult) {
+                  const result = weatherResult as { weather?: { temp: number; desc: string }; timezone?: string };
+                  if (result.weather) {
+                    setWeather(result.weather);
                   } else {
                     setWeather(null);
-                    // Weather fetch complete;
                   }
+                  if (result.timezone && result.timezone !== timezone) {
+                    createDateTimeFormatters(result.timezone);
+                    setTimezone(result.timezone);
+                  }
+                } else {
+                  setWeather(null);
                 }
-              } catch (err) {
-                OverlayLogger.error('Weather fetch failed', err);
-                // Weather fetch complete;
               }
 
-              try {
-                const locationElapsed = now - lastLocationTime.current;
-                const isStationary = movedMeters < 100;
-                const minTimeBetweenCalls = isStationary ? 30000 : 15000; // 30s if stationary, 15s if moving
-                const meetsDistance = movedMeters >= THRESHOLDS.LOCATION_DISTANCE;
-                const shouldFetchLocation = lastLocationTime.current === 0 || (locationElapsed >= minTimeBetweenCalls && meetsDistance);
-                
-                // Debug location caching
-                  if (process.env.NODE_ENV === 'development') {
-                    OverlayLogger.overlay('Location fetch decision', {
-                      movedMeters,
-                      isStationary,
-                      locationElapsed,
-                      minTimeBetweenCalls,
-                      meetsDistance,
-                      shouldFetchLocation,
-                      lastLocationTime: lastLocationTime.current
-                    });
-                  }
+              const locationElapsed = now - lastLocationTime.current;
+              const isStationary = movedMeters < 100;
+              const minTimeBetweenCalls = isStationary ? 30000 : 15000; // 30s if stationary, 15s if moving
+              const meetsDistance = movedMeters >= THRESHOLDS.LOCATION_DISTANCE;
+              const shouldFetchLocation = lastLocationTime.current === 0 || (locationElapsed >= minTimeBetweenCalls && meetsDistance);
+              
+              // Debug location caching
+              if (process.env.NODE_ENV === 'development') {
+                OverlayLogger.overlay('Location fetch decision', {
+                  movedMeters,
+                  isStationary,
+                  locationElapsed,
+                  minTimeBetweenCalls,
+                  meetsDistance,
+                  shouldFetchLocation,
+                  lastLocationTime: lastLocationTime.current
+                });
+              }
 
-                if (shouldFetchLocation) {
-                  // Starting location fetch;
-                  let loc: LocationData | null = null;
-                  if (API_KEYS.LOCATIONIQ) {
-                    loc = await fetchLocationFromLocationIQ(lat!, lon!, API_KEYS.LOCATIONIQ);
+              if (shouldFetchLocation) {
+                let loc: LocationData | null = null;
+                
+                // Try LocationIQ first
+                if (API_KEYS.LOCATIONIQ) {
+                  const locationResult = await safeApiCall(
+                    () => fetchLocationFromLocationIQ(lat!, lon!, API_KEYS.LOCATIONIQ!),
+                    'LocationIQ fetch'
+                  );
+                  if (locationResult && typeof locationResult === 'object') {
+                    loc = locationResult as LocationData;
                   }
-                  if (!loc && API_KEYS.MAPBOX) {
-                    loc = await fetchLocationFromMapbox(lat!, lon!, API_KEYS.MAPBOX);
-                  }
-                  lastLocationTime.current = Date.now();
-                    if (loc) {
-                      const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-                      setLocation({
-                        label: formatted.primary,
-                        context: formatted.context,
-                        countryCode: loc.countryCode || ''
-                      });
-                    }
-                  // Location fetch complete;
                 }
-              } catch (err) {
-                OverlayLogger.error('Location fetch failed', err);
-                // Location fetch complete;
+                
+                // Fallback to Mapbox if LocationIQ failed
+                if (!loc && API_KEYS.MAPBOX) {
+                  const mapboxResult = await safeApiCall(
+                    () => fetchLocationFromMapbox(lat!, lon!, API_KEYS.MAPBOX!),
+                    'Mapbox fetch'
+                  );
+                  if (mapboxResult && typeof mapboxResult === 'object') {
+                    loc = mapboxResult as LocationData;
+                  }
+                }
+                
+                lastLocationTime.current = Date.now();
+                if (loc) {
+                  const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
+                  setLocation({
+                    label: formatted.primary,
+                    context: formatted.context,
+                    countryCode: loc.countryCode || ''
+                  });
+                }
               }
             })();
     } else {
