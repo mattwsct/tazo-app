@@ -419,12 +419,21 @@ body {
   flex-direction: row;
   gap: 0.25rem;
   width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 0.25rem 0;
+}
+
+.radio-group.segmented::-webkit-scrollbar {
+  display: none;
 }
 
 .radio-group.segmented .radio-option {
   width: auto;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: none;
   justify-content: center;
@@ -434,6 +443,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 80px; /* Ensure minimum readable width */
+  flex-shrink: 0; /* Prevent shrinking below min-width */
+  touch-action: manipulation; /* Improve touch responsiveness */
 }
 
 .radio-group.segmented .radio-option .radio-label {
@@ -441,6 +452,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: block;
 }
 .section-subtitle {
   color: rgba(255, 255, 255, 0.7);
@@ -665,13 +677,21 @@ body {
   }
   
   .radio-group.segmented .radio-option {
-    min-height: 2.5rem;
-    padding: 0.625rem 0.375rem;
+    min-height: 2.75rem;
+    padding: 0.75rem 0.5rem;
     font-size: 0.8rem;
+    min-width: 70px; /* Smaller minimum width for mobile */
+    flex: 0 0 auto; /* Don't grow/shrink on mobile */
   }
   
   .radio-group.segmented .radio-option .radio-label {
     font-size: 0.8rem;
+    line-height: 1.2;
+  }
+  
+  .radio-group.segmented .radio-option .radio-icon {
+    font-size: 1rem;
+    margin-bottom: 0.125rem;
   }
   
   /* Better mobile spacing */
@@ -699,6 +719,61 @@ body {
     min-width: 0;
     padding: 1rem;
     font-size: 0.9rem;
+  }
+  
+  /* Special handling for location options on very small screens */
+  .radio-group.segmented {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.375rem;
+    overflow: visible;
+  }
+  
+  .radio-group.segmented .radio-option {
+    min-width: 0;
+    flex: none;
+    padding: 0.625rem 0.25rem;
+    font-size: 0.75rem;
+    min-height: 2.5rem;
+  }
+  
+  .radio-group.segmented .radio-option .radio-label {
+    font-size: 0.75rem;
+    line-height: 1.1;
+  }
+  
+  .radio-group.segmented .radio-option .radio-icon {
+    font-size: 0.875rem;
+    margin-bottom: 0.125rem;
+  }
+}
+
+/* Extra small screens - stack location options vertically */
+@media (max-width: 360px) {
+  .radio-group.segmented {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .radio-group.segmented .radio-option {
+    width: 100%;
+    flex: none;
+    padding: 0.75rem;
+    font-size: 0.8rem;
+    min-height: 2.75rem;
+    text-align: left;
+    justify-content: flex-start;
+  }
+  
+  .radio-group.segmented .radio-option .radio-label {
+    font-size: 0.8rem;
+  }
+  
+  .radio-group.segmented .radio-option .radio-icon {
+    font-size: 1rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0;
   }
 }
 

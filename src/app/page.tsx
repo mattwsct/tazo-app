@@ -227,7 +227,7 @@ export default function AdminPage() {
     value: string; 
     onChange: (value: string) => void; 
   }) => (
-    <div className="radio-group segmented">
+    <div className="radio-group segmented" role="radiogroup">
       {options.map((option) => (
         <button
           key={option.value}
@@ -236,8 +236,10 @@ export default function AdminPage() {
           role="radio"
           aria-checked={value === option.value}
           aria-label={option.label}
+          type="button"
+          tabIndex={0}
         >
-          <span className="radio-icon">{option.icon}</span>
+          <span className="radio-icon" aria-hidden="true">{option.icon}</span>
           <span className="radio-label">{option.label}</span>
         </button>
       ))}

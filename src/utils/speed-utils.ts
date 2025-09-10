@@ -40,7 +40,7 @@ export const getAdaptiveDistanceThreshold = (speedKmh: number): number => {
   } else if (speedKmh >= THRESHOLDS.HIGH_SPEED_THRESHOLD) {
     return Math.max(500, speedKmh * 10); // Scales with speed, minimum 500m
   } else {
-    return THRESHOLDS.LOCATION_DISTANCE; // Standard threshold
+    return THRESHOLDS.LOCATION_DISTANCE_DEFAULT; // Standard threshold
   }
 };
 
