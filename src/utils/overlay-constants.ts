@@ -27,22 +27,13 @@ export const THRESHOLDS = {
   // Static map gate
   MAP_PIXEL_CHANGE: 8, // minimum pixel movement to refresh image
   
-  // Movement-based intelligence thresholds
-  STATIONARY_THRESHOLD: 5, // km/h - consider stationary below this speed
-  MOVING_THRESHOLD: 20, // km/h - consider actively moving above this speed
-  HIGH_SPEED_MOVEMENT: 80, // km/h - high speed movement
 } as const;
 
-// Simplified polling intervals - consistent for both location and weather
+// Simplified polling intervals
 export const DYNAMIC_TIMERS = {
-  // Unified update intervals - same for location and weather
+  // Unified update intervals
   UPDATE_INTERVAL: 60000, // 1 minute
   MOVEMENT_THRESHOLD: 100, // 100 meters
-  
-  // Map updates based on speed
-  MAP_STATIONARY: 60000, // 1 minute when stationary
-  MAP_MOVING: 20000, // 20 seconds when moving
-  MAP_HIGH_SPEED: 10000, // 10 seconds when moving fast
 } as const;
 
 export const API_KEYS = {
