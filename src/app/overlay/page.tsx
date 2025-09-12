@@ -49,6 +49,8 @@ export default function OverlayPage() {
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
+  const [flagLoaded, setFlagLoaded] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -84,6 +86,15 @@ export default function OverlayPage() {
       distanceThreshold: THRESHOLDS.LOCATION_DISTANCE_DEFAULT,
       timeThreshold: 300000, // 5 minutes
     };
+  }, []);
+
+  // Get emoji flag for country code (fast fallback)
+  const getEmojiFlag = useCallback((countryCode: string): string => {
+    const codePoints = countryCode
+      .toUpperCase()
+      .split('')
+      .map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
   }, []);
 
   // Check API rate limits (per-second cooldown only)
@@ -405,67 +416,18 @@ export default function OverlayPage() {
     createDateTimeFormattersRef.current = createDateTimeFormatters;
   }, [createDateTimeFormatters]);
 
-  // Fallback location fetch if RTIRL is slow (after 3 seconds)
+  // Preload flag image when country code is available
   useEffect(() => {
-    const fallbackTimer = setTimeout(async () => {
-      // Only fetch if we still don't have location and RTIRL hasn't provided coords
-      if (!location && !lastCoords.current) {
-        OverlayLogger.overlay('RTIRL slow - attempting fallback location fetch');
-        
-        // Try to get approximate location from browser geolocation as fallback
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const { latitude, longitude } = position.coords;
-              lastCoords.current = [latitude, longitude];
-              
-              // Fetch location data
-              let loc: LocationData | null = null;
-              
-              if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
-                trackApiCall('locationiq');
-                const locationResult = await safeApiCall(
-                  () => fetchLocationFromLocationIQ(latitude, longitude, API_KEYS.LOCATIONIQ!),
-                  'LocationIQ fallback fetch'
-                );
-                if (locationResult && typeof locationResult === 'object') {
-                  loc = locationResult as LocationData;
-                }
-              }
-              
-              if (!loc && API_KEYS.MAPBOX && canMakeApiCall('mapbox')) {
-                trackApiCall('mapbox');
-                const mapboxResult = await safeApiCall(
-                  () => fetchLocationFromMapbox(latitude, longitude, API_KEYS.MAPBOX!),
-                  'Mapbox fallback fetch'
-                );
-                if (mapboxResult && typeof mapboxResult === 'object') {
-                  loc = mapboxResult as LocationData;
-                }
-              }
-              
-              if (loc) {
-                const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-                setLocation({
-                  primary: formatted.primary,
-                  context: formatted.context,
-                  countryCode: loc.countryCode || ''
-                });
-                lastLocationTime.current = Date.now();
-                OverlayLogger.overlay('Fallback location loaded', { location: formatted });
-              }
-            },
-            () => {
-              OverlayLogger.warn('Browser geolocation fallback failed');
-            },
-            { timeout: 5000, enableHighAccuracy: false }
-          );
-        }
-      }
-    }, 3000);
-    
-    return () => clearTimeout(fallbackTimer);
-  }, [location, safeApiCall, canMakeApiCall, trackApiCall]);
+    if (location?.countryCode) {
+      setFlagLoaded(false); // Reset flag loaded state when country changes
+      const img = new Image();
+      img.onload = () => setFlagLoaded(true);
+      img.onerror = () => setFlagLoaded(false);
+      img.src = `https://flagcdn.com/${location.countryCode}.svg`;
+    }
+  }, [location?.countryCode]);
+
+
 
   // RTIRL connection
   useEffect(() => {
@@ -537,87 +499,97 @@ export default function OverlayPage() {
             (async () => {
               const movedMeters = prevCoords ? distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]) : Infinity;
 
-              // WEATHER: fetch immediately on first fix or large move; else respect interval
+              // Determine what needs to be fetched
               const weatherElapsed = now - lastWeatherTime.current;
               const largeMove = movedMeters >= THRESHOLDS.WEATHER_DISTANCE_KM * 1000;
               const shouldFetchWeather = lastWeatherTime.current === 0 || largeMove || weatherElapsed >= TIMERS.WEATHER_TIMEZONE_UPDATE;
               
-              if (shouldFetchWeather) {
-                const weatherResult = await safeApiCall(
-                  () => fetchWeatherAndTimezoneFromOpenMeteo(lat!, lon!),
-                  'Weather fetch'
-                );
-                
-                lastWeatherTime.current = Date.now();
-                if (weatherResult && typeof weatherResult === 'object' && 'weather' in weatherResult) {
-                  const result = weatherResult as { weather?: { temp: number; desc: string }; timezone?: string };
-                  if (result.weather) {
-                    setWeather(result.weather);
-                  } else {
-                    setWeather(null);
-                  }
-                  if (result.timezone && result.timezone !== timezone) {
-                    createDateTimeFormatters(result.timezone);
-                    setTimezone(result.timezone);
-                  }
-                } else {
-                  setWeather(null);
-                }
-              }
-
               const locationElapsed = now - lastLocationTime.current;
-              
               const thresholds = getLocationUpdateThresholds();
-              
-              // Simple location update logic
               const meetsDistance = movedMeters >= thresholds.distanceThreshold;
               const shouldFetchLocation = lastLocationTime.current === 0 || 
                 (locationElapsed >= thresholds.timeThreshold && meetsDistance);
               
-
-              if (shouldFetchLocation) {
-                let loc: LocationData | null = null;
-                
-                // Try LocationIQ first (if rate limit allows)
-                if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
-                  trackApiCall('locationiq');
-                  const locationResult = await safeApiCall(
-                    () => fetchLocationFromLocationIQ(lat!, lon!, API_KEYS.LOCATIONIQ!),
-                    'LocationIQ fetch'
-                  );
-                  if (locationResult && typeof locationResult === 'object') {
-                    loc = locationResult as LocationData;
-                  }
-                }
-                
-                // Fallback to Mapbox if LocationIQ failed or hit rate limit
-                if (!loc && API_KEYS.MAPBOX && canMakeApiCall('mapbox')) {
-                  trackApiCall('mapbox');
-                  const mapboxResult = await safeApiCall(
-                    () => fetchLocationFromMapbox(lat!, lon!, API_KEYS.MAPBOX!),
-                    'Mapbox fetch'
-                  );
-                  if (mapboxResult && typeof mapboxResult === 'object') {
-                    loc = mapboxResult as LocationData;
-                  }
-                }
-                
-                lastLocationTime.current = Date.now();
-                if (loc) {
-                  const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-                  setLocation({
-                    primary: formatted.primary,
-                    context: formatted.context,
-                    countryCode: loc.countryCode || ''
-                  });
-                  
-                } else {
-                  OverlayLogger.warn('Location fetch failed - both APIs unavailable or rate limited', {
-                    locationIqAvailable: canMakeApiCall('locationiq'),
-                    mapboxAvailable: canMakeApiCall('mapbox')
-                  });
-                }
+              // Fetch weather and location in parallel for faster loading
+              const promises: Promise<void>[] = [];
+              
+              if (shouldFetchWeather) {
+                promises.push(
+                  (async () => {
+                    const weatherResult = await safeApiCall(
+                      () => fetchWeatherAndTimezoneFromOpenMeteo(lat!, lon!),
+                      'Weather fetch'
+                    );
+                    
+                    lastWeatherTime.current = Date.now();
+                    if (weatherResult && typeof weatherResult === 'object' && 'weather' in weatherResult) {
+                      const result = weatherResult as { weather?: { temp: number; desc: string }; timezone?: string };
+                      if (result.weather) {
+                        setWeather(result.weather);
+                      } else {
+                        setWeather(null);
+                      }
+                      if (result.timezone && result.timezone !== timezone) {
+                        createDateTimeFormatters(result.timezone);
+                        setTimezone(result.timezone);
+                      }
+                    } else {
+                      setWeather(null);
+                    }
+                  })()
+                );
               }
+              
+              if (shouldFetchLocation) {
+                promises.push(
+                  (async () => {
+                    let loc: LocationData | null = null;
+                    
+                    // Try LocationIQ first (if rate limit allows)
+                    if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
+                      trackApiCall('locationiq');
+                      const locationResult = await safeApiCall(
+                        () => fetchLocationFromLocationIQ(lat!, lon!, API_KEYS.LOCATIONIQ!),
+                        'LocationIQ fetch'
+                      );
+                      if (locationResult && typeof locationResult === 'object') {
+                        loc = locationResult as LocationData;
+                      }
+                    }
+                    
+                    // Fallback to Mapbox if LocationIQ failed or hit rate limit
+                    if (!loc && API_KEYS.MAPBOX && canMakeApiCall('mapbox')) {
+                      trackApiCall('mapbox');
+                      const mapboxResult = await safeApiCall(
+                        () => fetchLocationFromMapbox(lat!, lon!, API_KEYS.MAPBOX!),
+                        'Mapbox fetch'
+                      );
+                      if (mapboxResult && typeof mapboxResult === 'object') {
+                        loc = mapboxResult as LocationData;
+                      }
+                    }
+                    
+                    lastLocationTime.current = Date.now();
+                    if (loc) {
+                      const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
+                      setLocation({
+                        primary: formatted.primary,
+                        context: formatted.context,
+                        countryCode: loc.countryCode || ''
+                      });
+                    } else {
+                      OverlayLogger.warn('Location fetch failed - both APIs unavailable or rate limited', {
+                        locationIqAvailable: canMakeApiCall('locationiq'),
+                        mapboxAvailable: canMakeApiCall('mapbox')
+                      });
+                      // Don't set location to null - let timeout handle fallback
+                    }
+                  })()
+                );
+              }
+              
+              // Wait for all parallel requests to complete
+              await Promise.all(promises);
             })();
     }
           } catch {
@@ -651,13 +623,41 @@ export default function OverlayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // No dependencies - use refs instead to prevent duplicate listeners
 
-  // Overlay visibility with fade-in delay - don't wait for location
-  const isOverlayReady = useMemo(() => timezone && timeDisplay.time && timeDisplay.date, [timezone, timeDisplay]);
+  // Overlay visibility - wait for all elements to be ready with timeout fallback
+  const isOverlayReady = useMemo(() => {
+    // Time and timezone must be ready
+    const timeReady = timezone && timeDisplay.time && timeDisplay.date;
+    
+    // Location must be ready (unless hidden) - allow fallback to "Unknown Location"
+    const locationReady = settings.locationDisplay === 'hidden' || 
+      (settings.locationDisplay === 'custom' ? settings.customLocation?.trim() : location) ||
+      loadingTimeout; // Show overlay even if location failed after timeout
+    
+    // Weather must be ready (unless hidden) - allow fallback to no weather
+    const weatherReady = !settings.showWeather || weather || loadingTimeout;
+    
+    // Flag is always ready since we show emoji fallback immediately
+    const flagReady = true;
+    
+    return timeReady && locationReady && weatherReady && flagReady;
+  }, [timezone, timeDisplay, settings, location, weather, loadingTimeout]);
+
+  // Timeout fallback - show overlay after 10 seconds even if some elements failed
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!overlayVisible) {
+        setLoadingTimeout(true);
+        OverlayLogger.warn('Overlay loading timeout - showing with available elements only');
+      }
+    }, 10000); // 10 second timeout
+    
+    return () => clearTimeout(timeout);
+  }, [overlayVisible]);
 
   useEffect(() => {
     if (isOverlayReady && !overlayVisible) {
-      // Wait 1 second for time/timezone to be ready, then fade in immediately
-      const delay = setTimeout(() => setOverlayVisible(true), 1000);
+      // Wait 0.5 seconds for all elements to be ready, then fade in
+      const delay = setTimeout(() => setOverlayVisible(true), 500);
       return () => clearTimeout(delay);
     } else if (!isOverlayReady && overlayVisible) {
       setOverlayVisible(false);
@@ -679,8 +679,17 @@ export default function OverlayPage() {
       };
     }
     
+    // If location failed to load and we're in timeout mode, show fallback
+    if (!location && loadingTimeout) {
+      return {
+        primary: 'Unknown Location',
+        context: undefined,
+        countryCode: undefined
+      };
+    }
+    
     return location;
-  }, [location, settings.locationDisplay, settings.customLocation]);
+  }, [location, settings.locationDisplay, settings.customLocation, loadingTimeout]);
 
   const weatherDisplay = useMemo(() => {
     if (!weather) {
@@ -754,13 +763,23 @@ export default function OverlayPage() {
                   </div>
                   {locationDisplay?.countryCode && (
                     <div className="weather-flag-container">
-                      <img
-                        src={`https://flagcdn.com/${locationDisplay.countryCode}.svg`}
-                        alt={`Country: ${locationDisplay.countryCode}`}
-                        width={32}
-                        height={20}
-                        className="weather-flag"
-                      />
+                      {flagLoaded ? (
+                        <img
+                          src={`https://flagcdn.com/${locationDisplay.countryCode}.svg`}
+                          alt={`Country: ${locationDisplay.countryCode}`}
+                          width={32}
+                          height={20}
+                          className="weather-flag"
+                        />
+                      ) : (
+                        <div 
+                          className="weather-flag-emoji"
+                          style={{ fontSize: '20px', lineHeight: '20px' }}
+                          title={`Country: ${locationDisplay.countryCode}`}
+                        >
+                          {getEmojiFlag(locationDisplay.countryCode)}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
