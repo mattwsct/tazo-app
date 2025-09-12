@@ -81,19 +81,23 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
       location.neighbourhood,  // "Midtown West" - most specific neighborhood
       location.suburb,         // "Manhattan" - suburb fallback
       location.city,           // "New York" - city fallback
-      location.state           // "New York" - state fallback
+      location.state,          // "New York" - state fallback
+      location.country         // "Japan" - country fallback
     ],
     suburb: [
       location.suburb,         // "Manhattan" - primary suburb/borough
       location.city,           // "New York" - city fallback
-      location.state           // "New York" - state fallback
+      location.state,          // "New York" - state fallback
+      location.country         // "Japan" - country fallback
     ],
     city: [
       location.city,           // "New York" - primary city
-      location.state           // "New York" - state fallback
+      location.state,          // "New York" - state fallback
+      location.country         // "Japan" - country fallback
     ],
     state: [
-      location.state           // "New York" - state only
+      location.state,          // "New York" - state only
+      location.country         // "Japan" - country fallback
     ]
   };
   
@@ -114,6 +118,11 @@ function getContext(location: LocationData, primaryName: string, currentPrecisio
     if (levelName && !areRedundantNames(primaryName, levelName)) {
       return levelName;
     }
+  }
+  
+  // If no context found in fallback chain, try country as final fallback
+  if (location.country && !areRedundantNames(primaryName, location.country)) {
+    return location.country;
   }
   
   return null;

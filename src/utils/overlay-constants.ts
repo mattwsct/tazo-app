@@ -67,15 +67,13 @@ export const API_KEYS = {
   MAPBOX: process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
 } as const;
 
-// API rate limits for free tiers
+// API rate limits for free tiers (per-second only, no daily limits since overlay refreshes)
 export const API_RATE_LIMITS = {
   LOCATIONIQ_FREE: {
-    DAILY_LIMIT: 1000,
     PER_SECOND_LIMIT: 1,
     COOLDOWN_MS: 1000, // 1 second between calls
   },
   MAPBOX_FREE: {
-    DAILY_LIMIT: 100000,
     PER_SECOND_LIMIT: 10,
     COOLDOWN_MS: 100, // 100ms between calls
   },

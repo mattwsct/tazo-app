@@ -16,8 +16,6 @@ export {
 // Re-export from rate limiting
 export { 
   checkRateLimit,
-  getRemainingDailyCalls,
-  getDailyUsageStats,
   RATE_LIMITS
 } from './rate-limiting';
 

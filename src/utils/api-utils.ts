@@ -1,6 +1,5 @@
 import { 
-  checkRateLimit, 
-  getRemainingDailyCalls
+  checkRateLimit
 } from './rate-limiting';
 import { type LocationData } from './location-utils';
 import { ApiLogger } from '@/lib/logger';
@@ -127,33 +126,16 @@ export async function fetchLocationFromLocationIQ(
 
 
 
-  // Check rate limits (both per-second and daily)
+  // Check rate limits (per-second only)
   if (!checkRateLimit('locationiq')) {
-    const remaining = getRemainingDailyCalls('locationiq');
-    if (remaining === 0) {
-      ApiLogger.warn('locationiq', 'Daily API limit reached', { 
-        dailyLimit: 1000,
-        message: 'LocationIQ daily limit exceeded. Consider upgrading plan or wait until tomorrow.',
-        currentDailyCalls: 1000 - remaining,
-        resetTime: new Date(Date.now() + (86400000 - (Date.now() % 86400000))).toISOString()
-      });
-    } else {
-      ApiLogger.warn('locationiq', 'Rate limit exceeded', { 
-        remainingDaily: remaining,
-        message: 'Too many requests per second. Please wait a moment.',
-        currentDailyCalls: 1000 - remaining,
-        timeUntilReset: new Date(Date.now() + (86400000 - (Date.now() % 86400000))).toISOString()
-      });
-    }
+    ApiLogger.warn('locationiq', 'Rate limit exceeded, skipping API call');
     return null;
   }
 
   try {
-    const remaining = getRemainingDailyCalls('locationiq');
     ApiLogger.info('locationiq', 'Fetching location data', { 
       lat, 
-      lon, 
-      remainingDaily: remaining 
+      lon
     });
     
     // Add cache busting timestamp to prevent browser caching
@@ -172,12 +154,9 @@ export async function fetchLocationFromLocationIQ(
         return null; // Return null instead of throwing error
       } else if (response.status === 402) {
         ApiLogger.warn('locationiq', 'Daily API limit reached', { 
-          dailyLimit: 1000,
-          message: 'LocationIQ daily limit exceeded. Consider upgrading plan or wait until tomorrow.',
-          currentDailyCalls: 1000 - remaining,
-          resetTime: new Date(Date.now() + (86400000 - (Date.now() % 86400000))).toISOString()
+          message: 'LocationIQ daily limit exceeded. Consider upgrading plan or wait until tomorrow.'
         });
-        return null; // Return null for daily limit too
+        return null;
       } else {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }

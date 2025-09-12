@@ -37,12 +37,11 @@ export default function OverlayPage() {
   useRenderPerformance('OverlayPage');
 
   // State
-  const [time, setTime] = useState('');
-  const [date, setDate] = useState('');
+  const [timeDisplay, setTimeDisplay] = useState({ time: '', date: '' });
   const [location, setLocation] = useState<{ 
-    label: string; 
+    primary: string; 
     context?: string;
-    countryCode: string; 
+    countryCode?: string;
   } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
@@ -50,7 +49,6 @@ export default function OverlayPage() {
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
-  // Removed isLoading state - using Option 1: hide until ready
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -58,18 +56,11 @@ export default function OverlayPage() {
   const lastCoords = useRef<[number, number] | null>(null);
   const lastCoordsTime = useRef(0);
   const settingsRef = useRef(settings);
-  const periodicLocationTimer = useRef<NodeJS.Timeout | null>(null);
   
-  // API rate limiting tracking
-  const locationIqCalls = useRef(0);
-  const mapboxCalls = useRef(0);
+  // API rate limiting tracking (per-second only)
   const lastLocationIqCall = useRef(0);
   const lastMapboxCall = useRef(0);
-  const dailyResetTime = useRef(Date.now());
   
-  // Health monitoring
-  const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
-  const [isHealthy, setIsHealthy] = useState(true);
   
   // Update settings ref whenever settings change
   useEffect(() => {
@@ -87,68 +78,21 @@ export default function OverlayPage() {
     }
   }, []);
 
-  // Detect location granularity and determine appropriate update thresholds
-  const getLocationUpdateThresholds = useCallback((locationData: LocationData | null) => {
-    if (!locationData) {
-      return {
-        distanceThreshold: THRESHOLDS.LOCATION_DISTANCE_DEFAULT,
-        timeThreshold: 300000, // 5 minutes default
-        granularity: 'unknown'
-      };
-    }
-
-    // Determine granularity based on available data
-    let granularity = 'country';
-    let distanceThreshold: number = THRESHOLDS.LOCATION_DISTANCE_STATE;
-    let timeThreshold = 600000; // 10 minutes for countries/states
-
-    if (locationData.neighbourhood || locationData.suburb) {
-      granularity = 'neighbourhood';
-      distanceThreshold = THRESHOLDS.LOCATION_DISTANCE_NEIGHBORHOOD;
-      timeThreshold = 120000; // 2 minutes for neighborhoods
-    } else if (locationData.town || locationData.municipality) {
-      granularity = 'suburb';
-      distanceThreshold = THRESHOLDS.LOCATION_DISTANCE_SUBURB;
-      timeThreshold = 180000; // 3 minutes for suburbs
-    } else if (locationData.city) {
-      granularity = 'city';
-      distanceThreshold = THRESHOLDS.LOCATION_DISTANCE_CITY;
-      timeThreshold = 300000; // 5 minutes for cities
-    } else if (locationData.state || locationData.province) {
-      granularity = 'state';
-      distanceThreshold = THRESHOLDS.LOCATION_DISTANCE_STATE;
-      timeThreshold = 600000; // 10 minutes for states
-    }
-
+  // Simple location update thresholds
+  const getLocationUpdateThresholds = useCallback(() => {
     return {
-      distanceThreshold,
-      timeThreshold,
-      granularity
+      distanceThreshold: THRESHOLDS.LOCATION_DISTANCE_DEFAULT,
+      timeThreshold: 300000, // 5 minutes
     };
   }, []);
 
-  // Check API rate limits for free tiers
+  // Check API rate limits (per-second cooldown only)
   const canMakeApiCall = useCallback((apiType: 'locationiq' | 'mapbox') => {
     const now = Date.now();
-    
-    // Reset daily counters if 24 hours have passed
-    if (now - dailyResetTime.current > 86400000) {
-      locationIqCalls.current = 0;
-      mapboxCalls.current = 0;
-      dailyResetTime.current = now;
-    }
 
     if (apiType === 'locationiq') {
       const timeSinceLastCall = now - lastLocationIqCall.current;
       const cooldown = API_RATE_LIMITS.LOCATIONIQ_FREE.COOLDOWN_MS;
-      
-      if (locationIqCalls.current >= API_RATE_LIMITS.LOCATIONIQ_FREE.DAILY_LIMIT) {
-        OverlayLogger.warn('LocationIQ daily limit reached', {
-          calls: locationIqCalls.current,
-          limit: API_RATE_LIMITS.LOCATIONIQ_FREE.DAILY_LIMIT
-        });
-        return false;
-      }
       
       if (timeSinceLastCall < cooldown) {
         OverlayLogger.warn('LocationIQ rate limit - too soon', {
@@ -162,14 +106,6 @@ export default function OverlayPage() {
     } else if (apiType === 'mapbox') {
       const timeSinceLastCall = now - lastMapboxCall.current;
       const cooldown = API_RATE_LIMITS.MAPBOX_FREE.COOLDOWN_MS;
-      
-      if (mapboxCalls.current >= API_RATE_LIMITS.MAPBOX_FREE.DAILY_LIMIT) {
-        OverlayLogger.warn('Mapbox daily limit reached', {
-          calls: mapboxCalls.current,
-          limit: API_RATE_LIMITS.MAPBOX_FREE.DAILY_LIMIT
-        });
-        return false;
-      }
       
       if (timeSinceLastCall < cooldown) {
         OverlayLogger.warn('Mapbox rate limit - too soon', {
@@ -185,198 +121,20 @@ export default function OverlayPage() {
     return false;
   }, []);
 
-  // Track API call
+  // Track API call (update last call time only)
   const trackApiCall = useCallback((apiType: 'locationiq' | 'mapbox') => {
     const now = Date.now();
     if (apiType === 'locationiq') {
-      locationIqCalls.current++;
       lastLocationIqCall.current = now;
     } else if (apiType === 'mapbox') {
-      mapboxCalls.current++;
       lastMapboxCall.current = now;
     }
   }, []);
 
-  // Health monitoring - detect when updates stop and prevent long-running issues
-  useEffect(() => {
-    const sessionStartTime = Date.now();
-    
-    const healthCheck = () => {
-      const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-      const sessionDuration = Date.now() - sessionStartTime;
-      
-      if (timeSinceLastUpdate > 120000) { // 2 minutes without update
-        OverlayLogger.warn('Overlay appears unhealthy - no updates for 2+ minutes', {
-          timeSinceLastUpdate,
-          lastUpdate: new Date(lastUpdateTime).toISOString(),
-          sessionDuration: Math.round(sessionDuration / 1000 / 60) + ' minutes'
-        });
-        setIsHealthy(false);
-        
-        // Try to recover by refreshing the page after 5 minutes
-        if (timeSinceLastUpdate > 300000) { // 5 minutes
-          OverlayLogger.error('Overlay unhealthy for 5+ minutes, refreshing page');
-          window.location.reload();
-        }
-      } else {
-        setIsHealthy(true);
-      }
-    };
-    
-    const memoryCleanup = () => {
-      // Force garbage collection if available (development only)
-      if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined' && (window as unknown as { gc?: () => void }).gc) {
-        try {
-          (window as unknown as { gc: () => void }).gc();
-        } catch {
-          // Ignore GC errors
-        }
-      }
-      
-      // Log session duration every hour
-      const sessionDuration = Date.now() - sessionStartTime;
-      if (sessionDuration > 0 && sessionDuration % 3600000 < 30000) { // Every hour ± 30 seconds
-        const memoryInfo = typeof performance !== 'undefined' && 
-          'memory' in performance ? 
-          (performance as unknown as { memory: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory : null;
-        
-        OverlayLogger.overlay('Long-running session health check', {
-          sessionDuration: Math.round(sessionDuration / 1000 / 60) + ' minutes',
-          memoryUsage: memoryInfo ? {
-            used: Math.round(memoryInfo.usedJSHeapSize / 1024 / 1024) + ' MB',
-            total: Math.round(memoryInfo.totalJSHeapSize / 1024 / 1024) + ' MB',
-            limit: Math.round(memoryInfo.jsHeapSizeLimit / 1024 / 1024) + ' MB'
-          } : 'Not available'
-        });
-      }
-    };
-    
-    // Health check every 30 seconds
-    const healthInterval = setInterval(healthCheck, 30000);
-    
-    // Memory cleanup every 5 minutes
-    const memoryInterval = setInterval(memoryCleanup, 300000);
-    
-    return () => {
-      if (healthInterval) clearInterval(healthInterval);
-      if (memoryInterval) clearInterval(memoryInterval);
-    };
-  }, [lastUpdateTime]);
 
-  // Update lastUpdateTime whenever time updates
-  useEffect(() => {
-    setLastUpdateTime(Date.now());
-  }, [time, date]);
 
-  // Periodic location updates for IRL streaming - ensures location stays fresh
-  useEffect(() => {
-    const updateLocationPeriodically = async () => {
-      const coords = lastCoords.current;
-      if (!coords) return;
 
-      const now = Date.now();
-      const locationElapsed = now - lastLocationTime.current;
-      
-      // Only update if enough time has passed (respect rate limits)
-      if (locationElapsed < 30000) return; // Minimum 30 seconds between updates
-
-      OverlayLogger.overlay('Periodic location update triggered', {
-        coords,
-        lastUpdate: new Date(lastLocationTime.current).toISOString(),
-        elapsed: locationElapsed
-      });
-
-      let loc: LocationData | null = null;
-      
-      // Try LocationIQ first (if rate limit allows)
-      if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
-        trackApiCall('locationiq');
-        loc = await safeApiCall(
-          () => fetchLocationFromLocationIQ(coords[0], coords[1], API_KEYS.LOCATIONIQ!),
-          'Periodic LocationIQ fetch'
-        ) as LocationData | null;
-      }
-      
-      // Fallback to Mapbox if LocationIQ failed or hit rate limit
-      if (!loc && API_KEYS.MAPBOX && canMakeApiCall('mapbox')) {
-        trackApiCall('mapbox');
-        loc = await safeApiCall(
-          () => fetchLocationFromMapbox(coords[0], coords[1], API_KEYS.MAPBOX!),
-          'Periodic Mapbox fetch'
-        ) as LocationData | null;
-      }
-      
-      if (loc) {
-        lastLocationTime.current = now;
-        const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-        setLocation({
-          label: formatted.primary,
-          context: formatted.context,
-          countryCode: loc.countryCode || ''
-        });
-        OverlayLogger.overlay('Periodic location update successful', formatted);
-      }
-    };
-
-    // Set up periodic location updates every 2 minutes
-    periodicLocationTimer.current = setInterval(updateLocationPeriodically, 120000);
-
-    return () => {
-      if (periodicLocationTimer.current) {
-        clearInterval(periodicLocationTimer.current);
-        periodicLocationTimer.current = null;
-      }
-    };
-  }, [safeApiCall, canMakeApiCall, trackApiCall]);
-
-  // Debug panel for development
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const debugInfo = {
-        timezone,
-        time,
-        date,
-        lastUpdate: new Date(lastUpdateTime).toISOString(),
-        isHealthy,
-        hasLocation: !!location,
-        hasWeather: !!weather,
-        hasMapCoords: !!mapCoords,
-        overlayVisible,
-        sseConnected: typeof window !== 'undefined' && 
-          (window as unknown as { eventSource?: EventSource }).eventSource?.readyState === EventSource.OPEN
-      };
-      
-      // Only log every 30 seconds to avoid spam
-      if (Date.now() % 30000 < 1000) {
-        OverlayLogger.overlay('Debug Info', debugInfo);
-      }
-    }
-  }, [time, date, timezone, lastUpdateTime, isHealthy, location, weather, mapCoords, overlayVisible]);
-
-  // Debug: Force refresh on page load (remove in production)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      // Only log once per session to reduce console noise
-      if (!sessionStorage.getItem('tazo-overlay-debug-reset')) {
-        OverlayLogger.overlay('Debug: Resetting location/weather timers for fresh data');
-        sessionStorage.setItem('tazo-overlay-debug-reset', 'true');
-      }
-      lastWeatherTime.current = 0;
-      lastLocationTime.current = 0;
-    }
-  }, []);
   
-  // Debug: Manual refresh function (available for debugging)
-  // const forceRefresh = () => {
-  //   if (process.env.NODE_ENV === 'development') {
-  //     OverlayLogger.overlay('Debug: Manual refresh triggered');
-  //     lastWeatherTime.current = 0;
-  //     lastLocationTime.current = 0;
-  //     lastCoords.current = null;
-  //     setWeather(null);
-  //     setLocation(null);
-  //   }
-  // };
 
   // Refs
   const timeFormatter = useRef<Intl.DateTimeFormat | null>(null);
@@ -415,22 +173,6 @@ export default function OverlayPage() {
     };
   }, []);
 
-  // Filter out RTIRL Firebase cookie warnings
-  useEffect(() => {
-    const originalWarn = console.warn;
-    const filteredWarn = (...args: Parameters<typeof console.warn>) => {
-      const message = args[0];
-      if (typeof message === 'string' && message.includes('Cookie "" has been rejected as third-party')) {
-        return;
-      }
-      originalWarn.apply(console, args);
-    };
-    
-    console.warn = filteredWarn;
-    return () => {
-      console.warn = originalWarn;
-    };
-  }, []);
 
   // Create date/time formatters
   const createDateTimeFormatters = useCallback((timezone: string) => {
@@ -477,8 +219,10 @@ export default function OverlayPage() {
         const minutePart = timeParts.find(part => part.type === 'minute')?.value || '';
         const ampmPart = timeParts.find(part => part.type === 'dayPeriod')?.value || '';
         
-        setTime(`${timePart}:${minutePart} ${ampmPart}`);
-        setDate(dateFormatter.current!.format(now));
+        setTimeDisplay({
+          time: `${timePart}:${minutePart} ${ampmPart}`,
+          date: dateFormatter.current!.format(now)
+        });
         
         // Drift correction: check if we're significantly off schedule
         const currentTime = now.getTime();
@@ -487,12 +231,6 @@ export default function OverlayPage() {
         
         // If we're more than 5 seconds off, resync to the next minute boundary
         if (lastExpectedUpdate > 0 && drift > 5000 && driftCorrectionCount < MAX_DRIFT_CORRECTIONS) {
-          OverlayLogger.warn('Time drift detected, resyncing to minute boundary', {
-            drift: drift,
-            expectedTime: new Date(expectedTime).toISOString(),
-            actualTime: now.toISOString()
-          });
-          
           driftCorrectionCount++;
           resyncToMinuteBoundary();
           return;
@@ -503,18 +241,20 @@ export default function OverlayPage() {
         OverlayLogger.error('Time update failed', error);
         // Fallback to basic time display
         const now = new Date();
-        setTime(now.toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
-          hour12: true,
-          timeZone: timezone || 'UTC'
-        }));
-        setDate(now.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric', 
-          year: 'numeric',
-          timeZone: timezone || 'UTC'
-        }));
+        setTimeDisplay({
+          time: now.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true,
+            timeZone: timezone || 'UTC'
+          }),
+          date: now.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric',
+            timeZone: timezone || 'UTC'
+          })
+        });
       }
     }
     
@@ -593,12 +333,11 @@ export default function OverlayPage() {
         const data = await res.json();
         if (data) {
           setSettings(data);
-          OverlayLogger.settings('Settings loaded', data);
         } else {
           setSettings(DEFAULT_OVERLAY_SETTINGS);
         }
-      } catch (error) {
-        OverlayLogger.error('Failed to load settings, using defaults:', error);
+      } catch {
+        // Failed to load settings, using defaults
         setSettings(DEFAULT_OVERLAY_SETTINGS);
       }
     };
@@ -612,21 +351,15 @@ export default function OverlayPage() {
           const data = JSON.parse(event.data);
           
           if (data.type === 'settings_update') {
-            OverlayLogger.settings('Settings updated via SSE', data);
             setSettings(data);
-          } else if (data.type === 'connected') {
-            OverlayLogger.settings('SSE connected', { timestamp: data.timestamp });
-          } else if (data.type === 'heartbeat') {
-            // Heartbeat received, connection is alive
-            OverlayLogger.settings('SSE heartbeat', { timestamp: data.timestamp });
           }
-      } catch (error) {
-          OverlayLogger.error('Failed to parse SSE message', error);
+      } catch {
+          // Ignore malformed SSE messages
         }
       };
       
-      eventSource.onerror = (error) => {
-        OverlayLogger.error('SSE connection error', error);
+      eventSource.onerror = () => {
+        // Don't log SSE errors as they're common during development and not critical
         // Close the current connection before reconnecting
         try {
           eventSource.close();
@@ -637,10 +370,9 @@ export default function OverlayPage() {
         const reconnectDelay = Math.min(1000 * Math.pow(2, 0), 10000); // Start with 1s, max 10s
         setTimeout(() => {
           try {
-            OverlayLogger.settings('Reconnecting SSE...');
             setupSSE();
-          } catch (error) {
-            OverlayLogger.error('Failed to reconnect SSE', error);
+          } catch {
+            // Ignore reconnection errors
           }
         }, reconnectDelay);
       };
@@ -673,32 +405,83 @@ export default function OverlayPage() {
     createDateTimeFormattersRef.current = createDateTimeFormatters;
   }, [createDateTimeFormatters]);
 
+  // Fallback location fetch if RTIRL is slow (after 3 seconds)
+  useEffect(() => {
+    const fallbackTimer = setTimeout(async () => {
+      // Only fetch if we still don't have location and RTIRL hasn't provided coords
+      if (!location && !lastCoords.current) {
+        OverlayLogger.overlay('RTIRL slow - attempting fallback location fetch');
+        
+        // Try to get approximate location from browser geolocation as fallback
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const { latitude, longitude } = position.coords;
+              lastCoords.current = [latitude, longitude];
+              
+              // Fetch location data
+              let loc: LocationData | null = null;
+              
+              if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
+                trackApiCall('locationiq');
+                const locationResult = await safeApiCall(
+                  () => fetchLocationFromLocationIQ(latitude, longitude, API_KEYS.LOCATIONIQ!),
+                  'LocationIQ fallback fetch'
+                );
+                if (locationResult && typeof locationResult === 'object') {
+                  loc = locationResult as LocationData;
+                }
+              }
+              
+              if (!loc && API_KEYS.MAPBOX && canMakeApiCall('mapbox')) {
+                trackApiCall('mapbox');
+                const mapboxResult = await safeApiCall(
+                  () => fetchLocationFromMapbox(latitude, longitude, API_KEYS.MAPBOX!),
+                  'Mapbox fallback fetch'
+                );
+                if (mapboxResult && typeof mapboxResult === 'object') {
+                  loc = mapboxResult as LocationData;
+                }
+              }
+              
+              if (loc) {
+                const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
+                setLocation({
+                  primary: formatted.primary,
+                  context: formatted.context,
+                  countryCode: loc.countryCode || ''
+                });
+                lastLocationTime.current = Date.now();
+                OverlayLogger.overlay('Fallback location loaded', { location: formatted });
+              }
+            },
+            () => {
+              OverlayLogger.warn('Browser geolocation fallback failed');
+            },
+            { timeout: 5000, enableHighAccuracy: false }
+          );
+        }
+      }
+    }, 3000);
+    
+    return () => clearTimeout(fallbackTimer);
+  }, [location, safeApiCall, canMakeApiCall, trackApiCall]);
+
   // RTIRL connection
   useEffect(() => {
     let listenerSetup = false;
     
     const setupRTIRLListener = () => {
       if (listenerSetup) {
-        OverlayLogger.overlay('RTIRL listener already set up, skipping');
         return;
       }
       
-      OverlayLogger.overlay('setupRTIRLListener called', { 
-        hasWindow: typeof window !== 'undefined',
-        hasRealtimeIRL: typeof window !== 'undefined' && !!window.RealtimeIRL,
-        hasAPIKey: !!API_KEYS.RTIRL
-      });
       
       if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
-        OverlayLogger.overlay('Setting up RTIRL listener with key:', { key: API_KEYS.RTIRL.substring(0, 8) + '...' });
         listenerSetup = true;
         window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
           try {
-            if (process.env.NODE_ENV === 'development') {
-              OverlayLogger.overlay('RTIRL raw payload received', { payload: p, type: typeof p });
-            }
             if (!p || typeof p !== 'object') {
-              OverlayLogger.warn('RTIRL received invalid payload', { payload: p });
               return;
             }
             const payload = p as RTIRLPayload;
@@ -709,10 +492,8 @@ export default function OverlayPage() {
               createDateTimeFormattersRef.current(payload.location.timezone);
               setTimezone(payload.location.timezone);
               // Timezone ready;
-              OverlayLogger.overlay('Timezone updated from RTIRL', { timezone: payload.location.timezone });
-            } catch (error) {
-              OverlayLogger.error('Failed to set timezone from RTIRL', error);
-              // Timezone ready;
+            } catch {
+              // Ignore timezone errors
             }
           }
           
@@ -731,9 +512,6 @@ export default function OverlayPage() {
           }
           
           if (lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-            if (process.env.NODE_ENV === 'development') {
-              OverlayLogger.overlay('RTIRL GPS data received', { lat, lon });
-            }
             setMapCoords([lat, lon]);
             
             // Calculate speed for minimap
@@ -788,56 +566,14 @@ export default function OverlayPage() {
               }
 
               const locationElapsed = now - lastLocationTime.current;
-              const isStationary = movedMeters < 100;
-              const isMoving = speedKmh >= THRESHOLDS.MOVING_THRESHOLD;
-              const isHighSpeed = speedKmh >= THRESHOLDS.HIGH_SPEED_MOVEMENT;
               
-              // Get current location data to determine granularity-based thresholds
-              const currentLocationData = location ? {
-                neighbourhood: location.context?.includes('neighbourhood') ? location.context : undefined,
-                suburb: location.context?.includes('suburb') ? location.context : undefined,
-                town: location.context?.includes('town') ? location.context : undefined,
-                city: location.label,
-                state: location.context?.includes('state') ? location.context : undefined,
-                country: location.countryCode
-              } as LocationData : null;
+              const thresholds = getLocationUpdateThresholds();
               
-              const thresholds = getLocationUpdateThresholds(currentLocationData);
-              
-              // Dynamic timing based on speed and granularity for IRL streaming
-              let minTimeBetweenCalls: number;
-              if (isHighSpeed) {
-                minTimeBetweenCalls = Math.min(thresholds.timeThreshold, 30000); // Cap at 30s for high speed
-              } else if (isMoving) {
-                minTimeBetweenCalls = Math.min(thresholds.timeThreshold, 120000); // Cap at 2min for normal movement
-              } else {
-                minTimeBetweenCalls = thresholds.timeThreshold; // Use full threshold when stationary
-              }
-              
+              // Simple location update logic
               const meetsDistance = movedMeters >= thresholds.distanceThreshold;
               const shouldFetchLocation = lastLocationTime.current === 0 || 
-                (locationElapsed >= minTimeBetweenCalls && meetsDistance) ||
-                (locationElapsed >= minTimeBetweenCalls * 2); // Fallback: update even without distance if enough time passed
+                (locationElapsed >= thresholds.timeThreshold && meetsDistance);
               
-              // Debug location caching
-              if (process.env.NODE_ENV === 'development') {
-                OverlayLogger.overlay('Location fetch decision', {
-                  movedMeters,
-                  isStationary,
-                  isMoving,
-                  isHighSpeed,
-                  locationElapsed,
-                  minTimeBetweenCalls,
-                  meetsDistance,
-                  shouldFetchLocation,
-                  granularity: thresholds.granularity,
-                  distanceThreshold: thresholds.distanceThreshold,
-                  timeThreshold: thresholds.timeThreshold,
-                  lastLocationTime: lastLocationTime.current,
-                  locationIqCalls: locationIqCalls.current,
-                  mapboxCalls: mapboxCalls.current
-                });
-              }
 
               if (shouldFetchLocation) {
                 let loc: LocationData | null = null;
@@ -870,45 +606,25 @@ export default function OverlayPage() {
                 if (loc) {
                   const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
                   setLocation({
-                    label: formatted.primary,
+                    primary: formatted.primary,
                     context: formatted.context,
                     countryCode: loc.countryCode || ''
                   });
                   
-                  OverlayLogger.overlay('Location updated', {
-                    granularity: thresholds.granularity,
-                    location: formatted,
-                    apiCalls: {
-                      locationIq: locationIqCalls.current,
-                      mapbox: mapboxCalls.current
-                    }
-                  });
                 } else {
                   OverlayLogger.warn('Location fetch failed - both APIs unavailable or rate limited', {
                     locationIqAvailable: canMakeApiCall('locationiq'),
-                    mapboxAvailable: canMakeApiCall('mapbox'),
-                    apiCalls: {
-                      locationIq: locationIqCalls.current,
-                      mapbox: mapboxCalls.current
-                    }
+                    mapboxAvailable: canMakeApiCall('mapbox')
                   });
                 }
               }
             })();
-    } else {
-            OverlayLogger.warn('RTIRL GPS data invalid');
-          }
-          } catch (error) {
-            OverlayLogger.error('RTIRL listener error', error);
+    }
+          } catch {
+            // Ignore RTIRL listener errors
             // Don't break the entire component on RTIRL errors
           }
         });
-      } else {
-        if (!API_KEYS.RTIRL) {
-          OverlayLogger.warn('RTIRL API key not available');
-    } else {
-          OverlayLogger.warn('RealtimeIRL API not available');
-        }
       }
     };
     
@@ -921,12 +637,9 @@ export default function OverlayPage() {
       script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
       script.async = true;
       script.onerror = () => {
-        OverlayLogger.error('Failed to load RTIRL script');
+        // Failed to load RTIRL script
       };
       script.onload = () => {
-        if (process.env.NODE_ENV === 'development') {
-          OverlayLogger.overlay('RTIRL script loaded, setting up listener...');
-        }
         setupRTIRLListener();
       };
       document.body.appendChild(script);
@@ -938,103 +651,35 @@ export default function OverlayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // No dependencies - use refs instead to prevent duplicate listeners
 
-  // Overlay visibility with fade-in delay
-  const isOverlayReady = useMemo(() => timezone && time && date, [timezone, time, date]);
+  // Overlay visibility with fade-in delay - don't wait for location
+  const isOverlayReady = useMemo(() => timezone && timeDisplay.time && timeDisplay.date, [timezone, timeDisplay]);
 
   useEffect(() => {
     if (isOverlayReady && !overlayVisible) {
-      // Wait 1.5 seconds for all components to load, then fade in
-      const delay = setTimeout(() => setOverlayVisible(true), 1500);
+      // Wait 1 second for time/timezone to be ready, then fade in immediately
+      const delay = setTimeout(() => setOverlayVisible(true), 1000);
       return () => clearTimeout(delay);
     } else if (!isOverlayReady && overlayVisible) {
       setOverlayVisible(false);
     }
   }, [isOverlayReady, overlayVisible]);
 
-  // Trigger location update when overlay becomes visible for IRL streaming
-  useEffect(() => {
-    if (overlayVisible && lastCoords.current) {
-      const now = Date.now();
-      const locationElapsed = now - lastLocationTime.current;
-      
-      // If location is stale (older than 5 minutes), trigger immediate update
-      if (locationElapsed > 300000) {
-        OverlayLogger.overlay('Overlay visible - triggering fresh location update', {
-          coords: lastCoords.current,
-          lastUpdate: new Date(lastLocationTime.current).toISOString(),
-          elapsed: locationElapsed
-        });
-        
-        // Trigger location update asynchronously
-        (async () => {
-          const coords = lastCoords.current!;
-          let loc: LocationData | null = null;
-          
-          if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
-            trackApiCall('locationiq');
-            loc = await safeApiCall(
-              () => fetchLocationFromLocationIQ(coords[0], coords[1], API_KEYS.LOCATIONIQ!),
-              'Visibility LocationIQ fetch'
-            ) as LocationData | null;
-          }
-          
-          if (!loc && API_KEYS.MAPBOX && canMakeApiCall('mapbox')) {
-            trackApiCall('mapbox');
-            loc = await safeApiCall(
-              () => fetchLocationFromMapbox(coords[0], coords[1], API_KEYS.MAPBOX!),
-              'Visibility Mapbox fetch'
-            ) as LocationData | null;
-          }
-          
-          if (loc) {
-            lastLocationTime.current = now;
-            const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-            setLocation({
-              label: formatted.primary,
-              context: formatted.context,
-              countryCode: loc.countryCode || ''
-            });
-          }
-        })();
-      }
-    }
-  }, [overlayVisible, safeApiCall, canMakeApiCall, trackApiCall]);
 
   // Memoized display values
   const locationDisplay = useMemo(() => {
-    OverlayLogger.overlay('Location display calculation', {
-      locationDisplay: settings.locationDisplay,
-      hasLocation: !!location,
-      location: location,
-      customLocation: settings.customLocation
-    });
-    
     if (settings.locationDisplay === 'hidden') {
       return null;
     }
     
     if (settings.locationDisplay === 'custom') {
-      if (!settings.customLocation || settings.customLocation.trim() === '') {
-        return null;
-      }
       return {
-        primary: settings.customLocation.trim(),
+        primary: settings.customLocation?.trim() || '',
         context: undefined,
-        countryCode: location?.countryCode || null,
-        countryName: location?.countryCode || null
+        countryCode: location?.countryCode
       };
     }
     
-    if (!location || !location.label) {
-      return null;
-    }
-    
-    return {
-      primary: location.label,
-      context: location.context,
-      countryCode: location.countryCode,
-      countryName: location.countryCode || 'Unknown'
-    };
+    return location;
   }, [location, settings.locationDisplay, settings.customLocation]);
 
   const weatherDisplay = useMemo(() => {
@@ -1060,18 +705,18 @@ export default function OverlayPage() {
       >
         <div className="top-left">
           <div className="overlay-container">
-            {timezone && time && (
+            {timezone && timeDisplay.time && (
               <div className="time time-left">
                 <div className="time-display">
-                  <span className="time-value">{time.split(' ')[0]}</span>
-                  <span className="time-period">{time.split(' ')[1]}</span>
+                  <span className="time-value">{timeDisplay.time.split(' ')[0]}</span>
+                  <span className="time-period">{timeDisplay.time.split(' ')[1]}</span>
                 </div>
               </div>
             )}
             
-            {timezone && date && (
+            {timezone && timeDisplay.date && (
               <div className="date date-left">
-                {date}
+                {timeDisplay.date}
               </div>
             )}
             
@@ -1111,7 +756,7 @@ export default function OverlayPage() {
                     <div className="weather-flag-container">
                       <img
                         src={`https://flagcdn.com/${locationDisplay.countryCode}.svg`}
-                        alt={`Country: ${locationDisplay.countryName}`}
+                        alt={`Country: ${locationDisplay.countryCode}`}
                         width={32}
                         height={20}
                         className="weather-flag"
