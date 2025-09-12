@@ -1,12 +1,8 @@
 // Overlay configuration constants
 export const TIMERS = {
-  // Weather/Timezone updates - more aggressive with Vercel Pro
-  WEATHER_TIMEZONE_UPDATE: 300000, // 5 minutes (was 10 minutes)
-  WEATHER_BACKOFF_MIN: 600000, // 10 minutes (was 20 minutes)
-  WEATHER_BACKOFF_MAX: 1800000, // 30 minutes (was 60 minutes)
-
-  // LocationIQ reverse geocoding - more aggressive but still conservative
-  LOCATION_UPDATE: 180000, // 3 minutes minimum interval (was 5 minutes)
+  // Weather updates - time-based only (weather changes regardless of movement)
+  WEATHER_UPDATE_INTERVAL: 300000, // 5 minutes - weather changes over time
+  
   OVERLAY_FADE_TIMEOUT: 5000,
   MINIMAP_HIDE_DELAY: 10000, // 10s
   SPEED_HIDE_DELAY: 10000, // 10s
@@ -21,14 +17,9 @@ export const TIMERS = {
 } as const;
 
 export const THRESHOLDS = {
-  // Location distance thresholds based on area type for API efficiency
-  LOCATION_DISTANCE_NEIGHBORHOOD: 200, // meters - very frequent for neighborhoods
-  LOCATION_DISTANCE_SUBURB: 500, // meters - frequent for suburbs
-  LOCATION_DISTANCE_CITY: 1000, // meters - moderate for cities
-  LOCATION_DISTANCE_STATE: 5000, // meters - less frequent for states/countries
-  LOCATION_DISTANCE_DEFAULT: 1000, // meters - default fallback
+  // Location threshold - weather doesn't need movement threshold
+  LOCATION_MOVEMENT_THRESHOLD: 100, // meters - simplified to single threshold
   
-  WEATHER_DISTANCE_KM: 5, // km, reduced for more responsive weather updates
   SPEED_SHOW: 10, // 10 km/h
   SPEED_READINGS_REQUIRED: 2,
   HIGH_SPEED_THRESHOLD: 50, // km/h
@@ -42,17 +33,11 @@ export const THRESHOLDS = {
   HIGH_SPEED_MOVEMENT: 80, // km/h - high speed movement
 } as const;
 
-// Dynamic polling intervals based on movement state
+// Simplified polling intervals - consistent for both location and weather
 export const DYNAMIC_TIMERS = {
-  // Weather polling based on movement
-  WEATHER_STATIONARY: 600000, // 10 minutes when stationary
-  WEATHER_MOVING: 300000, // 5 minutes when moving
-  WEATHER_HIGH_SPEED: 180000, // 3 minutes when moving fast
-  
-  // Location polling based on movement - optimized for IRL streaming
-  LOCATION_STATIONARY: 300000, // 5 minutes when stationary (reduced from 10)
-  LOCATION_MOVING: 60000, // 1 minute when moving (reduced from 3 minutes)
-  LOCATION_HIGH_SPEED: 30000, // 30 seconds when moving fast (reduced from 2 minutes)
+  // Unified update intervals - same for location and weather
+  UPDATE_INTERVAL: 60000, // 1 minute
+  MOVEMENT_THRESHOLD: 100, // 100 meters
   
   // Map updates based on speed
   MAP_STATIONARY: 60000, // 1 minute when stationary

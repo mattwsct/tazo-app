@@ -7,7 +7,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRenderPerformance } from '@/lib/performance';
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit } from '@/utils/unit-conversions';
-import { API_KEYS, THRESHOLDS, TIMERS, API_RATE_LIMITS, type RTIRLPayload } from '@/utils/overlay-constants';
+import { API_KEYS, THRESHOLDS, TIMERS, DYNAMIC_TIMERS, API_RATE_LIMITS, type RTIRLPayload } from '@/utils/overlay-constants';
 import { distanceInMeters } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenMeteo, fetchLocationFromLocationIQ, fetchLocationFromMapbox } from '@/utils/api-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
@@ -80,11 +80,11 @@ export default function OverlayPage() {
     }
   }, []);
 
-  // Simple location update thresholds
+  // Location update thresholds - weather has separate logic
   const getLocationUpdateThresholds = useCallback(() => {
     return {
-      distanceThreshold: THRESHOLDS.LOCATION_DISTANCE_DEFAULT,
-      timeThreshold: 300000, // 5 minutes
+      distanceThreshold: THRESHOLDS.LOCATION_MOVEMENT_THRESHOLD, // 100 meters
+      timeThreshold: DYNAMIC_TIMERS.UPDATE_INTERVAL, // 1 minute
     };
   }, []);
 
@@ -501,14 +501,17 @@ export default function OverlayPage() {
 
               // Determine what needs to be fetched
               const weatherElapsed = now - lastWeatherTime.current;
-              const largeMove = movedMeters >= THRESHOLDS.WEATHER_DISTANCE_KM * 1000;
-              const shouldFetchWeather = lastWeatherTime.current === 0 || largeMove || weatherElapsed >= TIMERS.WEATHER_TIMEZONE_UPDATE;
-              
               const locationElapsed = now - lastLocationTime.current;
-              const thresholds = getLocationUpdateThresholds();
-              const meetsDistance = movedMeters >= thresholds.distanceThreshold;
+              const locationThresholds = getLocationUpdateThresholds();
+              const meetsDistance = movedMeters >= locationThresholds.distanceThreshold;
+              
+              // Weather updates every 5 minutes regardless of movement
+              const shouldFetchWeather = lastWeatherTime.current === 0 || 
+                weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL;
+              
+              // Location updates every minute but only if moved 100m
               const shouldFetchLocation = lastLocationTime.current === 0 || 
-                (locationElapsed >= thresholds.timeThreshold && meetsDistance);
+                (locationElapsed >= locationThresholds.timeThreshold && meetsDistance);
               
               // Fetch weather and location in parallel for faster loading
               const promises: Promise<void>[] = [];

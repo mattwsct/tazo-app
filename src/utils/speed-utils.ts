@@ -40,7 +40,7 @@ export const getAdaptiveDistanceThreshold = (speedKmh: number): number => {
   } else if (speedKmh >= THRESHOLDS.HIGH_SPEED_THRESHOLD) {
     return Math.max(500, speedKmh * 10); // Scales with speed, minimum 500m
   } else {
-    return THRESHOLDS.LOCATION_DISTANCE_DEFAULT; // Standard threshold
+    return THRESHOLDS.LOCATION_MOVEMENT_THRESHOLD; // Standard threshold
   }
 };
 
@@ -88,43 +88,23 @@ export const getMovementState = (speedKmh: number): 'stationary' | 'moving' | 'h
 };
 
 /**
- * Gets dynamic weather polling interval based on movement state
+ * Gets weather polling interval - simplified to single interval
  */
-export const getWeatherPollingInterval = (speedKmh: number): number => {
-  const movementState = getMovementState(speedKmh);
-  
-  switch (movementState) {
-    case 'stationary':
-      return DYNAMIC_TIMERS.WEATHER_STATIONARY;
-    case 'moving':
-      return DYNAMIC_TIMERS.WEATHER_MOVING;
-    case 'high-speed':
-      return DYNAMIC_TIMERS.WEATHER_HIGH_SPEED;
-    default:
-      return DYNAMIC_TIMERS.WEATHER_MOVING;
-  }
+export const getWeatherPollingInterval = (): number => {
+  // Weather updates every 5 minutes regardless of movement
+  return 300000; // 5 minutes
 };
 
 /**
- * Gets dynamic location polling interval based on movement state
+ * Gets location polling interval - simplified to single interval
  */
-export const getLocationPollingInterval = (speedKmh: number): number => {
-  const movementState = getMovementState(speedKmh);
-  
-  switch (movementState) {
-    case 'stationary':
-      return DYNAMIC_TIMERS.LOCATION_STATIONARY;
-    case 'moving':
-      return DYNAMIC_TIMERS.LOCATION_MOVING;
-    case 'high-speed':
-      return DYNAMIC_TIMERS.LOCATION_HIGH_SPEED;
-    default:
-      return DYNAMIC_TIMERS.LOCATION_MOVING;
-  }
+export const getLocationPollingInterval = (): number => {
+  // Location updates every 1 minute (but only if moved 100m)
+  return DYNAMIC_TIMERS.UPDATE_INTERVAL; // 1 minute
 };
 
 /**
- * Gets dynamic map update interval based on movement state
+ * Gets map update interval based on movement state
  */
 export const getMapUpdateInterval = (speedKmh: number): number => {
   const movementState = getMovementState(speedKmh);
