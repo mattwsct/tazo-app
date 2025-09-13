@@ -35,21 +35,6 @@ export interface LocationDisplay {
 
 type LocationPrecision = 'neighborhood' | 'suburb' | 'city' | 'state';
 
-/**
- * Defines the fallback hierarchy for location precision levels
- * 
- * Each precision level only falls back to less precise levels:
- * - neighborhood -> suburb -> city -> state
- * - suburb -> city -> state  
- * - city -> state
- * - state -> (no fallback)
- */
-const PRECISION_FALLBACKS: Record<LocationPrecision, LocationPrecision | null> = {
-  neighborhood: 'suburb',  // If neighborhood is redundant, try suburb
-  suburb: 'city',          // If suburb is redundant, try city
-  city: 'state',           // If city is redundant, try state  
-  state: null              // State is the final level, no fallback
-} as const;
 
 // === 🔍 DUPLICATE DETECTION ===
 
@@ -108,41 +93,40 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
 /**
  * Gets context for a location by finding the first non-redundant level
  * 
- * Simple logic: try each level in the fallback chain until we find one that's not redundant.
+ * Simplified logic: for neighborhood/suburb modes, only show city, state, or country.
+ * For city/state modes, only show state or country.
  */
 function getContext(location: LocationData, primaryName: string, currentPrecision: LocationPrecision): string | null {
-  const fallbackChain = getFallbackChain(currentPrecision);
-  
-  for (const precision of fallbackChain) {
-    const levelName = getLocationByPrecision(location, precision);
-    if (levelName && !areRedundantNames(primaryName, levelName)) {
-      return levelName;
+  // Simplified context logic - only show broader administrative levels
+  if (currentPrecision === 'neighborhood' || currentPrecision === 'suburb') {
+    // For neighborhood/suburb: try city, then state, then country
+    if (location.city && !areRedundantNames(primaryName, location.city)) {
+      return location.city;
     }
-  }
-  
-  // If no context found in fallback chain, try country as final fallback
-  if (location.country && !areRedundantNames(primaryName, location.country)) {
-    return location.country;
+    if (location.state && !areRedundantNames(primaryName, location.state)) {
+      return location.state;
+    }
+    if (location.country && !areRedundantNames(primaryName, location.country)) {
+      return location.country;
+    }
+  } else if (currentPrecision === 'city') {
+    // For city: try state, then country
+    if (location.state && !areRedundantNames(primaryName, location.state)) {
+      return location.state;
+    }
+    if (location.country && !areRedundantNames(primaryName, location.country)) {
+      return location.country;
+    }
+  } else if (currentPrecision === 'state') {
+    // For state: only show country
+    if (location.country && !areRedundantNames(primaryName, location.country)) {
+      return location.country;
+    }
   }
   
   return null;
 }
 
-/**
- * Gets the fallback chain for a given precision level
- * Example: neighborhood -> [city, state], city -> [state], state -> []
- */
-function getFallbackChain(precision: LocationPrecision): LocationPrecision[] {
-  const chain: LocationPrecision[] = [];
-  let current = PRECISION_FALLBACKS[precision];
-  
-  while (current) {
-    chain.push(current);
-    current = PRECISION_FALLBACKS[current];
-  }
-  
-  return chain;
-}
 
 // === 🌍 COUNTRY NAME FORMATTING ===
 
@@ -298,25 +282,27 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
 /**
  * Formats location data for overlay display with two-line precision-based logic
  * 
- * @example
- * // Neighborhood mode: Shows most specific location with context
- * formatLocation({ town: "Hell's Kitchen", city: 'New York City', state: 'New York' }, 'neighborhood')
- * // Returns: { primary: "Hell's Kitchen", context: 'New York' }
+ * Simplified context logic: only shows broader administrative levels (city, state, country)
  * 
  * @example
- * // Suburb mode: Shows suburb/borough with city context
+ * // Neighborhood mode: Shows most specific location with city/state/country context
+ * formatLocation({ neighbourhood: "Shinjuku 4", suburb: 'Shibuya', city: 'Tokyo', state: 'Tokyo Prefecture' }, 'neighborhood')
+ * // Returns: { primary: "Shinjuku 4", context: 'Tokyo' } (skips suburb, goes to city)
+ * 
+ * @example
+ * // Suburb mode: Shows suburb with city/state/country context
  * formatLocation({ suburb: 'Manhattan', city: 'New York City', state: 'New York' }, 'suburb')
- * // Returns: { primary: 'Manhattan', context: 'New York' }
+ * // Returns: { primary: 'Manhattan', context: 'New York City' }
  * 
  * @example
- * // City mode: Shows city with state context (if not duplicate)
+ * // City mode: Shows city with state/country context
  * formatLocation({ city: 'Tokyo', state: 'Tokyo Prefecture' }, 'city')
  * // Returns: { primary: 'Tokyo', context: undefined } (duplicate detected)
  * 
  * @example
- * // State mode: Shows state only (no country fallback)
+ * // State mode: Shows state with country context
  * formatLocation({ state: 'California', country: 'United States' }, 'state')
- * // Returns: { primary: 'California', context: undefined }
+ * // Returns: { primary: 'California', context: 'United States' }
  */
 export function formatLocation(
   location: LocationData | null, 

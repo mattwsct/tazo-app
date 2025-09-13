@@ -204,7 +204,14 @@ export async function fetchLocationFromLocationIQ(
       
       // Validate the result before returning
       if (!result.city && !result.state && !result.country) {
-        ApiLogger.warn('locationiq', 'LocationIQ returned empty result, treating as failed');
+        ApiLogger.warn('locationiq', 'LocationIQ returned incomplete result - missing city, state, and country', {
+          availableFields: {
+            neighbourhood: result.neighbourhood,
+            suburb: result.suburb,
+            town: result.town,
+            municipality: result.municipality
+          }
+        });
         return null;
       }
       
@@ -237,116 +244,6 @@ export async function fetchLocationFromLocationIQ(
   }
 }
 
-// === 🗺️ LOCATION API FALLBACK (Mapbox) ===
-
-/**
- * Fetches location name from coordinates using Mapbox API as fallback
- * Used when LocationIQ hits rate limits or fails
- */
-export async function fetchLocationFromMapbox(
-  lat: number, 
-  lon: number, 
-  apiKey: string
-): Promise<LocationData | null> {
-  if (!apiKey) {
-    ApiLogger.warn('mapbox', 'API key not provided');
-    return null;
-  }
-
-  // No caching - always fetch fresh data
-
-
-
-  // Check rate limits
-  if (!checkRateLimit('mapbox')) {
-    ApiLogger.warn('mapbox', 'Rate limit exceeded, skipping API call');
-    return null;
-  }
-
-  try {
-    ApiLogger.info('mapbox', 'Fetching location data (fallback)', { lat, lon });
-    
-    // Mapbox reverse geocoding API
-    const response = await fetchWithRetry(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${apiKey}&types=place,region,country&language=en&limit=1`
-    );
-    
-    if (!response.ok) {
-      if (response.status === 429) {
-        // Rate limit exceeded - this is expected
-        ApiLogger.info('mapbox', 'Rate limit exceeded', { 
-          status: response.status,
-          message: 'Mapbox rate limit exceeded'
-        });
-        return null; // Return null instead of throwing error
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-    }
-    
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(`Mapbox Error: ${data.error}`);
-    }
-    
-    if (data.features && data.features.length > 0) {
-      const feature = data.features[0];
-      const context = feature.context || [];
-      
-      // Extract location components from Mapbox response
-      let city: string | undefined;
-      let state: string | undefined;
-      let country: string | undefined;
-      let countryCode: string | undefined;
-      
-      // Parse context array for administrative levels
-      for (const item of context) {
-        if (item.id.startsWith('place')) {
-          city = item.text;
-        } else if (item.id.startsWith('region')) {
-          state = item.text;
-        } else if (item.id.startsWith('country')) {
-          country = item.text;
-          countryCode = item.short_code;
-        }
-      }
-      
-      // If no city in context, use the main feature name
-      if (!city && feature.place_type.includes('place')) {
-        city = feature.text;
-      }
-      
-      // If no state in context, try to extract from feature name
-      if (!state && feature.place_type.includes('region')) {
-        state = feature.text;
-      }
-      
-      const result: LocationData = {
-        city: city,
-        state: state,
-        country: country,
-        countryCode: countryCode?.toLowerCase(),
-        // Mapbox doesn't provide as granular data, so we'll use what we have
-        town: city,
-        municipality: city,
-        suburb: city,
-        province: state,
-        region: state,
-        county: state,
-      };
-      
-      ApiLogger.info('mapbox', 'Location data received (fallback)', result);
-      return result;
-    }
-    
-    throw new Error('No location features in response');
-    
-  } catch (error) {
-    ApiLogger.error('mapbox', 'Failed to fetch location (fallback)', error);
-    return null;
-  }
-}
 
 // === 🌤️ WEATHER API (Open-Meteo) ===
 

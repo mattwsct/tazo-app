@@ -9,7 +9,7 @@ import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit } from '@/utils/unit-conversions';
 import { API_KEYS, THRESHOLDS, TIMERS, DYNAMIC_TIMERS, API_RATE_LIMITS, type RTIRLPayload } from '@/utils/overlay-constants';
 import { distanceInMeters } from '@/utils/location-utils';
-import { fetchWeatherAndTimezoneFromOpenMeteo, fetchLocationFromLocationIQ, fetchLocationFromMapbox } from '@/utils/api-utils';
+import { fetchWeatherAndTimezoneFromOpenMeteo, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
 
 declare global {
@@ -61,7 +61,6 @@ export default function OverlayPage() {
   
   // API rate limiting tracking (per-second only)
   const lastLocationIqCall = useRef(0);
-  const lastMapboxCall = useRef(0);
   
   
   // Update settings ref whenever settings change
@@ -98,7 +97,7 @@ export default function OverlayPage() {
   }, []);
 
   // Check API rate limits (per-second cooldown only)
-  const canMakeApiCall = useCallback((apiType: 'locationiq' | 'mapbox') => {
+  const canMakeApiCall = useCallback((apiType: 'locationiq') => {
     const now = Date.now();
 
     if (apiType === 'locationiq') {
@@ -114,31 +113,16 @@ export default function OverlayPage() {
       }
       
       return true;
-    } else if (apiType === 'mapbox') {
-      const timeSinceLastCall = now - lastMapboxCall.current;
-      const cooldown = API_RATE_LIMITS.MAPBOX_FREE.COOLDOWN_MS;
-      
-      if (timeSinceLastCall < cooldown) {
-        OverlayLogger.warn('Mapbox rate limit - too soon', {
-          timeSinceLastCall,
-          cooldown
-        });
-        return false;
-      }
-      
-      return true;
     }
     
     return false;
   }, []);
 
   // Track API call (update last call time only)
-  const trackApiCall = useCallback((apiType: 'locationiq' | 'mapbox') => {
+  const trackApiCall = useCallback((apiType: 'locationiq') => {
     const now = Date.now();
     if (apiType === 'locationiq') {
       lastLocationIqCall.current = now;
-    } else if (apiType === 'mapbox') {
-      lastMapboxCall.current = now;
     }
   }, []);
 
@@ -353,8 +337,14 @@ export default function OverlayPage() {
       }
     };
     
-    // Set up Server-Sent Events for real-time updates
+    // Set up Server-Sent Events for real-time updates (disabled if KV not available)
     const setupSSE = () => {
+      // Check if KV is available before setting up SSE
+      if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+        console.log('SSE disabled: Vercel KV not configured');
+        return null;
+      }
+      
       const eventSource = new EventSource('/api/settings-stream');
       
       eventSource.onmessage = (event) => {
@@ -399,7 +389,9 @@ export default function OverlayPage() {
     
     // Cleanup on unmount
     return () => {
-      eventSource.close();
+      if (eventSource) {
+        eventSource.close();
+      }
     };
   }, []);
 
@@ -548,7 +540,7 @@ export default function OverlayPage() {
                   (async () => {
                     let loc: LocationData | null = null;
                     
-                    // Try LocationIQ first (if rate limit allows)
+                    // Fetch location from LocationIQ
                     if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
                       trackApiCall('locationiq');
                       const locationResult = await safeApiCall(
@@ -557,18 +549,6 @@ export default function OverlayPage() {
                       );
                       if (locationResult && typeof locationResult === 'object') {
                         loc = locationResult as LocationData;
-                      }
-                    }
-                    
-                    // Fallback to Mapbox if LocationIQ failed or hit rate limit
-                    if (!loc && API_KEYS.MAPBOX && canMakeApiCall('mapbox')) {
-                      trackApiCall('mapbox');
-                      const mapboxResult = await safeApiCall(
-                        () => fetchLocationFromMapbox(lat!, lon!, API_KEYS.MAPBOX!),
-                        'Mapbox fetch'
-                      );
-                      if (mapboxResult && typeof mapboxResult === 'object') {
-                        loc = mapboxResult as LocationData;
                       }
                     }
                     
@@ -581,9 +561,8 @@ export default function OverlayPage() {
                         countryCode: loc.countryCode || ''
                       });
                     } else {
-                      OverlayLogger.warn('Location fetch failed - both APIs unavailable or rate limited', {
-                        locationIqAvailable: canMakeApiCall('locationiq'),
-                        mapboxAvailable: canMakeApiCall('mapbox')
+                      OverlayLogger.warn('Location fetch failed - LocationIQ unavailable or rate limited', {
+                        locationIqAvailable: canMakeApiCall('locationiq')
                       });
                       // Don't set location to null - let timeout handle fallback
                     }
@@ -750,6 +729,27 @@ export default function OverlayPage() {
                     <div className="location-sub">{locationDisplay.context}</div>
                   )}
                 </div>
+                {locationDisplay.countryCode && (
+                  <div className="location-flag-container">
+                    {flagLoaded ? (
+                      <img
+                        src={`https://flagcdn.com/${locationDisplay.countryCode}.svg`}
+                        alt={`Country: ${locationDisplay.countryCode}`}
+                        width={32}
+                        height={20}
+                        className="location-flag"
+                      />
+                    ) : (
+                      <div 
+                        className="location-flag-emoji"
+                        style={{ fontSize: '20px', lineHeight: '20px' }}
+                        title={`Country: ${locationDisplay.countryCode}`}
+                      >
+                        {getEmojiFlag(locationDisplay.countryCode)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             
@@ -764,27 +764,6 @@ export default function OverlayPage() {
                       {weatherDisplay.temperature}
                     </div>
                   </div>
-                  {locationDisplay?.countryCode && (
-                    <div className="weather-flag-container">
-                      {flagLoaded ? (
-                        <img
-                          src={`https://flagcdn.com/${locationDisplay.countryCode}.svg`}
-                          alt={`Country: ${locationDisplay.countryCode}`}
-                          width={32}
-                          height={20}
-                          className="weather-flag"
-                        />
-                      ) : (
-                        <div 
-                          className="weather-flag-emoji"
-                          style={{ fontSize: '20px', lineHeight: '20px' }}
-                          title={`Country: ${locationDisplay.countryCode}`}
-                        >
-                          {getEmojiFlag(locationDisplay.countryCode)}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
