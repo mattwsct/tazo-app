@@ -33,7 +33,7 @@ export interface LocationDisplay {
 
 // === 🎯 LOCATION PRECISION LEVELS ===
 
-type LocationPrecision = 'neighborhood' | 'suburb' | 'city' | 'state';
+type LocationPrecision = 'area' | 'district' | 'city' | 'province' | 'country';
 
 
 // === 🔍 DUPLICATE DETECTION ===
@@ -60,34 +60,61 @@ function areRedundantNames(name1: string, name2: string): boolean {
  * Simple fallback chain: try each field in order until we find one that exists and isn't too long.
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
-  // Each precision level only falls back to less precise levels
-  const fieldChains = {
-    neighborhood: [
-      location.neighbourhood,  // "Midtown West" - most specific neighborhood
-      location.suburb,         // "Manhattan" - suburb fallback
-      location.city,           // "New York" - city fallback
-      location.state,          // "New York" - state fallback
-      location.country         // "Japan" - country fallback
-    ],
-    suburb: [
-      location.suburb,         // "Manhattan" - primary suburb/borough
-      location.city,           // "New York" - city fallback
-      location.state,          // "New York" - state fallback
-      location.country         // "Japan" - country fallback
-    ],
-    city: [
-      location.city,           // "New York" - primary city
-      location.state,          // "New York" - state fallback
-      location.country         // "Japan" - country fallback
-    ],
-    state: [
-      location.state,          // "New York" - state only
-      location.country         // "Japan" - country fallback
-    ]
+  // Simplified: Each precision level has 2-3 primary fields, then falls back to broader levels
+  const getField = (fields: (string | undefined)[]): string => {
+    return fields.find(field => field && field.length <= 30) || '';
   };
-  
-  const fields = fieldChains[precision];
-  return fields.find(field => field && field.length <= 20) || '';
+
+  switch (precision) {
+    case 'area':
+      return getField([
+        location.road,           // "Jalan Melasti"
+        location.neighbourhood,  // "Legian"
+        location.suburb,         // "Kuta"
+        location.town,           // "Kuta"
+        location.city,           // "Kuta" (fallback)
+        location.state,          // "Bali" (fallback)
+        location.country         // "Indonesia" (fallback)
+      ]);
+    
+    case 'district':
+      return getField([
+        location.county,         // "Badung"
+        location.municipality,   // "Badung"
+        location.suburb,         // "Kuta"
+        location.town,           // "Kuta" (fallback)
+        location.city,           // "Kuta" (fallback)
+        location.state,          // "Bali" (fallback)
+        location.country         // "Indonesia" (fallback)
+      ]);
+    
+    case 'city':
+      return getField([
+        location.town,           // "Kuta" (preferred)
+        location.city,           // "Kuta" (fallback)
+        location.municipality,   // "Badung" (fallback)
+        location.suburb,         // "Kuta" (fallback)
+        location.state,          // "Bali" (fallback)
+        location.country         // "Indonesia" (fallback)
+      ]);
+    
+    case 'province':
+      return getField([
+        location.state,          // "Bali" (preferred)
+        location.province,       // "Bali" (alternative)
+        location.region,         // "Lesser Sunda Islands" (fallback)
+        location.country         // "Indonesia" (fallback)
+      ]);
+    
+    case 'country':
+      return getField([
+        location.country,        // "Indonesia"
+        location.countryCode     // "ID" (fallback)
+      ]);
+    
+    default:
+      return '';
+  }
 }
 
 /**
@@ -97,28 +124,21 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
  * For city/state modes, only show state or country.
  */
 function getContext(location: LocationData, primaryName: string, currentPrecision: LocationPrecision): string | null {
-  // Simplified context logic - only show broader administrative levels
-  if (currentPrecision === 'neighborhood' || currentPrecision === 'suburb') {
-    // For neighborhood/suburb: try city, then state, then country
-    if (location.city && !areRedundantNames(primaryName, location.city)) {
-      return location.city;
-    }
-    if (location.state && !areRedundantNames(primaryName, location.state)) {
-      return location.state;
-    }
-    if (location.country && !areRedundantNames(primaryName, location.country)) {
-      return location.country;
-    }
-  } else if (currentPrecision === 'city') {
-    // For city: try state, then country
-    if (location.state && !areRedundantNames(primaryName, location.state)) {
-      return location.state;
+  // Simplified context: only show broader levels that are different from primary
+  const province = location.state || location.province || location.region;
+  
+  // For area/district/city: show province then country
+  if (['area', 'district', 'city'].includes(currentPrecision)) {
+    if (province && !areRedundantNames(primaryName, province)) {
+      return province;
     }
     if (location.country && !areRedundantNames(primaryName, location.country)) {
       return location.country;
     }
-  } else if (currentPrecision === 'state') {
-    // For state: only show country
+  }
+  
+  // For province: only show country
+  if (currentPrecision === 'province') {
     if (location.country && !areRedundantNames(primaryName, location.country)) {
       return location.country;
     }
@@ -306,7 +326,7 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'neighborhood' | 'suburb' | 'city' | 'state' | 'hidden' | 'custom' = 'neighborhood'
+  displayMode: 'area' | 'district' | 'city' | 'province' | 'country' | 'hidden' | 'custom' = 'area'
 ): LocationDisplay {
   if (!location || displayMode === 'hidden' || displayMode === 'custom') return { primary: '', context: undefined };
   

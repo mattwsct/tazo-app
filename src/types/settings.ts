@@ -1,6 +1,6 @@
 // Centralized settings types and constants
 
-export type LocationDisplayMode = 'neighborhood' | 'suburb' | 'city' | 'state' | 'hidden' | 'custom';
+export type LocationDisplayMode = 'area' | 'district' | 'city' | 'province' | 'country' | 'hidden' | 'custom';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
@@ -13,7 +13,7 @@ export interface OverlaySettings {
 
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
-  locationDisplay: 'neighborhood',
+  locationDisplay: 'area',
   customLocation: '',
   showWeather: true,
   showMinimap: false,

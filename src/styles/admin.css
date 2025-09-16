@@ -416,35 +416,42 @@ body {
 
 /* Segmented (mobile) variant */
 .radio-group.segmented {
+  display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.25rem;
   width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   padding: 0.25rem 0;
 }
 
-.radio-group.segmented::-webkit-scrollbar {
-  display: none;
-}
-
 .radio-group.segmented .radio-option {
-  width: auto;
   flex: 1 1 auto;
-  min-width: 0;
-  max-width: none;
+  min-width: 80px;
+  max-width: calc(33.333% - 0.167rem); /* Allow 3 per row on desktop */
   justify-content: center;
   text-align: center;
   padding: 0.75rem 0.5rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 80px; /* Ensure minimum readable width */
-  flex-shrink: 0; /* Prevent shrinking below min-width */
   touch-action: manipulation; /* Improve touch responsiveness */
+}
+
+/* Medium screens - 2 per row */
+@media (max-width: 768px) {
+  .radio-group.segmented .radio-option {
+    max-width: calc(50% - 0.125rem);
+  }
+}
+
+.radio-group.segmented .radio-option .radio-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .radio-group.segmented .radio-option .radio-label {
@@ -453,6 +460,17 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   display: block;
+  line-height: 1.2;
+}
+
+.radio-group.segmented .radio-option .radio-description {
+  font-size: 0.7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  opacity: 0.8;
+  line-height: 1.1;
 }
 .section-subtitle {
   color: rgba(255, 255, 255, 0.7);
@@ -501,8 +519,57 @@ body {
   flex-shrink: 0;
 }
 
+.radio-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.25rem;
+  flex: 1;
+}
+
 .radio-label {
   font-weight: 500;
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.radio-description {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  font-weight: 400;
+  line-height: 1.1;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.location-examples-loading {
+  color: #3b82f6;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.location-examples-real {
+  color: #10b981;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.location-examples-fallback {
+  color: #f59e0b;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* Form Elements */
@@ -680,13 +747,23 @@ body {
     min-height: 2.75rem;
     padding: 0.75rem 0.5rem;
     font-size: 0.8rem;
-    min-width: 70px; /* Smaller minimum width for mobile */
-    flex: 0 0 auto; /* Don't grow/shrink on mobile */
+    min-width: 70px;
+    max-width: calc(50% - 0.125rem); /* 2 per row on mobile */
+    flex: 1 1 auto;
+  }
+  
+  .radio-group.segmented .radio-option .radio-content {
+    gap: 0.1rem;
   }
   
   .radio-group.segmented .radio-option .radio-label {
     font-size: 0.8rem;
     line-height: 1.2;
+  }
+  
+  .radio-group.segmented .radio-option .radio-description {
+    font-size: 0.65rem;
+    line-height: 1.1;
   }
   
   .radio-group.segmented .radio-option .radio-icon {
@@ -723,15 +800,14 @@ body {
   
   /* Special handling for location options on very small screens */
   .radio-group.segmented {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.375rem;
-    overflow: visible;
   }
   
   .radio-group.segmented .radio-option {
+    flex: 1 1 calc(33.333% - 0.25rem); /* 3 per row on very small screens */
     min-width: 0;
-    flex: none;
     padding: 0.625rem 0.25rem;
     font-size: 0.75rem;
     min-height: 2.5rem;
@@ -766,8 +842,20 @@ body {
     justify-content: flex-start;
   }
   
+  .radio-group.segmented .radio-option .radio-content {
+    align-items: flex-start;
+    text-align: left;
+    gap: 0.25rem;
+  }
+  
   .radio-group.segmented .radio-option .radio-label {
     font-size: 0.8rem;
+  }
+  
+  .radio-group.segmented .radio-option .radio-description {
+    font-size: 0.7rem;
+    white-space: normal;
+    line-height: 1.2;
   }
   
   .radio-group.segmented .radio-option .radio-icon {

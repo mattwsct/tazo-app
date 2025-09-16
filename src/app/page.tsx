@@ -4,7 +4,20 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode } from '@/types/settings';
+import { formatLocation, LocationData } from '@/utils/location-utils';
+import { fetchLocationFromLocationIQ } from '@/utils/api-utils';
+import { API_KEYS, type RTIRLPayload } from '@/utils/overlay-constants';
 import '@/styles/admin.css';
+
+declare global {
+  interface Window {
+    RealtimeIRL?: {
+      forPullKey: (key: string) => {
+        addListener: (cb: (p: unknown) => void) => void;
+      };
+    };
+  }
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -17,6 +30,43 @@ export default function AdminPage() {
   // Custom location input state (for debouncing)
   const [customLocationInput, setCustomLocationInput] = useState('');
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Real location data for examples
+  const [currentLocationData, setCurrentLocationData] = useState<LocationData | null>(null);
+  const [locationExamplesLoading, setLocationExamplesLoading] = useState(false);
+
+  // Generate location examples using the same logic as overlay
+  const getLocationExample = useCallback((mode: LocationDisplayMode): string | undefined => {
+    // Don't show examples for custom and hidden modes
+    if (mode === 'custom' || mode === 'hidden') {
+      return undefined;
+    }
+    
+    if (locationExamplesLoading) {
+      return 'Loading...';
+    }
+    
+    if (!currentLocationData) {
+      // Fallback examples when RTIRL is not available
+      const fallbackExamples: Record<LocationDisplayMode, string> = {
+        area: 'Jalan Melasti, Legian',
+        district: 'Badung, Bali',
+        city: 'Kuta, Bali',
+        province: 'Bali, Indonesia',
+        country: 'Indonesia',
+        custom: '',
+        hidden: ''
+      };
+      return fallbackExamples[mode];
+    }
+    
+    // Use the same formatLocation function as the overlay
+    const formatted = formatLocation(currentLocationData, mode);
+    if (formatted.context) {
+      return `${formatted.primary}, ${formatted.context}`;
+    }
+    return formatted.primary;
+  }, [currentLocationData, locationExamplesLoading]);
   
 
   // Check authentication status and refresh session
@@ -194,6 +244,86 @@ export default function AdminPage() {
     setCustomLocationInput(settings.customLocation || '');
   }, [settings.customLocation]);
 
+  // Fetch location data once on load for examples
+  useEffect(() => {
+    let hasFetched = false;
+    
+    const fetchLocationOnce = () => {
+      if (hasFetched) return;
+      
+      if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
+        hasFetched = true;
+        setLocationExamplesLoading(true);
+        
+        // Set up a one-time listener to get current location
+        window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
+          try {
+            if (!p || typeof p !== 'object') {
+              return;
+            }
+            const payload = p as RTIRLPayload;
+            
+            // Extract GPS coordinates
+            let lat: number | null = null;
+            let lon: number | null = null;
+            if (payload.location) {
+              if ('lat' in payload.location && 'lon' in payload.location) {
+                lat = payload.location.lat;
+                lon = payload.location.lon;
+              } else if ('latitude' in payload.location && 'longitude' in payload.location) {
+                const loc = payload.location as { latitude: number; longitude: number };
+                lat = loc.latitude;
+                lon = loc.longitude;
+              }
+            }
+            
+            if (lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+              // Fetch location data once for examples
+              (async () => {
+                try {
+                  if (API_KEYS.LOCATIONIQ) {
+                    const locationResult = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
+                    if (locationResult) {
+                      setCurrentLocationData(locationResult);
+                      setLocationExamplesLoading(false);
+                    }
+                  }
+                } catch (error) {
+                  console.warn('Failed to fetch location for examples:', error);
+                  setLocationExamplesLoading(false);
+                }
+              })();
+              
+              // Remove listener after first successful fetch
+              // Note: RTIRL doesn't provide a remove method, but we set hasFetched to prevent further processing
+            }
+          } catch (error) {
+            console.warn('RTIRL listener error:', error);
+            setLocationExamplesLoading(false);
+          }
+        });
+      }
+    };
+    
+    // Check if RTIRL is already loaded
+    if (typeof window !== 'undefined' && window.RealtimeIRL) {
+      fetchLocationOnce();
+    } else {
+      // Load RTIRL script if not already loaded
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
+      script.async = true;
+      script.onerror = () => {
+        console.warn('Failed to load RTIRL script for examples');
+        setLocationExamplesLoading(false);
+      };
+      script.onload = () => {
+        fetchLocationOnce();
+      };
+      document.body.appendChild(script);
+    }
+  }, []);
+
   const openPreview = () => {
     window.open('/overlay', '_blank');
   };
@@ -223,7 +353,7 @@ export default function AdminPage() {
     value, 
     onChange
   }: { 
-    options: { value: string; label: string; icon: string }[]; 
+    options: { value: string; label: string; icon: string; description?: string }[]; 
     value: string; 
     onChange: (value: string) => void; 
   }) => (
@@ -240,7 +370,12 @@ export default function AdminPage() {
           tabIndex={0}
         >
           <span className="radio-icon" aria-hidden="true">{option.icon}</span>
-          <span className="radio-label">{option.label}</span>
+          <div className="radio-content">
+            <span className="radio-label">{option.label}</span>
+            {option.description && (
+              <span className="radio-description">{option.description}</span>
+            )}
+          </div>
         </button>
       ))}
     </div>
@@ -322,12 +457,48 @@ export default function AdminPage() {
                 value={settings.locationDisplay}
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
-                  { value: 'neighborhood', label: 'Neighborhood', icon: '🏙️' },
-                  { value: 'suburb', label: 'Suburb', icon: '🏘️' },
-                  { value: 'city', label: 'City', icon: '🏛️' },
-                  { value: 'state', label: 'State', icon: '🗺️' },
-                  { value: 'custom', label: 'Custom', icon: '✏️' },
-                  { value: 'hidden', label: 'Hidden', icon: '👁️‍🗨️' }
+                  { 
+                    value: 'area', 
+                    label: 'Area', 
+                    icon: '🏙️',
+                    description: getLocationExample('area')
+                  },
+                  { 
+                    value: 'district', 
+                    label: 'District', 
+                    icon: '🏘️',
+                    description: getLocationExample('district')
+                  },
+                  { 
+                    value: 'city', 
+                    label: 'City', 
+                    icon: '🏛️',
+                    description: getLocationExample('city')
+                  },
+                  { 
+                    value: 'province', 
+                    label: 'Province', 
+                    icon: '🗺️',
+                    description: getLocationExample('province')
+                  },
+                  { 
+                    value: 'country', 
+                    label: 'Country', 
+                    icon: '🌍',
+                    description: getLocationExample('country')
+                  },
+                  { 
+                    value: 'custom', 
+                    label: 'Custom', 
+                    icon: '✏️',
+                    description: getLocationExample('custom')
+                  },
+                  { 
+                    value: 'hidden', 
+                    label: 'Hidden', 
+                    icon: '👁️‍🗨️',
+                    description: getLocationExample('hidden')
+                  }
                 ]}
               />
               
@@ -350,9 +521,26 @@ export default function AdminPage() {
               )}
               
               <div className="setting-help">
-                {settings.locationDisplay === 'neighborhood' && 'Shows most specific area available (e.g., "Hell\'s Kitchen" or "Shibuya")'}
-                {settings.locationDisplay === 'city' && 'Shows city-level information (e.g., "New York City" or "Tokyo")'}
-                {settings.locationDisplay === 'state' && 'Shows state/province (e.g., "New York" or "Tokyo Prefecture")'}
+                {locationExamplesLoading && (
+                  <div className="location-examples-loading">
+                    🔄 Loading current location...
+                  </div>
+                )}
+                {currentLocationData && !locationExamplesLoading && (
+                  <div className="location-examples-real">
+                    ✅ Showing your current location
+                  </div>
+                )}
+                {!currentLocationData && !locationExamplesLoading && (
+                  <div className="location-examples-fallback">
+                    ℹ️ Showing sample data (RTIRL not connected)
+                  </div>
+                )}
+                {settings.locationDisplay === 'area' && 'Shows most specific area (street, neighborhood, or local area)'}
+                {settings.locationDisplay === 'district' && 'Shows district/county level (administrative district)'}
+                {settings.locationDisplay === 'city' && 'Shows city/town level (main urban area)'}
+                {settings.locationDisplay === 'province' && 'Shows province/state level (administrative region)'}
+                {settings.locationDisplay === 'country' && 'Shows country level only'}
                 {settings.locationDisplay === 'custom' && 'Displays custom text instead of GPS-based location'}
                 {settings.locationDisplay === 'hidden' && 'Hides location display completely'}
               </div>
