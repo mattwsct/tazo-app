@@ -96,6 +96,44 @@ export default function OverlayPage() {
     return String.fromCodePoint(...codePoints);
   }, []);
 
+  // Shorten weather descriptions for overlay display
+  const shortenWeatherDescription = useCallback((description: string): string => {
+    const shortMap: Record<string, string> = {
+      'clear sky': 'CLEAR',
+      'mainly clear': 'CLEAR',
+      'partly cloudy': 'PARTLY CLOUDY',
+      'overcast': 'OVERCAST',
+      'fog': 'FOG',
+      'depositing rime fog': 'FOG',
+      'light drizzle': 'DRIZZLE',
+      'moderate drizzle': 'DRIZZLE',
+      'dense drizzle': 'DRIZZLE',
+      'light freezing drizzle': 'FREEZING DRIZZLE',
+      'dense freezing drizzle': 'FREEZING DRIZZLE',
+      'slight rain': 'LIGHT RAIN',
+      'moderate rain': 'RAIN',
+      'heavy rain': 'HEAVY RAIN',
+      'light freezing rain': 'FREEZING RAIN',
+      'heavy freezing rain': 'FREEZING RAIN',
+      'slight snow fall': 'LIGHT SNOW',
+      'moderate snow fall': 'SNOW',
+      'heavy snow fall': 'HEAVY SNOW',
+      'snow grains': 'SNOW',
+      'slight rain showers': 'SHOWERS',
+      'moderate rain showers': 'SHOWERS',
+      'violent rain showers': 'HEAVY SHOWERS',
+      'slight snow showers': 'SNOW SHOWERS',
+      'heavy snow showers': 'HEAVY SNOW SHOWERS',
+      'thunderstorm': 'STORM',
+      'thunderstorm with slight hail': 'STORM + HAIL',
+      'thunderstorm with heavy hail': 'STORM + HAIL',
+      'unknown': 'UNKNOWN'
+    };
+    
+    return shortMap[description.toLowerCase()] || description.toUpperCase();
+  }, []);
+
+
   // Check API rate limits (per-second cooldown only)
   const canMakeApiCall = useCallback((apiType: 'locationiq') => {
     const now = Date.now();
@@ -679,10 +717,10 @@ export default function OverlayPage() {
     }
     
     return {
-      description: weather.desc.toUpperCase(),
+      description: shortenWeatherDescription(weather.desc),
       temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`
     };
-  }, [weather]);
+  }, [weather, shortenWeatherDescription]);
 
   return (
     <ErrorBoundary>
