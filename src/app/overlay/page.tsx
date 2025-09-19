@@ -22,8 +22,8 @@ declare global {
   }
 }
 
-// MapboxMinimap component - Static map images
-const MapboxMinimap = dynamic(() => import('@/components/MapboxMinimap'), {
+// MapLibreMinimap component - WebGL-based map rendering
+const MapLibreMinimap = dynamic(() => import('@/components/MapLibreMinimap'), {
   ssr: false,
   loading: () => <div className="minimap-placeholder" />
 });
@@ -51,6 +51,7 @@ export default function OverlayPage() {
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [flagLoaded, setFlagLoaded] = useState(false);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [minimapVisible, setMinimapVisible] = useState(false);
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -62,12 +63,12 @@ export default function OverlayPage() {
   // API rate limiting tracking (per-second only)
   const lastLocationIqCall = useRef(0);
   
+  // GPS update tracking for minimap
+  const gpsUpdateTimes = useRef<number[]>([]);
+  const lastMinimapHideTime = useRef(0);
+  const minimapCooldownRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Update settings ref whenever settings change
-  useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
-
+  
   // Safe API call wrapper to prevent silent failures
   const safeApiCall = useCallback(async (apiCall: () => Promise<unknown>, context: string): Promise<unknown> => {
     try {
@@ -84,6 +85,79 @@ export default function OverlayPage() {
     return {
       distanceThreshold: THRESHOLDS.LOCATION_MOVEMENT_THRESHOLD, // 100 meters
       timeThreshold: DYNAMIC_TIMERS.UPDATE_INTERVAL, // 1 minute
+    };
+  }, []);
+
+  // GPS update rate checking for minimap
+  const checkGpsUpdateRate = useCallback(() => {
+    const now = Date.now();
+    const recentUpdates = gpsUpdateTimes.current.filter(time => now - time < 30000); // Last 30 seconds
+    gpsUpdateTimes.current = recentUpdates; // Keep only recent updates
+    
+    // Require at least 2 updates in the last 30 seconds to consider GPS active
+    return recentUpdates.length >= 2;
+  }, []);
+
+  // Minimap visibility logic with cooldown
+  const updateMinimapVisibility = useCallback(() => {
+    const now = Date.now();
+    const isGpsActive = checkGpsUpdateRate();
+    const isMovingFast = currentSpeed >= 10; // 10 km/h threshold
+    const gpsTimeoutPeriod = 30000; // 30 seconds without GPS updates
+    
+    // Clear existing cooldown timer
+    if (minimapCooldownRef.current) {
+      clearTimeout(minimapCooldownRef.current);
+      minimapCooldownRef.current = null;
+    }
+    
+    if (settings.showMinimap) {
+      // Always show mode
+      setMinimapVisible(true);
+    } else if (settings.minimapSpeedBased) {
+      // Auto on movement mode
+      if (isMovingFast && isGpsActive) {
+        // Show immediately when moving fast (10+ km/h) and GPS is active
+        setMinimapVisible(true);
+        lastMinimapHideTime.current = 0; // Reset hide time
+      } else if (!isGpsActive) {
+        // No GPS updates in 30 seconds - hide immediately
+        setMinimapVisible(false);
+        lastMinimapHideTime.current = 0;
+      } else if (!isMovingFast && minimapVisible) {
+        // Speed dropped below 10 km/h - start cooldown
+        if (lastMinimapHideTime.current === 0) {
+          lastMinimapHideTime.current = now;
+        }
+        
+        // Hide after cooldown period
+        minimapCooldownRef.current = setTimeout(() => {
+          setMinimapVisible(false);
+          lastMinimapHideTime.current = 0;
+        }, gpsTimeoutPeriod);
+      }
+    } else {
+      // Hidden mode
+      setMinimapVisible(false);
+    }
+  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible, checkGpsUpdateRate]);
+
+  // Update settings ref whenever settings change
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  // Update minimap visibility when relevant state changes
+  useEffect(() => {
+    updateMinimapVisibility();
+  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, updateMinimapVisibility]);
+
+  // Cleanup minimap cooldown timer on unmount
+  useEffect(() => {
+    return () => {
+      if (minimapCooldownRef.current) {
+        clearTimeout(minimapCooldownRef.current);
+      }
     };
   }, []);
 
@@ -506,17 +580,31 @@ export default function OverlayPage() {
           if (lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
             setMapCoords([lat, lon]);
             
-            // Calculate speed for minimap
+            // Track GPS update for minimap logic
             const now = Date.now();
+            gpsUpdateTimes.current.push(now);
+            
+            // Get previous coordinates for distance calculation
             const prevCoords = lastCoords.current;
             const prevTime = lastCoordsTime.current;
-            let speedKmh = 0;
             
-            if (prevCoords && prevTime > 0) {
-              const movedMeters = distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]);
-              const timeDiffHours = (now - prevTime) / (1000 * 60 * 60);
-              if (timeDiffHours > 0) {
-                speedKmh = (movedMeters / 1000) / timeDiffHours;
+            // Use RTIRL's speed if available, otherwise calculate our own
+            let speedKmh = 0;
+            if (typeof payload === 'object' && payload !== null && 'speed' in payload) {
+              const rtirlPayload = payload as RTIRLPayload;
+              if (typeof rtirlPayload.speed === 'number' && rtirlPayload.speed >= 0) {
+                speedKmh = rtirlPayload.speed;
+              }
+            }
+            
+            // Fallback to calculated speed if RTIRL speed not available
+            if (speedKmh === 0) {
+              if (prevCoords && prevTime > 0) {
+                const movedMeters = distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]);
+                const timeDiffHours = (now - prevTime) / (1000 * 60 * 60);
+                if (timeDiffHours > 0) {
+                  speedKmh = (movedMeters / 1000) / timeDiffHours;
+                }
               }
             }
             
@@ -806,13 +894,12 @@ export default function OverlayPage() {
               </div>
             )}
 
-            {mapCoords && (settings.showMinimap || (settings.minimapSpeedBased && currentSpeed > 0)) && (
+            {mapCoords && minimapVisible && (
               <div className="minimap">
-                <MapboxMinimap 
+                <MapLibreMinimap 
                   lat={mapCoords[0]} 
                   lon={mapCoords[1]} 
                   isVisible={overlayVisible}
-                  speedKmh={currentSpeed}
                 />
                 </div>
               )}

@@ -17,10 +17,6 @@ export const RATE_LIMITS: Record<string, RateLimit> = {
     calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 5, // 5 per second (more lenient)
     lastCallTime: 0
   },
-  mapbox: { 
-    calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 30, // 30 per minute
-    lastCallTime: 0
-  },
 } as const;
 
 /**
