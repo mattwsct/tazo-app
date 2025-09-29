@@ -1,6 +1,6 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
-const MAX_COUNTRY_NAME_LENGTH = 12;
+const MAX_CHARACTER_LIMIT = 16; // Single limit for both primary and country lines
 
 export interface LocationData {
   country?: string;
@@ -18,22 +18,28 @@ export interface LocationData {
   municipality?: string;
   suburb?: string;
   neighbourhood?: string; // British spelling from LocationIQ
+  county?: string; // Metropolitan area (e.g., Gold Coast)
   province?: string;
   region?: string;
-  county?: string;
   house_number?: string;
   road?: string;
   postcode?: string;
+  // Additional fields that may appear in LocationIQ responses
+  village?: string;
+  hamlet?: string;
+  district?: string;
+  ward?: string;
+  borough?: string;
 }
 
 export interface LocationDisplay {
   primary: string;  // Most precise available location
-  context?: string; // Administrative context (only when not redundant)
+  country?: string; // Country name/code (no dedupe vs primary)
 }
 
 // === 🎯 LOCATION PRECISION LEVELS ===
 
-type LocationPrecision = 'area' | 'district' | 'city' | 'province' | 'country';
+type LocationPrecision = 'precise' | 'broad' | 'region';
 
 
 // === 🔍 DUPLICATE DETECTION ===
@@ -55,93 +61,75 @@ function areRedundantNames(name1: string, name2: string): boolean {
 // === 🗺️ LOCATION DATA EXTRACTION ===
 
 /**
- * Gets the best location name for a given precision level
+ * Gets the best location name for a given precision level with 14-character limit
  * 
- * Simple fallback chain: try each field in order until we find one that exists and isn't too long.
+ * Fallback chain: try each field in order until we find one that exists and fits within limit.
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
-  // Simplified: Each precision level has 2-3 primary fields, then falls back to broader levels
   const getField = (fields: (string | undefined)[]): string => {
-    return fields.find(field => field && field.length <= 30) || '';
+    return fields.find(field => field && field.length <= MAX_CHARACTER_LIMIT) || '';
   };
 
-  switch (precision) {
-    case 'area':
-      return getField([
-        location.road,           // "Jalan Melasti"
-        location.neighbourhood,  // "Legian"
-        location.suburb,         // "Kuta"
-        location.town,           // "Kuta"
-        location.city,           // "Kuta" (fallback)
-        location.state,          // "Bali" (fallback)
-        location.country         // "Indonesia" (fallback)
-      ]);
-    
-    case 'district':
-      return getField([
-        location.county,         // "Badung"
-        location.municipality,   // "Badung"
-        location.suburb,         // "Kuta"
-        location.town,           // "Kuta" (fallback)
-        location.city,           // "Kuta" (fallback)
-        location.state,          // "Bali" (fallback)
-        location.country         // "Indonesia" (fallback)
-      ]);
-    
-    case 'city':
-      return getField([
-        location.town,           // "Kuta" (preferred)
-        location.city,           // "Kuta" (fallback)
-        location.municipality,   // "Badung" (fallback)
-        location.suburb,         // "Kuta" (fallback)
-        location.state,          // "Bali" (fallback)
-        location.country         // "Indonesia" (fallback)
-      ]);
-    
-    case 'province':
-      return getField([
-        location.state,          // "Bali" (preferred)
-        location.province,       // "Bali" (alternative)
-        location.region,         // "Lesser Sunda Islands" (fallback)
-        location.country         // "Indonesia" (fallback)
-      ]);
-    
-    case 'country':
-      return getField([
-        location.country,        // "Indonesia"
-        location.countryCode     // "ID" (fallback)
-      ]);
-    
-    default:
-      return '';
+  // Single source of truth for ordering (most precise → least)
+  const preciseOrderKeys: (keyof LocationData)[] = [
+    'hamlet',
+    'village',
+    'neighbourhood',
+    'suburb',
+    'ward',
+    'borough',
+    'town',
+    'city',
+    'municipality',
+    'district',
+    'county'
+  ];
+
+  let keysToUse: (keyof LocationData)[];
+  if (precision === 'precise') {
+    keysToUse = preciseOrderKeys;
+  } else if (precision === 'broad') {
+    keysToUse = [...preciseOrderKeys].reverse();
+  } else { // region
+    keysToUse = [
+      'state',
+      'province', 
+      'region',
+      'city',
+      'county',
+      'municipality',
+      'district',
+      'town'
+    ];
   }
+
+  const valuesInOrder = keysToUse.map((key) => location[key] as string | undefined);
+
+  return getField(valuesInOrder);
 }
 
 /**
- * Gets context for a location by finding the first non-redundant level
+ * Gets country for a location with 16-character limit
  * 
- * Simplified logic: for neighborhood/suburb modes, only show city, state, or country.
- * For city/state modes, only show state or country.
+ * Rules:
+ * - Always show country name if it fits (≤16 chars)
+ * - If country name is too long, show country code
+ * - No dedupe checks needed
  */
-function getContext(location: LocationData, primaryName: string, currentPrecision: LocationPrecision): string | null {
-  // Simplified context: only show broader levels that are different from primary
-  const province = location.state || location.province || location.region;
+function getCountry(location: LocationData): string | null {
+  const countryCode = (location.countryCode || '').toUpperCase();
+  const countryName = location.country || '';
   
-  // For area/district/city: show province then country
-  if (['area', 'district', 'city'].includes(currentPrecision)) {
-    if (province && !areRedundantNames(primaryName, province)) {
-      return province;
-    }
-    if (location.country && !areRedundantNames(primaryName, location.country)) {
-      return location.country;
+  // Always try country name first if it exists
+  if (countryName) {
+    if (countryName.length <= MAX_CHARACTER_LIMIT) {
+      return countryName;
     }
   }
   
-  // For province: only show country
-  if (currentPrecision === 'province') {
-    if (location.country && !areRedundantNames(primaryName, location.country)) {
-      return location.country;
-    }
+  // If country name is too long, use country code
+  if (countryCode) {
+    return countryCode;
   }
   
   return null;
@@ -230,7 +218,7 @@ export function formatCountryName(countryName: string, countryCode = ''): string
     }
     
     // If the name is still too long, use country code
-    if (countryName.length > MAX_COUNTRY_NAME_LENGTH) {
+    if (countryName.length > MAX_CHARACTER_LIMIT) {
       return countryCode ? countryCode.toUpperCase() : countryName;
     }
     
@@ -286,11 +274,11 @@ export function getBestCityName(location: LocationData): string {
 export function shortenCountryName(countryName: string, countryCode = ''): string {
   if (!countryName && !countryCode) return '';
   
-  if (countryName && countryName.length <= MAX_COUNTRY_NAME_LENGTH) {
+  if (countryName && countryName.length <= MAX_CHARACTER_LIMIT) {
     return countryName;
   }
   
-  if (countryName && countryName.length > MAX_COUNTRY_NAME_LENGTH) {
+  if (countryName && countryName.length > MAX_CHARACTER_LIMIT) {
     return countryCode ? countryCode.toUpperCase() : countryName;
   }
   
@@ -300,46 +288,43 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
 // === 🎨 MAIN LOCATION FORMATTING ===
 
 /**
- * Formats location data for overlay display with two-line precision-based logic
+ * Formats location data for overlay display with 16-character limits
  * 
- * Simplified context logic: only shows broader administrative levels (city, state, country)
- * 
- * @example
- * // Neighborhood mode: Shows most specific location with city/state/country context
- * formatLocation({ neighbourhood: "Shinjuku 4", suburb: 'Shibuya', city: 'Tokyo', state: 'Tokyo Prefecture' }, 'neighborhood')
- * // Returns: { primary: "Shinjuku 4", context: 'Tokyo' } (skips suburb, goes to city)
- * 
- * @example
- * // Suburb mode: Shows suburb with city/state/country context
- * formatLocation({ suburb: 'Manhattan', city: 'New York City', state: 'New York' }, 'suburb')
- * // Returns: { primary: 'Manhattan', context: 'New York City' }
+ * Rules:
+ * - Precise: Shows most specific location with country
+ * - Broad: Shows broader location with country
+ * - Region: Shows state/province with country
+ * - Country line: Country name if ≤16 chars, else country code
  * 
  * @example
  * // City mode: Shows city with state/country context
- * formatLocation({ city: 'Tokyo', state: 'Tokyo Prefecture' }, 'city')
- * // Returns: { primary: 'Tokyo', context: undefined } (duplicate detected)
+ * formatLocation({ city: 'Tokyo', state: 'Tokyo', country: 'Japan', countryCode: 'JP' }, 'city')
+ * // Returns: { primary: 'Tokyo', context: 'JP' } (duplicate state detected)
  * 
  * @example
- * // State mode: Shows state with country context
- * formatLocation({ state: 'California', country: 'United States' }, 'state')
- * // Returns: { primary: 'California', context: 'United States' }
+ * // City mode: Shows city with state and country code
+ * formatLocation({ city: 'San Francisco', state: 'California', country: 'USA', countryCode: 'US' }, 'city')
+ * // Returns: { primary: 'San Francisco', context: 'California, US' }
+ * 
+ * @example
+ * // State mode: Shows state with country code
+ * formatLocation({ state: 'California', country: 'USA', countryCode: 'US' }, 'state')
+ * // Returns: { primary: 'California', context: 'US' }
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'area' | 'district' | 'city' | 'province' | 'country' | 'hidden' | 'custom' = 'area'
+  displayMode: 'precise' | 'broad' | 'region' | 'custom' | 'hidden' = 'precise'
 ): LocationDisplay {
-  if (!location || displayMode === 'hidden' || displayMode === 'custom') return { primary: '', context: undefined };
+  if (!location || displayMode === 'hidden' || displayMode === 'custom') return { primary: '', country: undefined };
   
-  // Get primary location (automatically handles length limits via getLocationByPrecision)
   const primary = getLocationByPrecision(location, displayMode);
-  if (!primary) return { primary: '', context: undefined };
+  if (!primary) return { primary: '', country: undefined };
   
-  // Get context with duplicate detection
-  const context = getContext(location, primary, displayMode);
+  const country = getCountry(location);
   
   return {
     primary,
-    context: context || undefined
+    country: country || undefined
   };
 }
 

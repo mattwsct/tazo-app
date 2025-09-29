@@ -59,6 +59,8 @@ export default function OverlayPage() {
   const lastCoords = useRef<[number, number] | null>(null);
   const lastCoordsTime = useRef(0);
   const settingsRef = useRef(settings);
+  const lastSettingsHash = useRef<string>('');
+  const lastRawLocation = useRef<LocationData | null>(null);
   
   // API rate limiting tracking (per-second only)
   const lastLocationIqCall = useRef(0);
@@ -111,10 +113,7 @@ export default function OverlayPage() {
       minimapCooldownRef.current = null;
     }
     
-    if (settings.showMinimap) {
-      // Always show mode
-      setMinimapVisible(true);
-    } else if (settings.minimapSpeedBased) {
+    if (settings.minimapSpeedBased) {
       // Auto on movement mode
       if (isMovingFast && isGpsActive) {
         // Show immediately when moving fast (10+ km/h) and GPS is active
@@ -129,13 +128,18 @@ export default function OverlayPage() {
         if (lastMinimapHideTime.current === 0) {
           lastMinimapHideTime.current = now;
         }
-        
         // Hide after cooldown period
         minimapCooldownRef.current = setTimeout(() => {
           setMinimapVisible(false);
           lastMinimapHideTime.current = 0;
         }, gpsTimeoutPeriod);
+      } else {
+        // Not moving fast; keep hidden until cooldown logic says otherwise
+        setMinimapVisible(false);
       }
+    } else if (settings.showMinimap) {
+      // Always show mode
+      setMinimapVisible(true);
     } else {
       // Hidden mode
       setMinimapVisible(false);
@@ -145,6 +149,21 @@ export default function OverlayPage() {
   // Update settings ref whenever settings change
   useEffect(() => {
     settingsRef.current = settings;
+    lastSettingsHash.current = JSON.stringify(settings);
+
+    // Re-render location display instantly from cached raw data if available
+    if (lastRawLocation.current && settings.locationDisplay !== 'custom' && settings.locationDisplay !== 'hidden') {
+      try {
+        const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
+        setLocation({
+          primary: formatted.primary || 'Unknown Location',
+          context: formatted.country,
+          countryCode: lastRawLocation.current.countryCode || ''
+        });
+      } catch {
+        // Ignore formatting errors; UI will update on next normal cycle
+      }
+    }
   }, [settings]);
 
   // Update minimap visibility when relevant state changes
@@ -170,42 +189,6 @@ export default function OverlayPage() {
     return String.fromCodePoint(...codePoints);
   }, []);
 
-  // Shorten weather descriptions for overlay display
-  const shortenWeatherDescription = useCallback((description: string): string => {
-    const shortMap: Record<string, string> = {
-      'clear sky': 'CLEAR',
-      'mainly clear': 'CLEAR',
-      'partly cloudy': 'PARTLY CLOUDY',
-      'overcast': 'OVERCAST',
-      'fog': 'FOG',
-      'depositing rime fog': 'FOG',
-      'light drizzle': 'DRIZZLE',
-      'moderate drizzle': 'DRIZZLE',
-      'dense drizzle': 'DRIZZLE',
-      'light freezing drizzle': 'FREEZING DRIZZLE',
-      'dense freezing drizzle': 'FREEZING DRIZZLE',
-      'slight rain': 'LIGHT RAIN',
-      'moderate rain': 'RAIN',
-      'heavy rain': 'HEAVY RAIN',
-      'light freezing rain': 'FREEZING RAIN',
-      'heavy freezing rain': 'FREEZING RAIN',
-      'slight snow fall': 'LIGHT SNOW',
-      'moderate snow fall': 'SNOW',
-      'heavy snow fall': 'HEAVY SNOW',
-      'snow grains': 'SNOW',
-      'slight rain showers': 'SHOWERS',
-      'moderate rain showers': 'SHOWERS',
-      'violent rain showers': 'HEAVY SHOWERS',
-      'slight snow showers': 'SNOW SHOWERS',
-      'heavy snow showers': 'HEAVY SNOW SHOWERS',
-      'thunderstorm': 'STORM',
-      'thunderstorm with slight hail': 'STORM + HAIL',
-      'thunderstorm with heavy hail': 'STORM + HAIL',
-      'unknown': 'UNKNOWN'
-    };
-    
-    return shortMap[description.toLowerCase()] || description.toUpperCase();
-  }, []);
 
 
   // Check API rate limits (per-second cooldown only)
@@ -248,6 +231,7 @@ export default function OverlayPage() {
   const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
   const timeUpdateTimer = useRef<NodeJS.Timeout | null>(null);
   const timeSyncTimeout = useRef<NodeJS.Timeout | null>(null);
+  const rtilSetupDone = useRef(false);
 
   // Global error handling to prevent crashes
   useEffect(() => {
@@ -499,13 +483,37 @@ export default function OverlayPage() {
     // Set up real-time updates
     const eventSource = setupSSE();
     
+    // Fallback polling mechanism - check for settings changes every 5 seconds
+    const pollingInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const newHash = JSON.stringify(data);
+          if (newHash !== lastSettingsHash.current) {
+            lastSettingsHash.current = newHash;
+            setSettings(data); // UI updates immediately
+          }
+        }
+      } catch {
+        // Ignore polling errors - SSE is primary, polling is fallback
+      }
+    }, 5000); // Check every 5 seconds
+    
     // Cleanup on unmount
     return () => {
       if (eventSource) {
         eventSource.close();
       }
+      clearInterval(pollingInterval);
     };
-  }, []);
+  }, []); // Empty dependency array - we want this to run once on mount
 
   // RTIRL connection - use refs to avoid re-running on timezone changes
   const timezoneRef = useRef(timezone);
@@ -535,16 +543,15 @@ export default function OverlayPage() {
 
   // RTIRL connection
   useEffect(() => {
-    let listenerSetup = false;
-    
+    if (rtilSetupDone.current) {
+      return;
+    }
+    rtilSetupDone.current = true;
+
     const setupRTIRLListener = () => {
-      if (listenerSetup) {
-        return;
-      }
       
       
       if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
-        listenerSetup = true;
         window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
           try {
             if (!p || typeof p !== 'object') {
@@ -627,10 +634,13 @@ export default function OverlayPage() {
               const shouldFetchWeather = lastWeatherTime.current === 0 || 
                 weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL;
               
-              // Location updates every minute but only if moved 100m
+              // Location updates every minute but only if moved threshold
               const shouldFetchLocation = lastLocationTime.current === 0 || 
                 (locationElapsed >= locationThresholds.timeThreshold && meetsDistance);
               
+              // If settings just updated (hash changed), allow UI update but do not force API refetch here
+              // API fetching remains purely based on the time/distance gates above
+
               // Fetch weather and location in parallel for faster loading
               const promises: Promise<void>[] = [];
               
@@ -681,11 +691,12 @@ export default function OverlayPage() {
                     lastLocationTime.current = Date.now();
                     if (loc) {
                       const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-                      setLocation({
-                        primary: formatted.primary,
-                        context: formatted.context,
-                        countryCode: loc.countryCode || ''
-                      });
+                      lastRawLocation.current = loc;
+        setLocation({
+          primary: formatted.primary || 'Unknown Location',
+          context: formatted.country,
+          countryCode: loc.countryCode || ''
+        });
                     } else {
                       OverlayLogger.warn('Location fetch failed - LocationIQ unavailable or rate limited', {
                         locationIqAvailable: canMakeApiCall('locationiq')
@@ -728,8 +739,7 @@ export default function OverlayPage() {
     return () => {
       // RTIRL script cleanup handled automatically
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // No dependencies - use refs instead to prevent duplicate listeners
+  }, [canMakeApiCall, createDateTimeFormatters, getLocationUpdateThresholds, safeApiCall, timezone, trackApiCall]); // Include dependencies; guarded by rtilSetupDone
 
   // Overlay visibility - wait for all elements to be ready with timeout fallback
   const isOverlayReady = useMemo(() => {
@@ -742,7 +752,7 @@ export default function OverlayPage() {
       loadingTimeout; // Show overlay even if location failed after timeout
     
     // Weather must be ready (unless hidden) - allow fallback to no weather
-    const weatherReady = !settings.showWeather || weather || loadingTimeout;
+    const weatherReady = settings.locationDisplay === 'hidden' || weather || loadingTimeout;
     
     // Flag is always ready since we show emoji fallback immediately
     const flagReady = true;
@@ -783,21 +793,25 @@ export default function OverlayPage() {
       return {
         primary: settings.customLocation?.trim() || '',
         context: undefined,
-        countryCode: location?.countryCode
+        countryCode: location?.countryCode?.toUpperCase()
       };
     }
     
-    // If location failed to load and we're in timeout mode, show fallback
-    if (!location && loadingTimeout) {
+    // Always show something for location display
+    if (location) {
       return {
-        primary: 'Unknown Location',
-        context: undefined,
-        countryCode: undefined
+        ...location,
+        countryCode: location.countryCode?.toUpperCase()
       };
     }
     
-    return location;
-  }, [location, settings.locationDisplay, settings.customLocation, loadingTimeout]);
+    // Fallback when no location data
+    return {
+      primary: 'Unknown Location',
+      context: undefined,
+      countryCode: undefined
+    };
+  }, [location, settings.locationDisplay, settings.customLocation]);
 
   const weatherDisplay = useMemo(() => {
     if (!weather) {
@@ -805,23 +819,21 @@ export default function OverlayPage() {
     }
     
     return {
-      description: shortenWeatherDescription(weather.desc),
       temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`
     };
-  }, [weather, shortenWeatherDescription]);
+  }, [weather]);
 
   return (
     <ErrorBoundary>
       <div 
-        id="overlay" 
-        className={overlayVisible ? 'show' : ''}
+        className="overlay-container"
         style={{
           opacity: overlayVisible ? 1 : 0,
           transition: 'opacity 0.8s ease-in-out'
         }}
       >
         <div className="top-left">
-          <div className="overlay-container">
+          <div className="overlay-box">
             {timezone && timeDisplay.time && (
               <div className="time time-left">
                 <div className="time-display">
@@ -838,15 +850,18 @@ export default function OverlayPage() {
             )}
             
             {API_KEYS.PULSOID && (
-              <HeartRateMonitor 
-                pulsoidToken={API_KEYS.PULSOID} 
-              />
+              <ErrorBoundary fallback={<div>Heart rate unavailable</div>}>
+                <HeartRateMonitor 
+                  pulsoidToken={API_KEYS.PULSOID} 
+                />
+              </ErrorBoundary>
             )}
           </div>
         </div>
 
         <div className="top-right">
-          <div className="overlay-container">
+          {settings.locationDisplay !== 'hidden' && (
+          <div className="overlay-box">
             {locationDisplay && (
               <div className="location">
                 <div className="location-text">
@@ -855,55 +870,56 @@ export default function OverlayPage() {
                     <div className="location-sub">{locationDisplay.context}</div>
                   )}
                 </div>
-                {locationDisplay.countryCode && (
-                  <div className="location-flag-container">
-                    {flagLoaded ? (
-                      <img
-                        src={`https://flagcdn.com/${locationDisplay.countryCode}.svg`}
-                        alt={`Country: ${locationDisplay.countryCode}`}
-                        width={32}
-                        height={20}
-                        className="location-flag"
-                      />
-                    ) : (
-                      <div 
-                        className="location-flag-emoji"
-                        style={{ fontSize: '20px', lineHeight: '20px' }}
-                        title={`Country: ${locationDisplay.countryCode}`}
-                      >
-                        {getEmojiFlag(locationDisplay.countryCode)}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
             
             {weatherDisplay && (
-            <div className="weather">
+              <div className="weather">
                 <div className="weather-container">
                   <div className="weather-content">
-                    <div className="weather-description">
-                      {weatherDisplay.description}
-                    </div>
                     <div className="weather-temperature">
                       {weatherDisplay.temperature}
                     </div>
+                    {locationDisplay?.countryCode && (
+                      <div className="weather-flag-container">
+                        {flagLoaded ? (
+                          <img
+                            src={`https://flagcdn.com/${locationDisplay.countryCode.toLowerCase()}.svg`}
+                            alt={`Country: ${locationDisplay.countryCode}`}
+                            width={20}
+                            height={12}
+                            className="weather-flag"
+                          />
+                        ) : (
+                          <div 
+                            className="weather-flag-emoji"
+                            style={{ fontSize: '12px', lineHeight: '12px' }}
+                            title={`Country: ${locationDisplay.countryCode}`}
+                          >
+                            {getEmojiFlag(locationDisplay.countryCode)}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             )}
+          </div>
+          )}
 
-            {mapCoords && minimapVisible && (
-              <div className="minimap">
+          {mapCoords && minimapVisible && (
+            <div className="minimap">
+              <ErrorBoundary fallback={<div className="minimap-placeholder">Map unavailable</div>}>
                 <MapLibreMinimap 
                   lat={mapCoords[0]} 
                   lon={mapCoords[1]} 
-                  isVisible={overlayVisible}
+                  isVisible={minimapVisible}
+                  zoomLevel={settings.mapZoomLevel}
                 />
-                </div>
-              )}
+              </ErrorBoundary>
             </div>
+          )}
         </div>
       </div>
     </ErrorBoundary>

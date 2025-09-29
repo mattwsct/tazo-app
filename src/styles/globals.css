@@ -22,9 +22,8 @@
   --radius-md: 15px;            /* 12px * 1.25 */
 }
 
-/* === OBS BROWSER SOURCE OPTIMIZATIONS === */
-/* These styles help ensure proper rendering in OBS browser sources */
-#overlay {
+/* === OVERLAY CONTAINER === */
+.overlay-container {
   /* Force hardware acceleration for better OBS performance */
   transform: translateZ(0);
   /* Ensure proper rendering */
@@ -54,11 +53,6 @@
   contain: layout style paint;
 }
 
-#overlay.show {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 /* === GLOBAL RESET === */
 * {
   box-sizing: border-box;
@@ -78,7 +72,7 @@ body.overlay-page {
 }
 
 /* === SHARED CONTAINER STYLES === */
-.overlay-container {
+.overlay-box {
   background: rgba(0, 0, 0, 0.6);
   /* Removed backdrop-filter for OBS compatibility */
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -101,7 +95,7 @@ body.overlay-page {
 }
 
 /* Hide container when it has no visible children */
-.overlay-container:empty {
+.overlay-box:empty {
   display: none;
 }
 
@@ -119,6 +113,10 @@ body.overlay-page {
   right: 10px;
   text-align: right;
   max-width: 450px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
 }
 
 /* === TIME DISPLAY STYLES === */
@@ -189,7 +187,7 @@ body.overlay-page {
 }
 
 /* Default container gap - consistent spacing */
-.overlay-container {
+.overlay-box {
   gap: var(--gap-sm);
 }
 
@@ -376,10 +374,10 @@ body.overlay-page {
 .weather-flag {
   border-radius: 2px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  /* Ensure proper aspect ratio and sizing */
-  width: 32px;
+  /* Ensure proper 2:1 aspect ratio to prevent cutoff */
+  width: 40px;
   height: 20px;
-  object-fit: cover;
+  object-fit: cover; /* Fill container completely */
   /* OBS-friendly rendering */
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -389,9 +387,9 @@ body.overlay-page {
 
 .weather-content {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .weather-description,
@@ -487,10 +485,6 @@ body.overlay-page {
   justify-content: center;
   width: 200px;
   height: 200px;
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 16px;
   overflow: hidden;
   background: rgba(30, 20, 60, 0.2);
   opacity: 0.95;
@@ -502,6 +496,8 @@ body.overlay-page {
   will-change: transform;
   contain: layout style paint;
 }
+
+/* Position minimap relative to top-right container - handled by minimap positioning */
 
 .minimap-loading {
   width: 200px;
@@ -636,13 +632,7 @@ body.overlay-page {
   background: #c82333;
 }
 
-/* Minimap styling */
-.minimap {
-  margin-top: 1rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
+/* Minimap styling - handled by main .minimap rule above */
 
 .minimap-placeholder {
   width: 200px;

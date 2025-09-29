@@ -3,115 +3,57 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { MapZoomLevel } from '@/types/settings';
 
 interface MapLibreMinimapProps {
   lat: number;
   lon: number;
   isVisible: boolean;
+  zoomLevel: MapZoomLevel;
 }
 
 const MINIMAP_CONFIG = {
-  ZOOM_LEVEL: 13,
+  ZOOM_LEVELS: {
+    street: 13,   // Street level - can see individual streets
+    city: 11,     // City level - can see city boundaries
+    region: 8,    // State/region level - can see state boundaries
+    country: 5    // Country level - can see country boundaries
+  },
   MARKER_SIZE: 12,
   MARKER_COLOR: "#22c55e",
   MARKER_GLOW: "#22c55e80",
 } as const;
 
+
 // Available map styles - easily switch between them
 const MAP_STYLES = {
-  // OpenStreetMap (current default)
-  osm: {
+  // CartoDB Voyager (colorful yet simple)
+  voyager: {
     version: 8 as const,
     sources: {
-      'raster-tiles': {
-        type: 'raster' as const,
-        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'] as string[],
-        tileSize: 256,
-        attribution: '© OpenStreetMap contributors'
-      }
-    },
-    layers: [{
-      id: 'simple-tiles',
-      type: 'raster' as const,
-      source: 'raster-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }]
-  },
-  
-  // CartoDB Positron (light, clean style)
-  positron: {
-    version: 8 as const,
-    sources: {
-      'carto-tiles': {
+      'carto-voyager-tiles': {
         type: 'raster' as const,
         tiles: [
-          'https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-          'https://cartodb-basemaps-b.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
-          'https://cartodb-basemaps-c.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png'
+          'https://cartodb-basemaps-a.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}.png',
+          'https://cartodb-basemaps-b.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}.png',
+          'https://cartodb-basemaps-c.global.ssl.fastly.net/rastertiles/voyager/{z}/{x}/{y}.png'
         ] as string[],
         tileSize: 256,
         attribution: '© OpenStreetMap contributors, © CartoDB'
       }
     },
     layers: [{
-      id: 'carto-tiles',
+      id: 'carto-voyager-tiles',
       type: 'raster' as const,
-      source: 'carto-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }]
-  },
-  
-  // CartoDB Dark Matter (dark style)
-  dark: {
-    version: 8 as const,
-    sources: {
-      'carto-dark-tiles': {
-        type: 'raster' as const,
-        tiles: [
-          'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
-          'https://cartodb-basemaps-b.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
-          'https://cartodb-basemaps-c.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
-        ] as string[],
-        tileSize: 256,
-        attribution: '© OpenStreetMap contributors, © CartoDB'
-      }
-    },
-    layers: [{
-      id: 'carto-dark-tiles',
-      type: 'raster' as const,
-      source: 'carto-dark-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }]
-  },
-  
-  // Stamen Toner (high contrast, black and white)
-  toner: {
-    version: 8 as const,
-    sources: {
-      'stamen-tiles': {
-        type: 'raster' as const,
-        tiles: ['https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png'] as string[],
-        tileSize: 256,
-        attribution: '© OpenStreetMap contributors, © Stamen Design'
-      }
-    },
-    layers: [{
-      id: 'stamen-tiles',
-      type: 'raster' as const,
-      source: 'stamen-tiles',
+      source: 'carto-voyager-tiles',
       minzoom: 0,
       maxzoom: 19
     }]
   }
 };
+// Single active style: Voyager
 
-// Change this to switch map styles easily
-const CURRENT_STYLE = 'positron'; // Options: 'osm', 'positron', 'dark', 'toner'
-
-export default function MapLibreMinimap({ lat, lon, isVisible }: MapLibreMinimapProps) {
+export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel }: MapLibreMinimapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const marker = useRef<maplibregl.Marker | null>(null);
@@ -153,14 +95,14 @@ export default function MapLibreMinimap({ lat, lon, isVisible }: MapLibreMinimap
     }
     
     try {
-      // Use selected map style
-      const mapStyle = MAP_STYLES[CURRENT_STYLE];
+      // Use Voyager map style
+      const mapStyle = MAP_STYLES.voyager;
 
       map.current = new maplibregl.Map({
         container: mapContainer.current,
         style: mapStyle,
         center: [lon, lat],
-        zoom: MINIMAP_CONFIG.ZOOM_LEVEL,
+        zoom: MINIMAP_CONFIG.ZOOM_LEVELS[zoomLevel] || MINIMAP_CONFIG.ZOOM_LEVELS.city,
         interactive: false, // Disable user interaction for overlay
         attributionControl: false,
         logoPosition: 'bottom-right'
@@ -210,7 +152,7 @@ export default function MapLibreMinimap({ lat, lon, isVisible }: MapLibreMinimap
         map.current = null;
       }
     };
-  }, [isVisible, lat, lon, addMarker]);
+  }, [isVisible, lat, lon, addMarker, zoomLevel]);
 
   // Update map center and marker position
   useEffect(() => {
@@ -226,6 +168,18 @@ export default function MapLibreMinimap({ lat, lon, isVisible }: MapLibreMinimap
       console.error('Failed to update map position:', error);
     }
   }, [lat, lon, mapLoaded]);
+
+  // Update zoom level when zoom level setting changes
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    try {
+      const newZoom = MINIMAP_CONFIG.ZOOM_LEVELS[zoomLevel] || MINIMAP_CONFIG.ZOOM_LEVELS.city;
+      map.current.setZoom(newZoom);
+    } catch (error) {
+      console.error('Failed to update map zoom:', error);
+    }
+  }, [zoomLevel, mapLoaded]);
 
   if (!isVisible) return null;
 

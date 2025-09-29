@@ -119,9 +119,9 @@ The GPS minimap automatically shows/hides based on movement:
 - **Perfect for IRL streams** - shows location when traveling
 
 ### Location Display Options
-- **City** - Shows current city name
-- **State** - Shows current state/region
-- **Country** - Shows current country
+- **City** - Shows current city with state and country context
+- **State/Province** - Shows current state/province with country context
+- **Custom** - Displays custom text instead of GPS-based location
 - **Hidden** - No location text displayed
 
 ### Supported Location Services
@@ -132,15 +132,15 @@ The GPS minimap automatically shows/hides based on movement:
 ## 🌤️ Weather Integration
 
 ### Features
-- **Current Conditions** - Temperature, weather description, humidity
+- **Temperature Display** - Current temperature in Celsius and Fahrenheit
 - **Location-based** - Weather updates based on GPS location
 - **Auto-refresh** - Updates every 15 minutes
-- **Responsive** - Adapts to different screen sizes
+- **Country Flag** - Shows country flag next to temperature
 
-### Weather Icons
-- Dynamic weather icons based on conditions
-- Day/night variants
-- Animated weather effects
+### Weather Display
+- Clean temperature-only display
+- Country flag integration for quick location reference
+- Responsive design for all screen sizes
 
 ## 🎬 OBS Integration
 

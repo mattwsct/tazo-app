@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel } from '@/types/settings';
 import { formatLocation, LocationData } from '@/utils/location-utils';
 import { fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { API_KEYS, type RTIRLPayload } from '@/utils/overlay-constants';
@@ -49,11 +49,9 @@ export default function AdminPage() {
     if (!currentLocationData) {
       // Fallback examples when RTIRL is not available
       const fallbackExamples: Record<LocationDisplayMode, string> = {
-        area: 'Jalan Melasti, Legian',
-        district: 'Badung, Bali',
-        city: 'Kuta, Bali',
-        province: 'Bali, Indonesia',
-        country: 'Indonesia',
+        precise: 'Burleigh Heads, Australia',
+        broad: 'Gold Coast, Australia',
+        region: 'Queensland, Australia',
         custom: '',
         hidden: ''
       };
@@ -62,8 +60,8 @@ export default function AdminPage() {
     
     // Use the same formatLocation function as the overlay
     const formatted = formatLocation(currentLocationData, mode);
-    if (formatted.context) {
-      return `${formatted.primary}, ${formatted.context}`;
+    if (formatted.country) {
+      return `${formatted.primary}, ${formatted.country}`;
     }
     return formatted.primary;
   }, [currentLocationData, locationExamplesLoading]);
@@ -185,6 +183,14 @@ export default function AdminPage() {
       }
     }
     
+    // Auto-set zoom level based on location display mode
+    if (updates.locationDisplay !== undefined) {
+      if (updates.locationDisplay === 'precise' || updates.locationDisplay === 'broad' || updates.locationDisplay === 'region') {
+        mergedSettings.mapZoomLevel = 'street'; // 13 - more zoomed in
+      } else if (updates.locationDisplay === 'custom' || updates.locationDisplay === 'hidden') {
+        mergedSettings.mapZoomLevel = 'city'; // 11 - city level
+      }
+    }
 
     
     setSettings(mergedSettings);
@@ -330,22 +336,6 @@ export default function AdminPage() {
 
 
 
-  // Simple Toggle Component (mobile-friendly)
-  const Toggle = ({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label: string }) => (
-    <div className="toggle-item">
-      <span className="toggle-label" id={`${label.replace(/\s+/g, '-').toLowerCase()}-label`}>{label}</span>
-      <button 
-        className={`toggle ${checked ? 'active' : ''}`}
-        onClick={() => onChange(!checked)}
-        aria-label={label}
-        role="switch"
-        aria-checked={checked}
-        aria-labelledby={`${label.replace(/\s+/g, '-').toLowerCase()}-label`}
-      >
-        <div className="toggle-slider"></div>
-      </button>
-    </div>
-  );
 
   // Simple Radio Group Component
   const RadioGroup = ({ 
@@ -458,34 +448,22 @@ export default function AdminPage() {
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
                   { 
-                    value: 'area', 
-                    label: 'Area', 
-                    icon: '🏙️',
-                    description: getLocationExample('area')
-                  },
-                  { 
-                    value: 'district', 
-                    label: 'District', 
+                    value: 'precise', 
+                    label: 'Precise', 
                     icon: '🏘️',
-                    description: getLocationExample('district')
+                    description: getLocationExample('precise')
                   },
                   { 
-                    value: 'city', 
-                    label: 'City', 
+                    value: 'broad', 
+                    label: 'Broad', 
                     icon: '🏛️',
-                    description: getLocationExample('city')
+                    description: getLocationExample('broad')
                   },
                   { 
-                    value: 'province', 
-                    label: 'Province', 
+                    value: 'region', 
+                    label: 'Region', 
                     icon: '🗺️',
-                    description: getLocationExample('province')
-                  },
-                  { 
-                    value: 'country', 
-                    label: 'Country', 
-                    icon: '🌍',
-                    description: getLocationExample('country')
+                    description: getLocationExample('region')
                   },
                   { 
                     value: 'custom', 
@@ -496,7 +474,7 @@ export default function AdminPage() {
                   { 
                     value: 'hidden', 
                     label: 'Hidden', 
-                    icon: '👁️‍🗨️',
+                    icon: '🚫',
                     description: getLocationExample('hidden')
                   }
                 ]}
@@ -536,57 +514,67 @@ export default function AdminPage() {
                     ℹ️ Showing sample data (RTIRL not connected)
                   </div>
                 )}
-                {settings.locationDisplay === 'area' && 'Shows most specific area (street, neighborhood, or local area)'}
-                {settings.locationDisplay === 'district' && 'Shows district/county level (administrative district)'}
-                {settings.locationDisplay === 'city' && 'Shows city/town level (main urban area)'}
-                {settings.locationDisplay === 'province' && 'Shows province/state level (administrative region)'}
-                {settings.locationDisplay === 'country' && 'Shows country level only'}
+                {settings.locationDisplay === 'precise' && 'Shows more specific location (suburb/area) with country'}
+                {settings.locationDisplay === 'broad' && 'Shows broader location (city/metropolitan area) with country'}
+                {settings.locationDisplay === 'region' && 'Shows state/province/region with country'}
                 {settings.locationDisplay === 'custom' && 'Displays custom text instead of GPS-based location'}
                 {settings.locationDisplay === 'hidden' && 'Hides location display completely'}
               </div>
             </div>
+
+            {/* Removed Weather options; hiding is now tied to Location=Hidden */}
           </section>
 
           {/* Minimap */}
-          <section className="settings-section">
-            <h2>🗺️ Minimap</h2>
-            <div className="setting-group">
-              <label className="group-label">Display Mode</label>
-              <RadioGroup
-                value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
-                onChange={(value) => {
-                  if (value === 'always') {
-                    handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
-                  } else if (value === 'speed') {
-                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
-                  } else {
-                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
-                  }
-                }}
-                options={[
-                  { value: 'hidden', label: 'Hidden', icon: '🚫' },
-                  { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'speed', label: 'Auto on Movement', icon: '🏃' }
-                ]}
-              />
-              
-              <div className="setting-separator"></div>
-              
-              <Toggle
-                checked={settings.showSpeed}
-                onChange={(checked) => handleSettingsChange({ showSpeed: checked })}
-                label="Show Speed Indicator"
-              />
-              
-              <div className="setting-help">
-                Speed indicator appears when moving and auto-hides when stationary
+            <section className="settings-section">
+              <h2>🗺️ Minimap</h2>
+              <div className="setting-group">
+                <label className="group-label">Display Mode</label>
+                <RadioGroup
+                  value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
+                  onChange={(value) => {
+                    if (value === 'always') {
+                      handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
+                    } else if (value === 'speed') {
+                      handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
+                    } else {
+                      handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
+                    }
+                  }}
+                  options={[
+                    { value: 'always', label: 'Always Show', icon: '👁️' },
+                    { value: 'speed', label: 'Auto on Movement', icon: '🏃' },
+                    { value: 'hidden', label: 'Hidden', icon: '🚫' }
+                  ]}
+                />
+                
+                <div className="setting-help">
+                  Auto on Movement shows minimap only when moving (speed &gt; 10 km/h)
+                </div>
               </div>
-            </div>
-          </section>
+              
+              <div className="setting-group">
+                <label className="group-label">Zoom Level</label>
+                <select
+                  value={settings.mapZoomLevel}
+                  onChange={(e) => handleSettingsChange({ mapZoomLevel: e.target.value as MapZoomLevel })}
+                  className="select-input"
+                >
+                  <option value="street">Street Level (13)</option>
+                  <option value="city">City Level (11)</option>
+                  <option value="region">Region Level (8)</option>
+                  <option value="country">Country Level (5)</option>
+                </select>
+                <div className="setting-help">
+                  Higher numbers = more zoomed in. City level shows streets, region shows areas, country shows large areas.
+                </div>
+              </div>
+              
+            </section>
 
-          {/* Kick removed */}
+            {/* Kick removed */}
 
-          {/* Manual updates removed (Kick not in use) */}
+            {/* Manual updates removed (Kick not in use) */}
         </div>
       </main>
 

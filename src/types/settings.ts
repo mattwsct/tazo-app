@@ -1,34 +1,32 @@
 // Centralized settings types and constants
 
-export type LocationDisplayMode = 'area' | 'district' | 'city' | 'province' | 'country' | 'hidden' | 'custom';
+export type LocationDisplayMode = 'precise' | 'broad' | 'region' | 'custom' | 'hidden';
+export type MapZoomLevel = 'street' | 'city' | 'region' | 'country';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
   customLocation?: string;
-  showWeather: boolean;
   showMinimap: boolean;
   minimapSpeedBased: boolean;
-  showSpeed: boolean;
+  mapZoomLevel: MapZoomLevel;
 }
 
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
-  locationDisplay: 'area',
+  locationDisplay: 'precise',
   customLocation: '',
-  showWeather: true,
   showMinimap: false,
   minimapSpeedBased: false,
-  showSpeed: true,
+  mapZoomLevel: 'city',
 };
 
 // Valid settings schema for validation
 export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   customLocation: 'string',
-  showWeather: 'boolean',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',
-  showSpeed: 'boolean'
+  mapZoomLevel: 'string'
 };
 
 // SSE message types

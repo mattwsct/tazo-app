@@ -18,7 +18,7 @@ export const TIMERS = {
 
 export const THRESHOLDS = {
   // Location threshold - weather doesn't need movement threshold
-  LOCATION_MOVEMENT_THRESHOLD: 100, // meters - simplified to single threshold
+  LOCATION_MOVEMENT_THRESHOLD: 10, // meters - more responsive for IRL streaming
   
   SPEED_SHOW: 10, // 10 km/h
   SPEED_READINGS_REQUIRED: 2,
@@ -33,7 +33,7 @@ export const THRESHOLDS = {
 export const DYNAMIC_TIMERS = {
   // Unified update intervals
   UPDATE_INTERVAL: 60000, // 1 minute
-  MOVEMENT_THRESHOLD: 100, // 100 meters
+  MOVEMENT_THRESHOLD: 10, // 10 meters
 } as const;
 
 export const API_KEYS = {

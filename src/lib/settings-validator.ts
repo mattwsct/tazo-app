@@ -58,10 +58,9 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
             const completeSettings: OverlaySettings = {
               locationDisplay: cleanSettings.locationDisplay ?? DEFAULT_OVERLAY_SETTINGS.locationDisplay,
               customLocation: cleanSettings.customLocation ?? DEFAULT_OVERLAY_SETTINGS.customLocation,
-              showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
               showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
               minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
-              showSpeed: cleanSettings.showSpeed ?? DEFAULT_OVERLAY_SETTINGS.showSpeed,
+              mapZoomLevel: cleanSettings.mapZoomLevel ?? DEFAULT_OVERLAY_SETTINGS.mapZoomLevel,
             };
 
   return completeSettings;
