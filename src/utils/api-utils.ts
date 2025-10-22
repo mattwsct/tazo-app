@@ -192,6 +192,7 @@ export async function fetchLocationFromLocationIQ(
         municipality: data.address.municipality,
         suburb: data.address.suburb,
         neighbourhood: data.address.neighbourhood, // British spelling from LocationIQ
+        quarter: data.address.quarter, // Extract quarter from address
         province: data.address.province,
         region: data.address.region,
         county: data.address.county,

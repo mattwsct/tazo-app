@@ -52,6 +52,7 @@ export default function OverlayPage() {
   const [flagLoaded, setFlagLoaded] = useState(false);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
+  const [dayNightTrigger, setDayNightTrigger] = useState(0); // Triggers recalculation of day/night
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -152,7 +153,7 @@ export default function OverlayPage() {
     lastSettingsHash.current = JSON.stringify(settings);
 
     // Re-render location display instantly from cached raw data if available
-    if (lastRawLocation.current && settings.locationDisplay !== 'custom' && settings.locationDisplay !== 'hidden') {
+    if (lastRawLocation.current && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
         setLocation({
@@ -634,7 +635,8 @@ export default function OverlayPage() {
               const shouldFetchWeather = lastWeatherTime.current === 0 || 
                 weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL;
               
-              // Location updates every minute but only if moved threshold
+              // Location updates: always on first load, or every minute if moved threshold
+              // We need country name/flag even in custom location mode
               const shouldFetchLocation = lastLocationTime.current === 0 || 
                 (locationElapsed >= locationThresholds.timeThreshold && meetsDistance);
               
@@ -782,6 +784,17 @@ export default function OverlayPage() {
     }
   }, [isOverlayReady, overlayVisible]);
 
+  // Check for sunrise/sunset changes every minute to update weather icon
+  useEffect(() => {
+    if (!mapCoords || !timezone) return;
+
+    // Check every minute
+    const interval = setInterval(() => {
+      setDayNightTrigger(prev => prev + 1);
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(interval);
+  }, [mapCoords, timezone]);
 
   // Memoized display values
   const locationDisplay = useMemo(() => {
@@ -792,7 +805,7 @@ export default function OverlayPage() {
     if (settings.locationDisplay === 'custom') {
       return {
         primary: settings.customLocation?.trim() || '',
-        context: undefined,
+        context: location?.context, // Show the actual country name
         countryCode: location?.countryCode?.toUpperCase()
       };
     }
@@ -813,15 +826,134 @@ export default function OverlayPage() {
     };
   }, [location, settings.locationDisplay, settings.customLocation]);
 
+  // Calculate sunrise and sunset based on lat/lon
+  const getSunTimes = useCallback((lat: number, lon: number): { sunrise: Date; sunset: Date } => {
+    const now = new Date();
+    
+    // Get day of year
+    const start = new Date(now.getFullYear(), 0, 0);
+    const diff = now.getTime() - start.getTime();
+    const oneDay = 1000 * 60 * 60 * 24;
+    const dayOfYear = Math.floor(diff / oneDay);
+    
+    // Calculate solar noon
+    const lngHour = lon / 15;
+    const t = dayOfYear + ((12 - lngHour) / 24);
+    
+    // Sun's mean anomaly
+    const M = (0.9856 * t) - 3.289;
+    
+    // Sun's true longitude
+    const L = M + (1.916 * Math.sin(M * Math.PI / 180)) + (0.020 * Math.sin(2 * M * Math.PI / 180)) + 282.634;
+    const Lnorm = ((L % 360) + 360) % 360;
+    
+    // Sun's right ascension
+    let RA = Math.atan(0.91764 * Math.tan(Lnorm * Math.PI / 180)) * 180 / Math.PI;
+    RA = ((RA % 360) + 360) % 360;
+    
+    // Right ascension needs to be in same quadrant as L
+    const Lquadrant = (Math.floor(Lnorm / 90)) * 90;
+    const RAquadrant = (Math.floor(RA / 90)) * 90;
+    RA = RA + (Lquadrant - RAquadrant);
+    RA = RA / 15;
+    
+    // Sun's declination
+    const sinDec = 0.39782 * Math.sin(Lnorm * Math.PI / 180);
+    const cosDec = Math.cos(Math.asin(sinDec));
+    
+    // Sun's local hour angle
+    const cosH = (Math.cos(90.833 * Math.PI / 180) - (sinDec * Math.sin(lat * Math.PI / 180))) / (cosDec * Math.cos(lat * Math.PI / 180));
+    
+    // Check if sun never rises or sets
+    if (cosH > 1) {
+      const midnight = new Date(now);
+      midnight.setHours(0, 0, 0, 0);
+      return { sunrise: midnight, sunset: midnight };
+    }
+    if (cosH < -1) {
+      const noon = new Date(now);
+      noon.setHours(12, 0, 0, 0);
+      return { sunrise: noon, sunset: noon };
+    }
+    
+    const H = Math.acos(cosH) * 180 / Math.PI;
+    
+    // Calculate sunrise and sunset
+    const sunrise = ((360 - H) / 15) + RA - (0.06571 * t) - 6.622 - lngHour;
+    const sunset = (H / 15) + RA - (0.06571 * t) - 6.622 - lngHour;
+    
+    // Normalize to 0-24 range
+    const sunriseNorm = ((sunrise % 24) + 24) % 24;
+    const sunsetNorm = ((sunset % 24) + 24) % 24;
+    
+    // Create Date objects for today's sunrise and sunset
+    const sunriseDate = new Date(now);
+    sunriseDate.setHours(Math.floor(sunriseNorm), Math.floor((sunriseNorm % 1) * 60), 0, 0);
+    
+    const sunsetDate = new Date(now);
+    sunsetDate.setHours(Math.floor(sunsetNorm), Math.floor((sunsetNorm % 1) * 60), 0, 0);
+    
+    return { sunrise: sunriseDate, sunset: sunsetDate };
+  }, []);
+
+  // Check if it's night time based on actual sunrise/sunset for current location
+  const isNightTime = useCallback((): boolean => {
+    if (!mapCoords || !timezone) return false;
+    
+    try {
+      const [lat, lon] = mapCoords;
+      const { sunrise, sunset } = getSunTimes(lat, lon);
+      const now = new Date();
+      
+      // Get current time in the location's timezone
+      const timeStr = now.toLocaleString('en-US', { timeZone: timezone });
+      const currentTime = new Date(timeStr);
+      
+      // Night is before sunrise or after sunset
+      return currentTime < sunrise || currentTime > sunset;
+    } catch {
+      return false;
+    }
+  }, [mapCoords, timezone, getSunTimes]);
+
+  // Get weather icon based on description and time of day
+  const getWeatherIcon = useCallback((desc: string): string => {
+    const d = desc.toLowerCase();
+    const isNight = isNightTime();
+    
+    // Clear/Sunny conditions - show sun during day, moon at night
+    if (d.includes('clear') || d.includes('sunny')) {
+      return isNight ? '🌙' : '☀️';
+    }
+    
+    // Partly cloudy - show appropriate icon for day/night
+    if (d.includes('partly') || d.includes('few clouds')) {
+      return isNight ? '☁️' : '🌤️';
+    }
+    
+    // Other conditions (same day or night)
+    if (d.includes('cloud')) return '☁️';
+    if (d.includes('rain') || d.includes('drizzle')) return '🌧️';
+    if (d.includes('storm') || d.includes('thunder')) return '⛈️';
+    if (d.includes('snow')) return '❄️';
+    if (d.includes('fog') || d.includes('mist') || d.includes('haze')) return '🌫️';
+    if (d.includes('wind')) return '💨';
+    
+    // Default - check if night for fallback
+    return isNight ? '🌙' : '🌤️';
+  }, [isNightTime]);
+
   const weatherDisplay = useMemo(() => {
     if (!weather) {
       return null;
     }
     
     return {
-      temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`
+      temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`,
+      icon: getWeatherIcon(weather.desc)
     };
-  }, [weather]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weather, getWeatherIcon, dayNightTrigger]); // dayNightTrigger intentionally included to force recalc on sunrise/sunset
 
   return (
     <ErrorBoundary>
@@ -867,40 +999,50 @@ export default function OverlayPage() {
                 <div className="location-text">
                   <div className="location-main">{locationDisplay.primary}</div>
                   {locationDisplay.context && (
-                    <div className="location-sub">{locationDisplay.context}</div>
+                    // Only show country name/flag if:
+                    // 1. Not in custom mode (always show for GPS modes), OR
+                    // 2. In custom mode AND showCountryName is enabled
+                    (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
+                      <div className="location-sub">
+                        {locationDisplay.context}
+                        {locationDisplay.countryCode && (
+                          <span className="location-flag-inline">
+                            {flagLoaded ? (
+                              <img
+                                src={`https://flagcdn.com/${locationDisplay.countryCode.toLowerCase()}.svg`}
+                                alt={`Country: ${locationDisplay.countryCode}`}
+                                width={28}
+                                height={18}
+                                className="location-flag-small"
+                              />
+                            ) : (
+                              <span 
+                                className="location-flag-emoji-small"
+                                style={{ fontSize: '16px', lineHeight: '16px' }}
+                                title={`Country: ${locationDisplay.countryCode}`}
+                              >
+                                {getEmojiFlag(locationDisplay.countryCode)}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
               </div>
             )}
             
-            {weatherDisplay && (
+            {weatherDisplay && settings.showWeather && (
               <div className="weather">
                 <div className="weather-container">
                   <div className="weather-content">
                     <div className="weather-temperature">
                       {weatherDisplay.temperature}
                     </div>
-                    {locationDisplay?.countryCode && (
-                      <div className="weather-flag-container">
-                        {flagLoaded ? (
-                          <img
-                            src={`https://flagcdn.com/${locationDisplay.countryCode.toLowerCase()}.svg`}
-                            alt={`Country: ${locationDisplay.countryCode}`}
-                            width={20}
-                            height={12}
-                            className="weather-flag"
-                          />
-                        ) : (
-                          <div 
-                            className="weather-flag-emoji"
-                            style={{ fontSize: '12px', lineHeight: '12px' }}
-                            title={`Country: ${locationDisplay.countryCode}`}
-                          >
-                            {getEmojiFlag(locationDisplay.countryCode)}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <span className="weather-icon">
+                      {weatherDisplay.icon}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -916,6 +1058,7 @@ export default function OverlayPage() {
                   lon={mapCoords[1]} 
                   isVisible={minimapVisible}
                   zoomLevel={settings.mapZoomLevel}
+                  timezone={timezone || undefined}
                 />
               </ErrorBoundary>
             </div>

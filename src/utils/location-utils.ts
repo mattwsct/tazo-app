@@ -1,6 +1,6 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
-const MAX_CHARACTER_LIMIT = 16; // Single limit for both primary and country lines
+const MAX_CHARACTER_LIMIT = 18; // Single limit for both primary and country lines
 
 export interface LocationData {
   country?: string;
@@ -30,6 +30,7 @@ export interface LocationData {
   district?: string;
   ward?: string;
   borough?: string;
+  quarter?: string;
 }
 
 export interface LocationDisplay {
@@ -39,73 +40,64 @@ export interface LocationDisplay {
 
 // === 🎯 LOCATION PRECISION LEVELS ===
 
-type LocationPrecision = 'precise' | 'broad' | 'region';
+type LocationPrecision = 'neighborhood' | 'city';
 
 
-// === 🔍 DUPLICATE DETECTION ===
+// === 🔍 SIMPLE FILTERING ===
 
 /**
- * Checks if two location names are redundant (bidirectional containment)
- * Examples: "New York City" contains "New York" -> redundant
- *           "Tokyo Prefecture" contains "Tokyo" -> redundant
+ * Simple validation for location names
+ * Skips: empty names, names ending with numbers (technical addresses), names too long
  */
-function areRedundantNames(name1: string, name2: string): boolean {
-  if (!name1 || !name2) return false;
+function isValidLocationName(name: string): boolean {
+  if (!name || name.length > MAX_CHARACTER_LIMIT) {
+    return false;
+  }
   
-  const lower1 = name1.toLowerCase().trim();
-  const lower2 = name2.toLowerCase().trim();
+  // Skip if it's just a number (like "123", "5")
+  if (/^\d+$/.test(name.trim())) {
+    return false;
+  }
   
-  return lower1.includes(lower2) || lower2.includes(lower1);
+  // Skip if it ends with a space and number (like "Honmachi 3", "Block 12")
+  // But keep names with numbers in the middle (like "4th Avenue", "21st Street")
+  if (/\s+\d+$/.test(name.trim())) {
+    return false;
+  }
+  
+  return true;
 }
+
 
 // === 🗺️ LOCATION DATA EXTRACTION ===
 
 /**
- * Gets the best location name for a given precision level with 14-character limit
+ * Gets the best location name for a given precision level with quality-based selection
  * 
- * Fallback chain: try each field in order until we find one that exists and fits within limit.
+ * Uses simple filtering to skip names with numbers, empty fields, and long names.
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
-  const getField = (fields: (string | undefined)[]): string => {
-    return fields.find(field => field && field.length <= MAX_CHARACTER_LIMIT) || '';
+  const getField = (fields: (keyof LocationData)[]): string => {
+    for (const field of fields) {
+      const value = location[field] as string | undefined;
+      if (value && isValidLocationName(value)) {
+        return value;
+      }
+    }
+    return '';
   };
 
-  // Single source of truth for ordering (most precise → least)
-  const preciseOrderKeys: (keyof LocationData)[] = [
-    'hamlet',
-    'village',
-    'neighbourhood',
-    'suburb',
-    'ward',
-    'borough',
-    'town',
-    'city',
-    'municipality',
-    'district',
-    'county'
-  ];
-
   let keysToUse: (keyof LocationData)[];
-  if (precision === 'precise') {
-    keysToUse = preciseOrderKeys;
-  } else if (precision === 'broad') {
-    keysToUse = [...preciseOrderKeys].reverse();
-  } else { // region
-    keysToUse = [
-      'state',
-      'province', 
-      'region',
-      'city',
-      'county',
-      'municipality',
-      'district',
-      'town'
-    ];
+  
+  if (precision === 'neighborhood') {
+    // Most specific meaningful location
+    keysToUse = ['neighbourhood', 'quarter', 'ward', 'suburb', 'district', 'city'];
+  } else { // city
+    // City level location
+    keysToUse = ['city', 'municipality', 'district'];
   }
 
-  const valuesInOrder = keysToUse.map((key) => location[key] as string | undefined);
-
-  return getField(valuesInOrder);
+  return getField(keysToUse);
 }
 
 /**
@@ -144,80 +136,25 @@ function getCountry(location: LocationData): string | null {
 export function formatCountryName(countryName: string, countryCode = ''): string {
   if (!countryName && !countryCode) return '';
   
-  // Common long country names that can be shortened
-  const countryShortenings: Record<string, string> = {
+  // Only shorten the most common long country names
+  const commonShortenings: Record<string, string> = {
     'united states of america': 'USA',
     'united states': 'USA',
     'united kingdom of great britain and northern ireland': 'UK',
     'united kingdom': 'UK',
     'russian federation': 'Russia',
-    'peoples republic of china': 'China',
-    'republic of south africa': 'South Africa',
-    'federative republic of brazil': 'Brazil',
-    'republic of india': 'India',
-    'republic of indonesia': 'Indonesia',
-    'kingdom of saudi arabia': 'Saudi Arabia',
-    'republic of korea': 'South Korea',
-    'democratic peoples republic of korea': 'North Korea',
-    'republic of the philippines': 'Philippines',
-    'socialist republic of vietnam': 'Vietnam',
-    'kingdom of thailand': 'Thailand',
-    'republic of turkey': 'Turkey',
-    'islamic republic of iran': 'Iran',
-    'republic of iraq': 'Iraq',
-    'republic of egypt': 'Egypt',
-    'republic of sudan': 'Sudan',
-    'republic of south sudan': 'South Sudan',
-    'republic of chad': 'Chad',
-    'republic of niger': 'Niger',
-    'republic of mali': 'Mali',
-    'republic of burkina faso': 'Burkina Faso',
-    'republic of senegal': 'Senegal',
-    'republic of guinea': 'Guinea',
-    'republic of sierra leone': 'Sierra Leone',
-    'republic of liberia': 'Liberia',
-    'republic of ivory coast': 'Ivory Coast',
-    'republic of ghana': 'Ghana',
-    'republic of togo': 'Togo',
-    'republic of benin': 'Benin',
-    'republic of nigeria': 'Nigeria',
-    'republic of cameroon': 'Cameroon',
-    'republic of central african republic': 'Central African Republic',
-    'republic of congo': 'Congo',
-    'democratic republic of the congo': 'DR Congo',
-    'republic of gabon': 'Gabon',
-    'republic of equatorial guinea': 'Equatorial Guinea',
-    'republic of angola': 'Angola',
-    'republic of zambia': 'Zambia',
-    'republic of zimbabwe': 'Zimbabwe',
-    'republic of botswana': 'Botswana',
-    'republic of namibia': 'Namibia',
-    'republic of mozambique': 'Mozambique',
-    'republic of madagascar': 'Madagascar',
-    'republic of mauritius': 'Mauritius',
-    'republic of seychelles': 'Seychelles',
-    'republic of comoros': 'Comoros',
-    'republic of djibouti': 'Djibouti',
-    'republic of somalia': 'Somalia',
-    'republic of kenya': 'Kenya',
-    'republic of uganda': 'Uganda',
-    'republic of rwanda': 'Rwanda',
-    'republic of burundi': 'Burundi',
-    'republic of tanzania': 'Tanzania',
-    'republic of malawi': 'Malawi',
-    'republic of lesotho': 'Lesotho',
-    'kingdom of eswatini': 'Eswatini'
+    'democratic republic of the congo': 'DR Congo'
   };
   
   if (countryName) {
     const lowerCountryName = countryName.toLowerCase();
     
     // Check if we have a shortening for this country
-    if (countryShortenings[lowerCountryName]) {
-      return countryShortenings[lowerCountryName];
+    if (commonShortenings[lowerCountryName]) {
+      return commonShortenings[lowerCountryName];
     }
     
-    // If the name is still too long, use country code
+    // If the name is too long, use country code
     if (countryName.length > MAX_CHARACTER_LIMIT) {
       return countryCode ? countryCode.toUpperCase() : countryName;
     }
@@ -232,40 +169,15 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 // === 📏 UTILITY FUNCTIONS ===
 
 /**
- * Gets the best city name by intelligently selecting the most appropriate city
+ * Gets the best city name by selecting the first available city field
  */
 export function getBestCityName(location: LocationData): string {
-  // Priority order for city names (API's preferred order)
-  const cityCandidates = [
-    location.city,           // Primary city field - trust the API's choice
-    location.municipality,   // Municipality (often the main city for larger areas)
-    location.town,           // Town (usually a proper city)
-    location.suburb          // Suburb (last resort, often just neighborhood names)
-  ].filter((city): city is string => Boolean(city));
-  
-  if (cityCandidates.length === 0) return '';
-  if (cityCandidates.length === 1) return cityCandidates[0];
-  
-  // Check for redundant names with administrative suffixes
-  for (let i = 0; i < cityCandidates.length; i++) {
-    for (let j = i + 1; j < cityCandidates.length; j++) {
-      if (areRedundantNames(cityCandidates[i], cityCandidates[j])) {
-        // For compound names like "Las Vegas" vs "Vegas", prefer the compound name
-        const isCompound1 = cityCandidates[i].includes(' ');
-        const isCompound2 = cityCandidates[j].includes(' ');
-        
-        if (isCompound1 && !isCompound2) return cityCandidates[i];
-        if (isCompound2 && !isCompound1) return cityCandidates[j];
-        
-        // For non-compound names, prefer the shorter one (likely the base name)
-        return cityCandidates[i].length <= cityCandidates[j].length ? 
-               cityCandidates[i] : cityCandidates[j];
-      }
-    }
-  }
-  
-  // Default: Trust the API's prioritization
-  return cityCandidates[0];
+  // Simple priority order for city names
+  return location.city || 
+         location.municipality || 
+         location.town || 
+         location.suburb || 
+         '';
 }
 
 /**
@@ -313,9 +225,15 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'precise' | 'broad' | 'region' | 'custom' | 'hidden' = 'precise'
+  displayMode: 'neighborhood' | 'city' | 'custom' | 'hidden' = 'neighborhood'
 ): LocationDisplay {
-  if (!location || displayMode === 'hidden' || displayMode === 'custom') return { primary: '', country: undefined };
+  if (!location || displayMode === 'hidden') return { primary: '', country: undefined };
+  
+  // For custom mode, we still need the country name/flag, just not the primary location
+  if (displayMode === 'custom') {
+    const country = getCountry(location);
+    return { primary: '', country: country || undefined };
+  }
   
   const primary = getLocationByPrecision(location, displayMode);
   if (!primary) return { primary: '', country: undefined };

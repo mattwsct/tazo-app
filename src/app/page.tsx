@@ -34,6 +34,46 @@ export default function AdminPage() {
   // Real location data for examples
   const [currentLocationData, setCurrentLocationData] = useState<LocationData | null>(null);
   const [locationExamplesLoading, setLocationExamplesLoading] = useState(false);
+  
+  // Force refresh location examples
+  const refreshLocationExamples = useCallback(async () => {
+    if (!API_KEYS.RTIRL || !window.RealtimeIRL) return;
+    
+    setLocationExamplesLoading(true);
+    try {
+      // Get current location from RTIRL
+      const payload = await new Promise<RTIRLPayload>((resolve) => {
+        window.RealtimeIRL!.forPullKey(API_KEYS.RTIRL!).addListener((p: unknown) => {
+          resolve(p as RTIRLPayload);
+        });
+      });
+      
+      if (payload?.location) {
+        let lat: number | null = null;
+        let lon: number | null = null;
+        
+        if ('lat' in payload.location && 'lon' in payload.location) {
+          lat = payload.location.lat;
+          lon = payload.location.lon;
+        } else if ('latitude' in payload.location && 'longitude' in payload.location) {
+          const loc = payload.location as { latitude: number; longitude: number };
+          lat = loc.latitude;
+          lon = loc.longitude;
+        }
+        
+        if (lat !== null && lon !== null && API_KEYS.LOCATIONIQ) {
+          const locationResult = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
+          if (locationResult) {
+            setCurrentLocationData(locationResult);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to refresh location examples:', error);
+    } finally {
+      setLocationExamplesLoading(false);
+    }
+  }, []);
 
   // Generate location examples using the same logic as overlay
   const getLocationExample = useCallback((mode: LocationDisplayMode): string | undefined => {
@@ -49,9 +89,8 @@ export default function AdminPage() {
     if (!currentLocationData) {
       // Fallback examples when RTIRL is not available
       const fallbackExamples: Record<LocationDisplayMode, string> = {
-        precise: 'Burleigh Heads, Australia',
-        broad: 'Gold Coast, Australia',
-        region: 'Queensland, Australia',
+        neighborhood: 'Burleigh Heads, Australia',
+        city: 'Gold Coast, Australia',
         custom: '',
         hidden: ''
       };
@@ -185,10 +224,10 @@ export default function AdminPage() {
     
     // Auto-set zoom level based on location display mode
     if (updates.locationDisplay !== undefined) {
-      if (updates.locationDisplay === 'precise' || updates.locationDisplay === 'broad' || updates.locationDisplay === 'region') {
-        mergedSettings.mapZoomLevel = 'street'; // 13 - more zoomed in
-      } else if (updates.locationDisplay === 'custom' || updates.locationDisplay === 'hidden') {
-        mergedSettings.mapZoomLevel = 'city'; // 11 - city level
+      if (updates.locationDisplay === 'neighborhood') {
+        mergedSettings.mapZoomLevel = 'street'; // More zoomed in for neighborhoods
+      } else {
+        mergedSettings.mapZoomLevel = 'city'; // City level for other locations
       }
     }
 
@@ -438,32 +477,41 @@ export default function AdminPage() {
       {/* Main Content */}
       <main className="main-content">
         <div className="settings-container">
-          {/* Location */}
+          
+          {/* Location & Display Section */}
           <section className="settings-section">
-            <h2>📍 Location</h2>
+            <div className="section-header">
+              <h2>📍 Location & Display</h2>
+              <p className="section-description">Configure how your location appears on the overlay</p>
+            </div>
+            
             <div className="setting-group">
-              <label className="group-label">Location Display</label>
+              <div className="group-label-with-action">
+                <label className="group-label">Location Mode</label>
+                <button 
+                  onClick={refreshLocationExamples}
+                  disabled={locationExamplesLoading}
+                  className="refresh-button-compact"
+                  title="Refresh location examples"
+                >
+                  {locationExamplesLoading ? '🔄' : '🔄'}
+                </button>
+              </div>
               <RadioGroup
                 value={settings.locationDisplay}
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
                   { 
-                    value: 'precise', 
-                    label: 'Precise', 
+                    value: 'neighborhood', 
+                    label: 'Neighborhood', 
                     icon: '🏘️',
-                    description: getLocationExample('precise')
+                    description: getLocationExample('neighborhood')
                   },
                   { 
-                    value: 'broad', 
-                    label: 'Broad', 
-                    icon: '🏛️',
-                    description: getLocationExample('broad')
-                  },
-                  { 
-                    value: 'region', 
-                    label: 'Region', 
-                    icon: '🗺️',
-                    description: getLocationExample('region')
+                    value: 'city', 
+                    label: 'City', 
+                    icon: '🏙️',
+                    description: getLocationExample('city')
                   },
                   { 
                     value: 'custom', 
@@ -495,6 +543,19 @@ export default function AdminPage() {
                   <div className="input-help">
                     This will override GPS-based location detection. Saves automatically after 1 second of no typing.
                   </div>
+                  
+                  {/* Country name toggle for custom location */}
+                  <div className="checkbox-group" style={{ marginTop: '12px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.showCountryName}
+                        onChange={(e) => handleSettingsChange({ showCountryName: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">🏴 Show Country Name & Flag</span>
+                    </label>
+                  </div>
                 </div>
               )}
               
@@ -514,67 +575,91 @@ export default function AdminPage() {
                     ℹ️ Showing sample data (RTIRL not connected)
                   </div>
                 )}
-                {settings.locationDisplay === 'precise' && 'Shows more specific location (suburb/area) with country'}
-                {settings.locationDisplay === 'broad' && 'Shows broader location (city/metropolitan area) with country'}
-                {settings.locationDisplay === 'region' && 'Shows state/province/region with country'}
+                {settings.locationDisplay === 'neighborhood' && 'Shows most specific location (neighborhood/area) with country'}
+                {settings.locationDisplay === 'city' && 'Shows city level location with country'}
                 {settings.locationDisplay === 'custom' && 'Displays custom text instead of GPS-based location'}
                 {settings.locationDisplay === 'hidden' && 'Hides location display completely'}
               </div>
             </div>
-
-            {/* Removed Weather options; hiding is now tied to Location=Hidden */}
           </section>
 
-          {/* Minimap */}
+          {/* Weather Section */}
+          {settings.locationDisplay !== 'hidden' && (
             <section className="settings-section">
-              <h2>🗺️ Minimap</h2>
-              <div className="setting-group">
-                <label className="group-label">Display Mode</label>
-                <RadioGroup
-                  value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
-                  onChange={(value) => {
-                    if (value === 'always') {
-                      handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
-                    } else if (value === 'speed') {
-                      handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
-                    } else {
-                      handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
-                    }
-                  }}
-                  options={[
-                    { value: 'always', label: 'Always Show', icon: '👁️' },
-                    { value: 'speed', label: 'Auto on Movement', icon: '🏃' },
-                    { value: 'hidden', label: 'Hidden', icon: '🚫' }
-                  ]}
-                />
-                
-                <div className="setting-help">
-                  Auto on Movement shows minimap only when moving (speed &gt; 10 km/h)
-                </div>
+              <div className="section-header">
+                <h2>🌤️ Weather</h2>
+                <p className="section-description">Display real-time weather information</p>
               </div>
               
               <div className="setting-group">
-                <label className="group-label">Zoom Level</label>
-                <select
-                  value={settings.mapZoomLevel}
-                  onChange={(e) => handleSettingsChange({ mapZoomLevel: e.target.value as MapZoomLevel })}
-                  className="select-input"
-                >
-                  <option value="street">Street Level (13)</option>
-                  <option value="city">City Level (11)</option>
-                  <option value="region">Region Level (8)</option>
-                  <option value="country">Country Level (5)</option>
-                </select>
+                <div className="checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.showWeather}
+                      onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
+                      className="checkbox-input"
+                    />
+                    <span className="checkbox-text">Show Temperature & Conditions</span>
+                  </label>
+                </div>
                 <div className="setting-help">
-                  Higher numbers = more zoomed in. City level shows streets, region shows areas, country shows large areas.
+                  Updates every 5 minutes with current temperature and weather icon
                 </div>
               </div>
-              
             </section>
+          )}
 
-            {/* Kick removed */}
-
-            {/* Manual updates removed (Kick not in use) */}
+          {/* Map Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>🗺️ Map</h2>
+              <p className="section-description">Configure the minimap display</p>
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Display Mode</label>
+              <RadioGroup
+                value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
+                onChange={(value) => {
+                  if (value === 'always') {
+                    handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
+                  } else if (value === 'speed') {
+                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
+                  } else {
+                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
+                  }
+                }}
+                options={[
+                  { value: 'always', label: 'Always Show', icon: '👁️' },
+                  { value: 'speed', label: 'Auto on Movement', icon: '🏃' },
+                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
+                ]}
+              />
+              
+              <div className="setting-help">
+                Auto on Movement shows minimap only when moving (speed &gt; 10 km/h)
+              </div>
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Zoom Level</label>
+              <select
+                value={settings.mapZoomLevel}
+                onChange={(e) => handleSettingsChange({ mapZoomLevel: e.target.value as MapZoomLevel })}
+                className="select-input"
+              >
+                <option value="street">Street Level (13)</option>
+                <option value="city">City Level (11)</option>
+                <option value="region">Region Level (8)</option>
+                <option value="country">Country Level (5)</option>
+              </select>
+              <div className="setting-help">
+                Higher numbers = more zoomed in. City level shows streets, region shows areas, country shows large areas.
+              </div>
+            </div>
+          </section>
+          
         </div>
       </main>
 
