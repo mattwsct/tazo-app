@@ -11,6 +11,13 @@ import { API_KEYS, THRESHOLDS, TIMERS, DYNAMIC_TIMERS, API_RATE_LIMITS, type RTI
 import { distanceInMeters } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ, type SunriseSunsetData } from '@/utils/api-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
+import { 
+  createLocationWithCountryFallback, 
+  createWeatherFallback, 
+  createSunriseSunsetFallback,
+  isNightTimeFallback
+} from '@/utils/fallback-utils';
+import { getOverallHealth } from '@/utils/api-health';
 
 declare global {
   interface Window {
@@ -54,6 +61,7 @@ export default function OverlayPage() {
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [dayNightTrigger, setDayNightTrigger] = useState(0); // Triggers recalculation of day/night
+  const [apiHealth, setApiHealth] = useState<{ isHealthy: boolean; unhealthyApis: string[] }>({ isHealthy: true, unhealthyApis: [] });
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -282,9 +290,9 @@ export default function OverlayPage() {
         year: 'numeric',
         timeZone: timezone,
       });
-      console.log('✅ DateTime formatters created for timezone:', timezone);
+      OverlayLogger.overlay('DateTime formatters created', { timezone });
     } catch (error) {
-      console.error('❌ Invalid timezone format:', timezone, error);
+      OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone, error });
       // Fallback to UTC
       timeFormatter.current = new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
@@ -457,7 +465,7 @@ export default function OverlayPage() {
     const setupSSE = () => {
       // Check if KV is available before setting up SSE
       if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-        console.log('SSE disabled: Vercel KV not configured');
+        OverlayLogger.overlay('SSE disabled: Vercel KV not configured');
         return null;
       }
       
@@ -654,16 +662,7 @@ export default function OverlayPage() {
               const shouldFetchWeather = lastWeatherTime.current === 0 || 
                 weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL;
               
-              // Debug weather timing
-              if (lastWeatherTime.current > 0) {
-                const nextUpdate = new Date(lastWeatherTime.current + TIMERS.WEATHER_UPDATE_INTERVAL);
-                console.log('🌤️ Weather update check:', {
-                  lastUpdate: new Date(lastWeatherTime.current).toLocaleTimeString(),
-                  nextUpdate: nextUpdate.toLocaleTimeString(),
-                  elapsed: Math.round(weatherElapsed / 1000) + 's',
-                  shouldFetch: shouldFetchWeather
-                });
-              }
+              // Debug weather timing removed for production
               
               // Location updates: always on first load, or every minute if moved threshold
               // We need country name/flag even in custom location mode
@@ -705,10 +704,20 @@ export default function OverlayPage() {
                       
                       if (result.sunriseSunset) {
                         setSunriseSunset(result.sunriseSunset);
-                        console.log('🌅 Sunrise/Sunset data received from OpenWeatherMap:', result.sunriseSunset);
+                        OverlayLogger.overlay('Sunrise/sunset data received', { sunriseSunset: result.sunriseSunset });
                       }
                     } else {
-                      setWeather(null);
+                      // OpenWeatherMap failed, use fallbacks
+                      OverlayLogger.warn('OpenWeatherMap failed, using fallbacks');
+                      
+                      // Use fallback weather (null = hide weather)
+                      setWeather(createWeatherFallback());
+                      
+                      // Use fallback sunrise/sunset
+                      const fallbackSunriseSunset = createSunriseSunsetFallback(timezone || undefined);
+                      if (fallbackSunriseSunset) {
+                        setSunriseSunset(fallbackSunriseSunset);
+                      }
                     }
                   })()
                 );
@@ -741,10 +750,15 @@ export default function OverlayPage() {
           countryCode: loc.countryCode || ''
         });
                     } else {
-                      OverlayLogger.warn('Location fetch failed - LocationIQ unavailable or rate limited', {
-                        locationIqAvailable: canMakeApiCall('locationiq')
+                      // LocationIQ failed, use coordinate fallback
+                      OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
+                      
+                      const fallbackLocation = createLocationWithCountryFallback(lat!, lon!);
+                      setLocation({
+                        primary: fallbackLocation.primary,
+                        context: fallbackLocation.country,
+                        countryCode: '' // No country code available from fallback
                       });
-                      // Don't set location to null - let timeout handle fallback
                     }
                   })()
                 );
@@ -825,17 +839,27 @@ export default function OverlayPage() {
     }
   }, [isOverlayReady, overlayVisible]);
 
-  // Check for sunrise/sunset changes every minute to update weather icon
+  // Check for sunrise/sunset changes every 2 minutes to update weather icon
   useEffect(() => {
     if (!mapCoords || !timezone) return;
 
-    // Check every minute
+    // Check every 2 minutes (reduced frequency for production)
     const interval = setInterval(() => {
       setDayNightTrigger(prev => prev + 1);
-    }, 60000); // 60 seconds
+    }, 120000); // 120 seconds (2 minutes)
 
     return () => clearInterval(interval);
   }, [mapCoords, timezone]);
+
+  // Monitor API health (less frequent in production)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const health = getOverallHealth();
+      setApiHealth(health);
+    }, 60000); // Check every 60 seconds (reduced from 30s)
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Memoized display values
   const locationDisplay = useMemo(() => {
@@ -872,16 +896,8 @@ export default function OverlayPage() {
   const isNightTime = useCallback((): boolean => {
     if (!sunriseSunset) {
       // Fallback to simple time-based check if no API data
-      const now = new Date();
-      const currentTimeStr = now.toLocaleString('en-US', { 
-        timeZone: timezone || 'UTC',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-      const [hours, minutes] = currentTimeStr.split(':');
-      const currentMinutes = parseInt(hours) * 60 + parseInt(minutes);
-      return currentMinutes >= 1140 || currentMinutes < 360; // 7 PM to 6 AM
+      OverlayLogger.warn('No sunrise/sunset data available, using fallback detection');
+      return isNightTimeFallback(timezone || undefined);
     }
     
     try {
@@ -931,21 +947,11 @@ export default function OverlayPage() {
       
       const isNight = currentMinutes < sunriseMinutes || currentMinutes > sunsetMinutes;
       
-      // Debug logging
-      console.log('🌅 OpenWeatherMap Day/Night Check:', {
-        timezone,
-        sunrise: sunriseLocal,
-        sunset: sunsetLocal,
-        current: currentTimeStr,
-        sunriseMinutes,
-        sunsetMinutes,
-        currentMinutes,
-        isNight
-      });
+      // Debug logging removed for production
       
       return isNight;
     } catch (error) {
-      console.error('Day/night calculation error:', error);
+      OverlayLogger.error('Day/night calculation error', error);
       return false;
     }
   }, [timezone, sunriseSunset]);
@@ -1100,6 +1106,19 @@ export default function OverlayPage() {
               ) : (
                 <div className="minimap-placeholder">Loading map...</div>
               )}
+            </div>
+          )}
+
+          {/* API Status Indicator (only show when there are issues) */}
+          {!apiHealth.isHealthy && (
+            <div className="api-status-indicator">
+              <span className="api-status-icon">⚠️</span>
+              <span className="api-status-text">
+                {apiHealth.unhealthyApis.length === 1 
+                  ? `${apiHealth.unhealthyApis[0]} unavailable` 
+                  : `${apiHealth.unhealthyApis.length} APIs unavailable`
+                }
+              </span>
             </div>
           )}
         </div>

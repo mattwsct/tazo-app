@@ -3,6 +3,14 @@ import {
 } from './rate-limiting';
 import { type LocationData } from './location-utils';
 import { ApiLogger } from '@/lib/logger';
+import { 
+  isValidApiKey
+} from './fallback-utils';
+import { 
+  recordApiSuccess, 
+  recordApiFailure, 
+  canUseApi 
+} from './api-health';
 
 
 
@@ -125,18 +133,24 @@ export async function fetchLocationFromLocationIQ(
   lon: number, 
   apiKey: string
 ): Promise<LocationData | null> {
-  if (!apiKey) {
-    ApiLogger.warn('locationiq', 'API key not provided');
+  // Check API health before attempting call
+  if (!canUseApi('locationiq')) {
+    ApiLogger.warn('locationiq', 'API is currently unavailable, using fallback');
+    return null; // Will trigger fallback in calling code
+  }
+
+  if (!isValidApiKey(apiKey)) {
+    const error = 'Invalid or missing API key';
+    ApiLogger.warn('locationiq', error);
+    recordApiFailure('locationiq', error);
     return null;
   }
 
-  // No caching - always fetch fresh data
-
-
-
   // Check rate limits (per-second only)
   if (!checkRateLimit('locationiq')) {
-    ApiLogger.warn('locationiq', 'Rate limit exceeded, skipping API call');
+    const error = 'Rate limit exceeded';
+    ApiLogger.warn('locationiq', error);
+    recordApiFailure('locationiq', error, true);
     return null;
   }
 
@@ -153,21 +167,31 @@ export async function fetchLocationFromLocationIQ(
     );
     
     if (!response.ok) {
+      let error: string;
+      let isRateLimited = false;
+      
       if (response.status === 429) {
-        // Rate limit exceeded - this is expected and handled by fallback
+        error = 'Rate limit exceeded';
+        isRateLimited = true;
         ApiLogger.info('locationiq', 'Rate limit exceeded - fallback will be used', { 
           status: response.status,
-          message: 'Rate limit exceeded - Mapbox fallback will be used'
+          message: 'Rate limit exceeded - fallback will be used'
         });
-        return null; // Return null instead of throwing error
       } else if (response.status === 402) {
+        error = 'Daily API limit reached';
         ApiLogger.warn('locationiq', 'Daily API limit reached', { 
           message: 'LocationIQ daily limit exceeded. Consider upgrading plan or wait until tomorrow.'
         });
-        return null;
+      } else if (response.status === 401) {
+        error = 'Invalid API key';
+        ApiLogger.warn('locationiq', 'Invalid API key');
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        error = `HTTP ${response.status}: ${response.statusText}`;
+        ApiLogger.error('locationiq', error);
       }
+      
+      recordApiFailure('locationiq', error, isRateLimited);
+      return null; // Return null instead of throwing error
     }
     
     const data = await response.json();
@@ -211,6 +235,9 @@ export async function fetchLocationFromLocationIQ(
       
       ApiLogger.info('locationiq', 'Location data received', result);
       
+      // Record successful API call
+      recordApiSuccess('locationiq');
+      
       // Validate the result before returning
       if (!result.city && !result.state && !result.country) {
         ApiLogger.warn('locationiq', 'LocationIQ returned incomplete result - missing city, state, and country', {
@@ -248,7 +275,9 @@ export async function fetchLocationFromLocationIQ(
     throw new Error('No address data in response');
     
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     ApiLogger.error('locationiq', 'Failed to fetch location', error);
+    recordApiFailure('locationiq', errorMessage);
     return null;
   }
 }
@@ -265,13 +294,23 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
   lon: number,
   apiKey: string
 ): Promise<WeatherTimezoneResponse | null> {
-  if (!apiKey) {
-    ApiLogger.warn('openweathermap', 'API key not provided');
+  // Check API health before attempting call
+  if (!canUseApi('openweathermap')) {
+    ApiLogger.warn('openweathermap', 'API is currently unavailable, using fallback');
+    return null; // Will trigger fallback in calling code
+  }
+
+  if (!isValidApiKey(apiKey)) {
+    const error = 'Invalid or missing API key';
+    ApiLogger.warn('openweathermap', error);
+    recordApiFailure('openweathermap', error);
     return null;
   }
 
   if (!checkRateLimit('openweathermap')) {
-    ApiLogger.warn('openweathermap', 'Rate limit exceeded, skipping API call');
+    const error = 'Rate limit exceeded';
+    ApiLogger.warn('openweathermap', error);
+    recordApiFailure('openweathermap', error, true);
     return null;
   }
   
@@ -283,13 +322,30 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     const response = await fetchWithRetry(url);
     
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      let error: string;
+      let isRateLimited = false;
+      
+      if (response.status === 429) {
+        error = 'Rate limit exceeded';
+        isRateLimited = true;
+      } else if (response.status === 401) {
+        error = 'Invalid API key';
+      } else if (response.status === 404) {
+        error = 'Location not found';
+      } else {
+        error = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      
+      recordApiFailure('openweathermap', error, isRateLimited);
+      throw new Error(error);
     }
     
     const data = await response.json();
     
     if (data.cod !== 200) {
-      throw new Error(`OpenWeatherMap Error: ${data.message || 'Unknown error'}`);
+      const error = `OpenWeatherMap Error: ${data.message || 'Unknown error'}`;
+      recordApiFailure('openweathermap', error);
+      throw new Error(error);
     }
     
     let weather: WeatherData | null = null;
@@ -355,11 +411,16 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
       ApiLogger.info('openweathermap', 'Sunrise/sunset data received', sunriseSunset);
     }
     
+    // Record successful API call
+    recordApiSuccess('openweathermap');
+    
     const result = { weather, timezone, sunriseSunset };
     return result;
     
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     ApiLogger.error('openweathermap', 'Failed to fetch weather/timezone/sunrise-sunset', error);
+    recordApiFailure('openweathermap', errorMessage);
     return null;
   }
 }
