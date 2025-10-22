@@ -60,6 +60,7 @@ async function fetchWithRetry(
 /**
  * Maps WMO Weather Code to human-readable description
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getWeatherDescription(wmoCode: number): string {
   const descMap: Record<number, string> = {
     0: 'clear sky',
@@ -103,6 +104,13 @@ export interface WeatherData {
 export interface WeatherTimezoneResponse {
   weather: WeatherData | null;
   timezone: string | null;
+  sunriseSunset?: SunriseSunsetData | null;
+}
+
+export interface SunriseSunsetData {
+  sunrise: string; // HH:MM:SS format
+  sunset: string;  // HH:MM:SS format
+  dayLength: string; // HH:MM:SS format
 }
 
 // === 📍 LOCATION API (LocationIQ) ===
@@ -246,27 +254,31 @@ export async function fetchLocationFromLocationIQ(
 }
 
 
-// === 🌤️ WEATHER API (Open-Meteo) ===
+// === 🌤️ WEATHER API (OpenWeatherMap) ===
 
 /**
- * Fetches weather and timezone data from Open-Meteo API
- * Free tier with no API key required - combined endpoint for efficiency
+ * Fetches weather, timezone, and sunrise/sunset data from OpenWeatherMap API
+ * Includes sunrise/sunset times for accurate day/night detection
  */
-export async function fetchWeatherAndTimezoneFromOpenMeteo(
+export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
   lat: number, 
-  lon: number
+  lon: number,
+  apiKey: string
 ): Promise<WeatherTimezoneResponse | null> {
-  // No caching - always fetch fresh data
+  if (!apiKey) {
+    ApiLogger.warn('openweathermap', 'API key not provided');
+    return null;
+  }
 
-  if (!checkRateLimit('openmeteo')) {
-    ApiLogger.warn('openmeteo', 'Rate limit exceeded, skipping API call');
+  if (!checkRateLimit('openweathermap')) {
+    ApiLogger.warn('openweathermap', 'Rate limit exceeded, skipping API call');
     return null;
   }
   
   try {
-    ApiLogger.info('openmeteo', 'Fetching weather and timezone data', { lat, lon });
+    ApiLogger.info('openweathermap', 'Fetching weather, timezone, and sunrise/sunset data', { lat, lon });
     
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&temperature_unit=celsius&timezone=auto`;
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
     
     const response = await fetchWithRetry(url);
     
@@ -276,40 +288,91 @@ export async function fetchWeatherAndTimezoneFromOpenMeteo(
     
     const data = await response.json();
     
-    if (data.error) {
-      throw new Error(`Open-Meteo Error: ${data.reason || data.error}`);
+    if (data.cod !== 200) {
+      throw new Error(`OpenWeatherMap Error: ${data.message || 'Unknown error'}`);
     }
     
     let weather: WeatherData | null = null;
     let timezone: string | null = null;
+    let sunriseSunset: SunriseSunsetData | null = null;
     
     // Extract weather data
-    if (data.current && 
-        typeof data.current.temperature_2m === 'number' && 
-        typeof data.current.weather_code === 'number') {
-      
+    if (data.main && typeof data.main.temp === 'number' && data.weather && data.weather[0]) {
       weather = {
-        temp: Math.round(data.current.temperature_2m),
-        desc: getWeatherDescription(data.current.weather_code),
+        temp: Math.round(data.main.temp),
+        desc: data.weather[0].description || 'unknown',
       };
       
-      ApiLogger.info('openmeteo', 'Weather data received', weather);
+      ApiLogger.info('openweathermap', 'Weather data received', weather);
     }
     
     // Extract timezone data
-    if (data.timezone && typeof data.timezone === 'string') {
-      timezone = data.timezone;
-      ApiLogger.info('openmeteo', 'Timezone data received', { timezone });
+    if (data.timezone && typeof data.timezone === 'number') {
+      // Convert timezone offset to IANA timezone string
+      const offsetHours = data.timezone / 3600;
+      
+      // Map common timezone offsets to IANA timezone names
+      const timezoneMap: Record<number, string> = {
+        9: 'Asia/Tokyo',
+        8: 'Asia/Shanghai',
+        7: 'Asia/Bangkok',
+        6: 'Asia/Dhaka',
+        5: 'Asia/Karachi',
+        4: 'Asia/Dubai',
+        3: 'Europe/Moscow',
+        2: 'Europe/Athens',
+        1: 'Europe/Paris',
+        0: 'UTC',
+        '-1': 'Atlantic/Azores',
+        '-2': 'Atlantic/South_Georgia',
+        '-3': 'America/Sao_Paulo',
+        '-4': 'America/New_York',
+        '-5': 'America/Chicago',
+        '-6': 'America/Denver',
+        '-7': 'America/Los_Angeles',
+        '-8': 'Pacific/Pitcairn',
+        '-9': 'Pacific/Gambier',
+        '-10': 'Pacific/Honolulu',
+        '-11': 'Pacific/Midway',
+        '-12': 'Pacific/Baker'
+      };
+      
+      timezone = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || 'UTC';
+      ApiLogger.info('openweathermap', 'Timezone data received', { timezone, offsetHours });
     }
     
-    const result = { weather, timezone };
+    // Extract sunrise/sunset data
+    if (data.sys && data.sys.sunrise && data.sys.sunset) {
+      const sunrise = new Date(data.sys.sunrise * 1000);
+      const sunset = new Date(data.sys.sunset * 1000);
+      
+      sunriseSunset = {
+        sunrise: sunrise.toISOString(),
+        sunset: sunset.toISOString(),
+        dayLength: formatDuration(sunset.getTime() - sunrise.getTime())
+      };
+      
+      ApiLogger.info('openweathermap', 'Sunrise/sunset data received', sunriseSunset);
+    }
+    
+    const result = { weather, timezone, sunriseSunset };
     return result;
     
   } catch (error) {
-    ApiLogger.error('openmeteo', 'Failed to fetch weather/timezone', error);
+    ApiLogger.error('openweathermap', 'Failed to fetch weather/timezone/sunrise-sunset', error);
     return null;
   }
+}
+
+// Helper function to format duration in HH:MM:SS format
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 } 
+
 
 // === 🛠️ API HELPER FUNCTIONS ===
 

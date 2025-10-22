@@ -41,6 +41,7 @@ export const API_KEYS = {
   LOCATIONIQ: process.env.NEXT_PUBLIC_LOCATIONIQ_KEY,
   PULSOID: process.env.NEXT_PUBLIC_PULSOID_TOKEN,
   MAPBOX: process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
+  OPENWEATHER: process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY,
 } as const;
 
 // API rate limits for free tiers (per-second only, no daily limits since overlay refreshes)

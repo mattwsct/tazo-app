@@ -9,7 +9,7 @@ import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit } from '@/utils/unit-conversions';
 import { API_KEYS, THRESHOLDS, TIMERS, DYNAMIC_TIMERS, API_RATE_LIMITS, type RTIRLPayload } from '@/utils/overlay-constants';
 import { distanceInMeters } from '@/utils/location-utils';
-import { fetchWeatherAndTimezoneFromOpenMeteo, fetchLocationFromLocationIQ } from '@/utils/api-utils';
+import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ, type SunriseSunsetData } from '@/utils/api-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
 
 declare global {
@@ -45,6 +45,7 @@ export default function OverlayPage() {
   } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
+  const [sunriseSunset, setSunriseSunset] = useState<SunriseSunsetData | null>(null);
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [overlayVisible, setOverlayVisible] = useState(false);
@@ -268,18 +269,36 @@ export default function OverlayPage() {
 
   // Create date/time formatters
   const createDateTimeFormatters = useCallback((timezone: string) => {
-    timeFormatter.current = new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: timezone,
-    });
-    dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: timezone,
-    });
+    try {
+      timeFormatter.current = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: timezone,
+      });
+      dateFormatter.current = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: timezone,
+      });
+      console.log('✅ DateTime formatters created for timezone:', timezone);
+    } catch (error) {
+      console.error('❌ Invalid timezone format:', timezone, error);
+      // Fallback to UTC
+      timeFormatter.current = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'UTC',
+      });
+      dateFormatter.current = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    }
   }, []);
 
   // Ensure we have a default timezone so UI renders quickly
@@ -635,6 +654,17 @@ export default function OverlayPage() {
               const shouldFetchWeather = lastWeatherTime.current === 0 || 
                 weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL;
               
+              // Debug weather timing
+              if (lastWeatherTime.current > 0) {
+                const nextUpdate = new Date(lastWeatherTime.current + TIMERS.WEATHER_UPDATE_INTERVAL);
+                console.log('🌤️ Weather update check:', {
+                  lastUpdate: new Date(lastWeatherTime.current).toLocaleTimeString(),
+                  nextUpdate: nextUpdate.toLocaleTimeString(),
+                  elapsed: Math.round(weatherElapsed / 1000) + 's',
+                  shouldFetch: shouldFetchWeather
+                });
+              }
+              
               // Location updates: always on first load, or every minute if moved threshold
               // We need country name/flag even in custom location mode
               const shouldFetchLocation = lastLocationTime.current === 0 || 
@@ -646,25 +676,36 @@ export default function OverlayPage() {
               // Fetch weather and location in parallel for faster loading
               const promises: Promise<void>[] = [];
               
-              if (shouldFetchWeather) {
+              if (shouldFetchWeather && API_KEYS.OPENWEATHER) {
                 promises.push(
                   (async () => {
                     const weatherResult = await safeApiCall(
-                      () => fetchWeatherAndTimezoneFromOpenMeteo(lat!, lon!),
+                      () => fetchWeatherAndTimezoneFromOpenWeatherMap(lat!, lon!, API_KEYS.OPENWEATHER!),
                       'Weather fetch'
                     );
                     
                     lastWeatherTime.current = Date.now();
                     if (weatherResult && typeof weatherResult === 'object' && 'weather' in weatherResult) {
-                      const result = weatherResult as { weather?: { temp: number; desc: string }; timezone?: string };
+                      const result = weatherResult as { 
+                        weather?: { temp: number; desc: string }; 
+                        timezone?: string;
+                        sunriseSunset?: SunriseSunsetData;
+                      };
+                      
                       if (result.weather) {
                         setWeather(result.weather);
                       } else {
                         setWeather(null);
                       }
+                      
                       if (result.timezone && result.timezone !== timezone) {
                         createDateTimeFormatters(result.timezone);
                         setTimezone(result.timezone);
+                      }
+                      
+                      if (result.sunriseSunset) {
+                        setSunriseSunset(result.sunriseSunset);
+                        console.log('🌅 Sunrise/Sunset data received from OpenWeatherMap:', result.sunriseSunset);
                       }
                     } else {
                       setWeather(null);
@@ -826,95 +867,88 @@ export default function OverlayPage() {
     };
   }, [location, settings.locationDisplay, settings.customLocation]);
 
-  // Calculate sunrise and sunset based on lat/lon
-  const getSunTimes = useCallback((lat: number, lon: number): { sunrise: Date; sunset: Date } => {
-    const now = new Date();
-    
-    // Get day of year
-    const start = new Date(now.getFullYear(), 0, 0);
-    const diff = now.getTime() - start.getTime();
-    const oneDay = 1000 * 60 * 60 * 24;
-    const dayOfYear = Math.floor(diff / oneDay);
-    
-    // Calculate solar noon
-    const lngHour = lon / 15;
-    const t = dayOfYear + ((12 - lngHour) / 24);
-    
-    // Sun's mean anomaly
-    const M = (0.9856 * t) - 3.289;
-    
-    // Sun's true longitude
-    const L = M + (1.916 * Math.sin(M * Math.PI / 180)) + (0.020 * Math.sin(2 * M * Math.PI / 180)) + 282.634;
-    const Lnorm = ((L % 360) + 360) % 360;
-    
-    // Sun's right ascension
-    let RA = Math.atan(0.91764 * Math.tan(Lnorm * Math.PI / 180)) * 180 / Math.PI;
-    RA = ((RA % 360) + 360) % 360;
-    
-    // Right ascension needs to be in same quadrant as L
-    const Lquadrant = (Math.floor(Lnorm / 90)) * 90;
-    const RAquadrant = (Math.floor(RA / 90)) * 90;
-    RA = RA + (Lquadrant - RAquadrant);
-    RA = RA / 15;
-    
-    // Sun's declination
-    const sinDec = 0.39782 * Math.sin(Lnorm * Math.PI / 180);
-    const cosDec = Math.cos(Math.asin(sinDec));
-    
-    // Sun's local hour angle
-    const cosH = (Math.cos(90.833 * Math.PI / 180) - (sinDec * Math.sin(lat * Math.PI / 180))) / (cosDec * Math.cos(lat * Math.PI / 180));
-    
-    // Check if sun never rises or sets
-    if (cosH > 1) {
-      const midnight = new Date(now);
-      midnight.setHours(0, 0, 0, 0);
-      return { sunrise: midnight, sunset: midnight };
-    }
-    if (cosH < -1) {
-      const noon = new Date(now);
-      noon.setHours(12, 0, 0, 0);
-      return { sunrise: noon, sunset: noon };
-    }
-    
-    const H = Math.acos(cosH) * 180 / Math.PI;
-    
-    // Calculate sunrise and sunset
-    const sunrise = ((360 - H) / 15) + RA - (0.06571 * t) - 6.622 - lngHour;
-    const sunset = (H / 15) + RA - (0.06571 * t) - 6.622 - lngHour;
-    
-    // Normalize to 0-24 range
-    const sunriseNorm = ((sunrise % 24) + 24) % 24;
-    const sunsetNorm = ((sunset % 24) + 24) % 24;
-    
-    // Create Date objects for today's sunrise and sunset
-    const sunriseDate = new Date(now);
-    sunriseDate.setHours(Math.floor(sunriseNorm), Math.floor((sunriseNorm % 1) * 60), 0, 0);
-    
-    const sunsetDate = new Date(now);
-    sunsetDate.setHours(Math.floor(sunsetNorm), Math.floor((sunsetNorm % 1) * 60), 0, 0);
-    
-    return { sunrise: sunriseDate, sunset: sunsetDate };
-  }, []);
 
-  // Check if it's night time based on actual sunrise/sunset for current location
+  // Accurate day/night check using OpenWeatherMap sunrise/sunset data
   const isNightTime = useCallback((): boolean => {
-    if (!mapCoords || !timezone) return false;
+    if (!sunriseSunset) {
+      // Fallback to simple time-based check if no API data
+      const now = new Date();
+      const currentTimeStr = now.toLocaleString('en-US', { 
+        timeZone: timezone || 'UTC',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const [hours, minutes] = currentTimeStr.split(':');
+      const currentMinutes = parseInt(hours) * 60 + parseInt(minutes);
+      return currentMinutes >= 1140 || currentMinutes < 360; // 7 PM to 6 AM
+    }
     
     try {
-      const [lat, lon] = mapCoords;
-      const { sunrise, sunset } = getSunTimes(lat, lon);
-      const now = new Date();
+      // Parse sunrise and sunset times (OpenWeatherMap provides them in UTC)
+      const sunriseUTC = new Date(sunriseSunset.sunrise);
+      const sunsetUTC = new Date(sunriseSunset.sunset);
       
       // Get current time in the location's timezone
-      const timeStr = now.toLocaleString('en-US', { timeZone: timezone });
-      const currentTime = new Date(timeStr);
+      const now = new Date();
+      const currentTimeStr = now.toLocaleString('en-US', { 
+        timeZone: timezone || 'UTC',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
       
-      // Night is before sunrise or after sunset
-      return currentTime < sunrise || currentTime > sunset;
-    } catch {
+      // Parse current time in local timezone
+      const [hours, minutes] = currentTimeStr.split(':');
+      const currentHour = parseInt(hours);
+      const currentMinute = parseInt(minutes);
+      
+      // Convert sunrise/sunset to local timezone for comparison
+      const sunriseLocal = sunriseUTC.toLocaleString('en-US', { 
+        timeZone: timezone || 'UTC',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const sunsetLocal = sunsetUTC.toLocaleString('en-US', { 
+        timeZone: timezone || 'UTC',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      
+      // Parse sunrise/sunset times in local timezone
+      const [sunriseHour, sunriseMin] = sunriseLocal.split(':');
+      const [sunsetHour, sunsetMin] = sunsetLocal.split(':');
+      
+      // Convert to minutes since midnight for easier comparison
+      const sunriseMinutes = parseInt(sunriseHour) * 60 + parseInt(sunriseMin);
+      const sunsetMinutes = parseInt(sunsetHour) * 60 + parseInt(sunsetMin);
+      const currentMinutes = currentHour * 60 + currentMinute;
+      
+      const isNight = currentMinutes < sunriseMinutes || currentMinutes > sunsetMinutes;
+      
+      // Debug logging
+      console.log('🌅 OpenWeatherMap Day/Night Check:', {
+        timezone,
+        sunrise: sunriseLocal,
+        sunset: sunsetLocal,
+        current: currentTimeStr,
+        sunriseMinutes,
+        sunsetMinutes,
+        currentMinutes,
+        isNight
+      });
+      
+      return isNight;
+    } catch (error) {
+      console.error('Day/night calculation error:', error);
       return false;
     }
-  }, [mapCoords, timezone, getSunTimes]);
+  }, [timezone, sunriseSunset]);
 
   // Get weather icon based on description and time of day
   const getWeatherIcon = useCallback((desc: string): string => {
@@ -1052,15 +1086,20 @@ export default function OverlayPage() {
 
           {mapCoords && minimapVisible && (
             <div className="minimap">
-              <ErrorBoundary fallback={<div className="minimap-placeholder">Map unavailable</div>}>
-                <MapLibreMinimap 
-                  lat={mapCoords[0]} 
-                  lon={mapCoords[1]} 
-                  isVisible={minimapVisible}
-                  zoomLevel={settings.mapZoomLevel}
-                  timezone={timezone || undefined}
-                />
-              </ErrorBoundary>
+              {sunriseSunset ? (
+                <ErrorBoundary fallback={<div className="minimap-placeholder">Map unavailable</div>}>
+                  <MapLibreMinimap 
+                    lat={mapCoords[0]} 
+                    lon={mapCoords[1]} 
+                    isVisible={minimapVisible}
+                    zoomLevel={settings.mapZoomLevel}
+                    timezone={timezone || undefined}
+                    isNight={isNightTime()}
+                  />
+                </ErrorBoundary>
+              ) : (
+                <div className="minimap-placeholder">Loading map...</div>
+              )}
             </div>
           )}
         </div>

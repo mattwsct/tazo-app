@@ -9,8 +9,8 @@ interface RateLimit {
 }
 
 export const RATE_LIMITS: Record<string, RateLimit> = {
-  openmeteo: { 
-    calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 1000, // 1000 per minute (16.7 per second)
+  openweathermap: { 
+    calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 50, // 50 per minute (well under 60/min limit)
     lastCallTime: 0
   },
   locationiq: { 
@@ -28,7 +28,7 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
   const now = Date.now();
   
   // Enforce cooldown period (minimum 1 second between calls for LocationIQ, 0.5s for others)
-  const cooldownPeriod = api === 'locationiq' ? 1000 : 500;
+  const cooldownPeriod = api === 'locationiq' ? 1000 : (api === 'openweathermap' ? 2000 : 500); // 2s cooldown for OpenWeatherMap
   if (now - limit.lastCallTime < cooldownPeriod) {
     return false;
   }

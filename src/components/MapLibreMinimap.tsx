@@ -11,9 +11,10 @@ interface MapLibreMinimapProps {
   isVisible: boolean;
   zoomLevel: MapZoomLevel;
   timezone?: string;
+  isNight?: boolean; // Pass day/night state from parent
 }
 
-// Calculate sunrise and sunset times based on lat/lon
+// UNUSED: Calculate sunrise and sunset times based on lat/lon
 // Using simplified algorithm (accurate to ~2 minutes)
 function getSunTimes(lat: number, lon: number): { sunrise: Date; sunset: Date } {
   const now = new Date();
@@ -86,7 +87,8 @@ function getSunTimes(lat: number, lon: number): { sunrise: Date; sunset: Date } 
   return { sunrise: sunriseDate, sunset: sunsetDate };
 }
 
-// Helper function to determine if it's night time based on actual sunrise/sunset
+// UNUSED: Helper function to determine if it's night time based on actual sunrise/sunset
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isNightTime(lat: number, lon: number, timezone?: string): boolean {
   try {
     const { sunrise, sunset } = getSunTimes(lat, lon);
@@ -170,13 +172,12 @@ const MAP_STYLES = {
   }
 };
 
-export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, timezone }: MapLibreMinimapProps) {
+export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNight = false }: MapLibreMinimapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const marker = useRef<maplibregl.Marker | null>(null);
   const [mapError, setMapError] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [isDark, setIsDark] = useState(false);
 
 
   // Initialize map (only once when first visible)
@@ -193,9 +194,7 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, timezo
     }
     
     try {
-      // Determine if it's night time based on actual sunrise/sunset
-      const isNight = isNightTime(lat, lon, timezone);
-      setIsDark(isNight);
+      // Use the isNight prop passed from parent (based on OpenWeatherMap data)
       const mapStyle = isNight ? MAP_STYLES.dark : MAP_STYLES.voyager;
 
       map.current = new maplibregl.Map({
@@ -290,31 +289,18 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, timezo
     }
   }, [zoomLevel, mapLoaded]);
 
-  // Check for day/night changes every minute and update map style if needed
+  // Update map style when isNight prop changes
   useEffect(() => {
-    if (!map.current || !mapLoaded || !timezone) return;
+    if (!map.current || !mapLoaded) return;
 
-    const checkDayNight = () => {
-      const isNight = isNightTime(lat, lon, timezone);
-      if (isNight !== isDark) {
-        setIsDark(isNight);
-        const newStyle = isNight ? MAP_STYLES.dark : MAP_STYLES.voyager;
-        try {
-          map.current?.setStyle(newStyle);
-        } catch (error) {
-          console.error('Failed to update map style:', error);
-        }
-      }
-    };
-
-    // Check immediately
-    checkDayNight();
-
-    // Then check every minute
-    const interval = setInterval(checkDayNight, 60000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timezone, mapLoaded, isDark]); // lat/lon intentionally omitted - checkDayNight closure captures current values
+    const newStyle = isNight ? MAP_STYLES.dark : MAP_STYLES.voyager;
+    try {
+      map.current.setStyle(newStyle);
+      console.log(`🗺️ Map style updated to ${isNight ? 'dark' : 'light'} mode`);
+    } catch (error) {
+      console.error('Failed to update map style:', error);
+    }
+  }, [isNight, mapLoaded]);
 
   if (!isVisible) return null;
 
