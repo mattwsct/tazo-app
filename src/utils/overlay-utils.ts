@@ -19,11 +19,5 @@ export {
   RATE_LIMITS
 } from './rate-limiting';
 
-/**
- * Capitalizes the first letter of each word
- */
-export function capitalizeWords(str: string): string {
-  return str.replace(/\b\w/g, c => c.toUpperCase());
-}
 
  
