@@ -103,13 +103,8 @@ export default function OverlayPage() {
   // GPS update rate checking for minimap
   const checkGpsUpdateRate = useCallback(() => {
     const now = Date.now();
-    // Count recent updates without mutating the array
     const recentUpdates = gpsUpdateTimes.current.filter(time => now - time < 30000); // Last 30 seconds
-    
-    // Periodically clean up old GPS update times (only clean, don't do it every call)
-    if (gpsUpdateTimes.current.length > recentUpdates.length + 10) {
-      gpsUpdateTimes.current = recentUpdates;
-    }
+    gpsUpdateTimes.current = recentUpdates; // Keep only recent updates
     
     // Require at least 2 updates in the last 30 seconds to consider GPS active
     return recentUpdates.length >= 2;
@@ -551,7 +546,6 @@ export default function OverlayPage() {
   // RTIRL connection - use refs to avoid re-running on timezone changes
   const timezoneRef = useRef(timezone);
   const createDateTimeFormattersRef = useRef(createDateTimeFormatters);
-  const updateMinimapVisibilityRef = useRef(updateMinimapVisibility);
   
   // Update refs when values change
   useEffect(() => {
@@ -561,10 +555,6 @@ export default function OverlayPage() {
   useEffect(() => {
     createDateTimeFormattersRef.current = createDateTimeFormatters;
   }, [createDateTimeFormatters]);
-  
-  useEffect(() => {
-    updateMinimapVisibilityRef.current = updateMinimapVisibility;
-  }, [updateMinimapVisibility]);
 
   // Preload flag image when country code is available
   useEffect(() => {
@@ -657,9 +647,6 @@ export default function OverlayPage() {
             
             lastCoords.current = [lat!, lon!];
             lastCoordsTime.current = now;
-            
-            // Trigger minimap visibility update after GPS data is processed
-            updateMinimapVisibilityRef.current();
             
             // Kick off location + weather fetches on coordinate updates with gating
             (async () => {
@@ -809,8 +796,7 @@ export default function OverlayPage() {
     return () => {
       // RTIRL script cleanup handled automatically
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canMakeApiCall, getLocationUpdateThresholds, safeApiCall, timezone, trackApiCall]); // Functions are accessed via refs to avoid re-creating RTIRL listener
+  }, [canMakeApiCall, createDateTimeFormatters, getLocationUpdateThresholds, safeApiCall, timezone, trackApiCall]); // Include dependencies; guarded by rtilSetupDone
 
   // Overlay visibility - wait for all elements to be ready with timeout fallback
   const isOverlayReady = useMemo(() => {
