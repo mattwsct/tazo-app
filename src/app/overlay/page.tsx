@@ -103,8 +103,13 @@ export default function OverlayPage() {
   // GPS update rate checking for minimap
   const checkGpsUpdateRate = useCallback(() => {
     const now = Date.now();
+    // Count recent updates without mutating the array
     const recentUpdates = gpsUpdateTimes.current.filter(time => now - time < 30000); // Last 30 seconds
-    gpsUpdateTimes.current = recentUpdates; // Keep only recent updates
+    
+    // Periodically clean up old GPS update times (only clean, don't do it every call)
+    if (gpsUpdateTimes.current.length > recentUpdates.length + 10) {
+      gpsUpdateTimes.current = recentUpdates;
+    }
     
     // Require at least 2 updates in the last 30 seconds to consider GPS active
     return recentUpdates.length >= 2;
@@ -278,6 +283,10 @@ export default function OverlayPage() {
   // Create date/time formatters
   const createDateTimeFormatters = useCallback((timezone: string) => {
     try {
+      const now = new Date();
+      const utcTime = now.toISOString();
+      const localTime = new Date().toLocaleString('en-US', { timeZone: timezone });
+      
       timeFormatter.current = new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
         minute: '2-digit',
@@ -290,9 +299,35 @@ export default function OverlayPage() {
         year: 'numeric',
         timeZone: timezone,
       });
-      OverlayLogger.overlay('DateTime formatters created', { timezone });
+      
+      // Log timezone info with actual time comparison
+      const formattedTime = timeFormatter.current.format(now);
+      const utcFormatted = new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'UTC',
+      }).format(now);
+      
+      OverlayLogger.overlay('DateTime formatters created', { 
+        timezone,
+        utcTime,
+        localTime,
+        formattedTime,
+        utcFormatted,
+        offset: `UTC time: ${utcFormatted}, Local time: ${formattedTime}`
+      });
+      
+      console.log('🕐 TIMEZONE SET:', {
+        timezone,
+        'UTC time': utcFormatted,
+        'Local time': formattedTime,
+        'UTC ISO': utcTime,
+        'Local string': localTime
+      });
     } catch (error) {
       OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone, error });
+      console.error('❌ TIMEZONE ERROR:', { timezone, error });
       // Fallback to UTC
       timeFormatter.current = new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
@@ -315,9 +350,9 @@ export default function OverlayPage() {
       const tz = 'UTC';
       createDateTimeFormatters(tz);
       setTimezone(tz);
-      // Timezone ready;
     }
   }, [timezone, createDateTimeFormatters]);
+  
 
   // Time and date updates - aligned to minute boundary with drift correction
   useEffect(() => {
@@ -546,6 +581,7 @@ export default function OverlayPage() {
   // RTIRL connection - use refs to avoid re-running on timezone changes
   const timezoneRef = useRef(timezone);
   const createDateTimeFormattersRef = useRef(createDateTimeFormatters);
+  const updateMinimapVisibilityRef = useRef(updateMinimapVisibility);
   
   // Update refs when values change
   useEffect(() => {
@@ -555,6 +591,10 @@ export default function OverlayPage() {
   useEffect(() => {
     createDateTimeFormattersRef.current = createDateTimeFormatters;
   }, [createDateTimeFormatters]);
+  
+  useEffect(() => {
+    updateMinimapVisibilityRef.current = updateMinimapVisibility;
+  }, [updateMinimapVisibility]);
 
   // Preload flag image when country code is available
   useEffect(() => {
@@ -577,10 +617,9 @@ export default function OverlayPage() {
     rtilSetupDone.current = true;
 
     const setupRTIRLListener = () => {
-      
-      
       if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
-        window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
+        try {
+          window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
           try {
             if (!p || typeof p !== 'object') {
               return;
@@ -592,7 +631,6 @@ export default function OverlayPage() {
             try {
               createDateTimeFormattersRef.current(payload.location.timezone);
               setTimezone(payload.location.timezone);
-              // Timezone ready;
             } catch {
               // Ignore timezone errors
             }
@@ -648,6 +686,9 @@ export default function OverlayPage() {
             lastCoords.current = [lat!, lon!];
             lastCoordsTime.current = now;
             
+            // Trigger minimap visibility update after GPS data is processed
+            updateMinimapVisibilityRef.current();
+            
             // Kick off location + weather fetches on coordinate updates with gating
             (async () => {
               const movedMeters = prevCoords ? distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]) : Infinity;
@@ -661,8 +702,6 @@ export default function OverlayPage() {
               // Weather updates every 5 minutes regardless of movement
               const shouldFetchWeather = lastWeatherTime.current === 0 || 
                 weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL;
-              
-              // Debug weather timing removed for production
               
               // Location updates: always on first load, or every minute if moved threshold
               // We need country name/flag even in custom location mode
@@ -678,12 +717,13 @@ export default function OverlayPage() {
               if (shouldFetchWeather && API_KEYS.OPENWEATHER) {
                 promises.push(
                   (async () => {
-                    const weatherResult = await safeApiCall(
-                      () => fetchWeatherAndTimezoneFromOpenWeatherMap(lat!, lon!, API_KEYS.OPENWEATHER!),
-                      'Weather fetch'
-                    );
-                    
-                    lastWeatherTime.current = Date.now();
+                    try {
+                      const weatherResult = await safeApiCall(
+                        () => fetchWeatherAndTimezoneFromOpenWeatherMap(lat!, lon!, API_KEYS.OPENWEATHER!),
+                        'Weather fetch'
+                      );
+                      
+                      lastWeatherTime.current = Date.now();
                     if (weatherResult && typeof weatherResult === 'object' && 'weather' in weatherResult) {
                       const result = weatherResult as { 
                         weather?: { temp: number; desc: string }; 
@@ -697,7 +737,10 @@ export default function OverlayPage() {
                         setWeather(null);
                       }
                       
-                      if (result.timezone && result.timezone !== timezone) {
+                      // OpenWeatherMap timezone is ONLY a fallback (less accurate than LocationIQ)
+                      // Only use it if we're still on the UTC default and no other source has provided timezone
+                      const isStillOnDefaultTimezone = timezone === 'UTC' || timezone === null;
+                      if (result.timezone && isStillOnDefaultTimezone) {
                         createDateTimeFormatters(result.timezone);
                         setTimezone(result.timezone);
                       }
@@ -709,8 +752,6 @@ export default function OverlayPage() {
                     } else {
                       // OpenWeatherMap failed, use fallbacks
                       OverlayLogger.warn('OpenWeatherMap failed, using fallbacks');
-                      
-                      // Use fallback weather (null = hide weather)
                       setWeather(createWeatherFallback());
                       
                       // Use fallback sunrise/sunset
@@ -718,6 +759,9 @@ export default function OverlayPage() {
                       if (fallbackSunriseSunset) {
                         setSunriseSunset(fallbackSunriseSunset);
                       }
+                    }
+                    } catch (error) {
+                      OverlayLogger.error('OpenWeatherMap API exception', error);
                     }
                   })()
                 );
@@ -744,11 +788,18 @@ export default function OverlayPage() {
                     if (loc) {
                       const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
                       lastRawLocation.current = loc;
-        setLocation({
-          primary: formatted.primary || 'Unknown Location',
-          context: formatted.country,
-          countryCode: loc.countryCode || ''
-        });
+                      setLocation({
+                        primary: formatted.primary || 'Unknown Location',
+                        context: formatted.country,
+                        countryCode: loc.countryCode || ''
+                      });
+                      
+                      // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
+                      // This overrides OpenWeatherMap's less accurate offset-based timezone
+                      if (loc.timezone) {
+                        createDateTimeFormatters(loc.timezone);
+                        setTimezone(loc.timezone);
+                      }
                     } else {
                       // LocationIQ failed, use coordinate fallback
                       OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
@@ -765,14 +816,18 @@ export default function OverlayPage() {
               }
               
               // Wait for all parallel requests to complete
-              await Promise.all(promises);
+              if (promises.length > 0) {
+                await Promise.all(promises);
+              }
             })();
-    }
-          } catch {
-            // Ignore RTIRL listener errors
-            // Don't break the entire component on RTIRL errors
+          }
+          } catch (error) {
+            OverlayLogger.error('RTIRL listener error', error);
           }
         });
+      } catch (error) {
+        OverlayLogger.error('Failed to register RTIRL listener', error);
+      }
       }
     };
     
@@ -785,7 +840,7 @@ export default function OverlayPage() {
       script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
       script.async = true;
       script.onerror = () => {
-        // Failed to load RTIRL script
+        OverlayLogger.error('Failed to load RTIRL script');
       };
       script.onload = () => {
         setupRTIRLListener();
@@ -796,7 +851,8 @@ export default function OverlayPage() {
     return () => {
       // RTIRL script cleanup handled automatically
     };
-  }, [canMakeApiCall, createDateTimeFormatters, getLocationUpdateThresholds, safeApiCall, timezone, trackApiCall]); // Include dependencies; guarded by rtilSetupDone
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canMakeApiCall, getLocationUpdateThresholds, safeApiCall, timezone, trackApiCall]); // Functions are accessed via refs to avoid re-creating RTIRL listener
 
   // Overlay visibility - wait for all elements to be ready with timeout fallback
   const isOverlayReady = useMemo(() => {

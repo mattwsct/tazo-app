@@ -266,7 +266,6 @@ export async function fetchLocationFromLocationIQ(
         region: data.address.region,
         postcode: data.address.postcode,
         country: data.address.country,
-        timezone: data.address.timezone,
         fullAddress: data.address
       });
       
@@ -366,11 +365,9 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     // Extract timezone data
     if (data.timezone && typeof data.timezone === 'number') {
       // Convert timezone offset to IANA timezone string
-      const offsetHours = Math.round(data.timezone / 3600);
+      const offsetHours = data.timezone / 3600;
       
-      // Map timezone offsets to IANA timezone names
-      // Note: Offset includes DST, so same offset can map to different timezones
-      // For US locations, we need to use coordinate/state info for accuracy
+      // Map common timezone offsets to IANA timezone names
       const timezoneMap: Record<number, string> = {
         9: 'Asia/Tokyo',
         8: 'Asia/Shanghai',
@@ -382,53 +379,22 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
         2: 'Europe/Athens',
         1: 'Europe/Paris',
         0: 'UTC',
-        [-1]: 'Atlantic/Azores',
-        [-2]: 'Atlantic/South_Georgia',
-        [-3]: 'America/Sao_Paulo',
-        [-4]: 'America/New_York',
-        [-5]: 'America/Chicago', // CST/CDT: -6/-5
-        [-6]: 'America/Chicago', // Most common: Central Time
-        [-7]: 'America/Denver', // MST/MDT: -7/-6
-        [-8]: 'America/Los_Angeles', // PST/PDT: -8/-7
-        [-9]: 'Pacific/Gambier',
-        [-10]: 'Pacific/Honolulu',
-        [-11]: 'Pacific/Midway',
-        [-12]: 'Pacific/Baker'
+        '-1': 'Atlantic/Azores',
+        '-2': 'Atlantic/South_Georgia',
+        '-3': 'America/Sao_Paulo',
+        '-4': 'America/New_York',
+        '-5': 'America/Chicago',
+        '-6': 'America/Denver',
+        '-7': 'America/Los_Angeles',
+        '-8': 'Pacific/Pitcairn',
+        '-9': 'Pacific/Gambier',
+        '-10': 'Pacific/Honolulu',
+        '-11': 'Pacific/Midway',
+        '-12': 'Pacific/Baker'
       };
       
-      // Try to get timezone from map, with fallback
       timezone = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || 'UTC';
-      
-      // For US locations, improve accuracy based on coordinates
-      // Texas (Galveston) should be America/Chicago (Central Time)
-      // This is a simplified check - could be improved with full state/coordinate mapping
-      if (lat >= 25 && lat <= 37 && lon >= -106 && lon <= -93) {
-        // Texas region - Central Time
-        if (offsetHours === -5 || offsetHours === -6) {
-          timezone = 'America/Chicago';
-        }
-      } else if (lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66) {
-        // General US region - refine based on common offsets
-        if (offsetHours === -5 && (lat < 40 || lon < -100)) {
-          timezone = 'America/Chicago'; // Central Time (includes DST)
-        } else if (offsetHours === -6 && (lat < 40 || lon < -100)) {
-          timezone = 'America/Chicago'; // Central Time (no DST)
-        } else if (offsetHours === -4 && (lat >= 38 && lon >= -85)) {
-          timezone = 'America/New_York'; // Eastern Time
-        } else if (offsetHours === -7 && (lat >= 35 && lon >= -124 && lon <= -102)) {
-          timezone = 'America/Denver'; // Mountain Time
-        } else if (offsetHours === -8 && (lat >= 32 && lon >= -124 && lon <= -102)) {
-          timezone = 'America/Los_Angeles'; // Pacific Time
-        }
-      }
-      
-      ApiLogger.info('openweathermap', 'Timezone data received', { timezone, offsetHours, lat, lon });
-      console.log('🌤️ OPENWEATHERMAP TIMEZONE EXTRACTION:', {
-        'Raw offset (seconds)': data.timezone,
-        'Offset (hours)': offsetHours,
-        'Mapped timezone': timezone,
-        'Coordinates': { lat, lon }
-      });
+      ApiLogger.info('openweathermap', 'Timezone data received', { timezone, offsetHours });
     }
     
     // Extract sunrise/sunset data
