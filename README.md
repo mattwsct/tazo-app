@@ -63,7 +63,7 @@ npm run dev
 
 ### At-Sea Detection
 When GPS coordinates can't be reverse geocoded (ocean/remote areas):
-- Automatically detects water bodies: "Gulf of Mexico 🇺🇸"
+- Automatically detects water bodies: "Gulf of America 🇺🇸"
 - Covers major seas and oceans worldwide
 - Shows appropriate regional flag
 
