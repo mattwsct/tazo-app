@@ -185,6 +185,13 @@ export async function fetchLocationFromLocationIQ(
       } else if (response.status === 401) {
         error = 'Invalid API key';
         ApiLogger.warn('locationiq', 'Invalid API key');
+      } else if (response.status === 404) {
+        error = 'Location not found (likely at sea or remote area)';
+        ApiLogger.info('locationiq', 'No reverse geocode available - using coordinate fallback', { 
+          status: 404,
+          lat,
+          lon
+        });
       } else {
         error = `HTTP ${response.status}: ${response.statusText}`;
         ApiLogger.error('locationiq', error);

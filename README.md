@@ -1,329 +1,171 @@
 # 🎮 Tazo Streaming Overlay
 
-A modern, real-time streaming overlay for IRL streams with GPS tracking, weather display, and Kick.com integration.
+A modern, real-time streaming overlay for IRL streams with GPS tracking, weather display, and heart rate monitoring.
 
 ## ✨ Features
 
-- **📍 GPS Location Tracking** - Real-time location with smart minimap display
-- **🌤️ Weather Integration** - Current weather conditions and temperature
-- **🎯 Kick.com Integration** - Subscription goals, latest subs, and leaderboards
-- **🔗 Webhook Support** - Real-time Kick.com events via webhooks
-- **🎬 OBS Integration** - Stream start/stop detection (legacy)
-- **📱 Responsive Design** - Works on all screen sizes
-- **🔒 Secure Admin Panel** - Protected settings management
+- **📍 Real-time GPS Location** - Smart minimap that shows/hides based on movement
+- **🌤️ Live Weather** - Temperature with day/night-aware icons
+- **💓 Heart Rate Monitor** - Pulsoid integration for live heart rate display
+- **🌊 At-Sea Mode** - Automatic water body detection for cruise/ocean streaming
+- **🗺️ Smart Location Display** - City, state, or custom location names with country flags
+- **🎨 Clean UI** - Modern, responsive design optimized for OBS
 
 ## 🚀 Quick Start
 
-### 1. Clone & Install
+### 1. Install
 ```bash
-git clone https://github.com/your-username/tazo-app.git
-cd tazo-app
 npm install
 ```
 
-### 2. Environment Setup
-Create a `.env.local` file in your project root:
+### 2. Configure Environment
+Create `.env.local` in project root:
 
-```bash
-# Core Application (Required)
-KV_REST_API_URL=https://your-kv-url.vercel-storage.com
-KV_REST_API_TOKEN=your_kv_token_here
-KV_REST_API_READ_ONLY_TOKEN=your_readonly_token_here
-ADMIN_PASSWORD=your_secure_admin_password
+```env
+# Required - GPS Tracking
+NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_pull_key
 
-# Kick.com Integration (Required for webhooks)
-KICK_CLIENT_ID=your_kick_client_id
-KICK_CLIENT_SECRET=your_kick_client_secret
-
-# External APIs (Optional)
-NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_key
+# Required - Location & Weather
 NEXT_PUBLIC_LOCATIONIQ_KEY=your_locationiq_key
+NEXT_PUBLIC_OPENWEATHERMAP_KEY=your_openweathermap_key
+
+# Optional - Additional Features
 NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token
 NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
+
+# Optional - Admin Panel & Settings Sync
+ADMIN_PASSWORD=your_admin_password
+KV_REST_API_URL=your_vercel_kv_url
+KV_REST_API_TOKEN=your_vercel_kv_token
+KV_REST_API_READ_ONLY_TOKEN=your_vercel_kv_readonly_token
 ```
 
-### 3. Start Development
+### 3. Run
 ```bash
 npm run dev
 ```
 
-Visit `http://localhost:3000` for the admin panel and `http://localhost:3000/overlay` for the overlay.
+- **Admin Panel**: `http://localhost:3000`
+- **Overlay**: `http://localhost:3000/overlay`
 
-## 🔧 Configuration
+## 🎯 Key Features Explained
 
-### Admin Panel
-Access the admin panel at `http://localhost:3000` and configure:
+### Smart GPS Minimap
+- **Auto-show when moving** (>10 km/h)
+- **Auto-hide when stationary**
+- **Day/night map styling** based on real sunrise/sunset times
 
-- **Display Settings** - Weather and location display options
-- **Location & Map** - GPS minimap and movement tracking
-- **Kick.com** - Subscription goals and community features
-- **Advanced** - System information and webhook status
+### Location Display Modes
+- **City** - "French Quarter, New Orleans"
+- **State** - "Louisiana, United States"
+- **Custom** - Set your own text
+- **Hidden** - No location displayed
 
-### GPS Minimap Settings
-- **Smart Display Mode** (Recommended) - Shows minimap only when moving (speed > 10 km/h)
-- **Always Visible** - Shows minimap continuously
-- **Location Display** - Choose city, state, country, or hidden
+### At-Sea Detection
+When GPS coordinates can't be reverse geocoded (ocean/remote areas):
+- Automatically detects water bodies: "Gulf of Mexico 🇺🇸"
+- Covers major seas and oceans worldwide
+- Shows appropriate regional flag
 
-## 🎯 Kick.com Integration
+### Weather Integration
+- Temperature in both °C and °F
+- Day/night weather icons (based on astronomical sunrise/sunset)
+- Auto-updates every 5 minutes
+- Location-based weather for your current GPS position
 
-### Webhook Setup
-1. Go to [Kick.com Developer Portal](https://kick.com/developer)
-2. Create an app and get your `client_id` and `client_secret`
-3. Configure webhook URL: `https://your-domain.com/api/kick-webhook`
-4. Subscribe to events: `livestream.status.updated`, `channel.subscription.new`, `channel.subscription.renewal`, `channel.subscription.gifts`
+## 🔧 Admin Panel Settings
 
-### Features
-- **Real-time Sub Goals** - Track subscriptions during stream sessions
-- **Latest Subscriber Display** - Show recent subscribers with animations
-- **Gift Sub Leaderboard** - Top gift subscription contributors
-- **Rolling Goals** - Automatically increase goals after completion
-- **Stream-based Resets** - Reset goals when stream ends (with 1-hour timeout)
+Access at `http://localhost:3000` to configure:
 
-### Supported Events
-- `livestream.status.updated` - Stream start/stop detection
-- `channel.subscription.new` - New subscriptions
-- `channel.subscription.renewal` - Subscription renewals
-- `channel.subscription.gifts` - Gift subscriptions
+- **Location Display** - Choose precision level or custom text
+- **Weather** - Show/hide temperature display
+- **Minimap** - Smart mode, always on, or hidden
+- **Map Zoom** - Adjust minimap zoom level (11-16)
+- **Country Flag** - Show/hide flag in custom location mode
 
-## 🔒 Security
+## 🌐 API Services
 
-### Environment Variables Security
-- **Server-side only** variables are secure and never exposed to the browser
-- **Client-side** variables (with `NEXT_PUBLIC_` prefix) are safe for this use case
-- **Admin password** is required and validated server-side
-- **Webhook signatures** are verified using Kick.com's public key
+### Required
+- **RealtimeIRL** - GPS tracking ([realtimeirl.com](https://realtimeirl.com/))
+- **LocationIQ** - Reverse geocoding ([locationiq.com](https://locationiq.com/))
+- **OpenWeatherMap** - Weather & sunrise/sunset ([openweathermap.org](https://openweathermap.org/))
 
-### Safe to Expose (Client-Side)
-| Variable | Purpose | Security |
-|----------|---------|----------|
-| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Map rendering | Domain restrictions, usage limits |
-| `NEXT_PUBLIC_RTIRL_PULL_KEY` | Location data | Rate limiting, public API |
-| `NEXT_PUBLIC_LOCATIONIQ_KEY` | Geocoding | Usage quotas, domain restrictions |
-| `NEXT_PUBLIC_PULSOID_TOKEN` | Heart rate data | Public token, rate limited |
+### Optional
+- **Pulsoid** - Heart rate monitoring ([pulsoid.net](https://pulsoid.net/))
+- **Mapbox** - Map tiles ([mapbox.com](https://mapbox.com/))
+- **Vercel KV** - Settings persistence ([vercel.com/storage/kv](https://vercel.com/storage/kv))
 
-### Server-Side Only (Secure)
-| Variable | Purpose | Security |
-|----------|---------|----------|
-| `ADMIN_PASSWORD` | Admin authentication | HTTP-only cookies |
-| `KICK_CLIENT_ID` | Kick.com API | Server-side only |
-| `KICK_CLIENT_SECRET` | Kick.com API | Server-side only |
-| `KV_REST_API_URL` | Database connection | Server-side only |
-| `KV_REST_API_TOKEN` | Database access | Server-side only |
-
-## 🗺️ GPS & Location Features
-
-### Smart Display Mode
-The GPS minimap automatically shows/hides based on movement:
-- **Moving** (speed > 10 km/h) → Minimap visible
-- **Stationary** (speed ≤ 10 km/h) → Minimap hidden
-- **Perfect for IRL streams** - shows location when traveling
-
-### Location Display Options
-- **City** - Shows current city with state and country context
-- **State/Province** - Shows current state/province with country context
-- **Custom** - Displays custom text instead of GPS-based location
-- **Hidden** - No location text displayed
-
-### Supported Location Services
-- **RTIRL** - Real-time location tracking
-- **LocationIQ** - Geocoding and reverse geocoding
-- **OpenMeteo** - Weather data based on location
-
-## 🌤️ Weather Integration
-
-### Features
-- **Temperature Display** - Current temperature in Celsius and Fahrenheit
-- **Location-based** - Weather updates based on GPS location
-- **Auto-refresh** - Updates every 15 minutes
-- **Country Flag** - Shows country flag next to temperature
-
-### Weather Display
-- Clean temperature-only display
-- Country flag integration for quick location reference
-- Responsive design for all screen sizes
-
-## 🎬 OBS Integration
-
-**Note**: OBS WebSocket integration has been completely removed. Stream start/stop detection is now handled exclusively via Kick.com webhooks, which provides more reliable and secure stream event detection.
-
-## 🚀 Deployment
+## 🚢 Deployment
 
 ### Vercel (Recommended)
-1. **Connect Repository**
-   ```bash
-   vercel --prod
-   ```
+```bash
+vercel --prod
+```
 
-2. **Set Environment Variables**
-   - Go to Vercel Dashboard → Project Settings → Environment Variables
-   - Add all variables from your `.env.local` file
+Set environment variables in Vercel dashboard → Project Settings → Environment Variables
 
-3. **Configure Webhook URL**
-   - Update your Kick.com webhook URL to: `https://your-domain.vercel.app/api/kick-webhook`
+### OBS Setup
+1. Add **Browser Source** in OBS
+2. URL: `https://your-domain.com/overlay`
+3. Width: `1920`, Height: `1080`
+4. Check "Shutdown source when not visible"
+5. Refresh browser when scene becomes active: ✓
 
-### Other Platforms
-- **Netlify** - Similar to Vercel setup
-- **Railway** - Use Railway's environment variable system
-- **Heroku** - Use Heroku config vars
+## 📊 API Usage
+
+All APIs are within free tier limits for 24/7 streaming:
+
+- **OpenWeatherMap**: ~288 calls/day (0.03% of limit)
+- **LocationIQ**: ~1,440 calls/day (29% of limit)
+- **Mapbox**: Cached tiles, minimal usage
+
+Rate limiting and cooldowns are built-in to prevent quota issues.
+
+## 🛠️ Tech Stack
+
+- **Next.js 15** - React framework with app router
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **MapLibre GL** - Map rendering
+- **Server-Sent Events** - Real-time settings sync
+
+## 📝 Commands
+
+```bash
+npm run dev      # Start development server
+npm run build    # Build for production
+npm run start    # Start production server
+npm run lint     # Run linter
+```
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+**GPS not updating?**
+- Check RTIRL pull key is correct
+- Verify you're broadcasting location in RealtimeIRL app
 
-#### "Environment validation failed"
-- Check that all required variables are set
-- Verify variable names are exactly as shown
-- Ensure no sensitive variables use `NEXT_PUBLIC_` prefix
+**Minimap not showing?**
+- Ensure you're moving >10 km/h (or set to "Always On" mode)
+- Check Mapbox token is valid
 
-#### "Kick.com webhook not working"
-- Verify webhook URL is correct: `https://your-domain.com/api/kick-webhook`
-- Check that events are subscribed: `livestream.status.updated`, `channel.subscription.*`
-- Ensure `KICK_CLIENT_ID` and `KICK_CLIENT_SECRET` are set
-- Check webhook signature verification
+**Weather not displaying?**
+- Verify OpenWeatherMap API key
+- Check browser console for API errors
 
-#### "GPS minimap not showing"
-- Verify `NEXT_PUBLIC_RTIRL_PULL_KEY` is set
-- Check that you're moving (speed > 10 km/h) if using Smart Display Mode
-- Ensure minimap is enabled in admin panel
+**Admin panel won't load?**
+- Set `ADMIN_PASSWORD` in environment variables
+- Restart dev server after adding env vars
 
-#### "Admin login not working"
-- Verify `ADMIN_PASSWORD` is set in environment variables
-- Check that the password is correct
-- Restart development server after adding environment variables
+## 🔒 Security
 
-### Debug Steps
-
-1. **Check Environment Variables**
-   ```bash
-   # Verify all required variables are set
-   cat .env.local
-   ```
-
-2. **Test Webhook Endpoint**
-   ```bash
-   curl -X GET https://your-domain.com/api/kick-webhook
-   ```
-
-3. **Check Server Logs**
-   - Vercel: Function logs in dashboard
-   - Local: Terminal output during development
-
-4. **Browser Console**
-   - Check for JavaScript errors
-   - Look for connection status messages
-   - Verify API calls are working
-
-## 📊 API Endpoints
-
-### Core Endpoints
-- `GET /api/health` - Health check and system status
-- `GET /api/get-settings` - Retrieve overlay settings
-- `POST /api/save-settings` - Save overlay settings
-- `GET /api/settings-stream` - Real-time settings updates (SSE)
-
-### Kick.com Integration
-- `POST /api/kick-webhook` - Receive Kick.com webhook events
-- `POST /api/manual-sub-update` - Manual sub count and latest sub updates
-
-### Admin Authentication
-- `POST /api/admin-login` - Admin login
-- `POST /api/admin-logout` - Admin logout
-
-## 🔧 Development
-
-### Project Structure
-```
-src/
-├── app/                    # Next.js app router
-│   ├── api/               # API routes
-│   ├── overlay/           # Overlay page
-│   └── page.tsx           # Admin panel
-├── components/            # React components
-├── lib/                   # Utility libraries
-├── styles/                # CSS styles
-├── types/                 # TypeScript types
-└── utils/                 # Helper utilities
-```
-
-### Key Technologies
-- **Next.js 15** - React framework with app router
-- **TypeScript** - Type-safe JavaScript
-- **Tailwind CSS** - Utility-first CSS framework
-- **Server-Sent Events** - Real-time updates
-- **Vercel KV** - Database storage
-
-### Development Commands
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run lint         # Run ESLint
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+- Admin password is HTTP-only cookie, never exposed to client
+- API keys with `NEXT_PUBLIC_` prefix are safe (domain-restricted, rate-limited)
+- All external API tokens are read-only access
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-If you need help:
-
-1. Check this documentation
-2. Review the troubleshooting section
-3. Check browser console for errors
-4. Verify environment variables are set correctly
-5. Test with the provided endpoints
-
-## 🔄 Updates
-
-This project is actively maintained and updated with:
-- New Kick.com API features
-- Security improvements
-- Performance optimizations
-- Bug fixes
+MIT License - feel free to use and modify!
 
 ---
 
-**Built with ❤️ for the streaming community**
-
-## 🚀 Recent Improvements
-
-### LocationIQ API Optimization (Latest)
-- **Daily Rate Limiting**: Added daily API call limits (1,000/day for free tier) to prevent quota exhaustion
-- **Smart Caching**: Location data is now cached for 24 hours within 1km radius, reducing API calls by ~80%
-- **Better Error Handling**: Improved error messages for rate limits and daily quota exceeded scenarios
-- **Automatic Fallback**: When daily limit is reached, the app gracefully falls back to cached data
-
-### Location Display Simplification (Latest)
-- **Precision-Based System**: Replaced complex field-specific modes with intuitive precision levels
-- **Automatic Fallbacks**: Each precision level automatically falls back to less specific names if needed
-- **Cleaner Logic**: Eliminated redundant `city`/`municipality` modes in favor of `suburb`/`city`/`state`
-- **API Fallback System**: Automatic fallback between LocationIQ and Mapbox when rate limits are hit
-
-**Location Display Modes:**
-- **`suburb`**: Most specific available (suburb → city → town → municipality → state → country)
-- **`city`**: City-level precision (city → town → municipality → state → country)
-- **`state`**: State/country level (state → country)
-- **`hidden`**: No location display
-
-**API Fallback System:**
-- **Primary Service**: LocationIQ for best precision and international coverage
-- **Fallback Service**: Mapbox when LocationIQ hits rate limits
-- **Automatic Switching**: Seamless fallback without user intervention
-- **Higher Reliability**: Two APIs ensure location names are always available
-
-**Note**: If you're hitting daily limits frequently, consider:
-1. Upgrading your LocationIQ plan for higher daily quotas
-2. The app will automatically reset limits at midnight local time
-3. Cached locations reduce the need for repeated API calls
-4. The Mapbox fallback ensures location names are always available
-
-## 📋 Environment Variables
+**Built for the IRL streaming community** 🚀

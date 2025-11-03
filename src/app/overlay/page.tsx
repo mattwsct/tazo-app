@@ -17,7 +17,6 @@ import {
   createSunriseSunsetFallback,
   isNightTimeFallback
 } from '@/utils/fallback-utils';
-import { getOverallHealth } from '@/utils/api-health';
 
 declare global {
   interface Window {
@@ -61,7 +60,6 @@ export default function OverlayPage() {
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [dayNightTrigger, setDayNightTrigger] = useState(0); // Triggers recalculation of day/night
-  const [apiHealth, setApiHealth] = useState<{ isHealthy: boolean; unhealthyApis: string[] }>({ isHealthy: true, unhealthyApis: [] });
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -808,7 +806,7 @@ export default function OverlayPage() {
                       setLocation({
                         primary: fallbackLocation.primary,
                         context: fallbackLocation.country,
-                        countryCode: '' // No country code available from fallback
+                        countryCode: fallbackLocation.countryCode || '' // Use country code from fallback if available
                       });
                     }
                   })()
@@ -906,16 +904,6 @@ export default function OverlayPage() {
 
     return () => clearInterval(interval);
   }, [mapCoords, timezone]);
-
-  // Monitor API health (less frequent in production)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const health = getOverallHealth();
-      setApiHealth(health);
-    }, 60000); // Check every 60 seconds (reduced from 30s)
-    
-    return () => clearInterval(interval);
-  }, []);
 
   // Memoized display values
   const locationDisplay = useMemo(() => {
@@ -1162,19 +1150,6 @@ export default function OverlayPage() {
               ) : (
                 <div className="minimap-placeholder">Loading map...</div>
               )}
-            </div>
-          )}
-
-          {/* API Status Indicator (only show when there are issues) */}
-          {!apiHealth.isHealthy && (
-            <div className="api-status-indicator">
-              <span className="api-status-icon">⚠️</span>
-              <span className="api-status-text">
-                {apiHealth.unhealthyApis.length === 1 
-                  ? `${apiHealth.unhealthyApis[0]} unavailable` 
-                  : `${apiHealth.unhealthyApis.length} APIs unavailable`
-                }
-              </span>
             </div>
           )}
         </div>

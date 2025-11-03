@@ -35,7 +35,8 @@ export interface LocationData {
 
 export interface LocationDisplay {
   primary: string;  // Most precise available location
-  country?: string; // Country name/code (no dedupe vs primary)
+  country?: string; // Country name (no dedupe vs primary)
+  countryCode?: string; // ISO country code for flag display
 }
 
 // === 🎯 LOCATION PRECISION LEVELS ===

@@ -25,76 +25,139 @@ export function createCoordinateFallback(lat: number, lon: number): LocationDisp
 /**
  * Creates a basic location display with country estimation based on coordinates
  */
-export function createLocationWithCountryFallback(lat: number, lon: number): LocationDisplay {
+export function createLocationWithCountryFallback(lat: number, lon: number): LocationDisplay & { isWater?: boolean } {
   const coords = createCoordinateFallback(lat, lon);
   
   // Basic country estimation based on coordinate ranges
-  const country = estimateCountryFromCoords(lat, lon);
+  const countryInfo = estimateCountryFromCoords(lat, lon);
+  
+  // If we're in water region, show water body name as primary
+  // This is accurate whether you're on the water or near it
+  const primary = countryInfo?.isWater && countryInfo?.name
+    ? countryInfo.name
+    : coords.primary;
+  
+  // Don't show country line for water bodies (would be duplicate)
+  // Just show the country code for the flag
+  const country = countryInfo?.isWater ? undefined : countryInfo?.name;
   
   return {
-    ...coords,
-    country: country || undefined
+    primary,
+    country,
+    countryCode: countryInfo?.code || undefined,
+    isWater: countryInfo?.isWater || false
   };
 }
 
 /**
  * Estimates country from coordinates using basic geographic ranges
  * This is a fallback when LocationIQ API is unavailable
+ * Returns both country name and country code for flag display
  */
-function estimateCountryFromCoords(lat: number, lon: number): string | null {
+function estimateCountryFromCoords(lat: number, lon: number): { name: string; code: string; isWater?: boolean } | null {
+  // Gulf of Mexico / Caribbean - treat as United States waters
+  if (lat >= 18 && lat <= 31 && lon >= -98 && lon <= -80) {
+    return { name: 'Gulf of Mexico', code: 'us', isWater: true };
+  }
+  
+  // Caribbean Sea
+  if (lat >= 10 && lat <= 25 && lon >= -88 && lon <= -60) {
+    return { name: 'Caribbean Sea', code: 'us', isWater: true };
+  }
+  
+  // Atlantic Ocean (North America East Coast)
+  if (lat >= 25 && lat <= 45 && lon >= -80 && lon <= -30) {
+    return { name: 'Atlantic Ocean', code: 'us', isWater: true };
+  }
+  
+  // Pacific Ocean (West Coast)
+  if (lat >= 20 && lat <= 60 && lon >= -180 && lon <= -120) {
+    return { name: 'Pacific Ocean', code: 'us', isWater: true };
+  }
+  
+  // Mediterranean Sea
+  if (lat >= 30 && lat <= 46 && lon >= -6 && lon <= 37) {
+    return { name: 'Mediterranean Sea', code: 'gr', isWater: true };
+  }
+  
+  // North Sea
+  if (lat >= 51 && lat <= 62 && lon >= -4 && lon <= 9) {
+    return { name: 'North Sea', code: 'gb', isWater: true };
+  }
+  
+  // Baltic Sea
+  if (lat >= 53 && lat <= 66 && lon >= 9 && lon <= 31) {
+    return { name: 'Baltic Sea', code: 'se', isWater: true };
+  }
+  
+  // Sea of Japan
+  if (lat >= 34 && lat <= 52 && lon >= 127 && lon <= 143) {
+    return { name: 'Sea of Japan', code: 'jp', isWater: true };
+  }
+  
+  // South China Sea
+  if (lat >= 0 && lat <= 25 && lon >= 100 && lon <= 121) {
+    return { name: 'South China Sea', code: 'cn', isWater: true };
+  }
+  
   // Japan
   if (lat >= 24 && lat <= 46 && lon >= 122 && lon <= 146) {
-    return 'Japan';
+    return { name: 'Japan', code: 'jp' };
   }
   
   // United States
   if (lat >= 24 && lat <= 49 && lon >= -125 && lon <= -66) {
-    return 'United States';
+    return { name: 'United States', code: 'us' };
   }
   
   // United Kingdom
   if (lat >= 50 && lat <= 61 && lon >= -8 && lon <= 2) {
-    return 'United Kingdom';
+    return { name: 'United Kingdom', code: 'gb' };
   }
   
   // Australia
   if (lat >= -44 && lat <= -10 && lon >= 113 && lon <= 154) {
-    return 'Australia';
+    return { name: 'Australia', code: 'au' };
   }
   
   // Canada
   if (lat >= 42 && lat <= 84 && lon >= -141 && lon <= -52) {
-    return 'Canada';
+    return { name: 'Canada', code: 'ca' };
   }
   
   // Germany
   if (lat >= 47 && lat <= 55 && lon >= 6 && lon <= 15) {
-    return 'Germany';
+    return { name: 'Germany', code: 'de' };
   }
   
   // France
   if (lat >= 42 && lat <= 51 && lon >= -5 && lon <= 8) {
-    return 'France';
+    return { name: 'France', code: 'fr' };
   }
   
   // China
   if (lat >= 18 && lat <= 54 && lon >= 73 && lon <= 135) {
-    return 'China';
+    return { name: 'China', code: 'cn' };
   }
   
   // India
   if (lat >= 6 && lat <= 37 && lon >= 68 && lon <= 97) {
-    return 'India';
+    return { name: 'India', code: 'in' };
   }
   
   // Brazil
   if (lat >= -34 && lat <= 5 && lon >= -74 && lon <= -34) {
-    return 'Brazil';
+    return { name: 'Brazil', code: 'br' };
   }
   
   // Russia
   if (lat >= 41 && lat <= 82 && lon >= 19 && lon <= 169) {
-    return 'Russia';
+    return { name: 'Russia', code: 'ru' };
+  }
+  
+  // Mexico
+  if (lat >= 14 && lat <= 33 && lon >= -118 && lon <= -86) {
+    return { name: 'Mexico', code: 'mx' };
   }
   
   return null; // Unknown region
