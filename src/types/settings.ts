@@ -1,7 +1,7 @@
 // Centralized settings types and constants
 
 export type LocationDisplayMode = 'neighborhood' | 'city' | 'custom' | 'hidden';
-export type MapZoomLevel = 'street' | 'city' | 'region' | 'country';
+export type MapZoomLevel = 'neighborhood' | 'city' | 'regional' | 'national' | 'ocean' | 'continental';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;

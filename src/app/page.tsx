@@ -225,7 +225,7 @@ export default function AdminPage() {
     // Auto-set zoom level based on location display mode
     if (updates.locationDisplay !== undefined) {
       if (updates.locationDisplay === 'neighborhood') {
-        mergedSettings.mapZoomLevel = 'street'; // More zoomed in for neighborhoods
+        mergedSettings.mapZoomLevel = 'neighborhood'; // More zoomed in for neighborhoods
       } else {
         mergedSettings.mapZoomLevel = 'city'; // City level for other locations
       }
@@ -649,13 +649,15 @@ export default function AdminPage() {
                 onChange={(e) => handleSettingsChange({ mapZoomLevel: e.target.value as MapZoomLevel })}
                 className="select-input"
               >
-                <option value="street">Street Level (13)</option>
-                <option value="city">City Level (11)</option>
-                <option value="region">Region Level (8)</option>
-                <option value="country">Country Level (5)</option>
+                <option value="neighborhood">Neighborhood (13) - Streets & Buildings</option>
+                <option value="city">City (11) - Whole City View</option>
+                <option value="regional">Regional (8) - State/Province View</option>
+                <option value="national">National (5) - Country View</option>
+                <option value="ocean">Ocean (3) - Coastal View from Sea</option>
+                <option value="continental">Continental (1) - Trans-Oceanic View</option>
               </select>
               <div className="setting-help">
-                Higher numbers = more zoomed in. City level shows streets, region shows areas, country shows large areas.
+                Higher numbers = more zoomed in. Ocean is for cruises near coast, Continental for mid-ocean.
               </div>
             </div>
           </section>

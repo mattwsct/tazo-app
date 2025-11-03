@@ -17,10 +17,12 @@ interface MapLibreMinimapProps {
 
 const MINIMAP_CONFIG = {
   ZOOM_LEVELS: {
-    street: 13,   // Street level - can see individual streets
-    city: 11,     // City level - can see city boundaries
-    region: 8,    // State/region level - can see state boundaries
-    country: 5    // Country level - can see country boundaries
+    neighborhood: 13,  // Neighborhood - streets & buildings
+    city: 11,          // City - whole city view
+    regional: 8,       // Regional - state/province view
+    national: 5,       // National - country view
+    ocean: 3,          // Ocean - coastal view from sea
+    continental: 1     // Continental - trans-oceanic, see entire ocean
   },
   MARKER_SIZE: 12,
   MARKER_COLOR: "#22c55e",

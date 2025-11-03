@@ -80,7 +80,13 @@ Access at `http://localhost:3000` to configure:
 - **Location Display** - Choose precision level or custom text
 - **Weather** - Show/hide temperature display
 - **Minimap** - Smart mode, always on, or hidden
-- **Map Zoom** - Adjust minimap zoom level (11-16)
+- **Map Zoom** - 6 levels from Continental (1) to Neighborhood (13)
+  - Continental (1) - Trans-oceanic view
+  - Ocean (3) - Coastal view from sea
+  - National (5) - Country view
+  - Regional (8) - State/province view
+  - City (11) - Whole city view
+  - Neighborhood (13) - Streets & buildings
 - **Country Flag** - Show/hide flag in custom location mode
 
 ## 🌐 API Services
