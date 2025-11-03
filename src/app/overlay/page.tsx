@@ -168,11 +168,13 @@ export default function OverlayPage() {
     if (lastRawLocation.current && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
-        setLocation({
-          primary: formatted.primary || 'Unknown Location',
-          context: formatted.country,
-          countryCode: lastRawLocation.current.countryCode || ''
-        });
+        if (formatted.primary) {
+          setLocation({
+            primary: formatted.primary,
+            context: formatted.country,
+            countryCode: lastRawLocation.current.countryCode || ''
+          });
+        }
       } catch {
         // Ignore formatting errors; UI will update on next normal cycle
       }
@@ -786,11 +788,13 @@ export default function OverlayPage() {
                     if (loc) {
                       const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
                       lastRawLocation.current = loc;
-                      setLocation({
-                        primary: formatted.primary || 'Unknown Location',
-                        context: formatted.country,
-                        countryCode: loc.countryCode || ''
-                      });
+                      if (formatted.primary) {
+                        setLocation({
+                          primary: formatted.primary,
+                          context: formatted.country,
+                          countryCode: loc.countryCode || ''
+                        });
+                      }
                       
                       // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
                       // This overrides OpenWeatherMap's less accurate offset-based timezone
@@ -803,11 +807,13 @@ export default function OverlayPage() {
                       OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
                       
                       const fallbackLocation = createLocationWithCountryFallback(lat!, lon!);
-                      setLocation({
-                        primary: fallbackLocation.primary,
-                        context: fallbackLocation.country,
-                        countryCode: fallbackLocation.countryCode || '' // Use country code from fallback if available
-                      });
+                      if (fallbackLocation.primary) {
+                        setLocation({
+                          primary: fallbackLocation.primary,
+                          context: fallbackLocation.country,
+                          countryCode: fallbackLocation.countryCode || '' // Use country code from fallback if available
+                        });
+                      }
                     }
                   })()
                 );
@@ -857,19 +863,19 @@ export default function OverlayPage() {
     // Time and timezone must be ready
     const timeReady = timezone && timeDisplay.time && timeDisplay.date;
     
-    // Location must be ready (unless hidden) - allow fallback to "Unknown Location"
+    // Location is optional - overlay shows even without location (blank until loaded)
+    // Only check if custom location is set when in custom mode
     const locationReady = settings.locationDisplay === 'hidden' || 
-      (settings.locationDisplay === 'custom' ? settings.customLocation?.trim() : location) ||
-      loadingTimeout; // Show overlay even if location failed after timeout
+      settings.locationDisplay === 'custom' ? settings.customLocation?.trim() !== undefined : true;
     
-    // Weather must be ready (unless hidden) - allow fallback to no weather
-    const weatherReady = settings.locationDisplay === 'hidden' || weather || loadingTimeout;
+    // Weather is optional - overlay shows even without weather
+    const weatherReady = true;
     
     // Flag is always ready since we show emoji fallback immediately
     const flagReady = true;
     
     return timeReady && locationReady && weatherReady && flagReady;
-  }, [timezone, timeDisplay, settings, location, weather, loadingTimeout]);
+  }, [timezone, timeDisplay, settings]);
 
   // Timeout fallback - show overlay after 10 seconds even if some elements failed
   useEffect(() => {
@@ -919,20 +925,16 @@ export default function OverlayPage() {
       };
     }
     
-    // Always show something for location display
-    if (location) {
+    // Show location data if available
+    if (location && location.primary) {
       return {
         ...location,
         countryCode: location.countryCode?.toUpperCase()
       };
     }
     
-    // Fallback when no location data
-    return {
-      primary: 'Unknown Location',
-      context: undefined,
-      countryCode: undefined
-    };
+    // No location data yet - return null so UI stays blank
+    return null;
   }, [location, settings.locationDisplay, settings.customLocation]);
 
 
