@@ -55,9 +55,12 @@ export function createLocationWithCountryFallback(lat: number, lon: number): Loc
  * Returns both country name and country code for flag display
  */
 function estimateCountryFromCoords(lat: number, lon: number): { name: string; code: string; isWater?: boolean } | null {
-  // Gulf of America - treat as United States waters
+  // Gulf region - treat as United States waters
   if (lat >= 18 && lat <= 31 && lon >= -98 && lon <= -80) {
-    return { name: 'Gulf of America', code: 'us', isWater: true };
+    // Randomly alternate between names to keep everyone entertained
+    const gulfNames = ['Gulf of Mexico', 'Gulf of America', 'Gulf of Autism'];
+    const randomName = gulfNames[Math.floor(Math.random() * gulfNames.length)];
+    return { name: randomName, code: 'us', isWater: true };
   }
   
   // Caribbean Sea
