@@ -57,9 +57,9 @@ export default function OverlayPage() {
   const [overlayVisible, setOverlayVisible] = useState(false);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [flagLoaded, setFlagLoaded] = useState(false);
-  const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [dayNightTrigger, setDayNightTrigger] = useState(0); // Triggers recalculation of day/night
+  const [lastGpsUpdateTime, setLastGpsUpdateTime] = useState(0); // Track when we last got GPS data
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -113,12 +113,22 @@ export default function OverlayPage() {
     return recentUpdates.length >= 2;
   }, []);
 
-  // Minimap visibility logic with cooldown
+  // Minimap visibility logic with cooldown and hysteresis
   const updateMinimapVisibility = useCallback(() => {
     const now = Date.now();
     const isGpsActive = checkGpsUpdateRate();
-    const isMovingFast = currentSpeed >= 10; // 10 km/h threshold
-    const gpsTimeoutPeriod = 30000; // 30 seconds without GPS updates
+    const gpsStaleTimeout = 10000; // 10 seconds - if no GPS update, speed is stale
+    const timeSinceLastGps = now - lastGpsUpdateTime;
+    const isGpsStale = timeSinceLastGps > gpsStaleTimeout;
+    
+    // Hysteresis thresholds to prevent flickering
+    const SPEED_ON_THRESHOLD = 10; // km/h - turn on at cycling speed
+    const SPEED_OFF_THRESHOLD = 8; // km/h - turn off below this (prevents rapid toggling)
+    
+    const shouldTurnOn = currentSpeed >= SPEED_ON_THRESHOLD;
+    const shouldTurnOff = currentSpeed < SPEED_OFF_THRESHOLD;
+    
+    const gpsTimeoutPeriod = 30000; // 30 seconds cooldown after stopping
     
     // Clear existing cooldown timer
     if (minimapCooldownRef.current) {
@@ -128,7 +138,17 @@ export default function OverlayPage() {
     
     if (settings.minimapSpeedBased) {
       // Auto on movement mode
-      if (isMovingFast && isGpsActive) {
+      if (isGpsStale) {
+        // GPS data is stale (no updates in 10 seconds) - hide immediately and reset speed
+        console.log('⏱️ GPS STALE DETECTED:', {
+          timeSinceLastGps: `${(timeSinceLastGps / 1000).toFixed(1)}s`,
+          threshold: '10s',
+          action: 'Hiding minimap and resetting speed to 0'
+        });
+        setMinimapVisible(false);
+        setCurrentSpeed(0);
+        lastMinimapHideTime.current = 0;
+      } else if (shouldTurnOn && isGpsActive) {
         // Show immediately when moving fast (10+ km/h) and GPS is active
         setMinimapVisible(true);
         lastMinimapHideTime.current = 0; // Reset hide time
@@ -136,8 +156,8 @@ export default function OverlayPage() {
         // No GPS updates in 30 seconds - hide immediately
         setMinimapVisible(false);
         lastMinimapHideTime.current = 0;
-      } else if (!isMovingFast && minimapVisible) {
-        // Speed dropped below 10 km/h - start cooldown
+      } else if (shouldTurnOff && minimapVisible) {
+        // Speed dropped below 8 km/h - start cooldown
         if (lastMinimapHideTime.current === 0) {
           lastMinimapHideTime.current = now;
         }
@@ -146,10 +166,11 @@ export default function OverlayPage() {
           setMinimapVisible(false);
           lastMinimapHideTime.current = 0;
         }, gpsTimeoutPeriod);
-      } else {
-        // Not moving fast; keep hidden until cooldown logic says otherwise
+      } else if (!minimapVisible && !shouldTurnOn) {
+        // Not moving fast; keep hidden
         setMinimapVisible(false);
       }
+      // else: maintain current state (in the hysteresis gap between 8-10 km/h)
     } else if (settings.showMinimap) {
       // Always show mode
       setMinimapVisible(true);
@@ -157,7 +178,7 @@ export default function OverlayPage() {
       // Hidden mode
       setMinimapVisible(false);
     }
-  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible, checkGpsUpdateRate]);
+  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible, checkGpsUpdateRate, lastGpsUpdateTime]);
 
   // Update settings ref whenever settings change
   useEffect(() => {
@@ -656,32 +677,49 @@ export default function OverlayPage() {
             // Track GPS update for minimap logic
             const now = Date.now();
             gpsUpdateTimes.current.push(now);
+            setLastGpsUpdateTime(now); // Track last GPS update time for stale detection
             
             // Get previous coordinates for distance calculation
             const prevCoords = lastCoords.current;
             const prevTime = lastCoordsTime.current;
             
-            // Use RTIRL's speed if available, otherwise calculate our own
-            let speedKmh = 0;
+            // Calculate BOTH speeds and use the maximum for reliability
+            let rtirlSpeed = 0;
+            let calculatedSpeed = 0;
+            
+            // Get RTIRL's speed if available
             if (typeof payload === 'object' && payload !== null && 'speed' in payload) {
               const rtirlPayload = payload as RTIRLPayload;
               if (typeof rtirlPayload.speed === 'number' && rtirlPayload.speed >= 0) {
-                speedKmh = rtirlPayload.speed;
+                rtirlSpeed = rtirlPayload.speed;
               }
             }
             
-            // Fallback to calculated speed if RTIRL speed not available
-            if (speedKmh === 0) {
-              if (prevCoords && prevTime > 0) {
-                const movedMeters = distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]);
-                const timeDiffHours = (now - prevTime) / (1000 * 60 * 60);
-                if (timeDiffHours > 0) {
-                  speedKmh = (movedMeters / 1000) / timeDiffHours;
-                }
+            // Always calculate speed from coordinates as backup/verification
+            if (prevCoords && prevTime > 0) {
+              const movedMeters = distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]);
+              const timeDiffHours = (now - prevTime) / (1000 * 60 * 60);
+              if (timeDiffHours > 0) {
+                calculatedSpeed = (movedMeters / 1000) / timeDiffHours;
               }
             }
             
-            setCurrentSpeed(Math.round(speedKmh));
+            // Use the maximum of both speeds (more reliable for detecting movement)
+            const speedKmh = Math.max(rtirlSpeed, calculatedSpeed);
+            const roundedSpeed = Math.round(speedKmh);
+            
+            // Log speed calculation for debugging (only when significant changes)
+            if (Math.abs(roundedSpeed - currentSpeed) >= 2 || roundedSpeed >= 10) {
+              console.log('🚀 SPEED UPDATE:', {
+                rtirlSpeed: rtirlSpeed.toFixed(1) + ' km/h',
+                calculatedSpeed: calculatedSpeed.toFixed(1) + ' km/h',
+                finalSpeed: roundedSpeed + ' km/h',
+                threshold: '10 km/h',
+                minimapTrigger: roundedSpeed >= 10 ? '✅ WILL SHOW' : '❌ TOO SLOW'
+              });
+            }
+            
+            setCurrentSpeed(roundedSpeed);
             
             lastCoords.current = [lat!, lon!];
             lastCoordsTime.current = now;
@@ -877,17 +915,8 @@ export default function OverlayPage() {
     return timeReady && locationReady && weatherReady && flagReady;
   }, [timezone, timeDisplay, settings]);
 
-  // Timeout fallback - show overlay after 10 seconds even if some elements failed
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (!overlayVisible) {
-        setLoadingTimeout(true);
-        OverlayLogger.warn('Overlay loading timeout - showing with available elements only');
-      }
-    }, 10000); // 10 second timeout
-    
-    return () => clearTimeout(timeout);
-  }, [overlayVisible]);
+  // Note: Timeout fallback removed since overlay now shows immediately when time/timezone are ready
+  // Location and weather are optional and will appear when loaded
 
   useEffect(() => {
     if (isOverlayReady && !overlayVisible) {

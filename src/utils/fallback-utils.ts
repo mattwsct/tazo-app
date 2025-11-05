@@ -55,52 +55,58 @@ export function createLocationWithCountryFallback(lat: number, lon: number): Loc
  * Returns both country name and country code for flag display
  */
 function estimateCountryFromCoords(lat: number, lon: number): { name: string; code: string; isWater?: boolean } | null {
-  // Gulf region - treat as United States waters
-  if (lat >= 18 && lat <= 31 && lon >= -98 && lon <= -80) {
+  // Gulf region - international waters (no country owns it)
+  // Extended to include Honduras coast (15°N) and full Gulf region
+  if (lat >= 12 && lat <= 31 && lon >= -98 && lon <= -80) {
     // Randomly alternate between names to keep everyone entertained
     const gulfNames = ['Gulf of Mexico', 'Gulf of America', 'Gulf of Autism'];
     const randomName = gulfNames[Math.floor(Math.random() * gulfNames.length)];
-    return { name: randomName, code: 'us', isWater: true };
+    console.log('🌊 GULF FALLBACK:', {
+      coordinates: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+      selectedName: randomName,
+      allOptions: gulfNames
+    });
+    return { name: randomName, code: '', isWater: true };
   }
   
-  // Caribbean Sea
+  // Caribbean Sea - international waters
   if (lat >= 10 && lat <= 25 && lon >= -88 && lon <= -60) {
-    return { name: 'Caribbean Sea', code: 'us', isWater: true };
+    return { name: 'Caribbean Sea', code: '', isWater: true };
   }
   
-  // Atlantic Ocean (North America East Coast)
+  // Atlantic Ocean - international waters
   if (lat >= 25 && lat <= 45 && lon >= -80 && lon <= -30) {
-    return { name: 'Atlantic Ocean', code: 'us', isWater: true };
+    return { name: 'Atlantic Ocean', code: '', isWater: true };
   }
   
-  // Pacific Ocean (West Coast)
+  // Pacific Ocean - international waters
   if (lat >= 20 && lat <= 60 && lon >= -180 && lon <= -120) {
-    return { name: 'Pacific Ocean', code: 'us', isWater: true };
+    return { name: 'Pacific Ocean', code: '', isWater: true };
   }
   
-  // Mediterranean Sea
+  // Mediterranean Sea - international waters
   if (lat >= 30 && lat <= 46 && lon >= -6 && lon <= 37) {
-    return { name: 'Mediterranean Sea', code: 'gr', isWater: true };
+    return { name: 'Mediterranean Sea', code: '', isWater: true };
   }
   
-  // North Sea
+  // North Sea - international waters
   if (lat >= 51 && lat <= 62 && lon >= -4 && lon <= 9) {
-    return { name: 'North Sea', code: 'gb', isWater: true };
+    return { name: 'North Sea', code: '', isWater: true };
   }
   
-  // Baltic Sea
+  // Baltic Sea - international waters
   if (lat >= 53 && lat <= 66 && lon >= 9 && lon <= 31) {
-    return { name: 'Baltic Sea', code: 'se', isWater: true };
+    return { name: 'Baltic Sea', code: '', isWater: true };
   }
   
-  // Sea of Japan
+  // Sea of Japan - international waters
   if (lat >= 34 && lat <= 52 && lon >= 127 && lon <= 143) {
-    return { name: 'Sea of Japan', code: 'jp', isWater: true };
+    return { name: 'Sea of Japan', code: '', isWater: true };
   }
   
-  // South China Sea
+  // South China Sea - international waters
   if (lat >= 0 && lat <= 25 && lon >= 100 && lon <= 121) {
-    return { name: 'South China Sea', code: 'cn', isWater: true };
+    return { name: 'South China Sea', code: '', isWater: true };
   }
   
   // Japan
