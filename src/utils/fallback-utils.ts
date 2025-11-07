@@ -58,8 +58,8 @@ function estimateCountryFromCoords(lat: number, lon: number): { name: string; co
   // Gulf region - international waters (no country owns it)
   // Extended to include Honduras coast (15°N) and full Gulf region
   if (lat >= 12 && lat <= 31 && lon >= -98 && lon <= -80) {
-    // Randomly alternate between names to keep everyone entertained
-    const gulfNames = ['Gulf of Mexico', 'Gulf of America', 'Gulf of Autism'];
+    // Randomly alternate between names
+    const gulfNames = ['Gulf of Mexico', 'Gulf of America'];
     const randomName = gulfNames[Math.floor(Math.random() * gulfNames.length)];
     console.log('🌊 GULF FALLBACK:', {
       coordinates: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,

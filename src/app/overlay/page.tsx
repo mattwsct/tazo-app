@@ -823,7 +823,17 @@ export default function OverlayPage() {
                     }
                     
                     lastLocationTime.current = Date.now();
-                    if (loc) {
+                    
+                    // Check if LocationIQ returned useful data (more than just country)
+                    const hasUsefulData = loc && (
+                      loc.city || loc.town || loc.village || loc.municipality ||
+                      loc.neighbourhood || loc.suburb || loc.district
+                    );
+                    
+                    const hasCountryData = loc && loc.country;
+                    
+                    if (loc && hasUsefulData) {
+                      // Full location data available - use it
                       const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
                       lastRawLocation.current = loc;
                       if (formatted.primary) {
@@ -840,8 +850,24 @@ export default function OverlayPage() {
                         createDateTimeFormatters(loc.timezone);
                         setTimezone(loc.timezone);
                       }
+                    } else if (hasCountryData) {
+                      // Only country data available
+                      // If LocationIQ returned a country, we're on land (not in water)
+                      // LocationIQ doesn't return country data for open water coordinates
+                      OverlayLogger.warn('LocationIQ returned only country data, using country name');
+                      setLocation({
+                        primary: loc!.country || '',
+                        context: undefined, // No context line needed when showing country as primary
+                        countryCode: loc!.countryCode || ''
+                      });
+                      
+                      // Use timezone if available
+                      if (loc!.timezone) {
+                        createDateTimeFormatters(loc!.timezone);
+                        setTimezone(loc!.timezone);
+                      }
                     } else {
-                      // LocationIQ failed, use coordinate fallback
+                      // LocationIQ failed completely, use coordinate fallback
                       OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
                       
                       const fallbackLocation = createLocationWithCountryFallback(lat!, lon!);
@@ -849,7 +875,7 @@ export default function OverlayPage() {
                         setLocation({
                           primary: fallbackLocation.primary,
                           context: fallbackLocation.country,
-                          countryCode: fallbackLocation.countryCode || '' // Use country code from fallback if available
+                          countryCode: fallbackLocation.countryCode || ''
                         });
                       }
                     }

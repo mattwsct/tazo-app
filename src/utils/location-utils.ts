@@ -73,39 +73,69 @@ function isValidLocationName(name: string): boolean {
 // === 🗺️ LOCATION DATA EXTRACTION ===
 
 /**
- * Gets the best location name for a given precision level with quality-based selection
+ * Gets the best location name for a given precision level with automatic fallback
  * 
- * Uses simple filtering to skip names with numbers, empty fields, and long names.
+ * If the requested precision level has names that are too long (>18 chars),
+ * it automatically falls back to the next less specific level.
+ * 
+ * Fallback hierarchy:
+ * - neighborhood → city → state → country
+ * - city → state → country
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
-  const getField = (fields: (keyof LocationData)[]): string => {
+  // Try to find a valid name at the current precision level
+  const tryFields = (fields: (keyof LocationData)[]): string | null => {
     for (const field of fields) {
       const value = location[field] as string | undefined;
       if (value && isValidLocationName(value)) {
         return value;
       }
     }
-    return '';
+    return null;
   };
 
-  let keysToUse: (keyof LocationData)[];
+  // Define fields for each specificity level
+  const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'suburb', 'quarter', 'ward', 'district', 'borough'];
+  const cityProperFields: (keyof LocationData)[] = ['city', 'town', 'village', 'hamlet', 'municipality'];
+  const countyFields: (keyof LocationData)[] = ['county'];
+  const stateFields: (keyof LocationData)[] = ['state', 'region', 'province'];
   
+  // Try requested precision first
   if (precision === 'neighborhood') {
-    // Most specific meaningful location
-    keysToUse = ['neighbourhood', 'quarter', 'ward', 'suburb', 'district', 'city'];
+    // Most specific: try neighborhood
+    const neighborhoodName = tryFields(neighborhoodFields);
+    if (neighborhoodName) return neighborhoodName;
+    
+    // Fallback to county (often shorter and more recognizable than full city name)
+    const countyName = tryFields(countyFields);
+    if (countyName) return countyName;
+    
+    // Fallback to city proper
+    const cityName = tryFields(cityProperFields);
+    if (cityName) return cityName;
+    
+    // Fallback to state
+    const stateName = tryFields(stateFields);
+    if (stateName) return stateName;
   } else { // city
-    // City level location
-    keysToUse = ['city', 'municipality', 'district'];
+    // Less specific: try city proper first
+    const cityName = tryFields(cityProperFields);
+    if (cityName) return cityName;
+    
+    // Fallback to state (skip county to show broader info)
+    const stateName = tryFields(stateFields);
+    if (stateName) return stateName;
   }
 
-  return getField(keysToUse);
+  // If nothing worked, return empty (will use country as last resort in formatLocation)
+  return '';
 }
 
 /**
- * Gets country for a location with 16-character limit
+ * Gets country for a location with character limit
  * 
  * Rules:
- * - Always show country name if it fits (≤16 chars)
+ * - Always show country name if it fits (≤18 chars)
  * - If country name is too long, show country code
  * - No dedupe checks needed
  */
