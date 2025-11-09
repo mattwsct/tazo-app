@@ -132,30 +132,21 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
 }
 
 /**
- * Gets country for a location with character limit
+ * Gets country for a location with character limit and smart shortening
  * 
  * Rules:
- * - Always show country name if it fits (≤18 chars)
- * - If country name is too long, show country code
- * - No dedupe checks needed
+ * - If name fits (≤18 chars), use it
+ * - If too long, try smart shortening (e.g., "USA", "UK", "DR Congo")
+ * - As last resort, use country code
  */
 function getCountry(location: LocationData): string | null {
   const countryCode = (location.countryCode || '').toUpperCase();
   const countryName = location.country || '';
   
-  // Always try country name first if it exists
-  if (countryName) {
-    if (countryName.length <= MAX_CHARACTER_LIMIT) {
-      return countryName;
-    }
-  }
+  if (!countryName && !countryCode) return null;
   
-  // If country name is too long, use country code
-  if (countryCode) {
-    return countryCode;
-  }
-  
-  return null;
+  // Use the smart formatting function which handles shortenings
+  return formatCountryName(countryName, countryCode) || null;
 }
 
 
@@ -167,14 +158,23 @@ function getCountry(location: LocationData): string | null {
 export function formatCountryName(countryName: string, countryCode = ''): string {
   if (!countryName && !countryCode) return '';
   
-  // Only shorten the most common long country names
+  // Smart shortening for common long country names (keeping them readable)
   const commonShortenings: Record<string, string> = {
-    'united states of america': 'USA',
-    'united states': 'USA',
-    'united kingdom of great britain and northern ireland': 'UK',
-    'united kingdom': 'UK',
+    'united states of america': 'United States',
+    'united kingdom of great britain and northern ireland': 'United Kingdom',
     'russian federation': 'Russia',
-    'democratic republic of the congo': 'DR Congo'
+    'democratic republic of the congo': 'DR Congo',
+    'republic of the congo': 'Congo',
+    'czech republic': 'Czechia',
+    'dominican republic': 'Dominican Rep.',
+    'united arab emirates': 'UAE',
+    'bosnia and herzegovina': 'Bosnia',
+    'trinidad and tobago': 'Trinidad & Tobago',
+    'saint vincent and the grenadines': 'St. Vincent',
+    'sao tome and principe': 'São Tomé',
+    'antigua and barbuda': 'Antigua',
+    'saint kitts and nevis': 'St. Kitts',
+    'central african republic': 'CAR'
   };
   
   if (countryName) {
