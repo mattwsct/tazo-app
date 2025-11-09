@@ -267,13 +267,36 @@ export function formatLocation(
   }
   
   const primary = getLocationByPrecision(location, displayMode);
-  if (!primary) return { primary: '', country: undefined };
-  
   const country = getCountry(location);
   
+  // If no primary location found, still show country on line 2 if available
+  if (!primary) {
+    if (country) {
+      return { 
+        primary: '', // Line 1 stays blank
+        country: country, // Line 2 shows country with flag
+        countryCode: location.countryCode || ''
+      };
+    }
+    // No location data at all
+    return { primary: '', country: undefined };
+  }
+  
+  // Check for duplicate names (e.g., "Singapore, Singapore" or "Monaco, Monaco")
+  // If primary matches country, hide primary and show only country with flag on line 2
+  if (country && primary.toLowerCase() === country.toLowerCase()) {
+    return {
+      primary: '', // Hide duplicate on line 1
+      country: country, // Show country with flag on line 2
+      countryCode: location.countryCode || ''
+    };
+  }
+  
+  // Normal case: show location with country context
   return {
     primary,
-    country: country || undefined
+    country: country || undefined,
+    countryCode: location.countryCode || ''
   };
 }
 

@@ -39,6 +39,33 @@ const HeartRateMonitor = dynamic(() => import('@/components/HeartRateMonitor'), 
   loading: () => null
 });
 
+// Flag component to reduce duplication
+const LocationFlag = ({ countryCode, flagLoaded, getEmojiFlag }: { 
+  countryCode: string; 
+  flagLoaded: boolean; 
+  getEmojiFlag: (code: string) => string;
+}) => (
+  <span className="location-flag-inline">
+    {flagLoaded ? (
+      <img
+        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
+        alt={`Country: ${countryCode}`}
+        width={28}
+        height={18}
+        className="location-flag-small"
+      />
+    ) : (
+      <span 
+        className="location-flag-emoji-small"
+        style={{ fontSize: '16px', lineHeight: '16px' }}
+        title={`Country: ${countryCode}`}
+      >
+        {getEmojiFlag(countryCode)}
+      </span>
+    )}
+  </span>
+);
+
 export default function OverlayPage() {
   useRenderPerformance('OverlayPage');
 
@@ -140,11 +167,6 @@ export default function OverlayPage() {
       // Auto on movement mode
       if (isGpsStale) {
         // GPS data is stale (no updates in 10 seconds) - hide immediately and reset speed
-        console.log('⏱️ GPS STALE DETECTED:', {
-          timeSinceLastGps: `${(timeSinceLastGps / 1000).toFixed(1)}s`,
-          threshold: '10s',
-          action: 'Hiding minimap and resetting speed to 0'
-        });
         setMinimapVisible(false);
         setCurrentSpeed(0);
         lastMinimapHideTime.current = 0;
@@ -337,14 +359,6 @@ export default function OverlayPage() {
         formattedTime,
         utcFormatted,
         offset: `UTC time: ${utcFormatted}, Local time: ${formattedTime}`
-      });
-      
-      console.log('🕐 TIMEZONE SET:', {
-        timezone,
-        'UTC time': utcFormatted,
-        'Local time': formattedTime,
-        'UTC ISO': utcTime,
-        'Local string': localTime
       });
     } catch (error) {
       OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone, error });
@@ -707,17 +721,6 @@ export default function OverlayPage() {
             // Use the maximum of both speeds (more reliable for detecting movement)
             const speedKmh = Math.max(rtirlSpeed, calculatedSpeed);
             const roundedSpeed = Math.round(speedKmh);
-            
-            // Log speed calculation for debugging (only when significant changes)
-            if (Math.abs(roundedSpeed - currentSpeed) >= 2 || roundedSpeed >= 10) {
-              console.log('🚀 SPEED UPDATE:', {
-                rtirlSpeed: rtirlSpeed.toFixed(1) + ' km/h',
-                calculatedSpeed: calculatedSpeed.toFixed(1) + ' km/h',
-                finalSpeed: roundedSpeed + ' km/h',
-                threshold: '10 km/h',
-                minimapTrigger: roundedSpeed >= 10 ? '✅ WILL SHOW' : '❌ TOO SLOW'
-              });
-            }
             
             setCurrentSpeed(roundedSpeed);
             
@@ -1138,7 +1141,9 @@ export default function OverlayPage() {
             {locationDisplay && (
               <div className="location">
                 <div className="location-text">
-                  <div className="location-main">{locationDisplay.primary}</div>
+                  {locationDisplay.primary && (
+                    <div className="location-main">{locationDisplay.primary}</div>
+                  )}
                   {locationDisplay.context && (
                     // Only show country name/flag if:
                     // 1. Not in custom mode (always show for GPS modes), OR
@@ -1147,25 +1152,11 @@ export default function OverlayPage() {
                       <div className="location-sub">
                         {locationDisplay.context}
                         {locationDisplay.countryCode && (
-                          <span className="location-flag-inline">
-                            {flagLoaded ? (
-                              <img
-                                src={`https://flagcdn.com/${locationDisplay.countryCode.toLowerCase()}.svg`}
-                                alt={`Country: ${locationDisplay.countryCode}`}
-                                width={28}
-                                height={18}
-                                className="location-flag-small"
-                              />
-                            ) : (
-                              <span 
-                                className="location-flag-emoji-small"
-                                style={{ fontSize: '16px', lineHeight: '16px' }}
-                                title={`Country: ${locationDisplay.countryCode}`}
-                              >
-                                {getEmojiFlag(locationDisplay.countryCode)}
-                              </span>
-                            )}
-                          </span>
+                          <LocationFlag 
+                            countryCode={locationDisplay.countryCode} 
+                            flagLoaded={flagLoaded} 
+                            getEmojiFlag={getEmojiFlag} 
+                          />
                         )}
                       </div>
                     )

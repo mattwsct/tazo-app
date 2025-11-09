@@ -61,11 +61,6 @@ function estimateCountryFromCoords(lat: number, lon: number): { name: string; co
     // Randomly alternate between names
     const gulfNames = ['Gulf of Mexico', 'Gulf of America'];
     const randomName = gulfNames[Math.floor(Math.random() * gulfNames.length)];
-    console.log('🌊 GULF FALLBACK:', {
-      coordinates: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
-      selectedName: randomName,
-      allOptions: gulfNames
-    });
     return { name: randomName, code: '', isWater: true };
   }
   
