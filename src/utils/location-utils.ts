@@ -160,8 +160,10 @@ export function formatCountryName(countryName: string, countryCode = ''): string
   
   // Smart shortening for common long country names (keeping them readable)
   const commonShortenings: Record<string, string> = {
-    'united states of america': 'United States',
-    'united kingdom of great britain and northern ireland': 'United Kingdom',
+    'united states of america': 'USA',
+    'united states': 'USA',
+    'united kingdom of great britain and northern ireland': 'UK',
+    'united kingdom': 'UK',
     'russian federation': 'Russia',
     'democratic republic of the congo': 'DR Congo',
     'republic of the congo': 'Congo',
