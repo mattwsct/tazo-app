@@ -1,6 +1,6 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
-const MAX_CHARACTER_LIMIT = 18; // Single limit for both primary and country lines
+const MAX_CHARACTER_LIMIT = 20; // Single limit for both primary and country lines
 
 export interface LocationData {
   country?: string;
@@ -75,7 +75,7 @@ function isValidLocationName(name: string): boolean {
 /**
  * Gets the best location name for a given precision level with automatic fallback
  * 
- * If the requested precision level has names that are too long (>18 chars),
+ * If the requested precision level has names that are too long (>20 chars),
  * it automatically falls back to the next less specific level.
  * 
  * Fallback hierarchy:
@@ -135,18 +135,26 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
  * Gets country for a location with character limit and smart shortening
  * 
  * Rules:
- * - If name fits (≤18 chars), use it
+ * - If name fits (≤20 chars), use it
  * - If too long, try smart shortening (e.g., "USA", "UK", "DR Congo")
  * - As last resort, use country code
+ * 
+ * Returns both the formatted country and whether it was abbreviated
  */
-function getCountry(location: LocationData): string | null {
+function getCountry(location: LocationData): { country: string; wasAbbreviated: boolean } | null {
   const countryCode = (location.countryCode || '').toUpperCase();
   const countryName = location.country || '';
   
   if (!countryName && !countryCode) return null;
   
   // Use the smart formatting function which handles shortenings
-  return formatCountryName(countryName, countryCode) || null;
+  const formatted = formatCountryName(countryName, countryCode);
+  if (!formatted) return null;
+  
+  // Check if it was abbreviated (formatted is different from original)
+  const wasAbbreviated = formatted.toLowerCase() !== countryName.toLowerCase();
+  
+  return { country: formatted, wasAbbreviated };
 }
 
 
@@ -264,19 +272,21 @@ export function formatLocation(
   
   // For custom mode, we still need the country name/flag, just not the primary location
   if (displayMode === 'custom') {
-    const country = getCountry(location);
-    return { primary: '', country: country || undefined };
+    const countryInfo = getCountry(location);
+    const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
+    return { primary: '', country: countryDisplay };
   }
   
   const primary = getLocationByPrecision(location, displayMode);
-  const country = getCountry(location);
+  const countryInfo = getCountry(location);
   
   // If no primary location found, still show country on line 2 if available
   if (!primary) {
-    if (country) {
+    if (countryInfo) {
+      const countryDisplay = formatCountryWithState(location, countryInfo);
       return { 
         primary: '', // Line 1 stays blank
-        country: country, // Line 2 shows country with flag
+        country: countryDisplay, // Line 2 shows country with flag
         countryCode: location.countryCode || ''
       };
     }
@@ -286,20 +296,58 @@ export function formatLocation(
   
   // Check for duplicate names (e.g., "Singapore, Singapore" or "Monaco, Monaco")
   // If primary matches country, hide primary and show only country with flag on line 2
-  if (country && primary.toLowerCase() === country.toLowerCase()) {
+  if (countryInfo && primary.toLowerCase() === countryInfo.country.toLowerCase()) {
+    const countryDisplay = formatCountryWithState(location, countryInfo);
     return {
       primary: '', // Hide duplicate on line 1
-      country: country, // Show country with flag on line 2
+      country: countryDisplay, // Show country with flag on line 2
       countryCode: location.countryCode || ''
     };
   }
   
   // Normal case: show location with country context
+  const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
   return {
     primary,
-    country: country || undefined,
+    country: countryDisplay,
     countryCode: location.countryCode || ''
   };
+}
+
+/**
+ * Formats country display, optionally including state when country is abbreviated
+ * 
+ * Rules:
+ * - If country was abbreviated (e.g., "USA", "UK") and state exists, try "State, Country"
+ * - If that fits in 20 chars, use it
+ * - Otherwise, just show country
+ */
+function formatCountryWithState(
+  location: LocationData, 
+  countryInfo: { country: string; wasAbbreviated: boolean }
+): string {
+  const { country, wasAbbreviated } = countryInfo;
+  
+  // Only add state if country was abbreviated
+  if (!wasAbbreviated) {
+    return country;
+  }
+  
+  // Try to get state/province/region
+  const state = location.state || location.province || location.region;
+  if (!state) {
+    return country;
+  }
+  
+  // Try formatting with state
+  const withState = `${state}, ${country}`;
+  
+  // If it fits, use it; otherwise just country
+  if (withState.length <= MAX_CHARACTER_LIMIT) {
+    return withState;
+  }
+  
+  return country;
 }
 
 /**
