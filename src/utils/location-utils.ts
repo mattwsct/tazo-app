@@ -35,7 +35,7 @@ export interface LocationData {
 
 export interface LocationDisplay {
   primary: string;  // Most precise available location
-  country?: string; // Country name (no dedupe vs primary)
+  country?: string; // Country name with flag (Line 2)
   countryCode?: string; // ISO country code for flag display
 }
 
@@ -266,9 +266,16 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'neighborhood' | 'city' | 'custom' | 'hidden' = 'neighborhood'
+  displayMode: 'neighborhood' | 'city' | 'country' | 'custom' | 'hidden' = 'neighborhood'
 ): LocationDisplay {
   if (!location || displayMode === 'hidden') return { primary: '', country: undefined };
+  
+  // For country mode, show only country name/flag (no primary location)
+  if (displayMode === 'country') {
+    const countryInfo = getCountry(location);
+    const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
+    return { primary: '', country: countryDisplay, countryCode: location.countryCode || '' };
+  }
   
   // For custom mode, we still need the country name/flag, just not the primary location
   if (displayMode === 'custom') {

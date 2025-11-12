@@ -73,7 +73,7 @@ export default function OverlayPage() {
   const [timeDisplay, setTimeDisplay] = useState({ time: '', date: '' });
   const [location, setLocation] = useState<{ 
     primary: string; 
-    context?: string;
+    country?: string;
     countryCode?: string;
   } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
@@ -211,10 +211,10 @@ export default function OverlayPage() {
     if (lastRawLocation.current && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
-        if (formatted.primary) {
+        if (formatted.primary || formatted.country) {
           setLocation({
             primary: formatted.primary,
-            context: formatted.country,
+            country: formatted.country,
             countryCode: lastRawLocation.current.countryCode || ''
           });
         }
@@ -839,10 +839,10 @@ export default function OverlayPage() {
                       // Full location data available - use it
                       const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
                       lastRawLocation.current = loc;
-                      if (formatted.primary) {
+                      if (formatted.primary || formatted.country) {
                         setLocation({
                           primary: formatted.primary,
-                          context: formatted.country,
+                          country: formatted.country,
                           countryCode: loc.countryCode || ''
                         });
                       }
@@ -860,7 +860,7 @@ export default function OverlayPage() {
                       OverlayLogger.warn('LocationIQ returned only country data, using country name');
                       setLocation({
                         primary: loc!.country || '',
-                        context: undefined, // No context line needed when showing country as primary
+                        country: undefined, // No country line needed when showing country as primary
                         countryCode: loc!.countryCode || ''
                       });
                       
@@ -877,7 +877,7 @@ export default function OverlayPage() {
                       if (fallbackLocation.primary) {
                         setLocation({
                           primary: fallbackLocation.primary,
-                          context: fallbackLocation.country,
+                          country: fallbackLocation.country,
                           countryCode: fallbackLocation.countryCode || ''
                         });
                       }
@@ -978,13 +978,14 @@ export default function OverlayPage() {
     if (settings.locationDisplay === 'custom') {
       return {
         primary: settings.customLocation?.trim() || '',
-        context: location?.context, // Show the actual country name
+        country: location?.country, // Show the actual country name
         countryCode: location?.countryCode?.toUpperCase()
       };
     }
     
     // Show location data if available
-    if (location && location.primary) {
+    // For 'country' mode, primary will be empty but country will have country data
+    if (location && (location.primary || location.country)) {
       return {
         ...location,
         countryCode: location.countryCode?.toUpperCase()
@@ -1144,13 +1145,13 @@ export default function OverlayPage() {
                   {locationDisplay.primary && (
                     <div className="location-main">{locationDisplay.primary}</div>
                   )}
-                  {locationDisplay.context && (
+                  {locationDisplay.country && (
                     // Only show country name/flag if:
                     // 1. Not in custom mode (always show for GPS modes), OR
                     // 2. In custom mode AND showCountryName is enabled
                     (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
                       <div className="location-sub">
-                        {locationDisplay.context}
+                        {locationDisplay.country}
                         {locationDisplay.countryCode && (
                           <LocationFlag 
                             countryCode={locationDisplay.countryCode} 

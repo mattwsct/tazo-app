@@ -91,6 +91,7 @@ export default function AdminPage() {
       const fallbackExamples: Record<LocationDisplayMode, string> = {
         neighborhood: 'Burleigh Heads, Australia',
         city: 'Gold Coast, Australia',
+        country: 'Texas, USA',
         custom: '',
         hidden: ''
       };
@@ -99,10 +100,17 @@ export default function AdminPage() {
     
     // Use the same formatLocation function as the overlay
     const formatted = formatLocation(currentLocationData, mode);
-    if (formatted.country) {
+    
+    // For country-only mode, just return the country (no primary location)
+    if (mode === 'country') {
+      return formatted.country || '';
+    }
+    
+    // For other modes, combine primary and country
+    if (formatted.primary && formatted.country) {
       return `${formatted.primary}, ${formatted.country}`;
     }
-    return formatted.primary;
+    return formatted.primary || formatted.country || '';
   }, [currentLocationData, locationExamplesLoading]);
   
 
@@ -226,6 +234,8 @@ export default function AdminPage() {
     if (updates.locationDisplay !== undefined) {
       if (updates.locationDisplay === 'neighborhood') {
         mergedSettings.mapZoomLevel = 'neighborhood'; // More zoomed in for neighborhoods
+      } else if (updates.locationDisplay === 'country') {
+        mergedSettings.mapZoomLevel = 'national'; // National view for country-only mode
       } else {
         mergedSettings.mapZoomLevel = 'city'; // City level for other locations
       }
@@ -514,6 +524,12 @@ export default function AdminPage() {
                     description: getLocationExample('city')
                   },
                   { 
+                    value: 'country', 
+                    label: 'Country Only', 
+                    icon: '🌍',
+                    description: getLocationExample('country')
+                  },
+                  { 
                     value: 'custom', 
                     label: 'Custom', 
                     icon: '✏️',
@@ -577,6 +593,7 @@ export default function AdminPage() {
                 )}
                 {settings.locationDisplay === 'neighborhood' && 'Shows most specific location (neighborhood/area) with country'}
                 {settings.locationDisplay === 'city' && 'Shows city level location with country'}
+                {settings.locationDisplay === 'country' && 'Shows only country name with flag (may include state/territory)'}
                 {settings.locationDisplay === 'custom' && 'Displays custom text instead of GPS-based location'}
                 {settings.locationDisplay === 'hidden' && 'Hides location display completely'}
               </div>
