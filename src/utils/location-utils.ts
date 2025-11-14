@@ -79,7 +79,7 @@ function isValidLocationName(name: string): boolean {
  * it automatically falls back to the next less specific level.
  * 
  * Fallback hierarchy:
- * - neighborhood → city → state → country
+ * - neighborhood → road → city → county → state → country
  * - city → state → country
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
@@ -96,6 +96,7 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
 
   // Define fields for each specificity level
   const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'suburb', 'quarter', 'ward', 'district', 'borough'];
+  const roadFields: (keyof LocationData)[] = ['road']; // Road names are very specific (e.g., "FM 170")
   const cityProperFields: (keyof LocationData)[] = ['city', 'town', 'village', 'hamlet', 'municipality'];
   const countyFields: (keyof LocationData)[] = ['county'];
   const stateFields: (keyof LocationData)[] = ['state', 'region', 'province'];
@@ -106,13 +107,18 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
     const neighborhoodName = tryFields(neighborhoodFields);
     if (neighborhoodName) return neighborhoodName;
     
-    // Fallback to county (often shorter and more recognizable than full city name)
-    const countyName = tryFields(countyFields);
-    if (countyName) return countyName;
+    // Fallback to road name (very specific, e.g., "FM 170", "Main Street")
+    // This makes neighborhood mode different from city mode when no neighborhood data exists
+    const roadName = tryFields(roadFields);
+    if (roadName) return roadName;
     
-    // Fallback to city proper
+    // Fallback to city proper (more specific than county)
     const cityName = tryFields(cityProperFields);
     if (cityName) return cityName;
+    
+    // Fallback to county (broader than city, but still more specific than state)
+    const countyName = tryFields(countyFields);
+    if (countyName) return countyName;
     
     // Fallback to state
     const stateName = tryFields(stateFields);
@@ -211,13 +217,15 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 
 /**
  * Gets the best city name by selecting the first available city field
+ * Note: Excludes suburb as suburbs are neighborhoods, not cities
  */
 export function getBestCityName(location: LocationData): string {
-  // Simple priority order for city names
+  // Simple priority order for city names (excludes suburb - that's a neighborhood)
   return location.city || 
          location.municipality || 
          location.town || 
-         location.suburb || 
+         location.village ||
+         location.hamlet ||
          '';
 }
 
@@ -241,13 +249,13 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
 // === 🎨 MAIN LOCATION FORMATTING ===
 
 /**
- * Formats location data for overlay display with 16-character limits
+ * Formats location data for overlay display with 20-character limits
  * 
  * Rules:
  * - Precise: Shows most specific location with country
  * - Broad: Shows broader location with country
  * - Region: Shows state/province with country
- * - Country line: Country name if ≤16 chars, else country code
+ * - Country line: Country name if ≤20 chars, else country code
  * 
  * @example
  * // City mode: Shows city with state/country context
@@ -281,7 +289,7 @@ export function formatLocation(
   if (displayMode === 'custom') {
     const countryInfo = getCountry(location);
     const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
-    return { primary: '', country: countryDisplay };
+    return { primary: '', country: countryDisplay, countryCode: location.countryCode || '' };
   }
   
   const primary = getLocationByPrecision(location, displayMode);
@@ -310,6 +318,22 @@ export function formatLocation(
       country: countryDisplay, // Show country with flag on line 2
       countryCode: location.countryCode || ''
     };
+  }
+  
+  // Also check if primary matches state when state is shown in country display
+  // This prevents duplicates like "Texas" with "Texas, USA"
+  // In this case, show the state as primary and just the country (without state) on line 2
+  if (countryInfo && countryInfo.wasAbbreviated) {
+    const state = location.state || location.province || location.region;
+    if (state && primary.toLowerCase() === state.toLowerCase()) {
+      // Primary matches state, and state would be shown in country display
+      // Show state as primary and just country (without state) to avoid duplication
+      return {
+        primary, // Show state on line 1
+        country: countryInfo.country, // Show just country on line 2 (state already shown on line 1)
+        countryCode: location.countryCode || ''
+      };
+    }
   }
   
   // Normal case: show location with country context
