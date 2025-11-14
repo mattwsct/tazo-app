@@ -128,22 +128,27 @@ export interface SunriseSunsetData {
  * Optimized for English street names globally (including Japan)
  * Includes caching to reduce API calls and respect daily limits
  */
+export interface LocationIQResult {
+  location: LocationData | null;
+  was404: boolean; // True if LocationIQ returned 404 (no address found - likely on water)
+}
+
 export async function fetchLocationFromLocationIQ(
   lat: number, 
   lon: number, 
   apiKey: string
-): Promise<LocationData | null> {
+): Promise<LocationIQResult> {
   // Check API health before attempting call
   if (!canUseApi('locationiq')) {
     ApiLogger.warn('locationiq', 'API is currently unavailable, using fallback');
-    return null; // Will trigger fallback in calling code
+    return { location: null, was404: false }; // Will trigger fallback in calling code
   }
 
   if (!isValidApiKey(apiKey)) {
     const error = 'Invalid or missing API key';
     ApiLogger.warn('locationiq', error);
     recordApiFailure('locationiq', error);
-    return null;
+    return { location: null, was404: false };
   }
 
   // Check rate limits (per-second only)
@@ -151,7 +156,7 @@ export async function fetchLocationFromLocationIQ(
     const error = 'Rate limit exceeded';
     ApiLogger.warn('locationiq', error);
     recordApiFailure('locationiq', error, true);
-    return null;
+    return { location: null, was404: false };
   }
 
   try {
@@ -192,13 +197,15 @@ export async function fetchLocationFromLocationIQ(
           lat,
           lon
         });
+        recordApiFailure('locationiq', error, isRateLimited);
+        return { location: null, was404: true }; // 404 means likely on water
       } else {
         error = `HTTP ${response.status}: ${response.statusText}`;
         ApiLogger.error('locationiq', error);
       }
       
       recordApiFailure('locationiq', error, isRateLimited);
-      return null; // Return null instead of throwing error
+      return { location: null, was404: false }; // Other errors are not 404
     }
     
     const data = await response.json();
@@ -255,7 +262,7 @@ export async function fetchLocationFromLocationIQ(
             municipality: result.municipality
           }
         });
-        return null;
+        return { location: null, was404: false };
       }
       
       // Debug: Log the raw API response to see what fields are actually available
@@ -277,7 +284,7 @@ export async function fetchLocationFromLocationIQ(
         fullAddress: data.address
       });
       
-      return result;
+      return { location: result, was404: false };
     }
     
     throw new Error('No address data in response');
@@ -286,7 +293,7 @@ export async function fetchLocationFromLocationIQ(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     ApiLogger.error('locationiq', 'Failed to fetch location', error);
     recordApiFailure('locationiq', errorMessage);
-    return null;
+    return { location: null, was404: false };
   }
 }
 

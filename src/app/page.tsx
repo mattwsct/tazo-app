@@ -63,8 +63,8 @@ export default function AdminPage() {
         
         if (lat !== null && lon !== null && API_KEYS.LOCATIONIQ) {
           const locationResult = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
-          if (locationResult) {
-            setCurrentLocationData(locationResult);
+          if (locationResult && locationResult.location) {
+            setCurrentLocationData(locationResult.location);
           }
         }
       }
@@ -338,8 +338,8 @@ export default function AdminPage() {
                 try {
                   if (API_KEYS.LOCATIONIQ) {
                     const locationResult = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
-                    if (locationResult) {
-                      setCurrentLocationData(locationResult);
+                    if (locationResult && locationResult.location) {
+                      setCurrentLocationData(locationResult.location);
                       setLocationExamplesLoading(false);
                     }
                   }

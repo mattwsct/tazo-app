@@ -79,8 +79,17 @@ function isValidLocationName(name: string): boolean {
  * it automatically falls back to the next less specific level.
  * 
  * Fallback hierarchy:
- * - neighborhood → road → city → county → state → country
- * - city → state → country
+ * - neighborhood: neighborhood/suburb/ward → city/town → county → state/province → country
+ * - city: city/town → county → state/province → country
+ * 
+ * Both modes share the same fallback chain (city → county → state/province).
+ * Neighborhood mode adds neighborhood fields at the beginning for more precision.
+ * 
+ * Global compatibility:
+ * - Works worldwide as LocationIQ provides country-appropriate fields
+ * - County is optional (doesn't exist in Japan, many EU countries)
+ * - Field names vary by country but hierarchy is generally consistent
+ * - Only area-based locations are used (no street addresses/road names)
  */
 function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
   // Try to find a valid name at the current precision level
@@ -94,44 +103,39 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
     return null;
   };
 
-  // Define fields for each specificity level
+  // Define fields for each specificity level (only area-based, no street addresses)
+  // These fields are ordered by typical specificity globally, though exact hierarchy varies by country
   const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'suburb', 'quarter', 'ward', 'district', 'borough'];
-  const roadFields: (keyof LocationData)[] = ['road']; // Road names are very specific (e.g., "FM 170")
   const cityProperFields: (keyof LocationData)[] = ['city', 'town', 'village', 'hamlet', 'municipality'];
-  const countyFields: (keyof LocationData)[] = ['county'];
+  const countyFields: (keyof LocationData)[] = ['county']; // May not exist in all countries (e.g., Japan, many European countries)
   const stateFields: (keyof LocationData)[] = ['state', 'region', 'province'];
   
-  // Try requested precision first
+  // Both modes share the same fallback chain: city → county → state/province
+  // Neighborhood mode adds neighborhood fields at the beginning for more precision
+  // Note: County is optional and will be skipped if not present in the location data
+  
   if (precision === 'neighborhood') {
-    // Most specific: try neighborhood
+    // Most specific: try neighborhood/local areas first
+    // These vary by country: suburb (AU/UK), ward (UK/JP), district (many), neighbourhood (US)
     const neighborhoodName = tryFields(neighborhoodFields);
     if (neighborhoodName) return neighborhoodName;
     
-    // Fallback to road name (very specific, e.g., "FM 170", "Main Street")
-    // This makes neighborhood mode different from city mode when no neighborhood data exists
-    const roadName = tryFields(roadFields);
-    if (roadName) return roadName;
-    
-    // Fallback to city proper (more specific than county)
-    const cityName = tryFields(cityProperFields);
-    if (cityName) return cityName;
-    
-    // Fallback to county (broader than city, but still more specific than state)
-    const countyName = tryFields(countyFields);
-    if (countyName) return countyName;
-    
-    // Fallback to state
-    const stateName = tryFields(stateFields);
-    if (stateName) return stateName;
-  } else { // city
-    // Less specific: try city proper first
-    const cityName = tryFields(cityProperFields);
-    if (cityName) return cityName;
-    
-    // Fallback to state (skip county to show broader info)
-    const stateName = tryFields(stateFields);
-    if (stateName) return stateName;
+    // Then fall through to shared fallback chain (city → county → state)
   }
+  
+  // Shared fallback chain for both modes: city → county → state/province
+  // This works globally as LocationIQ provides appropriate fields for each country
+  const cityName = tryFields(cityProperFields);
+  if (cityName) return cityName;
+  
+  // County may not exist in all countries (e.g., Japan uses prefectures, many EU countries skip this level)
+  // If present, it's typically between city and state/province in the hierarchy
+  const countyName = tryFields(countyFields);
+  if (countyName) return countyName;
+  
+  // State/province/region level (exists in most countries: US states, Japanese prefectures, EU regions, etc.)
+  const stateName = tryFields(stateFields);
+  if (stateName) return stateName;
 
   // If nothing worked, return empty (will use country as last resort in formatLocation)
   return '';

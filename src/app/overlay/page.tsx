@@ -811,21 +811,31 @@ export default function OverlayPage() {
               if (shouldFetchLocation) {
                 promises.push(
                   (async () => {
+                    // Capture request timestamp to prevent race conditions
+                    // If multiple requests are in flight, only use the most recent result
+                    const requestTimestamp = Date.now();
+                    
                     let loc: LocationData | null = null;
                     
                     // Fetch location from LocationIQ
+                    let locationIQWas404 = false;
                     if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
                       trackApiCall('locationiq');
                       const locationResult = await safeApiCall(
                         () => fetchLocationFromLocationIQ(lat!, lon!, API_KEYS.LOCATIONIQ!),
                         'LocationIQ fetch'
                       );
-                      if (locationResult && typeof locationResult === 'object') {
-                        loc = locationResult as LocationData;
+                      if (locationResult && typeof locationResult === 'object' && 'location' in locationResult) {
+                        const result = locationResult as { location: LocationData | null; was404: boolean };
+                        loc = result.location;
+                        locationIQWas404 = result.was404;
                       }
                     }
                     
-                    lastLocationTime.current = Date.now();
+                    // Only update if this is still the most recent request
+                    // Prevents race conditions where older requests complete after newer ones
+                    if (requestTimestamp >= lastLocationTime.current) {
+                      lastLocationTime.current = requestTimestamp;
                     
                     // Check if LocationIQ returned useful data (more than just country)
                     const hasUsefulData = loc && (
@@ -835,53 +845,62 @@ export default function OverlayPage() {
                     
                     const hasCountryData = loc && loc.country;
                     
-                    if (loc && hasUsefulData) {
-                      // Full location data available - use it
-                      const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-                      lastRawLocation.current = loc;
-                      if (formatted.primary || formatted.country) {
-                        setLocation({
-                          primary: formatted.primary,
-                          country: formatted.country,
-                          countryCode: loc.countryCode || ''
-                        });
+                      if (loc && hasUsefulData) {
+                        // Full location data available - use it
+                        const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
+                        lastRawLocation.current = loc;
+                        
+                        // Only update if we have something meaningful to display
+                        // Check for non-empty strings (not just truthy, since empty string is falsy)
+                        if (formatted.primary.trim() || formatted.country) {
+                          setLocation({
+                            primary: formatted.primary.trim() || '', // Ensure no leading/trailing whitespace
+                            country: formatted.country,
+                            countryCode: loc.countryCode || ''
+                          });
+                        }
+                        
+                        // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
+                        // This overrides OpenWeatherMap's less accurate offset-based timezone
+                        if (loc.timezone) {
+                          createDateTimeFormatters(loc.timezone);
+                          setTimezone(loc.timezone);
+                        }
+                      } else if (hasCountryData) {
+                        // Only country data available
+                        // If LocationIQ returned a country, we're on land (not in water)
+                        // LocationIQ doesn't return country data for open water coordinates
+                        OverlayLogger.warn('LocationIQ returned only country data, using country name');
+                        const countryName = loc!.country?.trim() || '';
+                        if (countryName) {
+                          setLocation({
+                            primary: countryName,
+                            country: undefined, // No country line needed when showing country as primary
+                            countryCode: loc!.countryCode || ''
+                          });
+                        }
+                        
+                        // Use timezone if available
+                        if (loc!.timezone) {
+                          createDateTimeFormatters(loc!.timezone);
+                          setTimezone(loc!.timezone);
+                        }
+                      } else {
+                        // LocationIQ failed completely, use coordinate fallback
+                        // Only show ocean names if LocationIQ returned 404 (likely on water)
+                        OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
+                        
+                        const fallbackLocation = createLocationWithCountryFallback(lat!, lon!, locationIQWas404);
+                        // Only update if we have a meaningful primary location
+                        if (fallbackLocation.primary && fallbackLocation.primary.trim()) {
+                          setLocation({
+                            primary: fallbackLocation.primary.trim(),
+                            country: fallbackLocation.country,
+                            countryCode: fallbackLocation.countryCode || ''
+                          });
+                        }
                       }
-                      
-                      // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
-                      // This overrides OpenWeatherMap's less accurate offset-based timezone
-                      if (loc.timezone) {
-                        createDateTimeFormatters(loc.timezone);
-                        setTimezone(loc.timezone);
-                      }
-                    } else if (hasCountryData) {
-                      // Only country data available
-                      // If LocationIQ returned a country, we're on land (not in water)
-                      // LocationIQ doesn't return country data for open water coordinates
-                      OverlayLogger.warn('LocationIQ returned only country data, using country name');
-                      setLocation({
-                        primary: loc!.country || '',
-                        country: undefined, // No country line needed when showing country as primary
-                        countryCode: loc!.countryCode || ''
-                      });
-                      
-                      // Use timezone if available
-                      if (loc!.timezone) {
-                        createDateTimeFormatters(loc!.timezone);
-                        setTimezone(loc!.timezone);
-                      }
-                    } else {
-                      // LocationIQ failed completely, use coordinate fallback
-                      OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
-                      
-                      const fallbackLocation = createLocationWithCountryFallback(lat!, lon!);
-                      if (fallbackLocation.primary) {
-                        setLocation({
-                          primary: fallbackLocation.primary,
-                          country: fallbackLocation.country,
-                          countryCode: fallbackLocation.countryCode || ''
-                        });
-                      }
-                    }
+                    } // End of race condition check
                   })()
                 );
               }
