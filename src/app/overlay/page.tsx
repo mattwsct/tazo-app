@@ -85,6 +85,7 @@ export default function OverlayPage() {
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [flagLoaded, setFlagLoaded] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
+  const [minimapOpacity, setMinimapOpacity] = useState(0.95); // Track opacity for fade transitions
   const [dayNightTrigger, setDayNightTrigger] = useState(0); // Triggers recalculation of day/night
   const [lastGpsUpdateTime, setLastGpsUpdateTime] = useState(0); // Track when we last got GPS data
 
@@ -104,6 +105,7 @@ export default function OverlayPage() {
   const gpsUpdateTimes = useRef<number[]>([]);
   const lastMinimapHideTime = useRef(0);
   const minimapCooldownRef = useRef<NodeJS.Timeout | null>(null);
+  const minimapFadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   
   // Safe API call wrapper to prevent silent failures
@@ -156,49 +158,89 @@ export default function OverlayPage() {
     const shouldTurnOff = currentSpeed < SPEED_OFF_THRESHOLD;
     
     const gpsTimeoutPeriod = 30000; // 30 seconds cooldown after stopping
+    const fadeOutDuration = 1000; // 1 second fade out
     
-    // Clear existing cooldown timer
+    // Clear existing timers
     if (minimapCooldownRef.current) {
       clearTimeout(minimapCooldownRef.current);
       minimapCooldownRef.current = null;
+    }
+    if (minimapFadeTimeoutRef.current) {
+      clearTimeout(minimapFadeTimeoutRef.current);
+      minimapFadeTimeoutRef.current = null;
     }
     
     if (settings.minimapSpeedBased) {
       // Auto on movement mode
       if (isGpsStale) {
-        // GPS data is stale (no updates in 10 seconds) - hide immediately and reset speed
-        setMinimapVisible(false);
+        // GPS data is stale (no updates in 10 seconds) - fade out and reset speed
+        setMinimapOpacity(0);
+        minimapFadeTimeoutRef.current = setTimeout(() => {
+          setMinimapVisible(false);
+        }, fadeOutDuration);
         setCurrentSpeed(0);
         lastMinimapHideTime.current = 0;
       } else if (shouldTurnOn && isGpsActive) {
         // Show immediately when moving fast (10+ km/h) and GPS is active
+        // If fading out, cancel fade and show immediately
+        if (minimapFadeTimeoutRef.current) {
+          clearTimeout(minimapFadeTimeoutRef.current);
+          minimapFadeTimeoutRef.current = null;
+        }
         setMinimapVisible(true);
+        setMinimapOpacity(0.95); // Full opacity
         lastMinimapHideTime.current = 0; // Reset hide time
       } else if (!isGpsActive) {
-        // No GPS updates in 30 seconds - hide immediately
-        setMinimapVisible(false);
+        // No GPS updates in 30 seconds - fade out
+        setMinimapOpacity(0);
+        minimapFadeTimeoutRef.current = setTimeout(() => {
+          setMinimapVisible(false);
+        }, fadeOutDuration);
         lastMinimapHideTime.current = 0;
       } else if (shouldTurnOff && minimapVisible) {
-        // Speed dropped below 8 km/h - start cooldown
+        // Speed dropped below 8 km/h - start cooldown, then fade out
         if (lastMinimapHideTime.current === 0) {
           lastMinimapHideTime.current = now;
         }
-        // Hide after cooldown period
+        // Start fade out after cooldown period
         minimapCooldownRef.current = setTimeout(() => {
-          setMinimapVisible(false);
-          lastMinimapHideTime.current = 0;
+          setMinimapOpacity(0);
+          minimapFadeTimeoutRef.current = setTimeout(() => {
+            setMinimapVisible(false);
+            lastMinimapHideTime.current = 0;
+          }, fadeOutDuration);
         }, gpsTimeoutPeriod);
       } else if (!minimapVisible && !shouldTurnOn) {
         // Not moving fast; keep hidden
         setMinimapVisible(false);
+        setMinimapOpacity(0);
       }
       // else: maintain current state (in the hysteresis gap between 8-10 km/h)
     } else if (settings.showMinimap) {
-      // Always show mode
-      setMinimapVisible(true);
+      // Always show mode - ensure full opacity
+      // If currently hidden, fade in smoothly
+      if (!minimapVisible) {
+        setMinimapVisible(true);
+        setMinimapOpacity(0);
+        requestAnimationFrame(() => {
+          setMinimapOpacity(0.95);
+        });
+      } else {
+        setMinimapOpacity(0.95);
+      }
     } else {
-      // Hidden mode
-      setMinimapVisible(false);
+      // Hidden mode - fade out smoothly when manually toggled off
+      if (minimapVisible) {
+        // Start fade out
+        setMinimapOpacity(0);
+        minimapFadeTimeoutRef.current = setTimeout(() => {
+          setMinimapVisible(false);
+        }, fadeOutDuration);
+      } else {
+        // Already hidden
+        setMinimapVisible(false);
+        setMinimapOpacity(0);
+      }
     }
   }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible, checkGpsUpdateRate, lastGpsUpdateTime]);
 
@@ -229,11 +271,14 @@ export default function OverlayPage() {
     updateMinimapVisibility();
   }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, updateMinimapVisibility]);
 
-  // Cleanup minimap cooldown timer on unmount
+  // Cleanup minimap timers on unmount
   useEffect(() => {
     return () => {
       if (minimapCooldownRef.current) {
         clearTimeout(minimapCooldownRef.current);
+      }
+      if (minimapFadeTimeoutRef.current) {
+        clearTimeout(minimapFadeTimeoutRef.current);
       }
     };
   }, []);
@@ -1160,7 +1205,7 @@ export default function OverlayPage() {
           <div className="overlay-box">
             {locationDisplay && (
               <div className="location">
-                <div className="location-text">
+                <div className={`location-text ${!locationDisplay.primary ? 'country-only' : ''}`}>
                   {locationDisplay.primary && (
                     <div className="location-main">{locationDisplay.primary}</div>
                   )}
@@ -1203,7 +1248,10 @@ export default function OverlayPage() {
           )}
 
           {mapCoords && minimapVisible && (
-            <div className="minimap">
+            <div 
+              className="minimap" 
+              style={{ opacity: minimapOpacity }}
+            >
               {sunriseSunset ? (
                 <ErrorBoundary fallback={<div className="minimap-placeholder">Map unavailable</div>}>
                   <MapLibreMinimap 

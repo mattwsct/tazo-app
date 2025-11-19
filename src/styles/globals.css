@@ -326,6 +326,18 @@ body.overlay-page {
   gap: var(--gap-sm);
 }
 
+/* When country is the only location (no primary), make it larger like primary */
+.location-text.country-only .location-sub {
+  font-size: var(--font-size-lg);
+  opacity: 1;
+}
+
+/* Adjust flag size when country is primary */
+.location-text.country-only .location-flag {
+  width: 48px;
+  height: 30px;
+}
+
 .location-flag-container {
   flex-shrink: 0; /* Prevent flag from shrinking */
   display: flex;
@@ -545,8 +557,18 @@ body.overlay-page {
   /* Prevent any potential border artifacts */
   outline: none;
   /* Performance optimizations */
-  will-change: transform;
+  will-change: transform, opacity;
   contain: layout style paint;
+  /* Smooth fade transitions */
+  transition: opacity 1s ease-out;
+}
+
+.minimap.fading-out {
+  opacity: 0;
+}
+
+.minimap.fading-in {
+  opacity: 0.95;
 }
 
 /* Position minimap relative to top-right container - handled by minimap positioning */
