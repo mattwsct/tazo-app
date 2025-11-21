@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, TodoItem } from '@/types/settings';
 import { formatLocation, LocationData } from '@/utils/location-utils';
 import { fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { API_KEYS, type RTIRLPayload } from '@/utils/overlay-constants';
@@ -30,6 +30,10 @@ export default function AdminPage() {
   // Custom location input state (for debouncing)
   const [customLocationInput, setCustomLocationInput] = useState('');
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Todo editing state
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingTodoText, setEditingTodoText] = useState('');
 
   // Real location data for examples
   const [currentLocationData, setCurrentLocationData] = useState<LocationData | null>(null);
@@ -488,6 +492,163 @@ export default function AdminPage() {
       <main className="main-content">
         <div className="settings-container">
           
+          {/* To-Do List Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>✅ To-Do List</h2>
+              <p className="section-description">Manage tasks that appear on the overlay</p>
+            </div>
+            
+            <div className="setting-group">
+              <div className="todo-input-group">
+                <input
+                  type="text"
+                  placeholder="Add a new task..."
+                  className="todo-input"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                      const newTodo: TodoItem = {
+                        id: Date.now().toString(),
+                        text: e.currentTarget.value.trim(),
+                        completed: false
+                      };
+                      const updatedTodos = [...(settings.todos || []), newTodo];
+                      handleSettingsChange({ todos: updatedTodos });
+                      e.currentTarget.value = '';
+                    }
+                  }}
+                />
+                <button
+                  className="btn btn-primary btn-small"
+                  onClick={(e) => {
+                    const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                    if (input && input.value.trim()) {
+                      const newTodo: TodoItem = {
+                        id: Date.now().toString(),
+                        text: input.value.trim(),
+                        completed: false
+                      };
+                      const updatedTodos = [...(settings.todos || []), newTodo];
+                      handleSettingsChange({ todos: updatedTodos });
+                      input.value = '';
+                    }
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+
+              {settings.todos && settings.todos.length > 0 && (
+                <>
+                  <div className="todo-list-actions">
+                    <button
+                      className="btn btn-secondary btn-small"
+                      onClick={() => {
+                        if (confirm('Are you sure you want to delete all tasks?')) {
+                          handleSettingsChange({ todos: [] });
+                        }
+                      }}
+                      disabled={!settings.todos || settings.todos.length === 0}
+                    >
+                      🗑️ Delete All
+                    </button>
+                  </div>
+                  <div className="todo-list">
+                    {settings.todos.map((todo) => (
+                      <div key={todo.id} className="todo-item-admin">
+                        <label className="todo-checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={todo.completed}
+                            onChange={() => {
+                              const updatedTodos = settings.todos!.map(t =>
+                                t.id === todo.id ? { ...t, completed: !t.completed } : t
+                              );
+                              handleSettingsChange({ todos: updatedTodos });
+                            }}
+                            className="todo-checkbox"
+                            disabled={editingTodoId === todo.id}
+                          />
+                          {editingTodoId === todo.id ? (
+                            <input
+                              type="text"
+                              value={editingTodoText}
+                              onChange={(e) => setEditingTodoText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  if (editingTodoText.trim()) {
+                                    const updatedTodos = settings.todos!.map(t =>
+                                      t.id === todo.id ? { ...t, text: editingTodoText.trim() } : t
+                                    );
+                                    handleSettingsChange({ todos: updatedTodos });
+                                  }
+                                  setEditingTodoId(null);
+                                  setEditingTodoText('');
+                                } else if (e.key === 'Escape') {
+                                  setEditingTodoId(null);
+                                  setEditingTodoText('');
+                                }
+                              }}
+                              onBlur={() => {
+                                if (editingTodoText.trim()) {
+                                  const updatedTodos = settings.todos!.map(t =>
+                                    t.id === todo.id ? { ...t, text: editingTodoText.trim() } : t
+                                  );
+                                  handleSettingsChange({ todos: updatedTodos });
+                                }
+                                setEditingTodoId(null);
+                                setEditingTodoText('');
+                              }}
+                              className="todo-edit-input"
+                              autoFocus
+                            />
+                          ) : (
+                            <span 
+                              className={`todo-text-admin ${todo.completed ? 'completed' : ''}`}
+                              onDoubleClick={() => {
+                                setEditingTodoId(todo.id);
+                                setEditingTodoText(todo.text);
+                              }}
+                              style={{ cursor: 'pointer' }}
+                              title="Double-click to edit"
+                            >
+                              {todo.text}
+                            </span>
+                          )}
+                        </label>
+                        <div className="todo-actions">
+                          {editingTodoId !== todo.id && (
+                            <button
+                              className="todo-edit-btn"
+                              onClick={() => {
+                                setEditingTodoId(todo.id);
+                                setEditingTodoText(todo.text);
+                              }}
+                              aria-label="Edit task"
+                            >
+                              ✏️
+                            </button>
+                          )}
+                          <button
+                            className="todo-delete-btn"
+                            onClick={() => {
+                              const updatedTodos = settings.todos!.filter(t => t.id !== todo.id);
+                              handleSettingsChange({ todos: updatedTodos });
+                            }}
+                            aria-label="Delete task"
+                            disabled={editingTodoId === todo.id}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+
           {/* Location & Display Section */}
           <section className="settings-section">
             <div className="section-header">

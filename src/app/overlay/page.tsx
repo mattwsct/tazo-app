@@ -1278,6 +1278,20 @@ export default function OverlayPage() {
             </div>
           )}
         </div>
+
+        {/* To-Do List - Bottom Right */}
+        {settings.todos && settings.todos.length > 0 && (
+          <div className="bottom-right">
+            <div className="overlay-box todo-list-box">
+              {settings.todos.map((todo) => (
+                <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
+                  <span className="todo-checkbox-icon">{todo.completed ? '✓' : '☐'}</span>
+                  <span className="todo-text">{todo.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </ErrorBoundary>
   );

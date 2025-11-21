@@ -3,6 +3,12 @@
 export type LocationDisplayMode = 'neighborhood' | 'city' | 'country' | 'custom' | 'hidden';
 export type MapZoomLevel = 'neighborhood' | 'city' | 'regional' | 'national' | 'ocean' | 'continental';
 
+export interface TodoItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
   customLocation?: string;
@@ -11,6 +17,7 @@ export interface OverlaySettings {
   showMinimap: boolean;
   minimapSpeedBased: boolean;
   mapZoomLevel: MapZoomLevel;
+  todos?: TodoItem[];
 }
 
 // Default settings (single source of truth)
@@ -22,10 +29,12 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showMinimap: false,
   minimapSpeedBased: false,
   mapZoomLevel: 'city',
+  todos: [],
 };
 
 // Valid settings schema for validation
-export const SETTINGS_CONFIG: Record<keyof OverlaySettings, 'boolean' | 'string' | 'number'> = {
+// Note: 'todos' is handled separately in the validator as it's an array
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   customLocation: 'string',
   showCountryName: 'boolean',
@@ -47,4 +56,4 @@ export interface HeartbeatMessage {
   timestamp: number;
 }
 
-export type SSEMessage = SettingsUpdateMessage | HeartbeatMessage; 
+export type SSEMessage = SettingsUpdateMessage | HeartbeatMessage;

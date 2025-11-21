@@ -1,6 +1,6 @@
 // Settings validation utility to prevent malicious entries
 
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, SETTINGS_CONFIG } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, SETTINGS_CONFIG, TodoItem } from '@/types/settings';
 
 
 
@@ -35,9 +35,32 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     }
   }
 
+  // Validate todos array (special handling)
+  if (settings.todos !== undefined) {
+    if (Array.isArray(settings.todos)) {
+      const validTodos: TodoItem[] = [];
+      for (const todo of settings.todos) {
+        if (todo && typeof todo === 'object' && 'id' in todo && 'text' in todo && 'completed' in todo) {
+          const todoObj = todo as Record<string, unknown>;
+          if (typeof todoObj.id === 'string' && typeof todoObj.text === 'string' && typeof todoObj.completed === 'boolean') {
+            validTodos.push({
+              id: todoObj.id,
+              text: String(todoObj.text).slice(0, 200), // Limit text length
+              completed: Boolean(todoObj.completed)
+            });
+          }
+        }
+      }
+      cleanSettings.todos = validTodos;
+    } else {
+      console.warn('Invalid type for todos: expected array');
+      rejectedKeys.push('todos');
+    }
+  }
+
   // Log any rejected keys (potential malicious entries)
   for (const key of Object.keys(settings)) {
-    if (!(key in SETTINGS_CONFIG)) {
+    if (!(key in SETTINGS_CONFIG) && key !== 'todos') { // todos is handled separately
       rejectedKeys.push(key);
     }
   }
@@ -63,6 +86,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
               showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
               minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
               mapZoomLevel: cleanSettings.mapZoomLevel ?? DEFAULT_OVERLAY_SETTINGS.mapZoomLevel,
+              todos: cleanSettings.todos ?? DEFAULT_OVERLAY_SETTINGS.todos,
             };
 
   return completeSettings;
@@ -80,7 +104,7 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const settingsObj = settings as Record<string, unknown>;
 
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in SETTINGS_CONFIG)) {
+    if (!(key in SETTINGS_CONFIG) && key !== 'todos') { // todos is a valid key
       maliciousKeys.push(key);
     }
   }
