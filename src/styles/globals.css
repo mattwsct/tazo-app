@@ -105,7 +105,7 @@ body.overlay-page {
 
 /* Consistent spacing between all lines */
 .overlay-box > *:not(:last-child) {
-  margin-bottom: var(--gap-md); /* 7.5px - slightly increased for better readability */
+  margin-bottom: 5px; /* Fixed spacing for consistent gaps regardless of font size */
 }
 
 /* Alignment handled by parent containers */
@@ -169,7 +169,7 @@ body.overlay-page {
   text-transform: uppercase;
   line-height: 1;
   align-self: flex-end;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0; /* Remove extra margin to maintain consistent spacing */
 }
 
 /* === DATE DISPLAY STYLES === */
