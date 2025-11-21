@@ -1280,10 +1280,16 @@ export default function OverlayPage() {
         </div>
 
         {/* To-Do List - Bottom Right */}
-        {settings.todos && settings.todos.length > 0 && (
+        {settings.showTodoList && settings.todos && settings.todos.length > 0 && (
           <div className="bottom-right">
             <div className="overlay-box todo-list-box">
-              {settings.todos.map((todo) => (
+              {[...(settings.todos || [])]
+                .sort((a, b) => {
+                  // Incomplete tasks first, then completed tasks
+                  if (a.completed === b.completed) return 0;
+                  return a.completed ? 1 : -1;
+                })
+                .map((todo) => (
                 <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
                   <span className="todo-checkbox-icon">{todo.completed ? '✓' : '☐'}</span>
                   <span className="todo-text">{todo.text}</span>

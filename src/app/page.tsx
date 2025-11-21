@@ -538,6 +538,23 @@ export default function AdminPage() {
                 </button>
               </div>
 
+              <div className="setting-group">
+                <div className="checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.showTodoList ?? false}
+                      onChange={(e) => handleSettingsChange({ showTodoList: e.target.checked })}
+                      className="checkbox-input"
+                    />
+                    <span className="checkbox-text">Show To-Do List on Overlay</span>
+                  </label>
+                </div>
+                <div className="setting-help">
+                  Display the to-do list in the bottom-right corner of the overlay
+                </div>
+              </div>
+
               {settings.todos && settings.todos.length > 0 && (
                 <>
                   <div className="todo-list-actions">
@@ -554,7 +571,13 @@ export default function AdminPage() {
                     </button>
                   </div>
                   <div className="todo-list">
-                    {settings.todos.map((todo) => (
+                    {[...(settings.todos || [])]
+                      .sort((a, b) => {
+                        // Incomplete tasks first, then completed tasks
+                        if (a.completed === b.completed) return 0;
+                        return a.completed ? 1 : -1;
+                      })
+                      .map((todo) => (
                       <div key={todo.id} className="todo-item-admin">
                         <label className="todo-checkbox-label">
                           <input

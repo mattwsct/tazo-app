@@ -58,9 +58,19 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     }
   }
 
+  // Validate showTodoList (it's in SETTINGS_CONFIG but handle explicitly for clarity)
+  if (settings.showTodoList !== undefined) {
+    if (typeof settings.showTodoList === 'boolean') {
+      cleanSettings.showTodoList = settings.showTodoList;
+    } else {
+      console.warn('Invalid type for showTodoList: expected boolean');
+      rejectedKeys.push('showTodoList');
+    }
+  }
+
   // Log any rejected keys (potential malicious entries)
   for (const key of Object.keys(settings)) {
-    if (!(key in SETTINGS_CONFIG) && key !== 'todos') { // todos is handled separately
+    if (!(key in SETTINGS_CONFIG) && key !== 'todos' && key !== 'showTodoList') { // todos and showTodoList are handled separately
       rejectedKeys.push(key);
     }
   }
@@ -87,6 +97,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
               minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
               mapZoomLevel: cleanSettings.mapZoomLevel ?? DEFAULT_OVERLAY_SETTINGS.mapZoomLevel,
               todos: cleanSettings.todos ?? DEFAULT_OVERLAY_SETTINGS.todos,
+              showTodoList: cleanSettings.showTodoList ?? DEFAULT_OVERLAY_SETTINGS.showTodoList,
             };
 
   return completeSettings;
@@ -104,7 +115,7 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const settingsObj = settings as Record<string, unknown>;
 
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in SETTINGS_CONFIG) && key !== 'todos') { // todos is a valid key
+    if (!(key in SETTINGS_CONFIG) && key !== 'todos' && key !== 'showTodoList') { // todos and showTodoList are valid keys
       maliciousKeys.push(key);
     }
   }

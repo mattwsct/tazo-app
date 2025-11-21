@@ -18,6 +18,7 @@ export interface OverlaySettings {
   minimapSpeedBased: boolean;
   mapZoomLevel: MapZoomLevel;
   todos?: TodoItem[];
+  showTodoList?: boolean;
 }
 
 // Default settings (single source of truth)
@@ -30,6 +31,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   minimapSpeedBased: false,
   mapZoomLevel: 'city',
   todos: [],
+  showTodoList: false,
 };
 
 // Valid settings schema for validation
@@ -41,7 +43,8 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos'>, 'b
   showWeather: 'boolean',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',
-  mapZoomLevel: 'string'
+  mapZoomLevel: 'string',
+  showTodoList: 'boolean'
 };
 
 // SSE message types
