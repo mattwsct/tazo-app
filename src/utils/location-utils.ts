@@ -122,20 +122,20 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
     
     // Then fall through to shared fallback chain (city → county → state)
   }
-  
+    
   // Shared fallback chain for both modes: city → county → state/province
   // This works globally as LocationIQ provides appropriate fields for each country
-  const cityName = tryFields(cityProperFields);
-  if (cityName) return cityName;
-  
+    const cityName = tryFields(cityProperFields);
+    if (cityName) return cityName;
+    
   // County may not exist in all countries (e.g., Japan uses prefectures, many EU countries skip this level)
   // If present, it's typically between city and state/province in the hierarchy
   const countyName = tryFields(countyFields);
   if (countyName) return countyName;
-  
+    
   // State/province/region level (exists in most countries: US states, Japanese prefectures, EU regions, etc.)
-  const stateName = tryFields(stateFields);
-  if (stateName) return stateName;
+    const stateName = tryFields(stateFields);
+    if (stateName) return stateName;
 
   // If nothing worked, return empty (will use country as last resort in formatLocation)
   return '';

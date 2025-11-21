@@ -24,13 +24,7 @@
 
 /* === OVERLAY CONTAINER === */
 .overlay-container {
-  /* Force hardware acceleration for better OBS performance */
-  transform: translateZ(0);
-  /* Ensure proper rendering */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Prevent any potential rendering artifacts */
-  backface-visibility: hidden;
+  /* OBS-friendly rendering applied once at container level */
   /* Overlay positioning and visibility */
   position: fixed;
   top: 0;
@@ -71,27 +65,56 @@ body.overlay-page {
   overflow: hidden;
 }
 
-/* === SHARED CONTAINER STYLES === */
-.overlay-box {
-  background: rgba(0, 0, 0, 0.6);
-  /* Removed backdrop-filter for OBS compatibility */
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-md);
-  padding: var(--gap-xl) var(--gap-3xl);
-  color: white;
-  /* Simplified text-shadow for OBS compatibility */
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
-  /* Simplified box-shadow for OBS compatibility */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  width: fit-content;
-  font-weight: 600;
-  display: flex;
-  flex-direction: column;
-  /* OBS-friendly rendering */
+/* === OBS-FRIENDLY RENDERING UTILITY === */
+/* Shared rendering optimizations for OBS compatibility */
+.obs-render {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transform: translateZ(0);
   backface-visibility: hidden;
+}
+
+/* === SHARED CONTAINER STYLES === */
+/* Unified background - one cohesive block for cleaner appearance */
+.overlay-box {
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  gap: 0;
+  padding: var(--gap-md) var(--gap-xl); /* Increased padding for better breathing room */
+  background: rgba(0, 0, 0, 0.7); /* Slightly darker for better contrast */
+  border-radius: var(--radius-md); /* Larger radius for more modern look */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05); /* Enhanced shadow with subtle border */
+  color: white;
+  font-weight: 600;
+  align-items: flex-start; /* Left-align by default */
+  backdrop-filter: blur(8px); /* Subtle blur for depth */
+}
+
+.overlay-box > * {
+  /* No individual backgrounds - unified container handles it */
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  line-height: 1; /* Consistent line height */
+  white-space: nowrap; /* Prevent text wrapping */
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); /* Consistent shadow for all text */
+}
+
+/* Consistent spacing between all lines */
+.overlay-box > *:not(:last-child) {
+  margin-bottom: var(--gap-md); /* 7.5px - slightly increased for better readability */
+}
+
+/* Alignment handled by parent containers */
+.top-left .overlay-box {
+  align-items: flex-start;
+}
+
+.top-right .overlay-box {
+  align-items: flex-end;
 }
 
 /* Hide container when it has no visible children */
@@ -123,21 +146,15 @@ body.overlay-page {
 .time {
   font-size: var(--font-size-2xl);
   font-weight: 600;
-  margin: 0;
-  line-height: 1;
   display: flex;
   align-items: center;
-}
-
-.time-left {
-  justify-content: flex-start;
+  justify-content: flex-start; /* Always left-aligned */
 }
 
 .time-display {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
-  line-height: 1;
+  gap: var(--gap-xs); /* Use CSS variable instead of hardcoded 4px */
 }
 
 .time-value {
@@ -159,16 +176,10 @@ body.overlay-page {
 .date {
   font-size: var(--font-size-sm);
   font-weight: 800;
-  margin: 0;
-  line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  opacity: 0.8;
+  opacity: 0.85; /* Slightly more visible */
   margin-right: -0.1em;
-}
-
-.date-left {
-  text-align: left;
 }
 
 /* === HEART RATE STYLES === */
@@ -177,8 +188,8 @@ body.overlay-page {
   align-items: center;
   justify-content: flex-start;
   margin: 0;
-  line-height: 1.2;
-  min-height: var(--font-size-lg);
+  line-height: 1; /* Match other elements for consistent spacing */
+  width: fit-content;
 }
 
 /* Hide heart rate wrapper when no heart rate data is visible */
@@ -186,28 +197,13 @@ body.overlay-page {
   display: none;
 }
 
-/* Default container gap - consistent spacing */
-.overlay-box {
-  gap: var(--gap-sm);
-}
-
 .heart-rate {
   color: white;
-  /* Simplified text-shadow for OBS compatibility */
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  margin: 0;
-  line-height: 1.2;
-  min-height: var(--font-size-lg);
   width: 100%;
-  /* OBS-friendly rendering */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .heart-rate-content {
@@ -228,12 +224,6 @@ body.overlay-page {
   width: var(--font-size-lg);
   flex-shrink: 0;
   transition: animation-duration 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-  /* OBS-friendly rendering */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Ensure SVG renders crisp in OBS */
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .heart-rate-icon svg {
@@ -263,62 +253,43 @@ body.overlay-page {
 .heart-rate-value {
   font-size: var(--font-size-lg);
   font-weight: 600;
-  line-height: 1;
   letter-spacing: -0.02em;
-  margin: 0;
-  /* OBS-friendly rendering */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .heart-rate-label {
   font-size: var(--font-size-xs);
   font-weight: 700;
   opacity: 0.9;
-  line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   text-align: left;
-  margin: 0;
-  /* Better vertical alignment with the heart rate number */
   align-self: center;
   transform: translateY(-1px);
 }
 
 /* === LOCATION DISPLAY STYLES === */
-.location {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  margin: 0;
-  text-align: right;
+.location-line {
   display: flex;
-  align-items: center; /* Center flag relative to text height */
+  align-items: center;
   justify-content: flex-end;
   gap: var(--gap-lg);
-}
-
-.location-text {
-  line-height: 1.1;
-  white-space: pre-line;
-  word-wrap: break-word;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
 }
 
 .location-main {
   font-size: var(--font-size-lg);
   font-weight: 600;
-  line-height: 1.1;
+}
+
+.location-sub-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gap-lg);
 }
 
 .location-sub {
   font-size: var(--font-size-base);
   font-weight: 600;
-  line-height: 1.1;
   opacity: 0.9;
   display: flex;
   align-items: center;
@@ -327,13 +298,13 @@ body.overlay-page {
 }
 
 /* When country is the only location (no primary), make it larger like primary */
-.location-text.country-only .location-sub {
+.location-sub-line.country-only .location-sub {
   font-size: var(--font-size-lg);
   opacity: 1;
 }
 
 /* Adjust flag size when country is primary */
-.location-text.country-only .location-flag {
+.location-sub-line.country-only .location-flag {
   width: 48px;
   height: 30px;
 }
@@ -349,11 +320,7 @@ body.overlay-page {
   width: 40px;
   height: 25px;
   border-radius: var(--radius-sm);
-  /* Simplified filter for OBS compatibility */
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
-  /* OBS-friendly rendering */
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .location-flag-inline {
@@ -368,34 +335,25 @@ body.overlay-page {
 .location-flag-small {
   border-radius: 2px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  /* OBS-friendly rendering */
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 .location-flag-emoji-small {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* OBS-friendly rendering */
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 
 
 /* === WEATHER DISPLAY STYLES === */
-.weather {
+.weather-line {
   font-size: var(--font-size-lg);
   font-weight: 600;
-  margin: 0;
-  line-height: 1.2;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--gap-sm);
+  width: fit-content;
 }
 
 .weather-container {
@@ -411,30 +369,21 @@ body.overlay-page {
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--gap-md); /* Use CSS variable instead of hardcoded 8px */
 }
 
 .weather-description,
 .weather-temperature {
   font-size: var(--font-size-sm);
   font-weight: 800;
-  margin: 0;
-  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--gap-lg);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  opacity: 0.8;
+  opacity: 0.85; /* Slightly more visible */
   margin-right: -0.1em;
-  /* Simplified text-shadow for OBS compatibility */
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
-  /* OBS-friendly rendering */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .weather-icon {

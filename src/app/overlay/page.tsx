@@ -130,6 +130,13 @@ export default function OverlayPage() {
   // GPS update rate checking for minimap
   const checkGpsUpdateRate = useCallback(() => {
     const now = Date.now();
+    
+    // First check: if no GPS update in last 15 seconds, GPS is definitely inactive
+    // This catches the case where RTIRL stops sending updates
+    if (lastGpsUpdateTime === 0 || (now - lastGpsUpdateTime) > 15000) {
+      return false;
+    }
+    
     // Count recent updates without mutating the array
     const recentUpdates = gpsUpdateTimes.current.filter(time => now - time < 30000); // Last 30 seconds
     
@@ -140,7 +147,7 @@ export default function OverlayPage() {
     
     // Require at least 2 updates in the last 30 seconds to consider GPS active
     return recentUpdates.length >= 2;
-  }, []);
+  }, [lastGpsUpdateTime]);
 
   // Minimap visibility logic with cooldown and hysteresis
   const updateMinimapVisibility = useCallback(() => {
@@ -176,7 +183,7 @@ export default function OverlayPage() {
         // GPS data is stale (no updates in 10 seconds) - fade out and reset speed
         setMinimapOpacity(0);
         minimapFadeTimeoutRef.current = setTimeout(() => {
-          setMinimapVisible(false);
+        setMinimapVisible(false);
         }, fadeOutDuration);
         setCurrentSpeed(0);
         lastMinimapHideTime.current = 0;
@@ -194,7 +201,7 @@ export default function OverlayPage() {
         // No GPS updates in 30 seconds - fade out
         setMinimapOpacity(0);
         minimapFadeTimeoutRef.current = setTimeout(() => {
-          setMinimapVisible(false);
+        setMinimapVisible(false);
         }, fadeOutDuration);
         lastMinimapHideTime.current = 0;
       } else if (shouldTurnOff && minimapVisible) {
@@ -206,8 +213,8 @@ export default function OverlayPage() {
         minimapCooldownRef.current = setTimeout(() => {
           setMinimapOpacity(0);
           minimapFadeTimeoutRef.current = setTimeout(() => {
-            setMinimapVisible(false);
-            lastMinimapHideTime.current = 0;
+          setMinimapVisible(false);
+          lastMinimapHideTime.current = 0;
           }, fadeOutDuration);
         }, gpsTimeoutPeriod);
       } else if (!minimapVisible && !shouldTurnOn) {
@@ -220,12 +227,12 @@ export default function OverlayPage() {
       // Always show mode - ensure full opacity
       // If currently hidden, fade in smoothly
       if (!minimapVisible) {
-        setMinimapVisible(true);
+      setMinimapVisible(true);
         setMinimapOpacity(0);
         requestAnimationFrame(() => {
           setMinimapOpacity(0.95);
         });
-      } else {
+    } else {
         setMinimapOpacity(0.95);
       }
     } else {
@@ -234,7 +241,7 @@ export default function OverlayPage() {
         // Start fade out
         setMinimapOpacity(0);
         minimapFadeTimeoutRef.current = setTimeout(() => {
-          setMinimapVisible(false);
+      setMinimapVisible(false);
         }, fadeOutDuration);
       } else {
         // Already hidden
@@ -890,61 +897,61 @@ export default function OverlayPage() {
                     
                     const hasCountryData = loc && loc.country;
                     
-                      if (loc && hasUsefulData) {
-                        // Full location data available - use it
-                        const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
-                        lastRawLocation.current = loc;
+                    if (loc && hasUsefulData) {
+                      // Full location data available - use it
+                      const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
+                      lastRawLocation.current = loc;
                         
                         // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
                         if (formatted.primary.trim() || formatted.country) {
-                          setLocation({
+                        setLocation({
                             primary: formatted.primary.trim() || '', // Ensure no leading/trailing whitespace
-                            country: formatted.country,
-                            countryCode: loc.countryCode || ''
-                          });
-                        }
-                        
-                        // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
-                        // This overrides OpenWeatherMap's less accurate offset-based timezone
-                        if (loc.timezone) {
-                          createDateTimeFormatters(loc.timezone);
-                          setTimezone(loc.timezone);
-                        }
-                      } else if (hasCountryData) {
-                        // Only country data available
-                        // If LocationIQ returned a country, we're on land (not in water)
-                        // LocationIQ doesn't return country data for open water coordinates
-                        OverlayLogger.warn('LocationIQ returned only country data, using country name');
+                          country: formatted.country,
+                          countryCode: loc.countryCode || ''
+                        });
+                      }
+                      
+                      // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
+                      // This overrides OpenWeatherMap's less accurate offset-based timezone
+                      if (loc.timezone) {
+                        createDateTimeFormatters(loc.timezone);
+                        setTimezone(loc.timezone);
+                      }
+                    } else if (hasCountryData) {
+                      // Only country data available
+                      // If LocationIQ returned a country, we're on land (not in water)
+                      // LocationIQ doesn't return country data for open water coordinates
+                      OverlayLogger.warn('LocationIQ returned only country data, using country name');
                         const countryName = loc!.country?.trim() || '';
                         if (countryName) {
-                          setLocation({
+                      setLocation({
                             primary: countryName,
-                            country: undefined, // No country line needed when showing country as primary
-                            countryCode: loc!.countryCode || ''
-                          });
+                        country: undefined, // No country line needed when showing country as primary
+                        countryCode: loc!.countryCode || ''
+                      });
                         }
-                        
-                        // Use timezone if available
-                        if (loc!.timezone) {
-                          createDateTimeFormatters(loc!.timezone);
-                          setTimezone(loc!.timezone);
-                        }
-                      } else {
-                        // LocationIQ failed completely, use coordinate fallback
+                      
+                      // Use timezone if available
+                      if (loc!.timezone) {
+                        createDateTimeFormatters(loc!.timezone);
+                        setTimezone(loc!.timezone);
+                      }
+                    } else {
+                      // LocationIQ failed completely, use coordinate fallback
                         // Only show ocean names if LocationIQ returned 404 (likely on water)
-                        OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
-                        
+                      OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
+                      
                         const fallbackLocation = createLocationWithCountryFallback(lat!, lon!, locationIQWas404);
                         // Only update if we have a meaningful primary location
                         if (fallbackLocation.primary && fallbackLocation.primary.trim()) {
-                          setLocation({
+                        setLocation({
                             primary: fallbackLocation.primary.trim(),
-                            country: fallbackLocation.country,
-                            countryCode: fallbackLocation.countryCode || ''
-                          });
-                        }
+                          country: fallbackLocation.country,
+                          countryCode: fallbackLocation.countryCode || ''
+                        });
                       }
+                    }
                     } // End of race condition check
                   })()
                 );
@@ -1167,7 +1174,7 @@ export default function OverlayPage() {
   return (
     <ErrorBoundary>
       <div 
-        className="overlay-container"
+        className="overlay-container obs-render"
         style={{
           opacity: overlayVisible ? 1 : 0,
           transition: 'opacity 0.8s ease-in-out'
@@ -1176,7 +1183,7 @@ export default function OverlayPage() {
         <div className="top-left">
           <div className="overlay-box">
             {timezone && timeDisplay.time && (
-              <div className="time time-left">
+              <div className="time time-left time-line">
                 <div className="time-display">
                   <span className="time-value">{timeDisplay.time.split(' ')[0]}</span>
                   <span className="time-period">{timeDisplay.time.split(' ')[1]}</span>
@@ -1185,13 +1192,13 @@ export default function OverlayPage() {
             )}
             
             {timezone && timeDisplay.date && (
-              <div className="date date-left">
+              <div className="date date-left date-line">
                 {timeDisplay.date}
               </div>
             )}
             
             {API_KEYS.PULSOID && (
-              <ErrorBoundary fallback={<div>Heart rate unavailable</div>}>
+              <ErrorBoundary fallback={<div className="heart-rate-line">Heart rate unavailable</div>}>
                 <HeartRateMonitor 
                   pulsoidToken={API_KEYS.PULSOID} 
                 />
@@ -1204,16 +1211,18 @@ export default function OverlayPage() {
           {settings.locationDisplay !== 'hidden' && (
           <div className="overlay-box">
             {locationDisplay && (
-              <div className="location">
-                <div className={`location-text ${!locationDisplay.primary ? 'country-only' : ''}`}>
-                  {locationDisplay.primary && (
+              <>
+                {locationDisplay.primary && (
+                  <div className="location location-line">
                     <div className="location-main">{locationDisplay.primary}</div>
-                  )}
-                  {locationDisplay.country && (
-                    // Only show country name/flag if:
-                    // 1. Not in custom mode (always show for GPS modes), OR
-                    // 2. In custom mode AND showCountryName is enabled
-                    (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
+                  </div>
+                )}
+                {locationDisplay.country && (
+                  // Only show country name/flag if:
+                  // 1. Not in custom mode (always show for GPS modes), OR
+                  // 2. In custom mode AND showCountryName is enabled
+                  (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
+                    <div className={`location location-line location-sub-line ${!locationDisplay.primary ? 'country-only' : ''}`}>
                       <div className="location-sub">
                         {locationDisplay.country}
                         {locationDisplay.countryCode && (
@@ -1224,14 +1233,14 @@ export default function OverlayPage() {
                           />
                         )}
                       </div>
-                    )
-                  )}
-                </div>
-              </div>
+                    </div>
+                  )
+                )}
+              </>
             )}
             
             {weatherDisplay && settings.showWeather && (
-              <div className="weather">
+              <div className="weather weather-line">
                 <div className="weather-container">
                   <div className="weather-content">
                     <div className="weather-temperature">
