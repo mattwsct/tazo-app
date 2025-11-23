@@ -671,7 +671,7 @@ export default function AdminPage() {
               )}
             </div>
           </section>
-
+          
           {/* Location & Display Section */}
           <section className="settings-section">
             <div className="section-header">

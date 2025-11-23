@@ -59,4 +59,4 @@ export interface HeartbeatMessage {
   timestamp: number;
 }
 
-export type SSEMessage = SettingsUpdateMessage | HeartbeatMessage;
+export type SSEMessage = SettingsUpdateMessage | HeartbeatMessage; 

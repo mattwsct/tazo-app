@@ -117,6 +117,10 @@ body.overlay-page {
   align-items: flex-end;
 }
 
+.bottom-right .overlay-box {
+  align-items: flex-start; /* Left-align content inside, box itself is right-aligned */
+}
+
 /* Hide container when it has no visible children */
 .overlay-box:empty {
   display: none;
@@ -162,10 +166,10 @@ body.overlay-page {
   letter-spacing: 0.1em; /* Match date letter spacing */
   line-height: 1;
   width: 100%;
-  text-align: left;
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
+  text-align: left; /* Natural left-to-right reading flow */
 }
 
 .todo-item.completed {
@@ -192,6 +196,11 @@ body.overlay-page {
 
 .todo-text {
   flex: 1;
+  text-align: left; /* Natural left-to-right reading flow */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%; /* Ensure it respects parent constraints */
 }
 
 /* === TIME DISPLAY STYLES === */

@@ -149,6 +149,13 @@ export default function OverlayPage() {
     return recentUpdates.length >= 2;
   }, [lastGpsUpdateTime]);
 
+  // Check if we have enough recent movements to confirm actual movement (for turning ON)
+  const checkRecentMovements = useCallback((minMovements: number = 3) => {
+    const now = Date.now();
+    const recentUpdates = gpsUpdateTimes.current.filter(time => now - time < 30000); // Last 30 seconds
+    return recentUpdates.length >= minMovements;
+  }, []);
+
   // Minimap visibility logic with cooldown and hysteresis
   const updateMinimapVisibility = useCallback(() => {
     const now = Date.now();
@@ -179,6 +186,13 @@ export default function OverlayPage() {
     
     if (settings.minimapSpeedBased) {
       // Auto on movement mode
+      // Different logic for turning ON vs OFF:
+      // - TURNING ON: Requires speed >= 10 km/h AND 3+ recent GPS movements (confirms actual movement)
+      // - TURNING OFF: Based on staleness checks (no GPS updates) or speed < 8 km/h with cooldown
+      
+      const hasEnoughRecentMovements = checkRecentMovements(3); // Require 3+ movements to turn ON
+      
+      // === TURNING OFF LOGIC (staleness-based) ===
       if (isGpsStale) {
         // GPS data is stale (no updates in 10 seconds) - fade out and reset speed
         setMinimapOpacity(0);
@@ -187,16 +201,6 @@ export default function OverlayPage() {
         }, fadeOutDuration);
         setCurrentSpeed(0);
         lastMinimapHideTime.current = 0;
-      } else if (shouldTurnOn && isGpsActive) {
-        // Show immediately when moving fast (10+ km/h) and GPS is active
-        // If fading out, cancel fade and show immediately
-        if (minimapFadeTimeoutRef.current) {
-          clearTimeout(minimapFadeTimeoutRef.current);
-          minimapFadeTimeoutRef.current = null;
-        }
-        setMinimapVisible(true);
-        setMinimapOpacity(0.95); // Full opacity
-        lastMinimapHideTime.current = 0; // Reset hide time
       } else if (!isGpsActive) {
         // No GPS updates in 30 seconds - fade out
         setMinimapOpacity(0);
@@ -217,6 +221,18 @@ export default function OverlayPage() {
           lastMinimapHideTime.current = 0;
           }, fadeOutDuration);
         }, gpsTimeoutPeriod);
+      }
+      // === TURNING ON LOGIC (speed + recent movements) ===
+      else if (shouldTurnOn && hasEnoughRecentMovements && isGpsActive) {
+        // Show when moving fast (10+ km/h) AND have 3+ recent GPS movements (confirms actual movement)
+        // If fading out, cancel fade and show immediately
+        if (minimapFadeTimeoutRef.current) {
+          clearTimeout(minimapFadeTimeoutRef.current);
+          minimapFadeTimeoutRef.current = null;
+        }
+        setMinimapVisible(true);
+        setMinimapOpacity(0.95); // Full opacity
+        lastMinimapHideTime.current = 0; // Reset hide time
       } else if (!minimapVisible && !shouldTurnOn) {
         // Not moving fast; keep hidden
         setMinimapVisible(false);
@@ -249,7 +265,7 @@ export default function OverlayPage() {
         setMinimapOpacity(0);
       }
     }
-  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible, checkGpsUpdateRate, lastGpsUpdateTime]);
+  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible, checkGpsUpdateRate, checkRecentMovements, lastGpsUpdateTime]);
 
   // Update settings ref whenever settings change
   useEffect(() => {
@@ -743,6 +759,14 @@ export default function OverlayPage() {
             // Track GPS update for minimap logic
             const now = Date.now();
             gpsUpdateTimes.current.push(now);
+            
+            // Check if GPS data was stale BEFORE this update
+            // This ensures we don't use stale speed data from RTIRL
+            const GPS_STALE_TIMEOUT = 10000; // 10 seconds
+            const timeSinceLastGps = lastGpsUpdateTime > 0 ? (now - lastGpsUpdateTime) : Infinity;
+            const wasGpsDataStale = timeSinceLastGps > GPS_STALE_TIMEOUT;
+            
+            // Update GPS timestamp AFTER checking for staleness
             setLastGpsUpdateTime(now); // Track last GPS update time for stale detection
             
             // Get previous coordinates for distance calculation
@@ -753,25 +777,42 @@ export default function OverlayPage() {
             let rtirlSpeed = 0;
             let calculatedSpeed = 0;
             
-            // Get RTIRL's speed if available
+            // Get RTIRL's speed if available (preferred source)
+            // BUT only trust it if GPS data was fresh (not stale before this update)
             if (typeof payload === 'object' && payload !== null && 'speed' in payload) {
               const rtirlPayload = payload as RTIRLPayload;
               if (typeof rtirlPayload.speed === 'number' && rtirlPayload.speed >= 0) {
-                rtirlSpeed = rtirlPayload.speed;
+                // Only use RTIRL speed if GPS data was fresh (not stale)
+                // If GPS was stale, the speed might be stale too, so ignore it
+                if (!wasGpsDataStale) {
+                  rtirlSpeed = rtirlPayload.speed;
+                }
+                // If GPS was stale, rtirlSpeed remains 0
               }
             }
             
-            // Always calculate speed from coordinates as backup/verification
-            if (prevCoords && prevTime > 0) {
+            // Calculate speed from coordinates as backup/verification
+            // BUT filter out GPS noise/drift to prevent false movement detection
+            if (prevCoords && prevTime > 0 && !wasGpsDataStale) {
               const movedMeters = distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]);
-              const timeDiffHours = (now - prevTime) / (1000 * 60 * 60);
-              if (timeDiffHours > 0) {
+              const timeDiffSeconds = (now - prevTime) / 1000;
+              const timeDiffHours = timeDiffSeconds / 3600;
+              
+              // Filter conditions to ignore GPS noise:
+              // 1. Minimum distance: ignore movements < 15 meters (GPS drift threshold)
+              // 2. Minimum time: ignore if updates < 3 seconds apart (prevents spikes from rapid updates)
+              const MIN_DISTANCE_METERS = 15; // GPS accuracy is typically 5-10m, so 15m filters noise
+              const MIN_TIME_SECONDS = 3; // Prevents spikes from very rapid updates
+              
+              if (timeDiffHours > 0 && movedMeters >= MIN_DISTANCE_METERS && timeDiffSeconds >= MIN_TIME_SECONDS) {
                 calculatedSpeed = (movedMeters / 1000) / timeDiffHours;
               }
+              // If conditions not met, calculatedSpeed remains 0 (filters out GPS noise)
             }
             
-            // Use the maximum of both speeds (more reliable for detecting movement)
-            const speedKmh = Math.max(rtirlSpeed, calculatedSpeed);
+            // If GPS data was stale, ignore all speed values (set to 0)
+            // This ensures we don't use stale RTIRL speed data
+            const speedKmh = wasGpsDataStale ? 0 : (rtirlSpeed > 0 ? rtirlSpeed : calculatedSpeed);
             const roundedSpeed = Math.round(speedKmh);
             
             setCurrentSpeed(roundedSpeed);
@@ -1212,16 +1253,16 @@ export default function OverlayPage() {
           <div className="overlay-box">
             {locationDisplay && (
               <>
-                {locationDisplay.primary && (
+                  {locationDisplay.primary && (
                   <div className="location location-line">
                     <div className="location-main">{locationDisplay.primary}</div>
                   </div>
-                )}
-                {locationDisplay.country && (
-                  // Only show country name/flag if:
-                  // 1. Not in custom mode (always show for GPS modes), OR
-                  // 2. In custom mode AND showCountryName is enabled
-                  (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
+                  )}
+                  {locationDisplay.country && (
+                    // Only show country name/flag if:
+                    // 1. Not in custom mode (always show for GPS modes), OR
+                    // 2. In custom mode AND showCountryName is enabled
+                    (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
                     <div className={`location location-line location-sub-line ${!locationDisplay.primary ? 'country-only' : ''}`}>
                       <div className="location-sub">
                         {locationDisplay.country}
@@ -1233,9 +1274,9 @@ export default function OverlayPage() {
                           />
                         )}
                       </div>
-                    </div>
-                  )
-                )}
+                      </div>
+                    )
+                  )}
               </>
             )}
             
