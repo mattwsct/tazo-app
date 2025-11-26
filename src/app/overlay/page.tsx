@@ -7,7 +7,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRenderPerformance } from '@/lib/performance';
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit } from '@/utils/unit-conversions';
-import { API_KEYS, THRESHOLDS, TIMERS, DYNAMIC_TIMERS, API_RATE_LIMITS, type RTIRLPayload } from '@/utils/overlay-constants';
+import { API_KEYS, THRESHOLDS, TIMERS, DYNAMIC_TIMERS, type RTIRLPayload } from '@/utils/overlay-constants';
 import { distanceInMeters } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ, type SunriseSunsetData } from '@/utils/api-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
@@ -86,15 +86,16 @@ export default function OverlayPage() {
   const [flagLoaded, setFlagLoaded] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(0.95); // Track opacity for fade transitions
-  const [dayNightTrigger, setDayNightTrigger] = useState(0); // Triggers recalculation of day/night
-  const [lastGpsUpdateTime, setLastGpsUpdateTime] = useState(0); // Track when we last got GPS data
+  const [hasReceivedFreshGps, setHasReceivedFreshGps] = useState(false); // Track if we've received at least one fresh GPS update
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
   const lastLocationTime = useRef(0);
+  const lastGpsUpdateTime = useRef(0); // Track when we last got GPS data (use ref for synchronous updates)
+  const weatherFetchInProgress = useRef(false); // Track if weather fetch is already in progress
+  const locationFetchInProgress = useRef(false); // Track if location fetch is already in progress
   const lastCoords = useRef<[number, number] | null>(null);
   const lastCoordsTime = useRef(0);
-  const settingsRef = useRef(settings);
   const lastSettingsHash = useRef<string>('');
   const lastRawLocation = useRef<LocationData | null>(null);
   
@@ -102,10 +103,25 @@ export default function OverlayPage() {
   const lastLocationIqCall = useRef(0);
   
   // GPS update tracking for minimap
-  const gpsUpdateTimes = useRef<number[]>([]);
-  const lastMinimapHideTime = useRef(0);
-  const minimapCooldownRef = useRef<NodeJS.Timeout | null>(null);
   const minimapFadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // GPS freshness tracking for location/weather display
+  const locationWeatherHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const GPS_FRESHNESS_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
+  const GPS_STALE_TIMEOUT = 10000; // 10 seconds - if no GPS update, data is stale
+  
+  // Helper: Check if GPS update is fresh (simplifies complex conditionals)
+  const isGpsUpdateFresh = useCallback((gpsUpdateTime: number, now: number, isFirstUpdate: boolean): boolean => {
+    const timeSinceUpdate = now - gpsUpdateTime;
+    const isRecent = timeSinceUpdate <= GPS_FRESHNESS_TIMEOUT;
+    const wasStale = lastGpsUpdateTime.current > 0 && (now - lastGpsUpdateTime.current) > GPS_STALE_TIMEOUT;
+    return isRecent && (!wasStale || isFirstUpdate);
+  }, []);
+  
+  // Helper: Check if timezone is real (not UTC placeholder)
+  const isRealTimezone = useCallback((tz: string | null): boolean => {
+    return tz !== null && tz !== 'UTC';
+  }, []);
   
   
   // Safe API call wrapper to prevent silent failures
@@ -119,112 +135,37 @@ export default function OverlayPage() {
     }
   }, []);
 
-  // Location update thresholds - weather has separate logic
-  const getLocationUpdateThresholds = useCallback(() => {
-    return {
-      distanceThreshold: THRESHOLDS.LOCATION_MOVEMENT_THRESHOLD, // 100 meters
-      timeThreshold: DYNAMIC_TIMERS.UPDATE_INTERVAL, // 1 minute
-    };
-  }, []);
-
-  // GPS update rate checking for minimap
-  const checkGpsUpdateRate = useCallback(() => {
-    const now = Date.now();
-    
-    // First check: if no GPS update in last 15 seconds, GPS is definitely inactive
-    // This catches the case where RTIRL stops sending updates
-    if (lastGpsUpdateTime === 0 || (now - lastGpsUpdateTime) > 15000) {
-      return false;
-    }
-    
-    // Count recent updates without mutating the array
-    const recentUpdates = gpsUpdateTimes.current.filter(time => now - time < 30000); // Last 30 seconds
-    
-    // Periodically clean up old GPS update times (only clean, don't do it every call)
-    if (gpsUpdateTimes.current.length > recentUpdates.length + 10) {
-      gpsUpdateTimes.current = recentUpdates;
-    }
-    
-    // Require at least 2 updates in the last 30 seconds to consider GPS active
-    return recentUpdates.length >= 2;
-  }, [lastGpsUpdateTime]);
-
-  // Check if we have enough recent movements to confirm actual movement (for turning ON)
-  const checkRecentMovements = useCallback((minMovements: number = 3) => {
-    const now = Date.now();
-    const recentUpdates = gpsUpdateTimes.current.filter(time => now - time < 30000); // Last 30 seconds
-    return recentUpdates.length >= minMovements;
-  }, []);
-
-  // Minimap visibility logic with cooldown and hysteresis
+  // Minimap visibility logic - simplified:
+  // Show when moving faster than walking pace (> 5 km/h) and GPS is fresh
+  // Hide when GPS data is stale (no updates in 10 seconds)
   const updateMinimapVisibility = useCallback(() => {
     const now = Date.now();
-    const isGpsActive = checkGpsUpdateRate();
-    const gpsStaleTimeout = 10000; // 10 seconds - if no GPS update, speed is stale
-    const timeSinceLastGps = now - lastGpsUpdateTime;
-    const isGpsStale = timeSinceLastGps > gpsStaleTimeout;
+    const timeSinceLastGps = now - lastGpsUpdateTime.current;
+    const isGpsStale = timeSinceLastGps > GPS_STALE_TIMEOUT;
     
-    // Hysteresis thresholds to prevent flickering
-    const SPEED_ON_THRESHOLD = 10; // km/h - turn on at cycling speed
-    const SPEED_OFF_THRESHOLD = 8; // km/h - turn off below this (prevents rapid toggling)
+    // Walking pace is ~4-5 km/h, so use 5 km/h as threshold
+    const WALKING_PACE_THRESHOLD = 5; // km/h
     
-    const shouldTurnOn = currentSpeed >= SPEED_ON_THRESHOLD;
-    const shouldTurnOff = currentSpeed < SPEED_OFF_THRESHOLD;
-    
-    const gpsTimeoutPeriod = 30000; // 30 seconds cooldown after stopping
     const fadeOutDuration = 1000; // 1 second fade out
     
     // Clear existing timers
-    if (minimapCooldownRef.current) {
-      clearTimeout(minimapCooldownRef.current);
-      minimapCooldownRef.current = null;
-    }
     if (minimapFadeTimeoutRef.current) {
       clearTimeout(minimapFadeTimeoutRef.current);
       minimapFadeTimeoutRef.current = null;
     }
     
     if (settings.minimapSpeedBased) {
-      // Auto on movement mode
-      // Different logic for turning ON vs OFF:
-      // - TURNING ON: Requires speed >= 10 km/h AND 3+ recent GPS movements (confirms actual movement)
-      // - TURNING OFF: Based on staleness checks (no GPS updates) or speed < 8 km/h with cooldown
-      
-      const hasEnoughRecentMovements = checkRecentMovements(3); // Require 3+ movements to turn ON
-      
-      // === TURNING OFF LOGIC (staleness-based) ===
+      // === SIMPLE LOGIC ===
+      // Turn OFF: GPS data is stale (no updates in 10 seconds)
       if (isGpsStale) {
-        // GPS data is stale (no updates in 10 seconds) - fade out and reset speed
         setMinimapOpacity(0);
         minimapFadeTimeoutRef.current = setTimeout(() => {
         setMinimapVisible(false);
         }, fadeOutDuration);
         setCurrentSpeed(0);
-        lastMinimapHideTime.current = 0;
-      } else if (!isGpsActive) {
-        // No GPS updates in 30 seconds - fade out
-        setMinimapOpacity(0);
-        minimapFadeTimeoutRef.current = setTimeout(() => {
-        setMinimapVisible(false);
-        }, fadeOutDuration);
-        lastMinimapHideTime.current = 0;
-      } else if (shouldTurnOff && minimapVisible) {
-        // Speed dropped below 8 km/h - start cooldown, then fade out
-        if (lastMinimapHideTime.current === 0) {
-          lastMinimapHideTime.current = now;
-        }
-        // Start fade out after cooldown period
-        minimapCooldownRef.current = setTimeout(() => {
-          setMinimapOpacity(0);
-          minimapFadeTimeoutRef.current = setTimeout(() => {
-          setMinimapVisible(false);
-          lastMinimapHideTime.current = 0;
-          }, fadeOutDuration);
-        }, gpsTimeoutPeriod);
       }
-      // === TURNING ON LOGIC (speed + recent movements) ===
-      else if (shouldTurnOn && hasEnoughRecentMovements && isGpsActive) {
-        // Show when moving fast (10+ km/h) AND have 3+ recent GPS movements (confirms actual movement)
+      // Turn ON: Speed > walking pace (5 km/h) and GPS is fresh
+      else if (currentSpeed > WALKING_PACE_THRESHOLD) {
         // If fading out, cancel fade and show immediately
         if (minimapFadeTimeoutRef.current) {
           clearTimeout(minimapFadeTimeoutRef.current);
@@ -232,13 +173,14 @@ export default function OverlayPage() {
         }
         setMinimapVisible(true);
         setMinimapOpacity(0.95); // Full opacity
-        lastMinimapHideTime.current = 0; // Reset hide time
-      } else if (!minimapVisible && !shouldTurnOn) {
-        // Not moving fast; keep hidden
-        setMinimapVisible(false);
-        setMinimapOpacity(0);
       }
-      // else: maintain current state (in the hysteresis gap between 8-10 km/h)
+      // Turn OFF: Speed <= walking pace
+      else if (minimapVisible) {
+        setMinimapOpacity(0);
+        minimapFadeTimeoutRef.current = setTimeout(() => {
+          setMinimapVisible(false);
+        }, fadeOutDuration);
+      }
     } else if (settings.showMinimap) {
       // Always show mode - ensure full opacity
       // If currently hidden, fade in smoothly
@@ -263,13 +205,12 @@ export default function OverlayPage() {
         // Already hidden
         setMinimapVisible(false);
         setMinimapOpacity(0);
-      }
     }
-  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible, checkGpsUpdateRate, checkRecentMovements, lastGpsUpdateTime]);
+    }
+  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible]);
 
-  // Update settings ref whenever settings change
+  // Update settings hash whenever settings change
   useEffect(() => {
-    settingsRef.current = settings;
     lastSettingsHash.current = JSON.stringify(settings);
 
     // Re-render location display instantly from cached raw data if available
@@ -294,14 +235,14 @@ export default function OverlayPage() {
     updateMinimapVisibility();
   }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, updateMinimapVisibility]);
 
-  // Cleanup minimap timers on unmount
+  // Cleanup minimap and location/weather timers on unmount
   useEffect(() => {
     return () => {
-      if (minimapCooldownRef.current) {
-        clearTimeout(minimapCooldownRef.current);
-      }
       if (minimapFadeTimeoutRef.current) {
         clearTimeout(minimapFadeTimeoutRef.current);
+      }
+      if (locationWeatherHideTimeoutRef.current) {
+        clearTimeout(locationWeatherHideTimeoutRef.current);
       }
     };
   }, []);
@@ -323,7 +264,7 @@ export default function OverlayPage() {
 
     if (apiType === 'locationiq') {
       const timeSinceLastCall = now - lastLocationIqCall.current;
-      const cooldown = API_RATE_LIMITS.LOCATIONIQ_FREE.COOLDOWN_MS;
+      const cooldown = 1000; // 1 second cooldown for LocationIQ free tier
       
       if (timeSinceLastCall < cooldown) {
         OverlayLogger.warn('LocationIQ rate limit - too soon', {
@@ -357,7 +298,6 @@ export default function OverlayPage() {
   const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
   const timeUpdateTimer = useRef<NodeJS.Timeout | null>(null);
   const timeSyncTimeout = useRef<NodeJS.Timeout | null>(null);
-  const rtilSetupDone = useRef(false);
 
   // Global error handling to prevent crashes
   useEffect(() => {
@@ -420,17 +360,9 @@ export default function OverlayPage() {
         timeZone: 'UTC',
       }).format(now);
       
-      OverlayLogger.overlay('DateTime formatters created', { 
-        timezone,
-        utcTime,
-        localTime,
-        formattedTime,
-        utcFormatted,
-        offset: `UTC time: ${utcFormatted}, Local time: ${formattedTime}`
-      });
+      // DateTime formatters created - time will update via useEffect when timezone is set
     } catch (error) {
       OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone, error });
-      console.error('❌ TIMEZONE ERROR:', { timezone, error });
       // Fallback to UTC
       timeFormatter.current = new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
@@ -447,19 +379,25 @@ export default function OverlayPage() {
     }
   }, []);
 
-  // Ensure we have a default timezone so UI renders quickly
-  useEffect(() => {
-    if (!timezone) {
-      const tz = 'UTC';
-      createDateTimeFormatters(tz);
-      setTimezone(tz);
-    }
-  }, [timezone, createDateTimeFormatters]);
+  // Don't set UTC as default - wait for real timezone from API
+  // This prevents showing wrong time initially
   
+  // Update time display immediately when formatters are created and timezone is set
+  useEffect(() => {
+    if (!isRealTimezone(timezone) || !timeFormatter.current || !dateFormatter.current) return;
+    
+    // Immediately update time display when formatters are ready
+    const now = new Date();
+    setTimeDisplay({
+      time: timeFormatter.current.format(now),
+      date: dateFormatter.current.format(now)
+    });
+  }, [timezone, isRealTimezone]);
 
   // Time and date updates - aligned to minute boundary with drift correction
+  // Only update when we have a real timezone (not UTC)
   useEffect(() => {
-    if (!timezone || !timeFormatter.current || !dateFormatter.current) return;
+    if (!isRealTimezone(timezone) || !timeFormatter.current || !dateFormatter.current) return;
     
     let isActive = true;
     let lastExpectedUpdate = 0;
@@ -471,13 +409,9 @@ export default function OverlayPage() {
       
       try {
         const now = new Date();
-        const timeParts = timeFormatter.current!.formatToParts(now);
-        const timePart = timeParts.find(part => part.type === 'hour' || part.type === 'minute')?.value || '';
-        const minutePart = timeParts.find(part => part.type === 'minute')?.value || '';
-        const ampmPart = timeParts.find(part => part.type === 'dayPeriod')?.value || '';
-        
+        const formattedTime = timeFormatter.current!.format(now);
         setTimeDisplay({
-          time: `${timePart}:${minutePart} ${ampmPart}`,
+          time: formattedTime,
           date: dateFormatter.current!.format(now)
         });
         
@@ -629,8 +563,8 @@ export default function OverlayPage() {
         } catch {
           // Ignore close errors
         }
-        // Reconnect with exponential backoff and max retry limit
-        const reconnectDelay = Math.min(1000 * Math.pow(2, 0), 10000); // Start with 1s, max 10s
+        // Reconnect after 1 second delay
+        const reconnectDelay = 1000;
         setTimeout(() => {
           try {
             setupSSE();
@@ -686,18 +620,12 @@ export default function OverlayPage() {
   const createDateTimeFormattersRef = useRef(createDateTimeFormatters);
   const updateMinimapVisibilityRef = useRef(updateMinimapVisibility);
   
-  // Update refs when values change
+  // Update refs when values change (needed for RTIRL listener closure)
   useEffect(() => {
     timezoneRef.current = timezone;
-  }, [timezone]);
-  
-  useEffect(() => {
     createDateTimeFormattersRef.current = createDateTimeFormatters;
-  }, [createDateTimeFormatters]);
-  
-  useEffect(() => {
     updateMinimapVisibilityRef.current = updateMinimapVisibility;
-  }, [updateMinimapVisibility]);
+  }, [timezone, createDateTimeFormatters, updateMinimapVisibility]);
 
   // Preload flag image when country code is available
   useEffect(() => {
@@ -714,11 +642,6 @@ export default function OverlayPage() {
 
   // RTIRL connection
   useEffect(() => {
-    if (rtilSetupDone.current) {
-      return;
-    }
-    rtilSetupDone.current = true;
-
     const setupRTIRLListener = () => {
       if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
         try {
@@ -728,6 +651,9 @@ export default function OverlayPage() {
               return;
             }
             const payload = p as RTIRLPayload;
+          
+          // RTIRL payload received - only log in development if needed for debugging
+          // Removed verbose logging to reduce console spam
           
           // Handle timezone from RTIRL
           if (payload.location?.timezone && payload.location.timezone !== timezoneRef.current) {
@@ -747,27 +673,90 @@ export default function OverlayPage() {
               lat = payload.location.lat;
               lon = payload.location.lon;
             } else if ('latitude' in payload.location && 'longitude' in payload.location) {
-              const loc = payload.location as { latitude: number; longitude: number };
-              lat = loc.latitude;
-              lon = loc.longitude;
+              lat = (payload.location as { latitude: number }).latitude;
+              lon = (payload.location as { longitude: number }).longitude;
             }
           }
           
-          if (lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          if (lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon <= 180) {
             setMapCoords([lat, lon]);
             
-            // Track GPS update for minimap logic
+            // Get GPS update timestamp from payload if available, otherwise use current time
+            // RTIRL includes reportedAt and updatedAt fields - use reportedAt as it's when GPS was actually reported
+            const payloadWithTimestamp = payload as RTIRLPayload & { 
+              timestamp?: number; 
+              time?: number;
+              reportedAt?: number;
+              updatedAt?: number;
+            };
+            const payloadTimestamp = payloadWithTimestamp.reportedAt || 
+                                    payloadWithTimestamp.updatedAt || 
+                                    payloadWithTimestamp.timestamp || 
+                                    payloadWithTimestamp.time;
+            const gpsUpdateTime = payloadTimestamp && typeof payloadTimestamp === 'number' 
+              ? payloadTimestamp 
+              : Date.now();
             const now = Date.now();
-            gpsUpdateTimes.current.push(now);
             
-            // Check if GPS data was stale BEFORE this update
-            // This ensures we don't use stale speed data from RTIRL
-            const GPS_STALE_TIMEOUT = 10000; // 10 seconds
-            const timeSinceLastGps = lastGpsUpdateTime > 0 ? (now - lastGpsUpdateTime) : Infinity;
+            // Check if GPS data was stale BEFORE this update (for speed calculation)
+            const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
             const wasGpsDataStale = timeSinceLastGps > GPS_STALE_TIMEOUT;
             
             // Update GPS timestamp AFTER checking for staleness
-            setLastGpsUpdateTime(now); // Track last GPS update time for stale detection
+            const isFirstGpsUpdate = lastGpsUpdateTime.current === 0;
+            lastGpsUpdateTime.current = now; // Track last GPS update time for stale detection (synchronous)
+            
+            // Check if GPS update is fresh (simplified logic)
+            const isFresh = isGpsUpdateFresh(gpsUpdateTime, now, isFirstGpsUpdate);
+            const isFirstFreshGps = !hasReceivedFreshGps && isFresh;
+            
+            // Only show if GPS update is fresh
+            if (isFresh) {
+              // Mark that we've received a fresh GPS update (for location/weather display)
+              if (!hasReceivedFreshGps) {
+                setHasReceivedFreshGps(true);
+                // Fresh GPS update received - showing location/weather
+                // Removed verbose logging to reduce console spam
+              }
+              
+              // Clear any existing hide timeout - we have fresh GPS data
+              if (locationWeatherHideTimeoutRef.current) {
+                clearTimeout(locationWeatherHideTimeoutRef.current);
+                locationWeatherHideTimeoutRef.current = null;
+              }
+              
+              // Calculate how much time is left until 15 minutes from reportedAt
+              // This ensures we hide exactly 15 minutes after RTIRL reported the GPS update
+              const timeSinceReportedAt = now - gpsUpdateTime;
+              const timeUntilStale = GPS_FRESHNESS_TIMEOUT - timeSinceReportedAt;
+              
+              if (timeUntilStale > 0) {
+                // Set timeout to hide location/weather when GPS becomes stale (15 minutes after reportedAt)
+                // Note: We keep weather/location data cached so it can appear immediately when GPS becomes fresh again
+                const reportedAtForTimeout = gpsUpdateTime; // Capture for timeout callback
+                locationWeatherHideTimeoutRef.current = setTimeout(() => {
+                  setHasReceivedFreshGps(false);
+                  // Don't clear weather/location data - keep it cached for when GPS becomes fresh again
+                  OverlayLogger.warn('GPS update is now stale (15+ minutes old) - hiding location/weather (data cached)', {
+                    reportedAt: reportedAtForTimeout,
+                    timeSinceReportedAt: Date.now() - reportedAtForTimeout
+                  });
+                }, timeUntilStale);
+              } else {
+                // GPS update is already stale (older than 15 minutes)
+                setHasReceivedFreshGps(false);
+                OverlayLogger.warn('GPS update is already stale (15+ minutes old) - hiding location/weather', {
+                  reportedAt: gpsUpdateTime,
+                  timeSinceReportedAt: now - gpsUpdateTime
+                });
+              }
+            } else if (isFirstGpsUpdate) {
+              // First GPS update AND it's stale - ensure clean state (don't show stale data)
+              // Only clear on first stale update to prevent showing old cached data from previous session
+              setWeather(null);
+              setLocation(null);
+              OverlayLogger.warn('First GPS update is stale - hiding location/weather');
+            }
             
             // Get previous coordinates for distance calculation
             const prevCoords = lastCoords.current;
@@ -785,33 +774,31 @@ export default function OverlayPage() {
                 // Only use RTIRL speed if GPS data was fresh (not stale)
                 // If GPS was stale, the speed might be stale too, so ignore it
                 if (!wasGpsDataStale) {
-                  rtirlSpeed = rtirlPayload.speed;
+                rtirlSpeed = rtirlPayload.speed;
                 }
                 // If GPS was stale, rtirlSpeed remains 0
               }
             }
             
-            // Calculate speed from coordinates as backup/verification
-            // BUT filter out GPS noise/drift to prevent false movement detection
-            if (prevCoords && prevTime > 0 && !wasGpsDataStale) {
+            // Calculate speed from coordinates as fallback (RTIRL already filters by movement distance)
+            // Since RTIRL sends updates every 10m of movement, we can trust RTIRL speed more
+            if (prevCoords && prevTime > 0 && !wasGpsDataStale && rtirlSpeed === 0) {
               const movedMeters = distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]);
               const timeDiffSeconds = (now - prevTime) / 1000;
               const timeDiffHours = timeDiffSeconds / 3600;
               
-              // Filter conditions to ignore GPS noise:
-              // 1. Minimum distance: ignore movements < 15 meters (GPS drift threshold)
-              // 2. Minimum time: ignore if updates < 3 seconds apart (prevents spikes from rapid updates)
-              const MIN_DISTANCE_METERS = 15; // GPS accuracy is typically 5-10m, so 15m filters noise
-              const MIN_TIME_SECONDS = 3; // Prevents spikes from very rapid updates
+              // Only calculate if we have meaningful movement and time difference
+              // RTIRL already filters by movement distance, so we can be more lenient here
+              const MIN_TIME_SECONDS = 1; // Minimum 1 second to prevent division issues
               
-              if (timeDiffHours > 0 && movedMeters >= MIN_DISTANCE_METERS && timeDiffSeconds >= MIN_TIME_SECONDS) {
+              if (timeDiffHours > 0 && timeDiffSeconds >= MIN_TIME_SECONDS && movedMeters > 0) {
                 calculatedSpeed = (movedMeters / 1000) / timeDiffHours;
               }
-              // If conditions not met, calculatedSpeed remains 0 (filters out GPS noise)
             }
             
+            // Prioritize RTIRL speed (it's already filtered by movement distance)
+            // Use calculated speed only as fallback when RTIRL speed is not available
             // If GPS data was stale, ignore all speed values (set to 0)
-            // This ensures we don't use stale RTIRL speed data
             const speedKmh = wasGpsDataStale ? 0 : (rtirlSpeed > 0 ? rtirlSpeed : calculatedSpeed);
             const roundedSpeed = Math.round(speedKmh);
             
@@ -830,25 +817,34 @@ export default function OverlayPage() {
               // Determine what needs to be fetched
               const weatherElapsed = now - lastWeatherTime.current;
               const locationElapsed = now - lastLocationTime.current;
-              const locationThresholds = getLocationUpdateThresholds();
-              const meetsDistance = movedMeters >= locationThresholds.distanceThreshold;
+              const meetsDistance = movedMeters >= THRESHOLDS.LOCATION_MOVEMENT_THRESHOLD;
               
               // Weather updates every 5 minutes regardless of movement
+              // BUT: Force fetch if this is the first fresh GPS update (to ensure weather appears)
               const shouldFetchWeather = lastWeatherTime.current === 0 || 
-                weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL;
+                weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL ||
+                isFirstFreshGps; // Force fetch on first fresh GPS
               
               // Location updates: always on first load, or every minute if moved threshold
               // We need country name/flag even in custom location mode
               const shouldFetchLocation = lastLocationTime.current === 0 || 
-                (locationElapsed >= locationThresholds.timeThreshold && meetsDistance);
+                (locationElapsed >= DYNAMIC_TIMERS.UPDATE_INTERVAL && meetsDistance);
               
               // If settings just updated (hash changed), allow UI update but do not force API refetch here
               // API fetching remains purely based on the time/distance gates above
 
               // Fetch weather and location in parallel for faster loading
+              // Fetch weather if GPS is fresh OR if it's the first update and GPS update is recent
+              // This ensures weather/sunriseSunset are fetched even on initial load with recent data
               const promises: Promise<void>[] = [];
               
-              if (shouldFetchWeather && API_KEYS.OPENWEATHER) {
+              // Fetch weather even if GPS is stale - we need timezone for overlay to show
+              // Weather data will be cached and shown when GPS becomes fresh
+              const shouldFetchWeatherNow = shouldFetchWeather && API_KEYS.OPENWEATHER && 
+                !weatherFetchInProgress.current; // Prevent concurrent weather fetches
+              
+              if (shouldFetchWeatherNow) {
+                weatherFetchInProgress.current = true; // Mark as in progress
                 promises.push(
                   (async () => {
                     try {
@@ -869,12 +865,12 @@ export default function OverlayPage() {
                         setWeather(result.weather);
                       } else {
                         setWeather(null);
+                        OverlayLogger.warn('Weather result missing weather data');
                       }
                       
                       // OpenWeatherMap timezone is ONLY a fallback (less accurate than LocationIQ)
                       // Only use it if we're still on the UTC default and no other source has provided timezone
-                      const isStillOnDefaultTimezone = timezone === 'UTC' || timezone === null;
-                      if (result.timezone && isStillOnDefaultTimezone) {
+                      if (result.timezone && !isRealTimezone(timezone)) {
                         createDateTimeFormatters(result.timezone);
                         setTimezone(result.timezone);
                       }
@@ -896,14 +892,20 @@ export default function OverlayPage() {
                     }
                     } catch (error) {
                       OverlayLogger.error('OpenWeatherMap API exception', error);
+                    } finally {
+                      weatherFetchInProgress.current = false; // Always clear flag, even on error
                     }
                   })()
                 );
               }
               
-              if (shouldFetchLocation) {
+              const shouldFetchLocationNow = shouldFetchLocation && !locationFetchInProgress.current; // Prevent concurrent location fetches
+              
+              if (shouldFetchLocationNow) {
+                locationFetchInProgress.current = true; // Mark as in progress
                 promises.push(
                   (async () => {
+                    try {
                     // Capture request timestamp to prevent race conditions
                     // If multiple requests are in flight, only use the most recent result
                     const requestTimestamp = Date.now();
@@ -912,16 +914,24 @@ export default function OverlayPage() {
                     
                     // Fetch location from LocationIQ
                     let locationIQWas404 = false;
-                    if (API_KEYS.LOCATIONIQ && canMakeApiCall('locationiq')) {
+                    let locationIQRateLimited = false;
+                    
+                    if (API_KEYS.LOCATIONIQ) {
+                      if (canMakeApiCall('locationiq')) {
                       trackApiCall('locationiq');
                       const locationResult = await safeApiCall(
                         () => fetchLocationFromLocationIQ(lat!, lon!, API_KEYS.LOCATIONIQ!),
                         'LocationIQ fetch'
                       );
-                      if (locationResult && typeof locationResult === 'object' && 'location' in locationResult) {
-                        const result = locationResult as { location: LocationData | null; was404: boolean };
-                        loc = result.location;
-                        locationIQWas404 = result.was404;
+                        if (locationResult && typeof locationResult === 'object' && 'location' in locationResult) {
+                          const result = locationResult as { location: LocationData | null; was404: boolean };
+                          loc = result.location;
+                          locationIQWas404 = result.was404;
+                      }
+                      } else {
+                        // Rate limited - don't use fallback yet, wait for next update
+                        locationIQRateLimited = true;
+                        OverlayLogger.warn('LocationIQ rate limited, skipping fetch - will retry on next GPS update');
                       }
                     }
                     
@@ -940,7 +950,7 @@ export default function OverlayPage() {
                     
                     if (loc && hasUsefulData) {
                       // Full location data available - use it
-                      const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
+                      const formatted = formatLocation(loc, settings.locationDisplay);
                       lastRawLocation.current = loc;
                         
                         // Only update if we have something meaningful to display
@@ -959,6 +969,7 @@ export default function OverlayPage() {
                         createDateTimeFormatters(loc.timezone);
                         setTimezone(loc.timezone);
                       }
+                      // Note: If LocationIQ doesn't provide timezone, OpenWeatherMap will set it as fallback
                     } else if (hasCountryData) {
                       // Only country data available
                       // If LocationIQ returned a country, we're on land (not in water)
@@ -978,22 +989,30 @@ export default function OverlayPage() {
                         createDateTimeFormatters(loc!.timezone);
                         setTimezone(loc!.timezone);
                       }
-                    } else {
-                      // LocationIQ failed completely, use coordinate fallback
-                        // Only show ocean names if LocationIQ returned 404 (likely on water)
-                      OverlayLogger.warn('LocationIQ failed, using coordinate fallback');
+                    } else if (!locationIQRateLimited) {
+                      // LocationIQ failed completely (not rate-limited), use country-only fallback
+                      // Never show coordinates - only show country if estimable, or ocean names if on water
+                      OverlayLogger.warn('LocationIQ failed, using country-only fallback');
                       
-                        const fallbackLocation = createLocationWithCountryFallback(lat!, lon!, locationIQWas404);
-                        // Only update if we have a meaningful primary location
-                        if (fallbackLocation.primary && fallbackLocation.primary.trim()) {
+                      const fallbackLocation = createLocationWithCountryFallback(lat!, lon!, locationIQWas404);
+                      // Only update if we have something meaningful to show (country or ocean name)
+                      // Don't show coordinates - show country if available, or nothing
+                      if (fallbackLocation.country || (fallbackLocation.primary && fallbackLocation.primary.trim())) {
                         setLocation({
-                            primary: fallbackLocation.primary.trim(),
-                          country: fallbackLocation.country,
+                          primary: fallbackLocation.primary.trim() || '', // Ocean name or empty
+                          country: fallbackLocation.country, // Country name if estimable
                           countryCode: fallbackLocation.countryCode || ''
                         });
                       }
+                      // If no country can be estimated and not on water, don't update location (keep existing or blank)
                     }
+                    // If rate-limited, don't update location - keep existing location or wait for next update
                     } // End of race condition check
+                    } catch (error) {
+                      OverlayLogger.error('Location fetch error', { error });
+                    } finally {
+                      locationFetchInProgress.current = false; // Always clear flag, even on error
+                    }
                   })()
                 );
               }
@@ -1031,30 +1050,24 @@ export default function OverlayPage() {
       document.body.appendChild(script);
     }
 
-    return () => {
-      // RTIRL script cleanup handled automatically
-    };
+    // RTIRL script cleanup handled automatically
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canMakeApiCall, getLocationUpdateThresholds, safeApiCall, timezone, trackApiCall]); // Functions are accessed via refs to avoid re-creating RTIRL listener
+  }, [canMakeApiCall, safeApiCall, timezone, trackApiCall]); // Functions are accessed via refs to avoid re-creating RTIRL listener
 
-  // Overlay visibility - wait for all elements to be ready with timeout fallback
+  // Overlay visibility - wait for all elements to be ready
+  // Show overlay as soon as we have timezone (even if time hasn't formatted yet)
+  // Time will appear once formatters are created
   const isOverlayReady = useMemo(() => {
-    // Time and timezone must be ready
-    const timeReady = timezone && timeDisplay.time && timeDisplay.date;
+    // Timezone must be ready (time will format once timezone is set)
+    const timeReady = isRealTimezone(timezone);
     
     // Location is optional - overlay shows even without location (blank until loaded)
     // Only check if custom location is set when in custom mode
     const locationReady = settings.locationDisplay === 'hidden' || 
       settings.locationDisplay === 'custom' ? settings.customLocation?.trim() !== undefined : true;
     
-    // Weather is optional - overlay shows even without weather
-    const weatherReady = true;
-    
-    // Flag is always ready since we show emoji fallback immediately
-    const flagReady = true;
-    
-    return timeReady && locationReady && weatherReady && flagReady;
-  }, [timezone, timeDisplay, settings]);
+    return timeReady && locationReady;
+  }, [timezone, settings, isRealTimezone]);
 
   // Note: Timeout fallback removed since overlay now shows immediately when time/timezone are ready
   // Location and weather are optional and will appear when loaded
@@ -1069,17 +1082,6 @@ export default function OverlayPage() {
     }
   }, [isOverlayReady, overlayVisible]);
 
-  // Check for sunrise/sunset changes every 2 minutes to update weather icon
-  useEffect(() => {
-    if (!mapCoords || !timezone) return;
-
-    // Check every 2 minutes (reduced frequency for production)
-    const interval = setInterval(() => {
-      setDayNightTrigger(prev => prev + 1);
-    }, 120000); // 120 seconds (2 minutes)
-
-    return () => clearInterval(interval);
-  }, [mapCoords, timezone]);
 
   // Memoized display values
   const locationDisplay = useMemo(() => {
@@ -1118,55 +1120,25 @@ export default function OverlayPage() {
     }
     
     try {
-      // Parse sunrise and sunset times (OpenWeatherMap provides them in UTC)
+      const now = new Date();
       const sunriseUTC = new Date(sunriseSunset.sunrise);
       const sunsetUTC = new Date(sunriseSunset.sunset);
       
-      // Get current time in the location's timezone
-      const now = new Date();
-      const currentTimeStr = now.toLocaleString('en-US', { 
-        timeZone: timezone || 'UTC',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
+      // Get current time components in the location's timezone
+      const tz = timezone || 'UTC';
+      const currentHour = parseInt(now.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', hour12: false }));
+      const currentMinute = parseInt(now.toLocaleString('en-US', { timeZone: tz, minute: '2-digit' }));
+      const sunriseHour = parseInt(sunriseUTC.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', hour12: false }));
+      const sunriseMin = parseInt(sunriseUTC.toLocaleString('en-US', { timeZone: tz, minute: '2-digit' }));
+      const sunsetHour = parseInt(sunsetUTC.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', hour12: false }));
+      const sunsetMin = parseInt(sunsetUTC.toLocaleString('en-US', { timeZone: tz, minute: '2-digit' }));
       
-      // Parse current time in local timezone
-      const [hours, minutes] = currentTimeStr.split(':');
-      const currentHour = parseInt(hours);
-      const currentMinute = parseInt(minutes);
-      
-      // Convert sunrise/sunset to local timezone for comparison
-      const sunriseLocal = sunriseUTC.toLocaleString('en-US', { 
-        timeZone: timezone || 'UTC',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
-      const sunsetLocal = sunsetUTC.toLocaleString('en-US', { 
-        timeZone: timezone || 'UTC',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      });
-      
-      // Parse sunrise/sunset times in local timezone
-      const [sunriseHour, sunriseMin] = sunriseLocal.split(':');
-      const [sunsetHour, sunsetMin] = sunsetLocal.split(':');
-      
-      // Convert to minutes since midnight for easier comparison
-      const sunriseMinutes = parseInt(sunriseHour) * 60 + parseInt(sunriseMin);
-      const sunsetMinutes = parseInt(sunsetHour) * 60 + parseInt(sunsetMin);
+      // Convert to minutes since midnight for comparison
       const currentMinutes = currentHour * 60 + currentMinute;
+      const sunriseMinutes = sunriseHour * 60 + sunriseMin;
+      const sunsetMinutes = sunsetHour * 60 + sunsetMin;
       
-      const isNight = currentMinutes < sunriseMinutes || currentMinutes > sunsetMinutes;
-      
-      // Debug logging removed for production
-      
-      return isNight;
+      return currentMinutes < sunriseMinutes || currentMinutes > sunsetMinutes;
     } catch (error) {
       OverlayLogger.error('Day/night calculation error', error);
       return false;
@@ -1202,15 +1174,16 @@ export default function OverlayPage() {
 
   const weatherDisplay = useMemo(() => {
     if (!weather) {
-      return null;
+    // No weather data - return null (no logging to reduce console spam)
+    return null;
     }
     
-    return {
+    const display = {
       temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`,
       icon: getWeatherIcon(weather.desc)
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weather, getWeatherIcon, dayNightTrigger]); // dayNightTrigger intentionally included to force recalc on sunrise/sunset
+    return display;
+  }, [weather, getWeatherIcon]); // getWeatherIcon already depends on sunriseSunset/timezone via isNightTime
 
   return (
     <ErrorBoundary>
@@ -1223,7 +1196,8 @@ export default function OverlayPage() {
       >
         <div className="top-left">
           <div className="overlay-box">
-            {timezone && timeDisplay.time && (
+            {/* Only show time when we have a real timezone (not UTC) */}
+            {isRealTimezone(timezone) && timeDisplay.time && (
               <div className="time time-left time-line">
                 <div className="time-display">
                   <span className="time-value">{timeDisplay.time.split(' ')[0]}</span>
@@ -1231,8 +1205,9 @@ export default function OverlayPage() {
                 </div>
               </div>
             )}
-            
-            {timezone && timeDisplay.date && (
+
+            {/* Only show date when we have a real timezone (not UTC) */}
+            {isRealTimezone(timezone) && timeDisplay.date && (
               <div className="date date-left date-line">
                 {timeDisplay.date}
               </div>
@@ -1249,6 +1224,9 @@ export default function OverlayPage() {
         </div>
 
         <div className="top-right">
+          {/* Hide entire right section until fresh GPS update (unless custom location mode) */}
+          {((settings.locationDisplay === 'custom') || hasReceivedFreshGps) && (
+            <>
           {settings.locationDisplay !== 'hidden' && (
           <div className="overlay-box">
             {locationDisplay && (
@@ -1280,6 +1258,7 @@ export default function OverlayPage() {
               </>
             )}
             
+            {/* Weather - inside overlay-box to share background */}
             {weatherDisplay && settings.showWeather && (
               <div className="weather weather-line">
                 <div className="weather-container">
@@ -1297,6 +1276,7 @@ export default function OverlayPage() {
           </div>
           )}
 
+          {/* Minimap - also hidden until fresh GPS update */}
           {mapCoords && minimapVisible && (
             <div 
               className="minimap" 
@@ -1317,6 +1297,8 @@ export default function OverlayPage() {
                 <div className="minimap-placeholder">Loading map...</div>
               )}
             </div>
+          )}
+            </>
           )}
         </div>
 

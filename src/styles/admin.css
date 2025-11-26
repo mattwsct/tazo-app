@@ -462,6 +462,24 @@ body {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
+/* Quick Toggles Section */
+.quick-toggles-section {
+  background: rgba(59, 130, 246, 0.05);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.quick-toggles-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 480px) {
+  .quick-toggles-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Settings Sections */
 .section-header {
   margin-bottom: 1.25rem;

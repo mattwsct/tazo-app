@@ -96,4 +96,6 @@ export interface TimeoutRefs {
 export interface RTIRLPayload {
   speed?: number;
   location?: { lat: number; lon: number; countryCode?: string; timezone?: string };
+  timestamp?: number; // Unix timestamp (milliseconds) of when the GPS update was made
+  time?: number; // Alternative timestamp field name
 } 

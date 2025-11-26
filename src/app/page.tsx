@@ -4,9 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, TodoItem } from '@/types/settings';
-import { formatLocation, LocationData } from '@/utils/location-utils';
-import { fetchLocationFromLocationIQ } from '@/utils/api-utils';
-import { API_KEYS, type RTIRLPayload } from '@/utils/overlay-constants';
 import '@/styles/admin.css';
 
 declare global {
@@ -35,87 +32,6 @@ export default function AdminPage() {
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoText, setEditingTodoText] = useState('');
 
-  // Real location data for examples
-  const [currentLocationData, setCurrentLocationData] = useState<LocationData | null>(null);
-  const [locationExamplesLoading, setLocationExamplesLoading] = useState(false);
-  
-  // Force refresh location examples
-  const refreshLocationExamples = useCallback(async () => {
-    if (!API_KEYS.RTIRL || !window.RealtimeIRL) return;
-    
-    setLocationExamplesLoading(true);
-    try {
-      // Get current location from RTIRL
-      const payload = await new Promise<RTIRLPayload>((resolve) => {
-        window.RealtimeIRL!.forPullKey(API_KEYS.RTIRL!).addListener((p: unknown) => {
-          resolve(p as RTIRLPayload);
-        });
-      });
-      
-      if (payload?.location) {
-        let lat: number | null = null;
-        let lon: number | null = null;
-        
-        if ('lat' in payload.location && 'lon' in payload.location) {
-          lat = payload.location.lat;
-          lon = payload.location.lon;
-        } else if ('latitude' in payload.location && 'longitude' in payload.location) {
-          const loc = payload.location as { latitude: number; longitude: number };
-          lat = loc.latitude;
-          lon = loc.longitude;
-        }
-        
-        if (lat !== null && lon !== null && API_KEYS.LOCATIONIQ) {
-          const locationResult = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
-          if (locationResult && locationResult.location) {
-            setCurrentLocationData(locationResult.location);
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to refresh location examples:', error);
-    } finally {
-      setLocationExamplesLoading(false);
-    }
-  }, []);
-
-  // Generate location examples using the same logic as overlay
-  const getLocationExample = useCallback((mode: LocationDisplayMode): string | undefined => {
-    // Don't show examples for custom and hidden modes
-    if (mode === 'custom' || mode === 'hidden') {
-      return undefined;
-    }
-    
-    if (locationExamplesLoading) {
-      return 'Loading...';
-    }
-    
-    if (!currentLocationData) {
-      // Fallback examples when RTIRL is not available
-      const fallbackExamples: Record<LocationDisplayMode, string> = {
-        neighborhood: 'Burleigh Heads, Australia',
-        city: 'Gold Coast, Australia',
-        country: 'Texas, USA',
-        custom: '',
-        hidden: ''
-      };
-      return fallbackExamples[mode];
-    }
-    
-    // Use the same formatLocation function as the overlay
-    const formatted = formatLocation(currentLocationData, mode);
-    
-    // For country-only mode, just return the country (no primary location)
-    if (mode === 'country') {
-      return formatted.country || '';
-    }
-    
-    // For other modes, combine primary and country
-    if (formatted.primary && formatted.country) {
-      return `${formatted.primary}, ${formatted.country}`;
-    }
-    return formatted.primary || formatted.country || '';
-  }, [currentLocationData, locationExamplesLoading]);
   
 
   // Check authentication status and refresh session
@@ -234,18 +150,6 @@ export default function AdminPage() {
       }
     }
     
-    // Auto-set zoom level based on location display mode
-    if (updates.locationDisplay !== undefined) {
-      if (updates.locationDisplay === 'neighborhood') {
-        mergedSettings.mapZoomLevel = 'neighborhood'; // More zoomed in for neighborhoods
-      } else if (updates.locationDisplay === 'country') {
-        mergedSettings.mapZoomLevel = 'national'; // National view for country-only mode
-      } else {
-        mergedSettings.mapZoomLevel = 'city'; // City level for other locations
-      }
-    }
-
-    
     setSettings(mergedSettings);
     setToast({ type: 'saving', message: 'Saving settings...' });
     setSyncStatus('syncing');
@@ -303,85 +207,6 @@ export default function AdminPage() {
     setCustomLocationInput(settings.customLocation || '');
   }, [settings.customLocation]);
 
-  // Fetch location data once on load for examples
-  useEffect(() => {
-    let hasFetched = false;
-    
-    const fetchLocationOnce = () => {
-      if (hasFetched) return;
-      
-      if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
-        hasFetched = true;
-        setLocationExamplesLoading(true);
-        
-        // Set up a one-time listener to get current location
-        window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
-          try {
-            if (!p || typeof p !== 'object') {
-              return;
-            }
-            const payload = p as RTIRLPayload;
-            
-            // Extract GPS coordinates
-            let lat: number | null = null;
-            let lon: number | null = null;
-            if (payload.location) {
-              if ('lat' in payload.location && 'lon' in payload.location) {
-                lat = payload.location.lat;
-                lon = payload.location.lon;
-              } else if ('latitude' in payload.location && 'longitude' in payload.location) {
-                const loc = payload.location as { latitude: number; longitude: number };
-                lat = loc.latitude;
-                lon = loc.longitude;
-              }
-            }
-            
-            if (lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-              // Fetch location data once for examples
-              (async () => {
-                try {
-                  if (API_KEYS.LOCATIONIQ) {
-                    const locationResult = await fetchLocationFromLocationIQ(lat, lon, API_KEYS.LOCATIONIQ);
-                    if (locationResult && locationResult.location) {
-                      setCurrentLocationData(locationResult.location);
-                      setLocationExamplesLoading(false);
-                    }
-                  }
-                } catch (error) {
-                  console.warn('Failed to fetch location for examples:', error);
-                  setLocationExamplesLoading(false);
-                }
-              })();
-              
-              // Remove listener after first successful fetch
-              // Note: RTIRL doesn't provide a remove method, but we set hasFetched to prevent further processing
-            }
-          } catch (error) {
-            console.warn('RTIRL listener error:', error);
-            setLocationExamplesLoading(false);
-          }
-        });
-      }
-    };
-    
-    // Check if RTIRL is already loaded
-    if (typeof window !== 'undefined' && window.RealtimeIRL) {
-      fetchLocationOnce();
-    } else {
-      // Load RTIRL script if not already loaded
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/@rtirl/api@latest/lib/index.min.js';
-      script.async = true;
-      script.onerror = () => {
-        console.warn('Failed to load RTIRL script for examples');
-        setLocationExamplesLoading(false);
-      };
-      script.onload = () => {
-        fetchLocationOnce();
-      };
-      document.body.appendChild(script);
-    }
-  }, []);
 
   const openPreview = () => {
     window.open('/overlay', '_blank');
@@ -496,7 +321,17 @@ export default function AdminPage() {
           <section className="settings-section">
             <div className="section-header">
               <h2>✅ To-Do List</h2>
-              <p className="section-description">Manage tasks that appear on the overlay</p>
+              <div className="checkbox-group" style={{ marginTop: '8px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showTodoList ?? false}
+                    onChange={(e) => handleSettingsChange({ showTodoList: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Show on overlay</span>
+                </label>
+              </div>
             </div>
             
             <div className="setting-group">
@@ -518,7 +353,7 @@ export default function AdminPage() {
                     }
                   }}
                 />
-                <button
+                <button 
                   className="btn btn-primary btn-small"
                   onClick={(e) => {
                     const input = e.currentTarget.previousElementSibling as HTMLInputElement;
@@ -538,22 +373,6 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              <div className="setting-group">
-                <div className="checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.showTodoList ?? false}
-                      onChange={(e) => handleSettingsChange({ showTodoList: e.target.checked })}
-                      className="checkbox-input"
-                    />
-                    <span className="checkbox-text">Show To-Do List on Overlay</span>
-                  </label>
-                </div>
-                <div className="setting-help">
-                  Display the to-do list in the bottom-right corner of the overlay
-                </div>
-              </div>
 
               {settings.todos && settings.todos.length > 0 && (
                 <>
@@ -675,22 +494,11 @@ export default function AdminPage() {
           {/* Location & Display Section */}
           <section className="settings-section">
             <div className="section-header">
-              <h2>📍 Location & Display</h2>
-              <p className="section-description">Configure how your location appears on the overlay</p>
+              <h2>📍 Location</h2>
             </div>
             
             <div className="setting-group">
-              <div className="group-label-with-action">
-                <label className="group-label">Location Mode</label>
-                <button 
-                  onClick={refreshLocationExamples}
-                  disabled={locationExamplesLoading}
-                  className="refresh-button-compact"
-                  title="Refresh location examples"
-                >
-                  {locationExamplesLoading ? '🔄' : '🔄'}
-                </button>
-              </div>
+              <label className="group-label">Location Mode</label>
               <RadioGroup
                 value={settings.locationDisplay}
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
@@ -698,32 +506,27 @@ export default function AdminPage() {
                   { 
                     value: 'neighborhood', 
                     label: 'Neighborhood', 
-                    icon: '🏘️',
-                    description: getLocationExample('neighborhood')
+                    icon: '🏘️'
                   },
                   { 
                     value: 'city', 
                     label: 'City', 
-                    icon: '🏙️',
-                    description: getLocationExample('city')
+                    icon: '🏙️'
                   },
                   { 
                     value: 'country', 
-                    label: 'Country Only', 
-                    icon: '🌍',
-                    description: getLocationExample('country')
+                    label: 'Country', 
+                    icon: '🌍'
                   },
                   { 
                     value: 'custom', 
                     label: 'Custom', 
-                    icon: '✏️',
-                    description: getLocationExample('custom')
+                    icon: '✏️'
                   },
                   { 
                     value: 'hidden', 
                     label: 'Hidden', 
-                    icon: '🚫',
-                    description: getLocationExample('hidden')
+                    icon: '🚫'
                   }
                 ]}
               />
@@ -740,9 +543,6 @@ export default function AdminPage() {
                     className="text-input"
                     maxLength={50}
                   />
-                  <div className="input-help">
-                    This will override GPS-based location detection. Saves automatically after 1 second of no typing.
-                  </div>
                   
                   {/* Country name toggle for custom location */}
                   <div className="checkbox-group" style={{ marginTop: '12px' }}>
@@ -759,63 +559,14 @@ export default function AdminPage() {
                 </div>
               )}
               
-              <div className="setting-help">
-                {locationExamplesLoading && (
-                  <div className="location-examples-loading">
-                    🔄 Loading current location...
-                  </div>
-                )}
-                {currentLocationData && !locationExamplesLoading && (
-                  <div className="location-examples-real">
-                    ✅ Showing your current location
-                  </div>
-                )}
-                {!currentLocationData && !locationExamplesLoading && (
-                  <div className="location-examples-fallback">
-                    ℹ️ Showing sample data (RTIRL not connected)
-                  </div>
-                )}
-                {settings.locationDisplay === 'neighborhood' && 'Shows most specific location (neighborhood/area) with country'}
-                {settings.locationDisplay === 'city' && 'Shows city level location with country'}
-                {settings.locationDisplay === 'country' && 'Shows only country name with flag (may include state/territory)'}
-                {settings.locationDisplay === 'custom' && 'Displays custom text instead of GPS-based location'}
-                {settings.locationDisplay === 'hidden' && 'Hides location display completely'}
-              </div>
             </div>
           </section>
 
-          {/* Weather Section */}
-          {settings.locationDisplay !== 'hidden' && (
-            <section className="settings-section">
-              <div className="section-header">
-                <h2>🌤️ Weather</h2>
-                <p className="section-description">Display real-time weather information</p>
-              </div>
-              
-              <div className="setting-group">
-                <div className="checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.showWeather}
-                      onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
-                      className="checkbox-input"
-                    />
-                    <span className="checkbox-text">Show Temperature & Conditions</span>
-                  </label>
-                </div>
-                <div className="setting-help">
-                  Updates every 5 minutes with current temperature and weather icon
-                </div>
-              </div>
-            </section>
-          )}
 
           {/* Map Section */}
           <section className="settings-section">
             <div className="section-header">
               <h2>🗺️ Map</h2>
-              <p className="section-description">Configure the minimap display</p>
             </div>
             
             <div className="setting-group">
@@ -838,28 +589,22 @@ export default function AdminPage() {
                 ]}
               />
               
-              <div className="setting-help">
-                Auto on Movement shows minimap only when moving (speed &gt; 10 km/h)
-              </div>
             </div>
             
             <div className="setting-group">
               <label className="group-label">Zoom Level</label>
-              <select
+              <RadioGroup
                 value={settings.mapZoomLevel}
-                onChange={(e) => handleSettingsChange({ mapZoomLevel: e.target.value as MapZoomLevel })}
-                className="select-input"
-              >
-                <option value="neighborhood">Neighborhood (13) - Streets & Buildings</option>
-                <option value="city">City (11) - Whole City View</option>
-                <option value="regional">Regional (8) - State/Province View</option>
-                <option value="national">National (5) - Country View</option>
-                <option value="ocean">Ocean (3) - Coastal View from Sea</option>
-                <option value="continental">Continental (1) - Trans-Oceanic View</option>
-              </select>
-              <div className="setting-help">
-                Higher numbers = more zoomed in. Ocean is for cruises near coast, Continental for mid-ocean.
-              </div>
+                onChange={(value) => handleSettingsChange({ mapZoomLevel: value as MapZoomLevel })}
+                options={[
+                  { value: 'neighborhood', label: 'Neighborhood', icon: '🏘️' },
+                  { value: 'city', label: 'City', icon: '🏙️' },
+                  { value: 'regional', label: 'Regional', icon: '🗺️' },
+                  { value: 'national', label: 'National', icon: '🌍' },
+                  { value: 'ocean', label: 'Ocean', icon: '🌊' },
+                  { value: 'continental', label: 'Continental', icon: '🌎' }
+                ]}
+              />
             </div>
           </section>
           

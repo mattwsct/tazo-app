@@ -24,17 +24,16 @@ export function createCoordinateFallback(lat: number, lon: number): LocationDisp
 
 /**
  * Creates a basic location display with country estimation based on coordinates
+ * Never shows raw coordinates - only shows country if estimable, or ocean names if on water
  * @param lat - Latitude
  * @param lon - Longitude
- * @param isLocationIQ404 - True if LocationIQ returned 404 (no address found), false for other failures
+ * @param isLocationIQ404 - True if LocationIQ returned 404 (no address found), likely on water
  */
 export function createLocationWithCountryFallback(
   lat: number, 
   lon: number, 
   isLocationIQ404: boolean = false
 ): LocationDisplay & { isWater?: boolean } {
-  const coords = createCoordinateFallback(lat, lon);
-  
   // Basic country estimation based on coordinate ranges
   const countryInfo = estimateCountryFromCoords(lat, lon);
   
@@ -45,13 +44,19 @@ export function createLocationWithCountryFallback(
   // or when in remote land areas
   const shouldShowWater = isLocationIQ404 && countryInfo?.isWater;
   
+  // Never show coordinates - only show meaningful location names
+  // If on water and LocationIQ returned 404, show ocean name
+  // Otherwise, show country if estimable (and it's NOT a water body), or nothing
   const primary = shouldShowWater && countryInfo?.name
     ? countryInfo.name
-    : coords.primary;
+    : ''; // Don't show coordinates - show nothing instead
   
   // Don't show country line for water bodies (would be duplicate)
-  // Just show the country code for the flag
-  const country = shouldShowWater ? undefined : countryInfo?.name;
+  // Show country only if we're on land (not water) and can estimate it
+  // IMPORTANT: Don't show water bodies as countries - only show actual countries
+  const country = shouldShowWater || countryInfo?.isWater 
+    ? undefined 
+    : countryInfo?.name;
   
   return {
     primary,
