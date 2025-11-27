@@ -98,6 +98,7 @@ export default function OverlayPage() {
   const lastCoordsTime = useRef(0);
   const lastSettingsHash = useRef<string>('');
   const lastRawLocation = useRef<LocationData | null>(null);
+  const lastSuccessfulWeatherFetch = useRef(0); // Track when weather was last successfully fetched
   
   // API rate limiting tracking (per-second only)
   const lastLocationIqCall = useRef(0);
@@ -109,6 +110,7 @@ export default function OverlayPage() {
   const locationWeatherHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const GPS_FRESHNESS_TIMEOUT = 15 * 60 * 1000; // 15 minutes in milliseconds
   const GPS_STALE_TIMEOUT = 10000; // 10 seconds - if no GPS update, data is stale
+  const WEATHER_DATA_VALIDITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes - weather data is still valid even if GPS is stale
   
   // Helper: Check if GPS update is fresh (simplifies complex conditionals)
   const isGpsUpdateFresh = useCallback((gpsUpdateTime: number, now: number, isFirstUpdate: boolean): boolean => {
@@ -751,11 +753,19 @@ export default function OverlayPage() {
                 });
               }
             } else if (isFirstGpsUpdate) {
-              // First GPS update AND it's stale - ensure clean state (don't show stale data)
-              // Only clear on first stale update to prevent showing old cached data from previous session
-              setWeather(null);
-              setLocation(null);
-              OverlayLogger.warn('First GPS update is stale - hiding location/weather');
+              // First GPS update AND it's stale - only clear if weather data is also stale
+              // Keep weather if it's still valid (within validity timeout)
+              const weatherAge = lastSuccessfulWeatherFetch.current > 0 
+                ? now - lastSuccessfulWeatherFetch.current 
+                : Infinity;
+              if (weatherAge > WEATHER_DATA_VALIDITY_TIMEOUT) {
+                setWeather(null);
+                setLocation(null);
+                OverlayLogger.warn('First GPS update is stale and weather data is old - clearing location/weather');
+              } else {
+                // Keep weather data even if GPS is stale initially
+                OverlayLogger.warn('First GPS update is stale but weather data is still valid - keeping weather');
+              }
             }
             
             // Get previous coordinates for distance calculation
@@ -821,9 +831,16 @@ export default function OverlayPage() {
               
               // Weather updates every 5 minutes regardless of movement
               // BUT: Force fetch if this is the first fresh GPS update (to ensure weather appears)
+              // Also fetch if we don't have weather data yet or weather is getting stale
+              const hasWeatherData = lastSuccessfulWeatherFetch.current > 0;
+              const weatherDataAge = hasWeatherData 
+                ? now - lastSuccessfulWeatherFetch.current 
+                : Infinity;
               const shouldFetchWeather = lastWeatherTime.current === 0 || 
                 weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL ||
-                isFirstFreshGps; // Force fetch on first fresh GPS
+                isFirstFreshGps || // Force fetch on first fresh GPS
+                (!hasWeatherData && isFresh) || // Fetch if no weather and GPS is fresh
+                (weatherDataAge >= WEATHER_DATA_VALIDITY_TIMEOUT && isFresh); // Fetch if weather is stale and GPS is fresh
               
               // Location updates: always on first load, or every minute if moved threshold
               // We need country name/flag even in custom location mode
@@ -863,8 +880,9 @@ export default function OverlayPage() {
                       
                       if (result.weather) {
                         setWeather(result.weather);
+                        lastSuccessfulWeatherFetch.current = Date.now(); // Track successful weather fetch
                       } else {
-                        setWeather(null);
+                        // Don't clear weather if fetch fails - keep existing weather data
                         OverlayLogger.warn('Weather result missing weather data');
                       }
                       
@@ -880,9 +898,18 @@ export default function OverlayPage() {
                         OverlayLogger.overlay('Sunrise/sunset data received', { sunriseSunset: result.sunriseSunset });
                       }
                     } else {
-                      // OpenWeatherMap failed, use fallbacks
-                      OverlayLogger.warn('OpenWeatherMap failed, using fallbacks');
-                      setWeather(createWeatherFallback());
+                      // OpenWeatherMap failed - don't clear existing weather, keep showing last known weather
+                      // Only use fallback if we have no weather data at all
+                      if (!weather) {
+                        OverlayLogger.warn('OpenWeatherMap failed and no cached weather, using fallbacks');
+                        const fallbackWeather = createWeatherFallback();
+                        if (fallbackWeather) {
+                          setWeather(fallbackWeather);
+                          lastSuccessfulWeatherFetch.current = Date.now();
+                        }
+                      } else {
+                        OverlayLogger.warn('OpenWeatherMap failed, keeping existing weather data');
+                      }
                       
                       // Use fallback sunrise/sunset
                       const fallbackSunriseSunset = createSunriseSunsetFallback(timezone || undefined);
@@ -1224,12 +1251,16 @@ export default function OverlayPage() {
         </div>
 
         <div className="top-right">
-          {/* Hide entire right section until fresh GPS update (unless custom location mode) */}
-          {((settings.locationDisplay === 'custom') || hasReceivedFreshGps) && (
+          {/* Show weather if we have valid weather data (even if GPS is temporarily stale)
+              Show location only when GPS is fresh (unless custom location mode) */}
+          {((settings.locationDisplay === 'custom') || hasReceivedFreshGps || 
+            (weather && lastSuccessfulWeatherFetch.current > 0 && 
+             (Date.now() - lastSuccessfulWeatherFetch.current) < WEATHER_DATA_VALIDITY_TIMEOUT)) && (
             <>
           {settings.locationDisplay !== 'hidden' && (
           <div className="overlay-box">
-            {locationDisplay && (
+            {/* Only show location when GPS is fresh (or custom mode) */}
+            {((settings.locationDisplay === 'custom') || hasReceivedFreshGps) && locationDisplay && (
               <>
                   {locationDisplay.primary && (
                   <div className="location location-line">
@@ -1258,8 +1289,10 @@ export default function OverlayPage() {
               </>
             )}
             
-            {/* Weather - inside overlay-box to share background */}
-            {weatherDisplay && settings.showWeather && (
+            {/* Weather - show if we have weather data and it's still valid (within validity timeout)
+                OR if GPS is fresh (weather will be fetched/updated) */}
+            {weatherDisplay && settings.showWeather && 
+             (hasReceivedFreshGps || (Date.now() - lastSuccessfulWeatherFetch.current) < WEATHER_DATA_VALIDITY_TIMEOUT) && (
               <div className="weather weather-line">
                 <div className="weather-container">
                   <div className="weather-content">
