@@ -67,6 +67,110 @@ export function createLocationWithCountryFallback(
 }
 
 /**
+ * Estimates country code from coordinates when LocationIQ doesn't provide it
+ * This is a lightweight helper that only returns the country code
+ * @param lat - Latitude
+ * @param lon - Longitude
+ * @returns ISO country code (lowercase) or null if cannot be determined
+ */
+export function estimateCountryCodeFromCoords(lat: number, lon: number): string | null {
+  // United States
+  if (lat >= 24 && lat <= 49 && lon >= -125 && lon <= -66) {
+    return 'us';
+  }
+  // Canada
+  if (lat >= 42 && lat <= 84 && lon >= -141 && lon <= -52) {
+    return 'ca';
+  }
+  // Mexico
+  if (lat >= 14 && lat <= 33 && lon >= -118 && lon <= -86) {
+    return 'mx';
+  }
+  // Japan
+  if (lat >= 24 && lat <= 46 && lon >= 122 && lon <= 146) {
+    return 'jp';
+  }
+  // United Kingdom
+  if (lat >= 50 && lat <= 61 && lon >= -8 && lon <= 2) {
+    return 'gb';
+  }
+  // Australia
+  if (lat >= -44 && lat <= -10 && lon >= 113 && lon <= 154) {
+    return 'au';
+  }
+  // Germany
+  if (lat >= 47 && lat <= 55 && lon >= 6 && lon <= 15) {
+    return 'de';
+  }
+  // France
+  if (lat >= 42 && lat <= 51 && lon >= -5 && lon <= 8) {
+    return 'fr';
+  }
+  // China
+  if (lat >= 18 && lat <= 54 && lon >= 73 && lon <= 135) {
+    return 'cn';
+  }
+  // India
+  if (lat >= 6 && lat <= 37 && lon >= 68 && lon <= 97) {
+    return 'in';
+  }
+  // Brazil
+  if (lat >= -34 && lat <= 5 && lon >= -74 && lon <= -34) {
+    return 'br';
+  }
+  // Russia
+  if (lat >= 41 && lat <= 82 && lon >= 19 && lon <= 180) {
+    return 'ru';
+  }
+  // Spain
+  if (lat >= 36 && lat <= 44 && lon >= -10 && lon <= 4) {
+    return 'es';
+  }
+  // Italy
+  if (lat >= 36 && lat <= 47 && lon >= 6 && lon <= 19) {
+    return 'it';
+  }
+  // South Korea
+  if (lat >= 33 && lat <= 39 && lon >= 124 && lon <= 132) {
+    return 'kr';
+  }
+  // Thailand
+  if (lat >= 5 && lat <= 21 && lon >= 97 && lon <= 106) {
+    return 'th';
+  }
+  // Vietnam
+  if (lat >= 8 && lat <= 24 && lon >= 102 && lon <= 110) {
+    return 'vn';
+  }
+  // Philippines
+  if (lat >= 5 && lat <= 21 && lon >= 116 && lon <= 127) {
+    return 'ph';
+  }
+  // Indonesia
+  if (lat >= -11 && lat <= 6 && lon >= 95 && lon <= 141) {
+    return 'id';
+  }
+  // New Zealand
+  if (lat >= -47 && lat <= -34 && lon >= 166 && lon <= 179) {
+    return 'nz';
+  }
+  // South Africa
+  if (lat >= -35 && lat <= -22 && lon >= 16 && lon <= 33) {
+    return 'za';
+  }
+  // Argentina
+  if (lat >= -55 && lat <= -22 && lon >= -74 && lon <= -53) {
+    return 'ar';
+  }
+  // Chile
+  if (lat >= -56 && lat <= -17 && lon >= -76 && lon <= -66) {
+    return 'cl';
+  }
+  
+  return null;
+}
+
+/**
  * Estimates country from coordinates using basic geographic ranges
  * This is a fallback when LocationIQ API is unavailable
  * Returns both country name and country code for flag display

@@ -18,8 +18,15 @@
   --gap-3xl: 20px;              /* 16px * 1.25 */
   
   /* Border radius */
-  --radius-sm: 5px;             /* 4px * 1.25 */
-  --radius-md: 15px;            /* 12px * 1.25 */
+  --radius-sm: 5px;
+  --radius-md: 15px;
+  
+  /* Shared styles */
+  --text-shadow: 
+    1px 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.4);
+  --letter-spacing-compact: 0.01em;
+  --letter-spacing-uppercase: 0.08em;
 }
 
 /* === OVERLAY CONTAINER === */
@@ -37,7 +44,7 @@
   font-family: 'Montserrat', sans-serif;
   font-weight: 600;
   color: white;
-  text-shadow: 1px 1px 2px black;
+  text-shadow: var(--text-shadow);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease-out;
@@ -81,50 +88,55 @@ body.overlay-page {
   flex-direction: column;
   width: fit-content;
   gap: 0;
-  padding: var(--gap-md) var(--gap-xl); /* Increased padding for better breathing room */
-  background: rgba(0, 0, 0, 0.7); /* Slightly darker for better contrast */
-  border-radius: var(--radius-md); /* Larger radius for more modern look */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05); /* Enhanced shadow with subtle border */
+  padding: var(--gap-md) var(--gap-xl) var(--gap-lg) var(--gap-xl);
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
   color: white;
   font-weight: 600;
-  align-items: flex-start; /* Left-align by default */
-  backdrop-filter: blur(8px); /* Subtle blur for depth */
+  align-items: flex-start;
+  backdrop-filter: blur(8px);
 }
 
 .overlay-box > * {
-  /* No individual backgrounds - unified container handles it */
   padding: 0;
   margin: 0;
   width: 100%;
-  line-height: 1; /* Consistent line height */
-  white-space: nowrap; /* Prevent text wrapping */
+  line-height: 1;
+  white-space: nowrap;
   word-break: keep-all;
   overflow-wrap: normal;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); /* Consistent shadow for all text */
+  text-shadow: var(--text-shadow);
 }
 
-/* Consistent spacing between all lines */
 .overlay-box > *:not(:last-child) {
-  margin-bottom: 5px; /* Fixed spacing for consistent gaps regardless of font size */
+  margin-bottom: 3px;
 }
 
-/* Alignment handled by parent containers */
-.top-left .overlay-box {
-  align-items: flex-start;
+/* Better visual hierarchy: more space after location sub-line for better separation */
+.location-sub-line {
+  margin-bottom: 5px !important;
 }
 
-.top-right .overlay-box {
-  align-items: flex-end;
+.time-line,
+.date-line,
+.location-line,
+.weather-line,
+.heart-rate-line {
+  margin: 0;
+  padding: 0;
+  line-height: 1;
 }
 
-.bottom-right .overlay-box {
-  align-items: flex-start; /* Left-align content inside, box itself is right-aligned */
+/* Ensure first child elements have consistent spacing from top */
+.overlay-box > :first-child {
+  margin-top: 0;
 }
 
-/* Hide container when it has no visible children */
-.overlay-box:empty {
-  display: none;
-}
+.top-left .overlay-box { align-items: flex-start; }
+.top-right .overlay-box { align-items: flex-end; }
+.bottom-right .overlay-box { align-items: flex-start; }
+.overlay-box:empty { display: none; }
 
 /* === POSITIONING CLASSES === */
 .top-left {
@@ -160,38 +172,36 @@ body.overlay-page {
 
 /* === TO-DO LIST STYLES === */
 .todo-item {
-  font-size: var(--font-size-sm); /* Match date font size */
-  font-weight: 800; /* Match date font weight */
-  text-transform: uppercase; /* Match date text transform */
-  letter-spacing: 0.1em; /* Match date letter spacing */
-  line-height: 1;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-compact);
   width: 100%;
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
-  text-align: left; /* Natural left-to-right reading flow */
+  text-align: left;
 }
 
 .todo-item.completed {
-  opacity: 0.6; /* Slightly more visible than 0.5 for better readability */
+  opacity: 0.6;
 }
 
 .todo-checkbox-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.3em; /* Slightly larger for better visibility */
+  width: 1.3em;
   height: 1.3em;
-  font-size: 1em; /* Match text size better */
-  color: rgba(255, 255, 255, 0.95); /* Slightly brighter white */
+  font-size: 1em;
+  color: rgba(255, 255, 255, 0.95);
   flex-shrink: 0;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); /* Subtle shadow for depth */
+  text-shadow: var(--text-shadow);
 }
 
 .todo-item.completed .todo-checkbox-icon {
-  color: rgba(34, 197, 94, 0.9); /* Slightly brighter green for better visibility */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  color: rgba(34, 197, 94, 0.9);
 }
 
 .todo-text {
@@ -204,12 +214,13 @@ body.overlay-page {
 }
 
 /* === TIME DISPLAY STYLES === */
-.time {
+.time,
+.time-line {
   font-size: var(--font-size-2xl);
   font-weight: 600;
   display: flex;
   align-items: center;
-  justify-content: flex-start; /* Always left-aligned */
+  justify-content: flex-start;
 }
 
 .time-display {
@@ -221,26 +232,22 @@ body.overlay-page {
 .time-value {
   font-size: var(--font-size-xl);
   font-weight: 600;
-  line-height: 1;
 }
 
 .time-period {
   font-size: 0.45em;
   font-weight: 700;
   text-transform: uppercase;
-  line-height: 1;
   align-self: flex-end;
-  margin-bottom: 0; /* Remove extra margin to maintain consistent spacing */
 }
 
-/* === DATE DISPLAY STYLES === */
-.date {
+.date,
+.date-line {
   font-size: var(--font-size-sm);
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  opacity: 0.85; /* Slightly more visible */
-  margin-right: -0.1em;
+  letter-spacing: var(--letter-spacing-uppercase);
+  opacity: 0.85;
 }
 
 /* === HEART RATE STYLES === */
@@ -248,15 +255,10 @@ body.overlay-page {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  margin: 0;
-  line-height: 1; /* Match other elements for consistent spacing */
   width: fit-content;
 }
 
-/* Hide heart rate wrapper when no heart rate data is visible */
-.heart-rate-wrapper:empty {
-  display: none;
-}
+.heart-rate-wrapper:empty { display: none; }
 
 .heart-rate {
   color: white;
@@ -322,7 +324,6 @@ body.overlay-page {
   font-weight: 700;
   opacity: 0.9;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
   text-align: left;
   align-self: center;
   transform: translateY(-1px);
@@ -333,53 +334,55 @@ body.overlay-page {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-lg);
+  gap: var(--gap-sm);
+  transition: opacity 0.3s ease-in-out;
 }
 
 .location-main {
   font-size: var(--font-size-lg);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-compact);
+  line-height: 1;
 }
 
 .location-sub-line {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-lg);
+  gap: var(--gap-sm);
 }
 
 .location-sub {
   font-size: var(--font-size-base);
-  font-weight: 600;
+  font-weight: 700;
   opacity: 0.9;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--gap-sm);
+  letter-spacing: var(--letter-spacing-compact);
 }
 
-/* When country is the only location (no primary), make it larger like primary */
 .location-sub-line.country-only .location-sub {
   font-size: var(--font-size-lg);
   opacity: 1;
 }
 
-/* Adjust flag size when country is primary */
 .location-sub-line.country-only .location-flag {
-  width: 48px;
-  height: 30px;
+  width: 36px;
+  height: 22px;
 }
 
 .location-flag-container {
-  flex-shrink: 0; /* Prevent flag from shrinking */
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .location-flag {
-  width: 40px;
-  height: 25px;
+  width: 32px;
+  height: 20px;
   border-radius: var(--radius-sm);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
 }
@@ -389,13 +392,12 @@ body.overlay-page {
   align-items: center;
   justify-content: center;
   margin-left: var(--gap-sm);
-  width: 28px;
+  width: 24px;
   flex-shrink: 0;
 }
 
 .location-flag-small {
   border-radius: 2px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .location-flag-emoji-small {
@@ -413,8 +415,9 @@ body.overlay-page {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: var(--gap-sm);
+  gap: 0;
   width: fit-content;
+  transition: opacity 0.3s ease-in-out;
 }
 
 .weather-container {
@@ -424,13 +427,12 @@ body.overlay-page {
   gap: var(--gap-lg);
 }
 
-
 .weather-content {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-md); /* Use CSS variable instead of hardcoded 8px */
+  gap: var(--gap-sm);
 }
 
 .weather-description,
@@ -440,25 +442,25 @@ body.overlay-page {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-lg);
+  gap: var(--gap-sm);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  opacity: 0.85; /* Slightly more visible */
-  margin-right: -0.1em;
+  letter-spacing: var(--letter-spacing-uppercase);
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
 }
 
 .weather-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  line-height: 20px;
+  font-size: 18px;
+  line-height: 18px;
   margin-left: var(--gap-sm);
-  width: 28px;
+  width: 24px;
   flex-shrink: 0;
-  /* OBS-friendly rendering */
   transform: translateZ(0);
   backface-visibility: hidden;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 
  
@@ -467,7 +469,6 @@ body.overlay-page {
 .speed-indicator {
   font-size: var(--font-size-base);
   font-weight: 700;
-  margin: 0;
   line-height: 1.2;
   text-align: right;
   display: flex;
@@ -475,9 +476,7 @@ body.overlay-page {
   justify-content: flex-end;
   gap: 0;
   color: white;
-  /* OBS-friendly text shadow */
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
-  /* OBS-friendly rendering */
+  text-shadow: var(--text-shadow);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transform: translateZ(0);
@@ -495,21 +494,15 @@ body.overlay-page {
 .speed-value {
   font-size: var(--font-size-base);
   font-weight: 700;
-  line-height: 1;
   letter-spacing: -0.02em;
-  margin: 0;
 }
 
 .speed-label {
   font-size: var(--font-size-xs);
   font-weight: 700;
   opacity: 0.9;
-  line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
   text-align: center;
-  margin: 0;
-  /* Vertically centered with the speed number */
   align-self: center;
 }
 

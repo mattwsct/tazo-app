@@ -168,6 +168,81 @@ npm run lint     # Run linter
 - API keys with `NEXT_PUBLIC_` prefix are safe (domain-restricted, rate-limited)
 - All external API tokens are read-only access
 
+## 🎨 Design Principles & Notes for AI Assistants
+
+### Key Design Principles
+1. **Readability First**: Text must be legible on stream at 1080p resolution
+   - Use font-weight 700+ for critical information
+   - Double text shadows for depth and readability
+   - Letter spacing for better legibility
+   - Tabular numbers for consistent temperature display
+
+2. **International Ready**: Handle all countries, languages, and formats
+   - Normalize country names to English for consistency
+   - Support international characters and long city names
+   - Graceful handling of missing country codes (hide section rather than show incomplete data)
+   - Water body detection for cruise/ocean scenarios
+
+3. **API Efficient**: Minimize calls while keeping data fresh
+   - Adaptive location update thresholds based on speed:
+     - Flights (>200 km/h): 1km threshold
+     - Driving (50-200 km/h): 100m threshold  
+     - Walking (<50 km/h): 10m threshold
+   - Weather updates every 5 minutes (time-based, not movement-based)
+   - Aggressive caching with 30-minute validity windows
+
+4. **Performance Critical**: Smooth 60fps for OBS capture
+   - CSS transitions for smooth appearance/disappearance
+   - Hardware acceleration (transform: translateZ(0))
+   - Backface visibility optimizations
+   - Minimal re-renders with proper React memoization
+
+5. **Graceful Degradation**: Always show something, even if APIs fail
+   - Cache data for 30 minutes when GPS becomes stale
+   - Hide incomplete data rather than show errors
+   - Progressive enhancement (show what you have)
+   - Priority: Location > Weather > Minimap
+
+### Common Scenarios
+- **Flying**: High speed, infrequent location updates needed, country-level display
+- **Cruising**: International waters, water body detection critical, show nearest country
+- **City Exploration**: Frequent updates, detailed location names, neighborhood-level display
+- **Transit**: Medium speed, moderate update frequency, city-level display
+
+### Visual Hierarchy
+- **Location**: Primary information, largest text (1.875rem), weight 700
+- **Weather**: Secondary information, smaller text (1.125rem), weight 800
+- **Flags**: 32px width for visibility, subtle border for contrast
+- **Icons**: 24px for weather icons, drop shadows for visibility
+
+### API Rate Limits (Free Tier)
+- **LocationIQ**: 1 call/second, 5,000 calls/day
+- **OpenWeatherMap**: 60 calls/minute, 1,000,000 calls/month
+- **Mapbox**: Cached tiles, minimal direct API calls
+
+### Important Code Patterns
+- Always cache data for smooth transitions (30-minute validity)
+- Hide incomplete data rather than show errors (`hasIncompleteLocationData` flag)
+- Use adaptive thresholds based on speed for API efficiency
+- Track successful fetches separately from last attempt times
+- Use refs for synchronous updates (GPS timestamps)
+
+### Design Improvements Implemented
+- ✅ Enhanced text shadows for better readability on stream
+- ✅ Increased font weights (location: 700, weather: 800)
+- ✅ Larger flags (32px) and weather icons (24px) for visibility
+- ✅ Adaptive location update thresholds based on speed
+- ✅ Smooth CSS transitions for appearance/disappearance
+- ✅ Tabular numbers for consistent temperature display
+
+### Future Enhancement Ideas
+- Smart location name truncation with ellipsis
+- Dynamic minimap zoom based on speed
+- Loading indicators during API calls
+- Country name normalization to English
+- Compass indicator for orientation
+- Travel direction/heading display
+
 ## 📄 License
 
 MIT License - feel free to use and modify!

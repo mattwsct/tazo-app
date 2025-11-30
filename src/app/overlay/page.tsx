@@ -10,7 +10,7 @@ import { celsiusToFahrenheit } from '@/utils/unit-conversions';
 import { API_KEYS, THRESHOLDS, TIMERS, DYNAMIC_TIMERS, type RTIRLPayload } from '@/utils/overlay-constants';
 import { distanceInMeters } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ, type SunriseSunsetData } from '@/utils/api-utils';
-import { formatLocation, type LocationData } from '@/utils/location-utils';
+import { formatLocation, formatCountryName, type LocationData } from '@/utils/location-utils';
 import { 
   createLocationWithCountryFallback, 
   createWeatherFallback, 
@@ -48,11 +48,11 @@ const LocationFlag = ({ countryCode, flagLoaded, getEmojiFlag }: {
   <span className="location-flag-inline">
     {flagLoaded ? (
       <img
-        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
-        alt={`Country: ${countryCode}`}
-        width={28}
-        height={18}
-        className="location-flag-small"
+                        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
+                        alt={`Country: ${countryCode}`}
+                        width={32}
+                        height={20}
+                        className="location-flag-small"
       />
     ) : (
       <span 
@@ -87,6 +87,7 @@ export default function OverlayPage() {
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(0.95); // Track opacity for fade transitions
   const [hasReceivedFreshGps, setHasReceivedFreshGps] = useState(false); // Track if we've received at least one fresh GPS update
+  const [hasIncompleteLocationData, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -303,9 +304,25 @@ export default function OverlayPage() {
   const timeUpdateTimer = useRef<NodeJS.Timeout | null>(null);
   const timeSyncTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Global error handling to prevent crashes
+  // Global error handling to prevent crashes and suppress harmless errors
   useEffect(() => {
+    // Suppress known harmless errors from external scripts
+    const suppressKnownErrors = (event: ErrorEvent) => {
+      // RTIRL script tries to access Chrome APIs - suppress this harmless error
+      if (event.message?.includes('chrome is not defined') || 
+          (event.message?.includes('chrome') && event.filename?.includes('rtirl'))) {
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    };
+    
     const handleError = (event: ErrorEvent) => {
+      // Suppress known harmless errors
+      if (suppressKnownErrors(event)) {
+        return;
+      }
+      
       OverlayLogger.error('Unhandled error caught', {
         message: event.message,
         filename: event.filename,
@@ -317,6 +334,13 @@ export default function OverlayPage() {
     };
     
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Suppress Chrome API errors from RTIRL
+      const reason = event.reason?.toString() || '';
+      if (reason.includes('chrome is not defined') || reason.includes('chrome')) {
+        event.preventDefault();
+        return;
+      }
+      
       OverlayLogger.error('Unhandled promise rejection caught', {
         reason: event.reason,
         promise: event.promise
@@ -325,12 +349,35 @@ export default function OverlayPage() {
       event.preventDefault();
     };
     
+    // Suppress React DevTools message (harmless informational message)
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => {
+      if (args[0]?.toString().includes('Download the React DevTools')) {
+        return; // Suppress React DevTools message
+      }
+      originalLog.apply(console, args);
+    };
+    
+    // Override window.onerror to catch RTIRL chrome errors before they hit console
+    const originalOnError = window.onerror;
+    window.onerror = (message, source, lineno, colno, error) => {
+      if (typeof message === 'string' && message.includes('chrome is not defined')) {
+        return true; // Suppress this harmless error
+      }
+      if (originalOnError) {
+        return originalOnError(message, source, lineno, colno, error);
+      }
+      return false;
+    };
+    
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
     
     return () => {
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      console.log = originalLog; // Restore original console.log
+      window.onerror = originalOnError; // Restore original onerror
     };
   }, []);
 
@@ -829,10 +876,20 @@ export default function OverlayPage() {
             (async () => {
               const movedMeters = prevCoords ? distanceInMeters(lat!, lon!, prevCoords[0], prevCoords[1]) : Infinity;
 
+              // Adaptive location update threshold based on speed
+              // High speed (flying): Update less frequently to save API calls
+              // Medium speed (driving): Moderate updates
+              // Low speed (walking): Frequent updates for accuracy
+              const adaptiveLocationThreshold = currentSpeed > 200 
+                ? 1000  // 1km threshold for flights (>200 km/h)
+                : currentSpeed > 50 
+                  ? 100  // 100m threshold for driving (50-200 km/h)
+                  : THRESHOLDS.LOCATION_MOVEMENT_THRESHOLD; // 10m threshold for walking (<50 km/h)
+
               // Determine what needs to be fetched
               const weatherElapsed = now - lastWeatherTime.current;
               const locationElapsed = now - lastLocationTime.current;
-              const meetsDistance = movedMeters >= THRESHOLDS.LOCATION_MOVEMENT_THRESHOLD;
+              const meetsDistance = movedMeters >= adaptiveLocationThreshold;
               
               // Weather updates every 5 minutes regardless of movement
               // BUT: Force fetch if this is the first fresh GPS update (to ensure weather appears)
@@ -994,6 +1051,7 @@ export default function OverlayPage() {
                           countryCode: loc.countryCode || ''
                         });
                         lastSuccessfulLocationFetch.current = Date.now(); // Track successful location fetch
+                        setHasIncompleteLocationData(false); // Clear incomplete flag when we have good data
                       }
                       
                       // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
@@ -1007,16 +1065,33 @@ export default function OverlayPage() {
                       // Only country data available
                       // If LocationIQ returned a country, we're on land (not in water)
                       // LocationIQ doesn't return country data for open water coordinates
-                      OverlayLogger.warn('LocationIQ returned only country data, using country name');
-                        const countryName = loc!.country?.trim() || '';
-                        if (countryName) {
-                      setLocation({
-                            primary: countryName,
-                        country: undefined, // No country line needed when showing country as primary
-                        countryCode: loc!.countryCode || ''
-                      });
+                      const rawCountryName = loc!.country?.trim() || '';
+                      const countryCode = loc!.countryCode || '';
+                      
+                      // If we only have country name but no country code, hide the entire top-right section
+                      // This avoids showing incomplete data - better to hide than show without flag
+                      if (!countryCode) {
+                        OverlayLogger.warn('LocationIQ returned only country data without country code - hiding top-right section', {
+                          country: rawCountryName
+                        });
+                        // Clear location and mark as incomplete to hide the entire section
+                        setLocation(null);
+                        setHasIncompleteLocationData(true);
+                        // Don't update lastSuccessfulLocationFetch - we're hiding, not caching
+                      } else if (rawCountryName) {
+                        // We have both country name and code - safe to display
+                        setHasIncompleteLocationData(false);
+                        // We have both country name and code - safe to display
+                        OverlayLogger.warn('LocationIQ returned only country data, using country name');
+                        // Format country name (e.g., "United States of America" -> "USA")
+                        const formattedCountryName = formatCountryName(rawCountryName, countryCode);
+                        setLocation({
+                          primary: formattedCountryName,
+                          country: undefined, // No country line needed when showing country as primary
+                          countryCode: countryCode
+                        });
                         lastSuccessfulLocationFetch.current = Date.now(); // Track successful location fetch
-                        }
+                      }
                       
                       // Use timezone if available
                       if (loc!.timezone) {
@@ -1038,6 +1113,7 @@ export default function OverlayPage() {
                           countryCode: fallbackLocation.countryCode || ''
                         });
                         lastSuccessfulLocationFetch.current = Date.now(); // Track successful location fetch
+                        setHasIncompleteLocationData(false); // Clear incomplete flag when we have fallback data
                       }
                       // If no country can be estimated and not on water, don't update location (keep existing or blank)
                     }
@@ -1261,8 +1337,9 @@ export default function OverlayPage() {
 
         <div className="top-right">
           {/* Hide entire right section until fresh GPS update (unless custom location mode)
+              Also hide if we have incomplete location data (country but no country code)
               Data is cached so it appears immediately when GPS becomes fresh again */}
-          {((settings.locationDisplay === 'custom') || hasReceivedFreshGps) && (
+          {((settings.locationDisplay === 'custom') || (hasReceivedFreshGps && !hasIncompleteLocationData)) && (
             <>
           {settings.locationDisplay !== 'hidden' && (
           <div className="overlay-box">
