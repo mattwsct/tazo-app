@@ -105,10 +105,15 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
 
   // Define fields for each specificity level (only area-based, no street addresses)
   // These fields are ordered by typical specificity globally, though exact hierarchy varies by country
-  const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'suburb', 'quarter', 'ward', 'district', 'borough'];
-  const cityProperFields: (keyof LocationData)[] = ['city', 'town', 'village', 'hamlet', 'municipality'];
-  const countyFields: (keyof LocationData)[] = ['county']; // May not exist in all countries (e.g., Japan, many European countries)
-  const stateFields: (keyof LocationData)[] = ['state', 'region', 'province'];
+  // Neighborhood: Smallest local areas within cities (e.g., "Downtown", "SoHo", "Shinjuku")
+  const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'quarter', 'ward', 'borough', 'district', 'suburb'];
+  // City: Settlements and urban areas (towns, villages, cities, municipalities)
+  // Order: Most recognizable first, then administrative names, then smaller settlements
+  const cityProperFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'suburb', 'village', 'hamlet'];
+  // County: Administrative divisions between city and state (may not exist in all countries)
+  const countyFields: (keyof LocationData)[] = ['county'];
+  // State: Large administrative divisions (states, provinces, regions, prefectures)
+  const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
   
   // Both modes share the same fallback chain: city → county → state/province
   // Neighborhood mode adds neighborhood fields at the beginning for more precision
