@@ -777,11 +777,18 @@ export default function OverlayPage() {
             lastGpsUpdateTime.current = now; // Track last GPS update time for stale detection (synchronous)
             
             // Check if GPS update is fresh (simplified logic)
+            // IMPORTANT: We check both the reportedAt timestamp AND whether we're still receiving updates
+            // This ensures that if RTIRL continues sending updates when stationary, location stays visible
             const isFresh = isGpsUpdateFresh(gpsUpdateTime, now, isFirstGpsUpdate);
             const isFirstFreshGps = !hasReceivedFreshGps && isFresh;
             
-            // Only show if GPS update is fresh
-            if (isFresh) {
+            // Check if we're still actively receiving GPS updates (even if stationary)
+            // If RTIRL continues sending updates, keep location visible regardless of reportedAt age
+            const isReceivingUpdates = !wasGpsDataStale; // If GPS wasn't stale before this update, we're receiving updates
+            
+            // Only show if GPS update is fresh OR we're still actively receiving updates
+            // This handles the case where you're stationary but RTIRL continues sending updates
+            if (isFresh || (isReceivingUpdates && !isFirstGpsUpdate)) {
               // Mark that we've received a fresh GPS update (for location/weather display)
               if (!hasReceivedFreshGps) {
                 setHasReceivedFreshGps(true);
@@ -789,37 +796,45 @@ export default function OverlayPage() {
                 // Removed verbose logging to reduce console spam
               }
               
-              // Clear any existing hide timeout - we have fresh GPS data
+              // Clear any existing hide timeout - we have fresh GPS data or are receiving updates
               if (locationWeatherHideTimeoutRef.current) {
                 clearTimeout(locationWeatherHideTimeoutRef.current);
                 locationWeatherHideTimeoutRef.current = null;
               }
               
-              // Calculate how much time is left until 15 minutes from reportedAt
-              // This ensures we hide exactly 15 minutes after RTIRL reported the GPS update
+              // Only set timeout if the reportedAt timestamp is actually old
+              // If we're receiving updates, don't hide even if reportedAt is old (RTIRL might cache timestamps)
               const timeSinceReportedAt = now - gpsUpdateTime;
               const timeUntilStale = GPS_FRESHNESS_TIMEOUT - timeSinceReportedAt;
               
-              if (timeUntilStale > 0) {
-                // Set timeout to hide location/weather when GPS becomes stale (15 minutes after reportedAt)
-                // Note: We keep weather/location data cached so it can appear immediately when GPS becomes fresh again
+              // Only hide if BOTH conditions are met:
+              // 1. The reportedAt timestamp is old (15+ minutes)
+              // 2. We're not actively receiving updates (GPS was stale before this update)
+              if (timeUntilStale <= 0 && wasGpsDataStale) {
+                // GPS update is already stale AND we're not receiving updates
+                setHasReceivedFreshGps(false);
+                OverlayLogger.warn('GPS update is stale and no longer receiving updates - hiding location/weather', {
+                  reportedAt: gpsUpdateTime,
+                  timeSinceReportedAt: now - gpsUpdateTime,
+                  wasReceivingUpdates: !wasGpsDataStale
+                });
+              } else if (timeUntilStale > 0 && wasGpsDataStale) {
+                // Set timeout only if we're not actively receiving updates
+                // If we start receiving updates again, the timeout will be cleared above
                 const reportedAtForTimeout = gpsUpdateTime; // Capture for timeout callback
                 locationWeatherHideTimeoutRef.current = setTimeout(() => {
-                  setHasReceivedFreshGps(false);
-                  // Don't clear weather/location data - keep it cached for when GPS becomes fresh again
-                  OverlayLogger.warn('GPS update is now stale (15+ minutes old) - hiding location/weather (data cached)', {
-                    reportedAt: reportedAtForTimeout,
-                    timeSinceReportedAt: Date.now() - reportedAtForTimeout
-                  });
+                  // Double-check we're still not receiving updates before hiding
+                  const timeSinceLastUpdate = Date.now() - lastGpsUpdateTime.current;
+                  if (timeSinceLastUpdate > GPS_STALE_TIMEOUT) {
+                    setHasReceivedFreshGps(false);
+                    OverlayLogger.warn('GPS update is now stale (15+ minutes old) - hiding location/weather (data cached)', {
+                      reportedAt: reportedAtForTimeout,
+                      timeSinceReportedAt: Date.now() - reportedAtForTimeout
+                    });
+                  }
                 }, timeUntilStale);
-              } else {
-                // GPS update is already stale (older than 15 minutes)
-                setHasReceivedFreshGps(false);
-                OverlayLogger.warn('GPS update is already stale (15+ minutes old) - hiding location/weather', {
-                  reportedAt: gpsUpdateTime,
-                  timeSinceReportedAt: now - gpsUpdateTime
-                });
               }
+              // If we're receiving updates, don't set a timeout - keep showing location
             } else if (isFirstGpsUpdate) {
               // First GPS update AND it's stale - only clear if both weather and location data are also stale
               // Keep data if it's still valid (within validity timeout)
