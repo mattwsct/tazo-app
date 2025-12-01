@@ -219,17 +219,20 @@ export default function OverlayPage() {
     lastSettingsHash.current = JSON.stringify(settings);
 
     // Re-render location display instantly from cached raw data if available
+    // This ensures location display updates immediately when settings change
     if (lastRawLocation.current && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
-        if (formatted.primary || formatted.country) {
-          setLocation({
-            primary: formatted.primary,
-            country: formatted.country,
-            countryCode: lastRawLocation.current.countryCode || ''
-          });
-        }
-      } catch {
+        // Always update location state when settings change, even if formatted result is empty
+        // This ensures the display mode change is reflected immediately
+        setLocation({
+          primary: formatted.primary || '',
+          country: formatted.country,
+          countryCode: lastRawLocation.current.countryCode || ''
+        });
+        setHasIncompleteLocationData(false); // Clear incomplete flag when re-formatting
+      } catch (error) {
+        OverlayLogger.warn('Location re-formatting failed on settings change', { error });
         // Ignore formatting errors; UI will update on next normal cycle
       }
     }
@@ -599,7 +602,9 @@ export default function OverlayPage() {
           const data = JSON.parse(event.data);
           
           if (data.type === 'settings_update') {
-            setSettings(data);
+            // Extract only settings properties, exclude SSE metadata (type, timestamp)
+            const { type, timestamp, ...settingsData } = data;
+            setSettings(settingsData as OverlaySettings);
           }
       } catch {
           // Ignore malformed SSE messages

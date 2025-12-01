@@ -277,9 +277,9 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
  * // Returns: { primary: 'San Francisco', context: 'California, US' }
  * 
  * @example
- * // State mode: Shows state with country code
- * formatLocation({ state: 'California', country: 'USA', countryCode: 'US' }, 'state')
- * // Returns: { primary: 'California', context: 'US' }
+ * // Country mode: Shows country (and state if country was abbreviated)
+ * formatLocation({ state: 'California', country: 'United States of America', countryCode: 'US' }, 'country')
+ * // Returns: { primary: '', country: 'California, USA', countryCode: 'US' }
  */
 export function formatLocation(
   location: LocationData | null, 
