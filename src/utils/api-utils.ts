@@ -436,12 +436,11 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
         }
       }
       
-      ApiLogger.info('openweathermap', 'Timezone data received', { timezone, offsetHours, lat, lon });
-      console.log('🌤️ OPENWEATHERMAP TIMEZONE EXTRACTION:', {
-        'Raw offset (seconds)': data.timezone,
-        'Offset (hours)': offsetHours,
-        'Mapped timezone': timezone,
-        'Coordinates': { lat, lon }
+      ApiLogger.info('openweathermap', 'Timezone data received', { 
+        timezone, 
+        offsetHours, 
+        rawOffsetSeconds: data.timezone,
+        coordinates: { lat, lon }
       });
     }
     

@@ -225,6 +225,10 @@ export default function OverlayPage() {
         const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
         // Always update location state when settings change, even if formatted result is empty
         // This ensures the display mode change is reflected immediately
+        OverlayLogger.location('Location display mode changed', {
+          mode: settings.locationDisplay,
+          display: formatted.primary || formatted.country || 'none'
+        });
         setLocation({
           primary: formatted.primary || '',
           country: formatted.country,
@@ -604,6 +608,11 @@ export default function OverlayPage() {
           if (data.type === 'settings_update') {
             // Extract only settings properties, exclude SSE metadata (type, timestamp)
             const { type, timestamp, ...settingsData } = data;
+            OverlayLogger.settings('Settings updated via SSE', { 
+              locationDisplay: settingsData.locationDisplay,
+              showWeather: settingsData.showWeather,
+              showMinimap: settingsData.showMinimap 
+            });
             setSettings(settingsData as OverlaySettings);
           }
       } catch {
@@ -654,6 +663,11 @@ export default function OverlayPage() {
           const newHash = JSON.stringify(data);
           if (newHash !== lastSettingsHash.current) {
             lastSettingsHash.current = newHash;
+            OverlayLogger.settings('Settings updated via polling', { 
+              locationDisplay: data.locationDisplay,
+              showWeather: data.showWeather,
+              showMinimap: data.showMinimap 
+            });
             setSettings(data); // UI updates immediately
           }
         }
@@ -869,6 +883,16 @@ export default function OverlayPage() {
             const speedKmh = wasGpsDataStale ? 0 : (rtirlSpeed > 0 ? rtirlSpeed : calculatedSpeed);
             const roundedSpeed = Math.round(speedKmh);
             
+            // Log GPS updates for debugging (only in development, and not on every update to reduce spam)
+            if (process.env.NODE_ENV === 'development' && (isFirstGpsUpdate || isFirstFreshGps)) {
+              OverlayLogger.overlay('GPS update received', {
+                fresh: isFresh,
+                age: now - gpsUpdateTime,
+                coordinates: [lat, lon],
+                speed: roundedSpeed
+              });
+            }
+            
             setCurrentSpeed(roundedSpeed);
             
             lastCoords.current = [lat!, lon!];
@@ -1050,6 +1074,13 @@ export default function OverlayPage() {
                         // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
                         if (formatted.primary.trim() || formatted.country) {
+                        OverlayLogger.location('Location updated', {
+                          mode: settings.locationDisplay,
+                          primary: formatted.primary.trim() || 'none',
+                          country: formatted.country || 'none',
+                          city: loc.city || loc.town || 'none',
+                          neighbourhood: loc.neighbourhood || loc.suburb || 'none'
+                        });
                         setLocation({
                             primary: formatted.primary.trim() || '', // Ensure no leading/trailing whitespace
                           country: formatted.country,

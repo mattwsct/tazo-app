@@ -109,11 +109,17 @@ function getLogStyles(level: LogLevel, context: string): string[] {
  */
 function formatData(data: unknown): string {
   if (data === null || data === undefined) return '';
-  if (typeof data === 'string') return data;
+  if (typeof data === 'string') {
+    // Don't show empty strings as data
+    return data.trim() === '' ? '' : data;
+  }
   if (typeof data === 'number' || typeof data === 'boolean') return String(data);
   
   try {
-    return JSON.stringify(data, null, 2);
+    const json = JSON.stringify(data, null, 2);
+    // Don't show empty objects/arrays as data
+    if (json === '{}' || json === '[]' || json === 'null') return '';
+    return json;
   } catch {
     return String(data);
   }
@@ -133,28 +139,48 @@ export class Logger {
     if (!shouldLog('debug') || !LOG_CONFIG.enableConsole) return;
     const styles = getLogStyles('debug', this.context);
     const formattedData = data ? formatData(data) : '';
-    console.log(formatMessage('debug', this.context, message), ...styles, formattedData);
+    // Only include data if it's not empty
+    if (formattedData) {
+      console.log(formatMessage('debug', this.context, message), ...styles, formattedData);
+    } else {
+      console.log(formatMessage('debug', this.context, message), ...styles);
+    }
   }
 
   info(message: string, data?: unknown): void {
     if (!shouldLog('info') || !LOG_CONFIG.enableConsole) return;
     const styles = getLogStyles('info', this.context);
     const formattedData = data ? formatData(data) : '';
-    console.log(formatMessage('info', this.context, message), ...styles, formattedData);
+    // Only include data if it's not empty
+    if (formattedData) {
+      console.log(formatMessage('info', this.context, message), ...styles, formattedData);
+    } else {
+      console.log(formatMessage('info', this.context, message), ...styles);
+    }
   }
 
   warn(message: string, data?: unknown): void {
     if (!shouldLog('warn') || !LOG_CONFIG.enableConsole) return;
     const styles = getLogStyles('warn', this.context);
     const formattedData = data ? formatData(data) : '';
-    console.warn(formatMessage('warn', this.context, message), ...styles, formattedData);
+    // Only include data if it's not empty
+    if (formattedData) {
+      console.warn(formatMessage('warn', this.context, message), ...styles, formattedData);
+    } else {
+      console.warn(formatMessage('warn', this.context, message), ...styles);
+    }
   }
 
   error(message: string, error?: unknown): void {
     if (!shouldLog('error') || !LOG_CONFIG.enableConsole) return;
     const styles = getLogStyles('error', this.context);
     const formattedData = error ? formatData(error) : '';
-    console.error(formatMessage('error', this.context, message), ...styles, formattedData);
+    // Only include data if it's not empty
+    if (formattedData) {
+      console.error(formatMessage('error', this.context, message), ...styles, formattedData);
+    } else {
+      console.error(formatMessage('error', this.context, message), ...styles);
+    }
   }
 }
 

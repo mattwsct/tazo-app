@@ -212,6 +212,12 @@ npm run lint     # Run linter
 - Set `ADMIN_PASSWORD` in environment variables
 - Restart dev server after adding env vars
 
+**Duplicate console logs in development?**
+- This is normal! Next.js 15 enables React StrictMode by default in development
+- StrictMode intentionally renders components twice to detect side effects
+- Logs will appear twice - this is expected behavior and won't happen in production
+- To reduce log noise, check browser console filters or disable StrictMode (not recommended)
+
 ## 🔒 Security
 
 - Admin password is HTTP-only cookie, never exposed to client
