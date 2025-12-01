@@ -105,15 +105,25 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
 
   // Define fields for each specificity level (only area-based, no street addresses)
   // These fields are ordered by typical specificity globally, though exact hierarchy varies by country
+  // 
   // Neighborhood: Smallest local areas within cities (e.g., "Downtown", "SoHo", "Shinjuku")
+  // Order: Most common first (neighbourhood), then administrative divisions (ward, borough), then districts/suburbs
   const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'quarter', 'ward', 'borough', 'district', 'suburb'];
+  // 
   // City: Settlements and urban areas (towns, villages, cities, municipalities)
-  // Order: Most recognizable first, then administrative names, then smaller settlements
-  const cityProperFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'suburb', 'village', 'hamlet'];
+  // Order: Most recognizable first (city), then administrative names (municipality), then smaller settlements
+  // NOTE: Suburb is NOT included here - it's a neighborhood field, not a city field
+  // This ensures City mode shows actual city names (e.g., "Austin") not neighborhoods (e.g., "Downtown")
+  const cityProperFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'village', 'hamlet'];
+  // 
   // County: Administrative divisions between city and state (may not exist in all countries)
+  // Examples: US counties, UK counties, Australian LGAs
   const countyFields: (keyof LocationData)[] = ['county'];
+  // 
   // State: Large administrative divisions (states, provinces, regions, prefectures)
-  const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
+  // Order: Province first (covers Japanese prefectures, Canadian provinces), then state, then region
+  // NOTE: County is NOT included here - it's a separate administrative level
+  const stateFields: (keyof LocationData)[] = ['province', 'state', 'region'];
   
   // Both modes share the same fallback chain: city → county → state/province
   // Neighborhood mode adds neighborhood fields at the beginning for more precision
@@ -345,6 +355,42 @@ export function formatLocation(
     }
   }
   
+  // Special handling for Neighborhood mode: if primary is a neighborhood, show city context instead of state/country
+  // This prevents nonsensical displays like "Downtown, Texas, US" and instead shows "Downtown" with "Austin, US"
+  if (displayMode === 'neighborhood') {
+    // Check if primary came from a neighborhood field (not city/state/county fallback)
+    const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'quarter', 'ward', 'borough', 'district', 'suburb'];
+    const isNeighborhoodField = neighborhoodFields.some(field => {
+      const value = location[field] as string | undefined;
+      return value && value.toLowerCase() === primary.toLowerCase();
+    });
+    
+    if (isNeighborhoodField) {
+      // Primary is a neighborhood - show city context on line 2 instead of state/country
+      // Try to get city name using the same validation logic
+      const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'village', 'hamlet'];
+      let cityName: string | null = null;
+      for (const field of cityFields) {
+        const value = location[field] as string | undefined;
+        if (value && isValidLocationName(value)) {
+          cityName = value;
+          break;
+        }
+      }
+      
+      if (cityName) {
+        // We have a city name - format as "City, Country" or "City, State, Country"
+        const cityDisplay = formatCityWithContext(location, cityName, countryInfo);
+        return {
+          primary,
+          country: cityDisplay,
+          countryCode: location.countryCode || ''
+        };
+      }
+      // No city available - fall back to normal state/country display
+    }
+  }
+  
   // Normal case: show location with country context
   const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
   return {
@@ -352,6 +398,43 @@ export function formatLocation(
     country: countryDisplay,
     countryCode: location.countryCode || ''
   };
+}
+
+/**
+ * Formats city display with country context for Neighborhood mode
+ * Shows "City, Country" or "City, State, Country" depending on what fits
+ */
+function formatCityWithContext(
+  location: LocationData,
+  cityName: string,
+  countryInfo: { country: string; wasAbbreviated: boolean } | null
+): string {
+  if (!countryInfo) {
+    return cityName; // Just city if no country info
+  }
+  
+  const { country, wasAbbreviated } = countryInfo;
+  
+  // If country was abbreviated (e.g., "USA", "UK"), try adding state for context
+  if (wasAbbreviated) {
+    const state = location.state || location.province || location.region;
+    if (state) {
+      // Try "City, State, Country" format
+      const withState = `${cityName}, ${state}, ${country}`;
+      if (withState.length <= MAX_CHARACTER_LIMIT) {
+        return withState;
+      }
+    }
+  }
+  
+  // Try "City, Country" format
+  const withCountry = `${cityName}, ${country}`;
+  if (withCountry.length <= MAX_CHARACTER_LIMIT) {
+    return withCountry;
+  }
+  
+  // If city name itself is too long, just show city (truncate if needed)
+  return cityName.length <= MAX_CHARACTER_LIMIT ? cityName : cityName.substring(0, MAX_CHARACTER_LIMIT - 3) + '...';
 }
 
 /**

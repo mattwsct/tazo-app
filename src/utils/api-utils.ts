@@ -217,15 +217,18 @@ export async function fetchLocationFromLocationIQ(
     if (data.address) {
       // Parse address components with better city prioritization
       // Try to get the most recognizable city name, not just the smallest administrative unit
+      // NOTE: Do NOT use suburb as fallback - it's a neighborhood field, not a city field
+      // This ensures City mode shows actual city names (e.g., "Austin") not neighborhoods (e.g., "Downtown")
       const city = data.address.city || 
                   data.address.municipality ||  // Municipality is often the actual city
-                  data.address.town ||          // Town is usually a proper city
-                  data.address.suburb;          // Suburb as last resort (often just neighborhood names)
+                  data.address.town;            // Town is usually a proper city
+                  // Suburb is NOT used here - it's stored separately and handled by precision logic
       
+      // State/province/region level - do NOT include county here as it's a separate administrative level
+      // County is stored separately and handled by precision logic
       const state = data.address.province ||  // Japanese prefectures are in 'province' field
                    data.address.state || 
-                   data.address.region || 
-                   data.address.county;
+                   data.address.region;
       
       const result: LocationData = {
         city: city,
