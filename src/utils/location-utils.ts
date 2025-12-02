@@ -379,7 +379,7 @@ export function formatLocation(
       }
       
       if (cityName) {
-        // We have a city name - format as "City, Country" or "City, State, Country"
+        // We have a city name - format as "City, State" or "City, Country Code" (max 2 categories)
         const cityDisplay = formatCityWithContext(location, cityName, countryInfo);
         return {
           primary,
@@ -402,7 +402,7 @@ export function formatLocation(
 
 /**
  * Formats city display with country context for Neighborhood mode
- * Shows "City, Country" or "City, State, Country" depending on what fits
+ * Limited to maximum 2 categories: "City, State" or "City, Country Code"
  */
 function formatCityWithContext(
   location: LocationData,
@@ -413,61 +413,85 @@ function formatCityWithContext(
     return cityName; // Just city if no country info
   }
   
-  const { country, wasAbbreviated } = countryInfo;
+  const { country } = countryInfo;
+  const countryCode = location.countryCode || '';
   
-  // If country was abbreviated (e.g., "USA", "UK"), try adding state for context
-  if (wasAbbreviated) {
-    const state = location.state || location.province || location.region;
-    if (state) {
-      // Try "City, State, Country" format
-      const withState = `${cityName}, ${state}, ${country}`;
-      if (withState.length <= MAX_CHARACTER_LIMIT) {
-        return withState;
-      }
+  // Priority 1: Try "City, State" format (2 categories)
+  const state = location.state || location.province || location.region;
+  if (state) {
+    const withState = `${cityName}, ${state}`;
+    if (withState.length <= MAX_CHARACTER_LIMIT) {
+      return withState;
     }
   }
   
-  // Try "City, Country" format
+  // Priority 2: Try "City, Country Code" format (2 categories)
+  // Use country code instead of full country name for brevity
+  if (countryCode) {
+    const withCountryCode = `${cityName}, ${countryCode.toUpperCase()}`;
+    if (withCountryCode.length <= MAX_CHARACTER_LIMIT) {
+      return withCountryCode;
+    }
+  }
+  
+  // Priority 3: Try "City, Country" format (2 categories) if country name is short
   const withCountry = `${cityName}, ${country}`;
   if (withCountry.length <= MAX_CHARACTER_LIMIT) {
     return withCountry;
   }
   
-  // If city name itself is too long, just show city (truncate if needed)
+  // Priority 4: If state exists but city+state doesn't fit, try "State, Country Code"
+  if (state && countryCode) {
+    const stateWithCountryCode = `${state}, ${countryCode.toUpperCase()}`;
+    if (stateWithCountryCode.length <= MAX_CHARACTER_LIMIT) {
+      return stateWithCountryCode;
+    }
+  }
+  
+  // Fallback: Just city (truncate if needed)
   return cityName.length <= MAX_CHARACTER_LIMIT ? cityName : cityName.substring(0, MAX_CHARACTER_LIMIT - 3) + '...';
 }
 
 /**
  * Formats country display, optionally including state when country is abbreviated
+ * Limited to maximum 2 categories: "State, Country Code" or "State, Country"
  * 
  * Rules:
- * - If country was abbreviated (e.g., "USA", "UK") and state exists, try "State, Country"
+ * - If country was abbreviated (e.g., "USA", "UK") and state exists, try "State, Country Code" (preferred) or "State, Country"
  * - If that fits in 20 chars, use it
- * - Otherwise, just show country
+ * - Otherwise, just show country or country code
  */
 function formatCountryWithState(
   location: LocationData, 
   countryInfo: { country: string; wasAbbreviated: boolean }
 ): string {
   const { country, wasAbbreviated } = countryInfo;
-  
-  // Only add state if country was abbreviated
-  if (!wasAbbreviated) {
-    return country;
-  }
+  const countryCode = location.countryCode || '';
   
   // Try to get state/province/region
   const state = location.state || location.province || location.region;
-  if (!state) {
-    return country;
+  
+  // If country was abbreviated and state exists, try 2-category formats
+  if (wasAbbreviated && state) {
+    // Priority 1: "State, Country Code" (2 categories, most concise)
+    if (countryCode) {
+      const stateWithCountryCode = `${state}, ${countryCode.toUpperCase()}`;
+      if (stateWithCountryCode.length <= MAX_CHARACTER_LIMIT) {
+        return stateWithCountryCode;
+      }
+    }
+    
+    // Priority 2: "State, Country" (2 categories)
+    const withState = `${state}, ${country}`;
+    if (withState.length <= MAX_CHARACTER_LIMIT) {
+      return withState;
+    }
   }
   
-  // Try formatting with state
-  const withState = `${state}, ${country}`;
-  
-  // If it fits, use it; otherwise just country
-  if (withState.length <= MAX_CHARACTER_LIMIT) {
-    return withState;
+  // If no state or country wasn't abbreviated, show single category
+  // Prefer country code if available and country name is long
+  if (countryCode && country.length > MAX_CHARACTER_LIMIT) {
+    return countryCode.toUpperCase();
   }
   
   return country;
