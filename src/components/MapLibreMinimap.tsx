@@ -91,6 +91,10 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
   // Initialize map (only once when first visible)
   useEffect(() => {
     if (!mapContainer.current || map.current || !isVisible) return;
+    
+    // Reset position tracking when map is initialized
+    prevPosition.current = null;
+    lastUpdateTime.current = 0;
 
     // Check WebGL support
     const canvas = document.createElement('canvas');
@@ -162,23 +166,98 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible]); // Only depend on isVisible - lat/lon/zoom intentionally omitted to prevent re-initialization
 
-  // Update map center and marker position smoothly
+  // Track previous position to calculate movement distance
+  const prevPosition = useRef<[number, number] | null>(null);
+  const lastUpdateTime = useRef(0);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Update map center and marker position efficiently
   useEffect(() => {
     if (!map.current || !marker.current || !mapLoaded) return;
 
-    try {
-      // Smoothly pan to new center with animation
-      map.current.easeTo({
-        center: [lon, lat],
-        duration: 1000, // 1 second smooth transition
-        easing: (t) => t * (2 - t) // ease-out function
-      });
-      
-      // Update marker position (marker will move with the map)
-      marker.current.setLngLat([lon, lat]);
-    } catch (error) {
-      console.error('Failed to update map position:', error);
+    // Throttle updates to prevent excessive map operations (max once per 500ms)
+    const now = Date.now();
+    const timeSinceLastUpdate = now - lastUpdateTime.current;
+    const THROTTLE_MS = 500; // Minimum time between map updates
+
+    // Clear any pending update
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+      updateTimeoutRef.current = null;
     }
+
+    // Calculate movement distance if we have a previous position
+    let movementDistance = Infinity;
+    if (prevPosition.current) {
+      const [prevLon, prevLat] = prevPosition.current;
+      // Simple distance calculation (Haversine approximation)
+      const R = 6371000; // Earth radius in meters
+      const dLat = (lat - prevLat) * Math.PI / 180;
+      const dLon = (lon - prevLon) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(prevLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      movementDistance = R * c;
+    }
+
+    const MIN_PAN_DISTANCE = 100; // Only pan map if movement > 100m
+    const shouldUpdateNow = timeSinceLastUpdate >= THROTTLE_MS;
+
+    const updateMap = () => {
+      try {
+        // Recalculate movement distance at update time (in case position changed)
+        let currentMovementDistance = Infinity;
+        if (prevPosition.current) {
+          const [prevLon, prevLat] = prevPosition.current;
+          const R = 6371000; // Earth radius in meters
+          const dLat = (lat - prevLat) * Math.PI / 180;
+          const dLon = (lon - prevLon) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(prevLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          currentMovementDistance = R * c;
+        }
+
+        // Always pan map to keep marker centered at [lon, lat]
+        // Marker stays fixed in center, only map moves
+        // For small movements, use shorter/faster animation to reduce visual impact
+        const animationDuration = currentMovementDistance > MIN_PAN_DISTANCE ? 800 : 300;
+        
+        map.current!.easeTo({
+          center: [lon, lat], // Pan map to keep marker centered
+          duration: animationDuration,
+          easing: (t) => t * (2 - t) // ease-out function
+        });
+        
+        // Marker position matches map center, so it stays centered
+        // We still update it to ensure it's at the exact coordinates
+        marker.current!.setLngLat([lon, lat]);
+        
+        // Update previous position and timestamp
+        prevPosition.current = [lon, lat];
+        lastUpdateTime.current = Date.now();
+      } catch (error) {
+        console.error('Failed to update map position:', error);
+      }
+    };
+
+    if (shouldUpdateNow) {
+      // Update immediately if enough time has passed
+      updateMap();
+    } else {
+      // Schedule update after throttle period
+      updateTimeoutRef.current = setTimeout(updateMap, THROTTLE_MS - timeSinceLastUpdate);
+    }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+    };
   }, [lat, lon, mapLoaded]);
 
   // Update zoom level when zoom level setting changes (with smooth animation)
