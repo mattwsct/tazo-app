@@ -187,7 +187,8 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
     }
 
     // Calculate movement distance if we have a previous position
-    let movementDistance = Infinity;
+    // Calculate movement distance if previous position exists
+    // Note: Movement distance calculation is available for future pan threshold logic
     if (prevPosition.current) {
       const [prevLon, prevLat] = prevPosition.current;
       // Simple distance calculation (Haversine approximation)
@@ -198,7 +199,9 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
                 Math.cos(prevLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
                 Math.sin(dLon/2) * Math.sin(dLon/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      movementDistance = R * c;
+      // Movement distance calculated but not currently used
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _movementDistance = R * c;
     }
 
     const MIN_PAN_DISTANCE = 100; // Only pan map if movement > 100m

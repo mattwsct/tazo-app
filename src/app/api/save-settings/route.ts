@@ -5,6 +5,8 @@ import { verifyAuth, logKVUsage } from '@/lib/api-auth';
 import { broadcastSettings } from '@/lib/settings-broadcast';
 import { OverlayLogger } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 // Invalidate SSE cache when settings are updated
 declare global {
   var sseCacheInvalidated: number | undefined;

@@ -90,11 +90,16 @@ export default function OverlayPage() {
   const [hasIncompleteLocationData, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
   
   // Todo visibility tracking - simplified: show completed todos for 1 minute after page load or after being marked complete
-  const [pageLoadTime] = useState(() => Date.now()); // Track when page loaded
   const [completedTodoTimestamps, setCompletedTodoTimestamps] = useState<Map<string, number>>(new Map()); // Track when todos were completed
   const completedTodoTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Track timers for hiding completed todos
   const hideCompletedTodosTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timer to hide all completed todos after 1 minute
   const [showCompletedTodos, setShowCompletedTodos] = useState(true); // Track if we should show completed todos
+  
+  // Todo list visibility: show for 15 seconds every 10 minutes
+  const [showTodoList, setShowTodoList] = useState(true); // Track if todo list should be visible
+  const [todoListOpacity, setTodoListOpacity] = useState(1); // Track opacity for fade transitions
+  const todoListVisibilityTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer for showing/hiding todo list
+  const todoListFadeTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer for fade transitions
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -128,7 +133,7 @@ export default function OverlayPage() {
     const isRecent = timeSinceUpdate <= GPS_FRESHNESS_TIMEOUT;
     const wasStale = lastGpsUpdateTime.current > 0 && (now - lastGpsUpdateTime.current) > GPS_STALE_TIMEOUT;
     return isRecent && (!wasStale || isFirstUpdate);
-  }, []);
+  }, [GPS_FRESHNESS_TIMEOUT, GPS_STALE_TIMEOUT]);
   
   // Helper: Check if timezone is real (not UTC placeholder)
   const isRealTimezone = useCallback((tz: string | null): boolean => {
@@ -256,6 +261,7 @@ export default function OverlayPage() {
 
   // Cleanup minimap and location/weather timers on unmount
   useEffect(() => {
+    const todoTimers = completedTodoTimersRef.current;
     return () => {
       if (minimapFadeTimeoutRef.current) {
         clearTimeout(minimapFadeTimeoutRef.current);
@@ -264,10 +270,16 @@ export default function OverlayPage() {
         clearTimeout(locationWeatherHideTimeoutRef.current);
       }
       // Cleanup todo timers
-      completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
-      completedTodoTimersRef.current.clear();
+      todoTimers.forEach((timer) => clearTimeout(timer));
+      todoTimers.clear();
       if (hideCompletedTodosTimeoutRef.current) {
         clearTimeout(hideCompletedTodosTimeoutRef.current);
+      }
+      if (todoListVisibilityTimerRef.current) {
+        clearTimeout(todoListVisibilityTimerRef.current);
+      }
+      if (todoListFadeTimerRef.current) {
+        clearTimeout(todoListFadeTimerRef.current);
       }
     };
   }, []);
@@ -405,10 +417,6 @@ export default function OverlayPage() {
   // Create date/time formatters
   const createDateTimeFormatters = useCallback((timezone: string) => {
     try {
-      const now = new Date();
-      const utcTime = now.toISOString();
-      const localTime = new Date().toLocaleString('en-US', { timeZone: timezone });
-      
       timeFormatter.current = new Intl.DateTimeFormat('en-US', {
         hour: 'numeric',
         minute: '2-digit',
@@ -421,15 +429,6 @@ export default function OverlayPage() {
         year: 'numeric',
         timeZone: timezone,
       });
-      
-      // Log timezone info with actual time comparison
-      const formattedTime = timeFormatter.current.format(now);
-      const utcFormatted = new Intl.DateTimeFormat('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: 'UTC',
-      }).format(now);
       
       // DateTime formatters created - time will update via useEffect when timezone is set
     } catch (error) {
@@ -575,7 +574,7 @@ export default function OverlayPage() {
         timeUpdateTimer.current = null;
       }
     };
-  }, [timezone]);
+  }, [timezone, isRealTimezone]);
 
   // Set up timer to hide all completed todos 1 minute after page load
   useEffect(() => {
@@ -594,6 +593,56 @@ export default function OverlayPage() {
     return () => {
       if (hideCompletedTodosTimeoutRef.current) {
         clearTimeout(hideCompletedTodosTimeoutRef.current);
+      }
+    };
+  }, []); // Run once on mount
+
+  // Set up todo list visibility cycle: show for 15 seconds every 5 minutes with fade transitions
+  useEffect(() => {
+    const SHOW_DURATION = 15 * 1000; // 15 seconds in milliseconds
+    const CYCLE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+    const FADE_DURATION = 500; // 500ms fade transition
+    
+    const fadeIn = () => {
+      // Set visible first, then fade in
+      setShowTodoList(true);
+      requestAnimationFrame(() => {
+        setTodoListOpacity(1);
+      });
+    };
+    
+    const fadeOut = () => {
+      // Fade out first, then hide after transition
+      setTodoListOpacity(0);
+      todoListFadeTimerRef.current = setTimeout(() => {
+        setShowTodoList(false);
+      }, FADE_DURATION);
+    };
+    
+    const scheduleCycle = () => {
+      // Fade in todo list immediately
+      fadeIn();
+      
+      // Fade out after 15 seconds (accounting for fade duration)
+      todoListVisibilityTimerRef.current = setTimeout(() => {
+        fadeOut();
+        
+        // Fade in again after 5 minutes (5 minutes - 15 seconds = 4 minutes 45 seconds)
+        todoListVisibilityTimerRef.current = setTimeout(() => {
+          scheduleCycle(); // Recursively schedule next cycle
+        }, CYCLE_DURATION - SHOW_DURATION);
+      }, SHOW_DURATION);
+    };
+    
+    // Start the cycle
+    scheduleCycle();
+    
+    return () => {
+      if (todoListVisibilityTimerRef.current) {
+        clearTimeout(todoListVisibilityTimerRef.current);
+      }
+      if (todoListFadeTimerRef.current) {
+        clearTimeout(todoListFadeTimerRef.current);
       }
     };
   }, []); // Run once on mount
@@ -748,7 +797,8 @@ export default function OverlayPage() {
           
           if (data.type === 'settings_update') {
             // Extract only settings properties, exclude SSE metadata (type, timestamp)
-            const { type, timestamp, ...settingsData } = data;
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { type: _type, timestamp: _timestamp, ...settingsData } = data;
             OverlayLogger.settings('Settings updated via SSE', { 
               locationDisplay: settingsData.locationDisplay,
               showWeather: settingsData.showWeather,
@@ -1613,8 +1663,15 @@ export default function OverlayPage() {
         </div>
 
         {/* To-Do List - Bottom Right */}
-        {settings.showTodoList && visibleTodos.length > 0 && (
-          <div className="bottom-right">
+        {/* Show todo list only when visibility timer allows (15 seconds every 5 minutes) */}
+        {settings.showTodoList && showTodoList && visibleTodos.length > 0 && (
+          <div 
+            className="bottom-right"
+            style={{
+              opacity: todoListOpacity,
+              transition: 'opacity 0.5s ease-in-out'
+            }}
+          >
             <div className="overlay-box todo-list-box">
               {visibleTodos
                 .sort((a, b) => {
