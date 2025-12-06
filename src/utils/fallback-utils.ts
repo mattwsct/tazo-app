@@ -66,6 +66,43 @@ export function createLocationWithCountryFallback(
   };
 }
 
+// Country coordinate ranges - shared data structure to avoid duplication
+interface CountryBounds {
+  name: string;
+  code: string;
+  latMin: number;
+  latMax: number;
+  lonMin: number;
+  lonMax: number;
+}
+
+const COUNTRY_BOUNDS: CountryBounds[] = [
+  { name: 'United States', code: 'us', latMin: 24, latMax: 49, lonMin: -125, lonMax: -66 },
+  { name: 'Canada', code: 'ca', latMin: 42, latMax: 84, lonMin: -141, lonMax: -52 },
+  { name: 'Mexico', code: 'mx', latMin: 14, latMax: 33, lonMin: -118, lonMax: -86 },
+  { name: 'Japan', code: 'jp', latMin: 24, latMax: 46, lonMin: 122, lonMax: 146 },
+  { name: 'United Kingdom', code: 'gb', latMin: 50, latMax: 61, lonMin: -8, lonMax: 2 },
+  { name: 'Australia', code: 'au', latMin: -44, latMax: -10, lonMin: 113, lonMax: 154 },
+  { name: 'Germany', code: 'de', latMin: 47, latMax: 55, lonMin: 6, lonMax: 15 },
+  { name: 'France', code: 'fr', latMin: 42, latMax: 51, lonMin: -5, lonMax: 8 },
+  { name: 'China', code: 'cn', latMin: 18, latMax: 54, lonMin: 73, lonMax: 135 },
+  { name: 'India', code: 'in', latMin: 6, latMax: 37, lonMin: 68, lonMax: 97 },
+  { name: 'Brazil', code: 'br', latMin: -34, latMax: 5, lonMin: -74, lonMax: -34 },
+  { name: 'Russia', code: 'ru', latMin: 41, latMax: 82, lonMin: 19, lonMax: 169 },
+  { name: 'Spain', code: 'es', latMin: 36, latMax: 44, lonMin: -10, lonMax: 5 },
+  { name: 'Portugal', code: 'pt', latMin: 37, latMax: 42, lonMin: -10, lonMax: -6 },
+  { name: 'Italy', code: 'it', latMin: 36, latMax: 47, lonMin: 6, lonMax: 19 },
+  { name: 'South Korea', code: 'kr', latMin: 33, latMax: 39, lonMin: 124, lonMax: 132 },
+  { name: 'Thailand', code: 'th', latMin: 5, latMax: 21, lonMin: 97, lonMax: 106 },
+  { name: 'Vietnam', code: 'vn', latMin: 8, latMax: 24, lonMin: 102, lonMax: 110 },
+  { name: 'Philippines', code: 'ph', latMin: 5, latMax: 21, lonMin: 116, lonMax: 127 },
+  { name: 'Indonesia', code: 'id', latMin: -11, latMax: 6, lonMin: 95, lonMax: 141 },
+  { name: 'New Zealand', code: 'nz', latMin: -47, latMax: -34, lonMin: 166, lonMax: 179 },
+  { name: 'South Africa', code: 'za', latMin: -35, latMax: -22, lonMin: 16, lonMax: 33 },
+  { name: 'Argentina', code: 'ar', latMin: -56, latMax: -21, lonMin: -74, lonMax: -53 },
+  { name: 'Chile', code: 'cl', latMin: -56, latMax: -17, lonMin: -76, lonMax: -66 },
+];
+
 /**
  * Estimates country code from coordinates when LocationIQ doesn't provide it
  * This is a lightweight helper that only returns the country code
@@ -74,227 +111,26 @@ export function createLocationWithCountryFallback(
  * @returns ISO country code (lowercase) or null if cannot be determined
  */
 export function estimateCountryCodeFromCoords(lat: number, lon: number): string | null {
-  // United States
-  if (lat >= 24 && lat <= 49 && lon >= -125 && lon <= -66) {
-    return 'us';
-  }
-  // Canada
-  if (lat >= 42 && lat <= 84 && lon >= -141 && lon <= -52) {
-    return 'ca';
-  }
-  // Mexico
-  if (lat >= 14 && lat <= 33 && lon >= -118 && lon <= -86) {
-    return 'mx';
-  }
-  // Japan
-  if (lat >= 24 && lat <= 46 && lon >= 122 && lon <= 146) {
-    return 'jp';
-  }
-  // United Kingdom
-  if (lat >= 50 && lat <= 61 && lon >= -8 && lon <= 2) {
-    return 'gb';
-  }
-  // Australia
-  if (lat >= -44 && lat <= -10 && lon >= 113 && lon <= 154) {
-    return 'au';
-  }
-  // Germany
-  if (lat >= 47 && lat <= 55 && lon >= 6 && lon <= 15) {
-    return 'de';
-  }
-  // France
-  if (lat >= 42 && lat <= 51 && lon >= -5 && lon <= 8) {
-    return 'fr';
-  }
-  // China
-  if (lat >= 18 && lat <= 54 && lon >= 73 && lon <= 135) {
-    return 'cn';
-  }
-  // India
-  if (lat >= 6 && lat <= 37 && lon >= 68 && lon <= 97) {
-    return 'in';
-  }
-  // Brazil
-  if (lat >= -34 && lat <= 5 && lon >= -74 && lon <= -34) {
-    return 'br';
-  }
-  // Russia
-  if (lat >= 41 && lat <= 82 && lon >= 19 && lon <= 180) {
-    return 'ru';
-  }
-  // Spain
-  if (lat >= 36 && lat <= 44 && lon >= -10 && lon <= 4) {
-    return 'es';
-  }
-  // Italy
-  if (lat >= 36 && lat <= 47 && lon >= 6 && lon <= 19) {
-    return 'it';
-  }
-  // South Korea
-  if (lat >= 33 && lat <= 39 && lon >= 124 && lon <= 132) {
-    return 'kr';
-  }
-  // Thailand
-  if (lat >= 5 && lat <= 21 && lon >= 97 && lon <= 106) {
-    return 'th';
-  }
-  // Vietnam
-  if (lat >= 8 && lat <= 24 && lon >= 102 && lon <= 110) {
-    return 'vn';
-  }
-  // Philippines
-  if (lat >= 5 && lat <= 21 && lon >= 116 && lon <= 127) {
-    return 'ph';
-  }
-  // Indonesia
-  if (lat >= -11 && lat <= 6 && lon >= 95 && lon <= 141) {
-    return 'id';
-  }
-  // New Zealand
-  if (lat >= -47 && lat <= -34 && lon >= 166 && lon <= 179) {
-    return 'nz';
-  }
-  // South Africa
-  if (lat >= -35 && lat <= -22 && lon >= 16 && lon <= 33) {
-    return 'za';
-  }
-  // Argentina
-  if (lat >= -55 && lat <= -22 && lon >= -74 && lon <= -53) {
-    return 'ar';
-  }
-  // Chile
-  if (lat >= -56 && lat <= -17 && lon >= -76 && lon <= -66) {
-    return 'cl';
-  }
-  
-  return null;
+  const country = COUNTRY_BOUNDS.find(
+    (c) => lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax
+  );
+  return country?.code || null;
 }
 
 /**
  * Estimates country from coordinates using basic geographic ranges
  * This is a fallback when LocationIQ API is unavailable
  * Returns both country name and country code for flag display
+ * IMPORTANT: Check countries/land FIRST, then water bodies
+ * This prevents land locations (like Las Vegas) from being incorrectly identified as oceans
  */
 function estimateCountryFromCoords(lat: number, lon: number): { name: string; code: string; isWater?: boolean } | null {
-  // IMPORTANT: Check countries/land FIRST, then water bodies
-  // This prevents land locations (like Las Vegas) from being incorrectly identified as oceans
-  // Order matters - countries take priority over water bodies
-  
-  // === COUNTRIES (check first to avoid false ocean matches) ===
-  
-  // United States - check early to prevent Pacific Ocean false matches
-  if (lat >= 24 && lat <= 49 && lon >= -125 && lon <= -66) {
-    return { name: 'United States', code: 'us' };
-  }
-  
-  // Canada
-  if (lat >= 42 && lat <= 84 && lon >= -141 && lon <= -52) {
-    return { name: 'Canada', code: 'ca' };
-  }
-  
-  // Mexico
-  if (lat >= 14 && lat <= 33 && lon >= -118 && lon <= -86) {
-    return { name: 'Mexico', code: 'mx' };
-  }
-  
-  // Japan
-  if (lat >= 24 && lat <= 46 && lon >= 122 && lon <= 146) {
-    return { name: 'Japan', code: 'jp' };
-  }
-  
-  // United Kingdom
-  if (lat >= 50 && lat <= 61 && lon >= -8 && lon <= 2) {
-    return { name: 'United Kingdom', code: 'gb' };
-  }
-  
-  // Australia
-  if (lat >= -44 && lat <= -10 && lon >= 113 && lon <= 154) {
-    return { name: 'Australia', code: 'au' };
-  }
-  
-  // Germany
-  if (lat >= 47 && lat <= 55 && lon >= 6 && lon <= 15) {
-    return { name: 'Germany', code: 'de' };
-  }
-  
-  // France
-  if (lat >= 42 && lat <= 51 && lon >= -5 && lon <= 8) {
-    return { name: 'France', code: 'fr' };
-  }
-  
-  // China
-  if (lat >= 18 && lat <= 54 && lon >= 73 && lon <= 135) {
-    return { name: 'China', code: 'cn' };
-  }
-  
-  // India
-  if (lat >= 6 && lat <= 37 && lon >= 68 && lon <= 97) {
-    return { name: 'India', code: 'in' };
-  }
-  
-  // Brazil
-  if (lat >= -34 && lat <= 5 && lon >= -74 && lon <= -34) {
-    return { name: 'Brazil', code: 'br' };
-  }
-  
-  // Russia
-  if (lat >= 41 && lat <= 82 && lon >= 19 && lon <= 169) {
-    return { name: 'Russia', code: 'ru' };
-  }
-  
-  // Spain - prevents Atlantic Ocean false matches
-  if (lat >= 36 && lat <= 44 && lon >= -10 && lon <= 5) {
-    return { name: 'Spain', code: 'es' };
-  }
-  
-  // Portugal - prevents Atlantic Ocean false matches
-  if (lat >= 37 && lat <= 42 && lon >= -10 && lon <= -6) {
-    return { name: 'Portugal', code: 'pt' };
-  }
-  
-  // Italy - prevents Mediterranean/Adriatic false matches
-  if (lat >= 36 && lat <= 47 && lon >= 6 && lon <= 19) {
-    return { name: 'Italy', code: 'it' };
-  }
-  
-  // Chile - prevents Pacific Ocean false matches
-  if (lat >= -56 && lat <= -17 && lon >= -76 && lon <= -66) {
-    return { name: 'Chile', code: 'cl' };
-  }
-  
-  // Argentina - prevents Atlantic Ocean false matches
-  if (lat >= -56 && lat <= -21 && lon >= -74 && lon <= -53) {
-    return { name: 'Argentina', code: 'ar' };
-  }
-  
-  // Thailand - prevents Indian Ocean false matches
-  if (lat >= 5 && lat <= 21 && lon >= 97 && lon <= 106) {
-    return { name: 'Thailand', code: 'th' };
-  }
-  
-  // Indonesia - prevents Indian/Pacific Ocean false matches
-  if (lat >= -11 && lat <= 6 && lon >= 95 && lon <= 141) {
-    return { name: 'Indonesia', code: 'id' };
-  }
-  
-  // Philippines - prevents Pacific Ocean false matches
-  if (lat >= 5 && lat <= 21 && lon >= 116 && lon <= 127) {
-    return { name: 'Philippines', code: 'ph' };
-  }
-  
-  // Vietnam - prevents South China Sea false matches
-  if (lat >= 8 && lat <= 24 && lon >= 102 && lon <= 110) {
-    return { name: 'Vietnam', code: 'vn' };
-  }
-  
-  // South Korea - prevents Sea of Japan/Yellow Sea false matches
-  if (lat >= 33 && lat <= 39 && lon >= 124 && lon <= 132) {
-    return { name: 'South Korea', code: 'kr' };
-  }
-  
-  // New Zealand - prevents Pacific Ocean false matches
-  if (lat >= -47 && lat <= -34 && lon >= 166 && lon <= 179) {
-    return { name: 'New Zealand', code: 'nz' };
+  // Check countries first (using shared data structure)
+  const country = COUNTRY_BOUNDS.find(
+    (c) => lat >= c.latMin && lat <= c.latMax && lon >= c.lonMin && lon <= c.lonMax
+  );
+  if (country) {
+    return { name: country.name, code: country.code };
   }
   
   // === MAJOR SEAS AND GULFS (check after countries) ===

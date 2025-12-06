@@ -89,17 +89,19 @@ export default function OverlayPage() {
   const [hasReceivedFreshGps, setHasReceivedFreshGps] = useState(false); // Track if we've received at least one fresh GPS update
   const [hasIncompleteLocationData, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
   
-  // Todo visibility tracking - simplified: show completed todos for 1 minute after page load or after being marked complete
+  // Todo completion tracking with localStorage persistence
   const [completedTodoTimestamps, setCompletedTodoTimestamps] = useState<Map<string, number>>(new Map()); // Track when todos were completed
   const completedTodoTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Track timers for hiding completed todos
-  const hideCompletedTodosTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timer to hide all completed todos after 1 minute
-  const [showCompletedTodos, setShowCompletedTodos] = useState(true); // Track if we should show completed todos
+  const STORAGE_KEY = 'tazo-completed-todos'; // localStorage key for persistence
   
-  // Todo list visibility: show for 15 seconds every 10 minutes
+  // Todo list visibility: show for 15 seconds every 5 minutes
   const [showTodoList, setShowTodoList] = useState(true); // Track if todo list should be visible
   const [todoListOpacity, setTodoListOpacity] = useState(1); // Track opacity for fade transitions
   const todoListVisibilityTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer for showing/hiding todo list
   const todoListFadeTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer for fade transitions
+  const previousTodoIdsRef = useRef<Set<string>>(new Set()); // Track previous todo IDs to detect new items
+  const previousTodoCompletionStateRef = useRef<Map<string, boolean>>(new Map()); // Track previous completion state to detect unchecked items
+  const scheduleCycleRef = useRef<(() => void) | null>(null); // Reference to scheduleCycle function for resetting
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -261,7 +263,6 @@ export default function OverlayPage() {
 
   // Cleanup minimap and location/weather timers on unmount
   useEffect(() => {
-    const todoTimers = completedTodoTimersRef.current;
     return () => {
       if (minimapFadeTimeoutRef.current) {
         clearTimeout(minimapFadeTimeoutRef.current);
@@ -269,18 +270,16 @@ export default function OverlayPage() {
       if (locationWeatherHideTimeoutRef.current) {
         clearTimeout(locationWeatherHideTimeoutRef.current);
       }
-      // Cleanup todo timers
-      todoTimers.forEach((timer) => clearTimeout(timer));
-      todoTimers.clear();
-      if (hideCompletedTodosTimeoutRef.current) {
-        clearTimeout(hideCompletedTodosTimeoutRef.current);
-      }
+      // Cleanup todo list visibility timers
       if (todoListVisibilityTimerRef.current) {
         clearTimeout(todoListVisibilityTimerRef.current);
       }
       if (todoListFadeTimerRef.current) {
         clearTimeout(todoListFadeTimerRef.current);
       }
+      // Cleanup completed todo timers
+      completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
+      completedTodoTimersRef.current.clear();
     };
   }, []);
 
@@ -576,27 +575,6 @@ export default function OverlayPage() {
     };
   }, [timezone, isRealTimezone]);
 
-  // Set up timer to hide all completed todos 1 minute after page load
-  useEffect(() => {
-    const ONE_MINUTE = 60 * 1000; // 1 minute in milliseconds
-    
-    // Clear any existing timer
-    if (hideCompletedTodosTimeoutRef.current) {
-      clearTimeout(hideCompletedTodosTimeoutRef.current);
-    }
-    
-    // Set timer to hide completed todos after 1 minute
-    hideCompletedTodosTimeoutRef.current = setTimeout(() => {
-      setShowCompletedTodos(false);
-    }, ONE_MINUTE);
-    
-    return () => {
-      if (hideCompletedTodosTimeoutRef.current) {
-        clearTimeout(hideCompletedTodosTimeoutRef.current);
-      }
-    };
-  }, []); // Run once on mount
-
   // Set up todo list visibility cycle: show for 15 seconds every 5 minutes with fade transitions
   useEffect(() => {
     const SHOW_DURATION = 15 * 1000; // 15 seconds in milliseconds
@@ -620,6 +598,14 @@ export default function OverlayPage() {
     };
     
     const scheduleCycle = () => {
+      // Clear any existing timers
+      if (todoListVisibilityTimerRef.current) {
+        clearTimeout(todoListVisibilityTimerRef.current);
+      }
+      if (todoListFadeTimerRef.current) {
+        clearTimeout(todoListFadeTimerRef.current);
+      }
+      
       // Fade in todo list immediately
       fadeIn();
       
@@ -634,6 +620,9 @@ export default function OverlayPage() {
       }, SHOW_DURATION);
     };
     
+    // Store reference to scheduleCycle for resetting when new todos are added
+    scheduleCycleRef.current = scheduleCycle;
+    
     // Start the cycle
     scheduleCycle();
     
@@ -647,7 +636,201 @@ export default function OverlayPage() {
     };
   }, []); // Run once on mount
 
-  // Track when todos are marked complete and set timer to hide them after 1 minute
+  // Detect new todo items, unchecked items, or completed items and reset visibility cycle
+  useEffect(() => {
+    if (!settings.todos || settings.todos.length === 0) {
+      previousTodoIdsRef.current = new Set();
+      previousTodoCompletionStateRef.current = new Map();
+      return;
+    }
+
+    const currentTodoIds = new Set(settings.todos.map(todo => todo.id));
+    const previousTodoIds = previousTodoIdsRef.current;
+    const previousCompletionState = previousTodoCompletionStateRef.current;
+
+    // Check if any new todos were added
+    const hasNewTodos = Array.from(currentTodoIds).some(id => !previousTodoIds.has(id));
+
+    // Check if any todos were unchecked (changed from completed to incomplete)
+    const hasUncheckedTodos = settings.todos.some(todo => {
+      const wasCompleted = previousCompletionState.get(todo.id) === true;
+      const isIncomplete = !todo.completed;
+      // If todo was completed before and is now incomplete, it was unchecked
+      return wasCompleted && isIncomplete;
+    });
+
+    // Check if any todos were checked (changed from incomplete to completed)
+    const hasCheckedTodos = settings.todos.some(todo => {
+      const wasIncomplete = previousCompletionState.get(todo.id) === false;
+      const isCompleted = todo.completed;
+      // If todo was incomplete before and is now completed, it was checked
+      return wasIncomplete && isCompleted;
+    });
+
+    if ((hasNewTodos || hasUncheckedTodos || hasCheckedTodos) && scheduleCycleRef.current) {
+      // New todo added, item unchecked, or item checked - reset the visibility cycle immediately
+      scheduleCycleRef.current();
+    }
+
+    // Update previous todo IDs and completion state
+    previousTodoIdsRef.current = currentTodoIds;
+    const newCompletionState = new Map<string, boolean>();
+    settings.todos.forEach(todo => {
+      newCompletionState.set(todo.id, todo.completed);
+    });
+    previousTodoCompletionStateRef.current = newCompletionState;
+  }, [settings.todos]);
+
+  // Filter todos based on completion timestamps (hide if completed > 60 seconds ago)
+  const visibleTodos = useMemo(() => {
+    if (!settings.todos || settings.todos.length === 0) {
+      return [];
+    }
+
+    const now = Date.now();
+    const ONE_MINUTE = 60 * 1000; // 60 seconds in milliseconds
+
+    return settings.todos.filter((todo) => {
+      if (!todo.completed) {
+        // Always show incomplete todos
+        return true;
+      }
+      
+      // For completed todos, check if they were completed less than 60 seconds ago
+      const completionTime = completedTodoTimestamps.get(todo.id);
+      if (!completionTime) {
+        // No completion timestamp in state - check localStorage for persistence
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const storedTimestamps = JSON.parse(stored) as Record<string, number>;
+            const storedTimestamp = storedTimestamps[todo.id];
+            
+            if (storedTimestamp) {
+              // Found in localStorage - check if it's still within 60 seconds
+              const timeSinceCompletion = now - storedTimestamp;
+              const shouldShow = timeSinceCompletion < ONE_MINUTE;
+              if (!shouldShow) {
+                OverlayLogger.overlay(`Hiding completed todo ${todo.id} - completed ${Math.round(timeSinceCompletion / 1000)}s ago`);
+              }
+              return shouldShow;
+            }
+          }
+        } catch (error) {
+          // If localStorage check fails, show the todo (graceful degradation)
+          OverlayLogger.warn('Failed to check localStorage for todo visibility', { error });
+          return true;
+        }
+        
+        // No timestamp found in localStorage - this means it was completed more than 60 seconds ago
+        // and was cleaned up, OR it was never tracked. Hide it to be safe.
+        OverlayLogger.overlay(`Hiding completed todo ${todo.id} - no timestamp found`);
+        return false;
+      }
+      
+      const timeSinceCompletion = now - completionTime;
+      const shouldShow = timeSinceCompletion < ONE_MINUTE;
+      if (!shouldShow) {
+        OverlayLogger.overlay(`Hiding completed todo ${todo.id} - completed ${Math.round(timeSinceCompletion / 1000)}s ago`);
+      }
+      return shouldShow;
+    });
+  }, [settings.todos, completedTodoTimestamps]);
+
+  // Load completed todo timestamps from localStorage on mount and set up timers
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      OverlayLogger.overlay(`Loading completed todo timestamps from localStorage`, { 
+        hasStored: !!stored,
+        storageKey: STORAGE_KEY 
+      });
+      
+      if (stored) {
+        const timestamps = JSON.parse(stored) as Record<string, number>;
+        const now = Date.now();
+        const ONE_MINUTE = 60 * 1000;
+        
+        OverlayLogger.overlay(`Found ${Object.keys(timestamps).length} timestamps in localStorage`, {
+          timestamps: Object.entries(timestamps).map(([id, ts]) => ({
+            id,
+            ageSeconds: Math.round((now - ts) / 1000)
+          }))
+        });
+        
+        // Filter out timestamps older than 60 seconds (cleanup old data)
+        const validTimestamps = new Map<string, number>();
+        Object.entries(timestamps).forEach(([id, timestamp]) => {
+          const timeSinceCompletion = now - timestamp;
+          if (timeSinceCompletion < ONE_MINUTE) {
+            validTimestamps.set(id, timestamp);
+            
+            // Set up timer to hide this todo when it reaches 60 seconds
+            const remainingTime = ONE_MINUTE - timeSinceCompletion;
+            const timer = setTimeout(() => {
+              setCompletedTodoTimestamps((current) => {
+                const updated = new Map(current);
+                updated.delete(id);
+                return updated;
+              });
+              completedTodoTimersRef.current.delete(id);
+            }, remainingTime);
+            
+            completedTodoTimersRef.current.set(id, timer);
+          } else {
+            OverlayLogger.overlay(`Filtered out old timestamp for todo ${id}`, {
+              ageSeconds: Math.round(timeSinceCompletion / 1000)
+            });
+          }
+        });
+        
+        setCompletedTodoTimestamps(validTimestamps);
+        OverlayLogger.overlay(`Loaded ${validTimestamps.size} valid timestamps into state`);
+        
+        // Don't clean up localStorage here - keep old timestamps so we can check them later
+        // Old timestamps (> 60 seconds) will be filtered out in visibleTodos and tracking logic
+      }
+    } catch (error) {
+      // Ignore localStorage errors (e.g., in private browsing mode)
+      OverlayLogger.warn('Failed to load completed todo timestamps from localStorage', { error });
+    }
+  }, []); // Run once on mount
+
+  // Persist completed todo timestamps to localStorage whenever they change
+  // Also clean up old timestamps (> 60 seconds) periodically
+  useEffect(() => {
+    try {
+      const now = Date.now();
+      const ONE_MINUTE = 60 * 1000;
+      
+      // Load existing timestamps to preserve ones not in current state
+      const existing = localStorage.getItem(STORAGE_KEY);
+      const allTimestamps: Record<string, number> = existing 
+        ? JSON.parse(existing) as Record<string, number>
+        : {};
+      
+      // Update with current state timestamps
+      completedTodoTimestamps.forEach((timestamp, id) => {
+        allTimestamps[id] = timestamp;
+      });
+      
+      // Clean up timestamps older than 60 seconds
+      const cleaned: Record<string, number> = {};
+      Object.entries(allTimestamps).forEach(([id, timestamp]) => {
+        const timeSinceCompletion = now - timestamp;
+        if (timeSinceCompletion < ONE_MINUTE) {
+          cleaned[id] = timestamp;
+        }
+      });
+      
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+    } catch (error) {
+      // Ignore localStorage errors (e.g., quota exceeded)
+      OverlayLogger.warn('Failed to save completed todo timestamps to localStorage', { error });
+    }
+  }, [completedTodoTimestamps]);
+
+  // Track when todos are marked complete and set timer to hide them after 60 seconds
   useEffect(() => {
     if (!settings.todos || settings.todos.length === 0) {
       // Clear timestamps and timers if todos are cleared
@@ -658,7 +841,7 @@ export default function OverlayPage() {
     }
 
     const now = Date.now();
-    const ONE_MINUTE = 60 * 1000; // 1 minute in milliseconds
+    const ONE_MINUTE = 60 * 1000; // 60 seconds in milliseconds
 
     // Use functional update to avoid dependency on completedTodoTimestamps
     setCompletedTodoTimestamps((prevTimestamps) => {
@@ -671,10 +854,49 @@ export default function OverlayPage() {
         if (todo.completed) {
           // Check if this todo was just completed (not in timestamps yet)
           if (!prevTimestamps.has(todo.id)) {
-            // Just completed - record timestamp
+            // Check localStorage to see if this was completed before (persistence check)
+            try {
+              const stored = localStorage.getItem(STORAGE_KEY);
+              if (stored) {
+                const storedTimestamps = JSON.parse(stored) as Record<string, number>;
+                const storedTimestamp = storedTimestamps[todo.id];
+                
+                if (storedTimestamp) {
+                  // Found in localStorage - check if it's still within 60 seconds
+                  const timeSinceCompletion = now - storedTimestamp;
+                  if (timeSinceCompletion < ONE_MINUTE) {
+                    // Still within 60 seconds - use the stored timestamp
+                    newTimestamps.set(todo.id, storedTimestamp);
+                    
+                    // Set up timer for remaining time
+                    const remainingTime = ONE_MINUTE - timeSinceCompletion;
+                    const timer = setTimeout(() => {
+                      setCompletedTodoTimestamps((current) => {
+                        const updated = new Map(current);
+                        updated.delete(todo.id);
+                        return updated;
+                      });
+                      completedTodoTimersRef.current.delete(todo.id);
+                    }, remainingTime);
+                    
+                    completedTodoTimersRef.current.set(todo.id, timer);
+                    return; // Skip adding new timestamp
+                  }
+                  // If stored timestamp is > 60 seconds old, don't add it (todo will be hidden)
+                  OverlayLogger.overlay(`Todo ${todo.id} was completed ${Math.round(timeSinceCompletion / 1000)}s ago - not adding to state, will be hidden`);
+                  return; // Don't add timestamp, todo will be filtered out
+                }
+              }
+            } catch (error) {
+              // If localStorage check fails, proceed with new timestamp
+              OverlayLogger.warn('Failed to check localStorage for todo timestamp', { error });
+            }
+            
+            // No stored timestamp or it's expired - record new timestamp
+            OverlayLogger.overlay(`Todo ${todo.id} is newly completed or expired - adding new timestamp`);
             newTimestamps.set(todo.id, now);
             
-            // Set timer to hide this specific todo after 1 minute
+            // Set timer to hide this specific todo after 60 seconds
             const timer = setTimeout(() => {
               setCompletedTodoTimestamps((current) => {
                 const updated = new Map(current);
@@ -716,43 +938,6 @@ export default function OverlayPage() {
       return newTimestamps;
     });
   }, [settings.todos]); // Removed completedTodoTimestamps from dependencies to avoid infinite loop
-
-  // Compute visible todos - simplified: show completed todos for 1 minute after page load or after being marked complete
-  const visibleTodos = useMemo(() => {
-    if (!settings.todos || settings.todos.length === 0) {
-      return [];
-    }
-
-    const now = Date.now();
-    const ONE_MINUTE = 60 * 1000; // 1 minute in milliseconds
-
-    // Filter todos based on visibility rules:
-    // 1. Always show incomplete todos
-    // 2. Show completed todos if:
-    //    - We're still within 1 minute of page load, OR
-    //    - The todo was completed less than 1 minute ago
-    return settings.todos.filter((todo) => {
-      if (!todo.completed) {
-        // Always show incomplete todos
-        return true;
-      }
-      
-      // For completed todos, check if we should show them
-      if (!showCompletedTodos) {
-        // After 1 minute from page load, only show if completed less than 1 minute ago
-        const completionTime = completedTodoTimestamps.get(todo.id);
-        if (!completionTime) {
-          // No completion timestamp (was already completed on load) - hide it
-          return false;
-        }
-        const timeSinceCompletion = now - completionTime;
-        return timeSinceCompletion < ONE_MINUTE;
-      }
-      
-      // Within 1 minute of page load - show all completed todos
-      return true;
-    });
-  }, [settings.todos, showCompletedTodos, completedTodoTimestamps]);
 
   // Load settings and set up real-time updates
   useEffect(() => {
