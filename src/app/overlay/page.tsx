@@ -89,13 +89,12 @@ export default function OverlayPage() {
   const [hasReceivedFreshGps, setHasReceivedFreshGps] = useState(false); // Track if we've received at least one fresh GPS update
   const [hasIncompleteLocationData, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
   
-  // Todo visibility tracking
-  const [initialIncompleteTodoIds, setInitialIncompleteTodoIds] = useState<Set<string>>(new Set()); // Track todos that were incomplete on initial load
-  const [completedTodoTimestamps, setCompletedTodoTimestamps] = useState<Map<string, number>>(new Map()); // Track when todos were completed (timestamp)
-  const completedTodoTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Track timers for removing completed todos
-  const hasInitializedTodosRef = useRef(false); // Track if we've initialized the initial incomplete todos
-  const completedTodoTimestampsRef = useRef<Map<string, number>>(new Map()); // Ref version for synchronous access in filter
-  const previousTodosRef = useRef<Map<string, boolean>>(new Map()); // Track previous todo completion states
+  // Todo visibility tracking - simplified: show completed todos for 1 minute after page load or after being marked complete
+  const [pageLoadTime] = useState(() => Date.now()); // Track when page loaded
+  const [completedTodoTimestamps, setCompletedTodoTimestamps] = useState<Map<string, number>>(new Map()); // Track when todos were completed
+  const completedTodoTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Track timers for hiding completed todos
+  const hideCompletedTodosTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timer to hide all completed todos after 1 minute
+  const [showCompletedTodos, setShowCompletedTodos] = useState(true); // Track if we should show completed todos
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -267,6 +266,9 @@ export default function OverlayPage() {
       // Cleanup todo timers
       completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
       completedTodoTimersRef.current.clear();
+      if (hideCompletedTodosTimeoutRef.current) {
+        clearTimeout(hideCompletedTodosTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -575,196 +577,133 @@ export default function OverlayPage() {
     };
   }, [timezone]);
 
-  // Track initial incomplete todos on first load
+  // Set up timer to hide all completed todos 1 minute after page load
   useEffect(() => {
-    if (settings.todos && !hasInitializedTodosRef.current) {
-      // First load - track which todos were incomplete
-      const incompleteIds = new Set<string>();
-      settings.todos.forEach((todo) => {
-        if (!todo.completed) {
-          incompleteIds.add(todo.id);
-        }
-      });
-      setInitialIncompleteTodoIds(incompleteIds);
-      hasInitializedTodosRef.current = true;
+    const ONE_MINUTE = 60 * 1000; // 1 minute in milliseconds
+    
+    // Clear any existing timer
+    if (hideCompletedTodosTimeoutRef.current) {
+      clearTimeout(hideCompletedTodosTimeoutRef.current);
     }
-  }, [settings.todos]);
+    
+    // Set timer to hide completed todos after 1 minute
+    hideCompletedTodosTimeoutRef.current = setTimeout(() => {
+      setShowCompletedTodos(false);
+    }, ONE_MINUTE);
+    
+    return () => {
+      if (hideCompletedTodosTimeoutRef.current) {
+        clearTimeout(hideCompletedTodosTimeoutRef.current);
+      }
+    };
+  }, []); // Run once on mount
 
-  // Track when todos are marked complete after page load
+  // Track when todos are marked complete and set timer to hide them after 1 minute
   useEffect(() => {
     if (!settings.todos || settings.todos.length === 0) {
-      // Clear timestamps if todos are cleared
+      // Clear timestamps and timers if todos are cleared
       setCompletedTodoTimestamps(new Map());
-      completedTodoTimestampsRef.current.clear();
       completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
       completedTodoTimersRef.current.clear();
-      previousTodosRef.current.clear();
       return;
     }
 
     const now = Date.now();
-    const FIVE_MINUTES = 5 * 60 * 1000; // 5 minutes in milliseconds
-    const newTimestamps = new Map(completedTodoTimestampsRef.current);
-    const currentTodosMap = new Map<string, boolean>();
+    const ONE_MINUTE = 60 * 1000; // 1 minute in milliseconds
 
-    // Build current todos map
-    settings.todos.forEach((todo) => {
-      currentTodosMap.set(todo.id, todo.completed);
-    });
+    // Use functional update to avoid dependency on completedTodoTimestamps
+    setCompletedTodoTimestamps((prevTimestamps) => {
+      const newTimestamps = new Map(prevTimestamps);
 
-    // Check for todos that transitioned from incomplete to complete
-    settings.todos.forEach((todo) => {
-      // Check if this todo was incomplete on initial load and is now completed
-      if (todo.completed && initialIncompleteTodoIds.has(todo.id)) {
-        // This todo was incomplete on initial load and is now completed
-        if (!completedTodoTimestampsRef.current.has(todo.id)) {
-          // Just completed - record timestamp immediately (synchronously)
-          newTimestamps.set(todo.id, now);
-          completedTodoTimestampsRef.current.set(todo.id, now);
-          
-          // Set timer to remove after 5 minutes (only if not already set by useMemo)
-          if (!completedTodoTimersRef.current.has(todo.id)) {
+      if (!settings.todos) return newTimestamps;
+
+      // Track newly completed todos
+      settings.todos.forEach((todo) => {
+        if (todo.completed) {
+          // Check if this todo was just completed (not in timestamps yet)
+          if (!prevTimestamps.has(todo.id)) {
+            // Just completed - record timestamp
+            newTimestamps.set(todo.id, now);
+            
+            // Set timer to hide this specific todo after 1 minute
             const timer = setTimeout(() => {
               setCompletedTodoTimestamps((current) => {
                 const updated = new Map(current);
                 updated.delete(todo.id);
-                completedTodoTimestampsRef.current.delete(todo.id);
                 return updated;
               });
               completedTodoTimersRef.current.delete(todo.id);
-            }, FIVE_MINUTES);
+            }, ONE_MINUTE);
             
             completedTodoTimersRef.current.set(todo.id, timer);
           }
+        } else {
+          // Todo is incomplete - remove from timestamps if it was there
+          if (prevTimestamps.has(todo.id)) {
+            // Clear timer if it exists
+            const timer = completedTodoTimersRef.current.get(todo.id);
+            if (timer) {
+              clearTimeout(timer);
+              completedTodoTimersRef.current.delete(todo.id);
+            }
+            newTimestamps.delete(todo.id);
+          }
         }
-      } else if (!todo.completed) {
-        // Todo is incomplete - remove from timestamps if it was there
-        if (completedTodoTimestampsRef.current.has(todo.id)) {
-          // Clear timer if it exists
-          const timer = completedTodoTimersRef.current.get(todo.id);
+      });
+
+      // Remove timestamps for todos that no longer exist
+      prevTimestamps.forEach((timestamp, todoId) => {
+        const todoExists = settings.todos?.some((t) => t.id === todoId);
+        if (!todoExists) {
+          const timer = completedTodoTimersRef.current.get(todoId);
           if (timer) {
             clearTimeout(timer);
-            completedTodoTimersRef.current.delete(todo.id);
+            completedTodoTimersRef.current.delete(todoId);
           }
-          newTimestamps.delete(todo.id);
-          completedTodoTimestampsRef.current.delete(todo.id);
+          newTimestamps.delete(todoId);
         }
-      }
+      });
+
+      return newTimestamps;
     });
+  }, [settings.todos]); // Removed completedTodoTimestamps from dependencies to avoid infinite loop
 
-    // Remove timestamps for todos that no longer exist
-    completedTodoTimestampsRef.current.forEach((timestamp, todoId) => {
-      const todoExists = settings.todos?.some((t) => t.id === todoId);
-      if (!todoExists) {
-        const timer = completedTodoTimersRef.current.get(todoId);
-        if (timer) {
-          clearTimeout(timer);
-          completedTodoTimersRef.current.delete(todoId);
-        }
-        newTimestamps.delete(todoId);
-        completedTodoTimestampsRef.current.delete(todoId);
-      }
-    });
-
-    // Update previous todos ref for next comparison
-    previousTodosRef.current = currentTodosMap;
-
-    // Update state (for re-renders)
-    if (newTimestamps.size !== completedTodoTimestamps.size || 
-        Array.from(newTimestamps.keys()).some(id => !completedTodoTimestamps.has(id))) {
-      setCompletedTodoTimestamps(newTimestamps);
-    }
-  }, [settings.todos, initialIncompleteTodoIds, completedTodoTimestamps]);
-
-  // Compute visible todos with useMemo to ensure refs are checked synchronously
+  // Compute visible todos - simplified: show completed todos for 1 minute after page load or after being marked complete
   const visibleTodos = useMemo(() => {
     if (!settings.todos || settings.todos.length === 0) {
       return [];
     }
 
     const now = Date.now();
-    const FIVE_MINUTES = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-    // Synchronously update timestamps for newly completed todos (before filtering)
-    settings.todos.forEach((todo) => {
-      // Check if this todo was incomplete on initial load and is now completed
-      if (todo.completed && initialIncompleteTodoIds.has(todo.id)) {
-        // This todo was incomplete on initial load and is now completed
-        if (!completedTodoTimestampsRef.current.has(todo.id)) {
-          // Just completed - record timestamp immediately (synchronously)
-          completedTodoTimestampsRef.current.set(todo.id, now);
-          
-          // Update state asynchronously (for re-renders and useEffect)
-          setCompletedTodoTimestamps((prev) => {
-            const updated = new Map(prev);
-            updated.set(todo.id, now);
-            return updated;
-          });
-          
-          // Set timer to remove after 5 minutes (only if not already set)
-          if (!completedTodoTimersRef.current.has(todo.id)) {
-            const timer = setTimeout(() => {
-              setCompletedTodoTimestamps((current) => {
-                const updated = new Map(current);
-                updated.delete(todo.id);
-                completedTodoTimestampsRef.current.delete(todo.id);
-                return updated;
-              });
-              completedTodoTimersRef.current.delete(todo.id);
-            }, FIVE_MINUTES);
-            
-            completedTodoTimersRef.current.set(todo.id, timer);
-          }
-        }
-      } else if (!todo.completed) {
-        // Todo is incomplete - remove from timestamps if it was there
-        if (completedTodoTimestampsRef.current.has(todo.id)) {
-          // Clear timer if it exists
-          const timer = completedTodoTimersRef.current.get(todo.id);
-          if (timer) {
-            clearTimeout(timer);
-            completedTodoTimersRef.current.delete(todo.id);
-          }
-          completedTodoTimestampsRef.current.delete(todo.id);
-          
-          // Update state asynchronously
-          setCompletedTodoTimestamps((prev) => {
-            const updated = new Map(prev);
-            updated.delete(todo.id);
-            return updated;
-          });
-        }
-      }
-    });
+    const ONE_MINUTE = 60 * 1000; // 1 minute in milliseconds
 
     // Filter todos based on visibility rules:
-    // 1. Show incomplete todos
-    // 2. Show completed todos that were incomplete on initial load AND were completed after page load (within 5 minutes)
+    // 1. Always show incomplete todos
+    // 2. Show completed todos if:
+    //    - We're still within 1 minute of page load, OR
+    //    - The todo was completed less than 1 minute ago
     return settings.todos.filter((todo) => {
       if (!todo.completed) {
         // Always show incomplete todos
         return true;
       }
       
-      // For completed todos:
-      // - Hide if they were already completed on initial load
-      // - Show if they were incomplete on initial load and completed after page load (within 5 minutes)
-      if (!initialIncompleteTodoIds.has(todo.id)) {
-        // Was already completed on initial load - hide it
-        return false;
+      // For completed todos, check if we should show them
+      if (!showCompletedTodos) {
+        // After 1 minute from page load, only show if completed less than 1 minute ago
+        const completionTime = completedTodoTimestamps.get(todo.id);
+        if (!completionTime) {
+          // No completion timestamp (was already completed on load) - hide it
+          return false;
+        }
+        const timeSinceCompletion = now - completionTime;
+        return timeSinceCompletion < ONE_MINUTE;
       }
       
-      // Check if it has a timestamp and is still within 5 minutes
-      const timestamp = completedTodoTimestampsRef.current.get(todo.id);
-      if (!timestamp) {
-        // No timestamp yet - hide it (shouldn't happen after sync update above, but safety check)
-        return false;
-      }
-      
-      const timeSinceCompletion = now - timestamp;
-      return timeSinceCompletion < FIVE_MINUTES;
+      // Within 1 minute of page load - show all completed todos
+      return true;
     });
-  }, [settings.todos, initialIncompleteTodoIds, completedTodoTimestamps]);
+  }, [settings.todos, showCompletedTodos, completedTodoTimestamps]);
 
   // Load settings and set up real-time updates
   useEffect(() => {
@@ -887,17 +826,19 @@ export default function OverlayPage() {
     };
   }, []); // Empty dependency array - we want this to run once on mount
 
-  // RTIRL connection - use refs to avoid re-running on timezone changes
+  // RTIRL connection - use refs to avoid re-running on timezone/settings changes
   const timezoneRef = useRef(timezone);
   const createDateTimeFormattersRef = useRef(createDateTimeFormatters);
   const updateMinimapVisibilityRef = useRef(updateMinimapVisibility);
+  const settingsRef = useRef(settings);
   
   // Update refs when values change (needed for RTIRL listener closure)
   useEffect(() => {
     timezoneRef.current = timezone;
     createDateTimeFormattersRef.current = createDateTimeFormatters;
     updateMinimapVisibilityRef.current = updateMinimapVisibility;
-  }, [timezone, createDateTimeFormatters, updateMinimapVisibility]);
+    settingsRef.current = settings;
+  }, [timezone, createDateTimeFormatters, updateMinimapVisibility, settings]);
 
   // Preload flag image when country code is available
   useEffect(() => {
@@ -1285,14 +1226,15 @@ export default function OverlayPage() {
                     
                     if (loc && hasUsefulData) {
                       // Full location data available - use it
-                      const formatted = formatLocation(loc, settings.locationDisplay);
+                      // Use settingsRef to get the current settings value (not stale closure value)
+                      const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
                       lastRawLocation.current = loc;
                         
                         // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
                         if (formatted.primary.trim() || formatted.country) {
                         OverlayLogger.location('Location updated', {
-                          mode: settings.locationDisplay,
+                          mode: settingsRef.current.locationDisplay,
                           primary: formatted.primary.trim() || 'none',
                           country: formatted.country || 'none',
                           city: loc.city || loc.town || 'none',
