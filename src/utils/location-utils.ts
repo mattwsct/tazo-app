@@ -43,6 +43,9 @@ export interface LocationDisplay {
 
 type LocationPrecision = 'neighborhood' | 'city';
 
+// Category types to track which location category was used
+type LocationCategory = 'neighborhood' | 'city' | 'county' | 'state' | 'country';
+
 
 // === 🔍 SIMPLE FILTERING ===
 
@@ -74,6 +77,7 @@ function isValidLocationName(name: string): boolean {
 
 /**
  * Gets the best location name for a given precision level with automatic fallback
+ * Returns both the location name and the category it came from
  * 
  * If the requested precision level has names that are too long (>20 chars),
  * it automatically falls back to the next less specific level.
@@ -91,7 +95,10 @@ function isValidLocationName(name: string): boolean {
  * - Field names vary by country but hierarchy is generally consistent
  * - Only area-based locations are used (no street addresses/road names)
  */
-function getLocationByPrecision(location: LocationData, precision: LocationPrecision): string {
+function getLocationByPrecision(
+  location: LocationData, 
+  precision: LocationPrecision
+): { name: string; category: LocationCategory } {
   // Try to find a valid name at the current precision level
   const tryFields = (fields: (keyof LocationData)[]): string | null => {
     for (const field of fields) {
@@ -133,27 +140,27 @@ function getLocationByPrecision(location: LocationData, precision: LocationPreci
     // Most specific: try neighborhood/local areas first
     // These vary by country: suburb (AU/UK), ward (UK/JP), district (many), neighbourhood (US)
     const neighborhoodName = tryFields(neighborhoodFields);
-    if (neighborhoodName) return neighborhoodName;
+    if (neighborhoodName) return { name: neighborhoodName, category: 'neighborhood' };
     
     // Then fall through to shared fallback chain (city → county → state)
   }
     
   // Shared fallback chain for both modes: city → county → state/province
   // This works globally as LocationIQ provides appropriate fields for each country
-    const cityName = tryFields(cityProperFields);
-    if (cityName) return cityName;
+  const cityName = tryFields(cityProperFields);
+  if (cityName) return { name: cityName, category: 'city' };
     
   // County may not exist in all countries (e.g., Japan uses prefectures, many EU countries skip this level)
   // If present, it's typically between city and state/province in the hierarchy
   const countyName = tryFields(countyFields);
-  if (countyName) return countyName;
+  if (countyName) return { name: countyName, category: 'county' };
     
   // State/province/region level (exists in most countries: US states, Japanese prefectures, EU regions, etc.)
-    const stateName = tryFields(stateFields);
-    if (stateName) return stateName;
+  const stateName = tryFields(stateFields);
+  if (stateName) return { name: stateName, category: 'state' };
 
   // If nothing worked, return empty (will use country as last resort in formatLocation)
-  return '';
+  return { name: '', category: 'country' };
 }
 
 /**
@@ -300,24 +307,26 @@ export function formatLocation(
   // For country mode, show only country name/flag (no primary location)
   if (displayMode === 'country') {
     const countryInfo = getCountry(location);
-    const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
+    const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo, 'country') : undefined;
     return { primary: '', country: countryDisplay, countryCode: location.countryCode || '' };
   }
   
   // For custom mode, we still need the country name/flag, just not the primary location
   if (displayMode === 'custom') {
     const countryInfo = getCountry(location);
-    const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
+    const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo, 'country') : undefined;
     return { primary: '', country: countryDisplay, countryCode: location.countryCode || '' };
   }
   
-  const primary = getLocationByPrecision(location, displayMode);
+  const primaryResult = getLocationByPrecision(location, displayMode);
+  const primary = primaryResult.name;
+  const primaryCategory = primaryResult.category;
   const countryInfo = getCountry(location);
   
   // If no primary location found, still show country on line 2 if available
   if (!primary) {
     if (countryInfo) {
-      const countryDisplay = formatCountryWithState(location, countryInfo);
+      const countryDisplay = formatCountryWithState(location, countryInfo, primaryCategory);
       return { 
         primary: '', // Line 1 stays blank
         country: countryDisplay, // Line 2 shows country with flag
@@ -331,7 +340,7 @@ export function formatLocation(
   // Check for duplicate names (e.g., "Singapore, Singapore" or "Monaco, Monaco")
   // If primary matches country, hide primary and show only country with flag on line 2
   if (countryInfo && primary.toLowerCase() === countryInfo.country.toLowerCase()) {
-    const countryDisplay = formatCountryWithState(location, countryInfo);
+    const countryDisplay = formatCountryWithState(location, countryInfo, primaryCategory);
     return {
       primary: '', // Hide duplicate on line 1
       country: countryDisplay, // Show country with flag on line 2
@@ -342,16 +351,63 @@ export function formatLocation(
   // Also check if primary matches state when state is shown in country display
   // This prevents duplicates like "Texas" with "Texas, USA"
   // In this case, show the state as primary and just the country (without state) on line 2
-  if (countryInfo && countryInfo.wasAbbreviated) {
+  if (countryInfo && countryInfo.wasAbbreviated && primaryCategory === 'state') {
     const state = location.state || location.province || location.region;
     if (state && primary.toLowerCase() === state.toLowerCase()) {
       // Primary matches state, and state would be shown in country display
       // Show state as primary and just country (without state) to avoid duplication
+      // Exclude state category from secondary line
+      const countryDisplay = formatCountryWithState(location, countryInfo, 'state');
       return {
         primary, // Show state on line 1
-        country: countryInfo.country, // Show just country on line 2 (state already shown on line 1)
+        country: countryDisplay, // Show country on line 2 (state excluded)
         countryCode: location.countryCode || ''
       };
+    }
+  }
+  
+  // Special handling for City mode: if primary is actually a neighborhood (shouldn't happen, but handle data quality issues)
+  // In City mode, we should only show city-level names, not neighborhoods
+  if (displayMode === 'city') {
+    const neighborhoodFields: (keyof LocationData)[] = ['neighbourhood', 'quarter', 'ward', 'borough', 'district', 'suburb'];
+    const isNeighborhoodField = neighborhoodFields.some(field => {
+      const value = location[field] as string | undefined;
+      return value && value.toLowerCase() === primary.toLowerCase();
+    });
+    
+    if (isNeighborhoodField) {
+      // Primary is a neighborhood but we're in City mode - ignore it and show city instead
+      // Try to get city name using the same validation logic
+      const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'village', 'hamlet'];
+      let cityName: string | null = null;
+      for (const field of cityFields) {
+        const value = location[field] as string | undefined;
+        if (value && isValidLocationName(value)) {
+          cityName = value;
+          break;
+        }
+      }
+      
+      if (cityName) {
+        // We have a city name - show city as primary with state/country context
+        // Exclude city category from secondary line since it's already used in primary
+        const cityDisplay = countryInfo ? formatCountryWithState(location, countryInfo, 'city') : undefined;
+        return {
+          primary: cityName, // Show city on line 1
+          country: cityDisplay, // Show state/country on line 2
+          countryCode: location.countryCode || ''
+        };
+      }
+      // No city available - treat as if no primary found
+      if (countryInfo) {
+        const countryDisplay = formatCountryWithState(location, countryInfo, primaryCategory);
+        return { 
+          primary: '', // Line 1 stays blank
+          country: countryDisplay, // Line 2 shows country with flag
+          countryCode: location.countryCode || ''
+        };
+      }
+      return { primary: '', country: undefined };
     }
   }
   
@@ -380,7 +436,8 @@ export function formatLocation(
       
       if (cityName) {
         // We have a city name - format as "City, State" or "City, Country Code" (max 2 categories)
-        const cityDisplay = formatCityWithContext(location, cityName, countryInfo);
+        // Exclude the category used in primary from secondary line
+        const cityDisplay = formatCityWithContext(location, cityName, countryInfo, primaryCategory);
         return {
           primary,
           country: cityDisplay,
@@ -392,7 +449,8 @@ export function formatLocation(
   }
   
   // Normal case: show location with country context
-  const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo) : undefined;
+  // Exclude the category used in primary from the secondary line
+  const countryDisplay = countryInfo ? formatCountryWithState(location, countryInfo, primaryCategory) : undefined;
   return {
     primary,
     country: countryDisplay,
@@ -403,11 +461,13 @@ export function formatLocation(
 /**
  * Formats city display with country context for Neighborhood mode
  * Limited to maximum 2 categories: "City, State" or "City, Country Code"
+ * Excludes the excludedCategory from being used in the secondary line
  */
 function formatCityWithContext(
   location: LocationData,
   cityName: string,
-  countryInfo: { country: string; wasAbbreviated: boolean } | null
+  countryInfo: { country: string; wasAbbreviated: boolean } | null,
+  excludedCategory?: LocationCategory
 ): string {
   if (!countryInfo) {
     return cityName; // Just city if no country info
@@ -417,17 +477,21 @@ function formatCityWithContext(
   const countryCode = location.countryCode || '';
   
   // Priority 1: Try "City, State" format (2 categories)
-  const state = location.state || location.province || location.region;
-  if (state) {
-    const withState = `${cityName}, ${state}`;
-    if (withState.length <= MAX_CHARACTER_LIMIT) {
-      return withState;
+  // Skip if state category was already used
+  if (excludedCategory !== 'state') {
+    const state = location.state || location.province || location.region;
+    if (state) {
+      const withState = `${cityName}, ${state}`;
+      if (withState.length <= MAX_CHARACTER_LIMIT) {
+        return withState;
+      }
     }
   }
   
   // Priority 2: Try "City, Country Code" format (2 categories)
   // Use country code instead of full country name for brevity
-  if (countryCode) {
+  // Skip if country category was already used
+  if (excludedCategory !== 'country' && countryCode) {
     const withCountryCode = `${cityName}, ${countryCode.toUpperCase()}`;
     if (withCountryCode.length <= MAX_CHARACTER_LIMIT) {
       return withCountryCode;
@@ -435,16 +499,23 @@ function formatCityWithContext(
   }
   
   // Priority 3: Try "City, Country" format (2 categories) if country name is short
-  const withCountry = `${cityName}, ${country}`;
-  if (withCountry.length <= MAX_CHARACTER_LIMIT) {
-    return withCountry;
+  // Skip if country category was already used
+  if (excludedCategory !== 'country') {
+    const withCountry = `${cityName}, ${country}`;
+    if (withCountry.length <= MAX_CHARACTER_LIMIT) {
+      return withCountry;
+    }
   }
   
   // Priority 4: If state exists but city+state doesn't fit, try "State, Country Code"
-  if (state && countryCode) {
-    const stateWithCountryCode = `${state}, ${countryCode.toUpperCase()}`;
-    if (stateWithCountryCode.length <= MAX_CHARACTER_LIMIT) {
-      return stateWithCountryCode;
+  // Skip if state or country category was already used
+  if (excludedCategory !== 'state' && excludedCategory !== 'country') {
+    const state = location.state || location.province || location.region;
+    if (state && countryCode) {
+      const stateWithCountryCode = `${state}, ${countryCode.toUpperCase()}`;
+      if (stateWithCountryCode.length <= MAX_CHARACTER_LIMIT) {
+        return stateWithCountryCode;
+      }
     }
   }
   
@@ -455,21 +526,36 @@ function formatCityWithContext(
 /**
  * Formats country display, optionally including state when country is abbreviated
  * Limited to maximum 2 categories: "State, Country Code" or "State, Country"
+ * Excludes the excludedCategory from being used in the secondary line
  * 
  * Rules:
  * - If country was abbreviated (e.g., "USA", "UK") and state exists, try "State, Country Code" (preferred) or "State, Country"
  * - If that fits in 20 chars, use it
  * - Otherwise, just show country or country code
+ * - Never uses a category that was already used in the primary line
  */
 function formatCountryWithState(
   location: LocationData, 
-  countryInfo: { country: string; wasAbbreviated: boolean }
+  countryInfo: { country: string; wasAbbreviated: boolean },
+  excludedCategory?: LocationCategory
 ): string {
   const { country, wasAbbreviated } = countryInfo;
   const countryCode = location.countryCode || '';
   
-  // Try to get state/province/region
-  const state = location.state || location.province || location.region;
+  // Try to get state/province/region (skip if state category was already used)
+  const state = (excludedCategory !== 'state') 
+    ? (location.state || location.province || location.region)
+    : undefined;
+  
+  // Try to get city (skip if city category was already used)
+  const city = (excludedCategory !== 'city')
+    ? (location.city || location.municipality || location.town || location.village || location.hamlet)
+    : undefined;
+  
+  // Try to get county (skip if county category was already used)
+  const county = (excludedCategory !== 'county')
+    ? location.county
+    : undefined;
   
   // If country was abbreviated and state exists, try 2-category formats
   if (wasAbbreviated && state) {
@@ -488,7 +574,41 @@ function formatCountryWithState(
     }
   }
   
-  // If no state or country wasn't abbreviated, show single category
+  // If state was excluded or not available, try city if available
+  if (city && isValidLocationName(city)) {
+    // Priority 3: "City, Country Code" (2 categories)
+    if (countryCode) {
+      const cityWithCountryCode = `${city}, ${countryCode.toUpperCase()}`;
+      if (cityWithCountryCode.length <= MAX_CHARACTER_LIMIT) {
+        return cityWithCountryCode;
+      }
+    }
+    
+    // Priority 4: "City, Country" (2 categories)
+    const cityWithCountry = `${city}, ${country}`;
+    if (cityWithCountry.length <= MAX_CHARACTER_LIMIT) {
+      return cityWithCountry;
+    }
+  }
+  
+  // If city was excluded or not available, try county if available
+  if (county && isValidLocationName(county)) {
+    // Priority 5: "County, Country Code" (2 categories)
+    if (countryCode) {
+      const countyWithCountryCode = `${county}, ${countryCode.toUpperCase()}`;
+      if (countyWithCountryCode.length <= MAX_CHARACTER_LIMIT) {
+        return countyWithCountryCode;
+      }
+    }
+    
+    // Priority 6: "County, Country" (2 categories)
+    const countyWithCountry = `${county}, ${country}`;
+    if (countyWithCountry.length <= MAX_CHARACTER_LIMIT) {
+      return countyWithCountry;
+    }
+  }
+  
+  // If no state/city/county or country wasn't abbreviated, show single category
   // Prefer country code if available and country name is long
   if (countryCode && country.length > MAX_CHARACTER_LIMIT) {
     return countryCode.toUpperCase();
