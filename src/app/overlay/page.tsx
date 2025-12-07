@@ -94,14 +94,9 @@ export default function OverlayPage() {
   const completedTodoTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Track timers for hiding completed todos
   const STORAGE_KEY = 'tazo-completed-todos'; // localStorage key for persistence
   
-  // Todo list visibility: show for 15 seconds every 5 minutes
-  const [showTodoList, setShowTodoList] = useState(true); // Track if todo list should be visible
-  const [todoListOpacity, setTodoListOpacity] = useState(1); // Track opacity for fade transitions
-  const todoListVisibilityTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer for showing/hiding todo list
-  const todoListFadeTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer for fade transitions
+  // Track previous todo IDs and completion state for detecting changes
   const previousTodoIdsRef = useRef<Set<string>>(new Set()); // Track previous todo IDs to detect new items
   const previousTodoCompletionStateRef = useRef<Map<string, boolean>>(new Map()); // Track previous completion state to detect unchecked items
-  const scheduleCycleRef = useRef<(() => void) | null>(null); // Reference to scheduleCycle function for resetting
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -228,9 +223,11 @@ export default function OverlayPage() {
     }
   }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, minimapVisible]);
 
-  // Update settings hash whenever settings change
+  // Update settings hash and re-format location whenever settings change
   useEffect(() => {
-    lastSettingsHash.current = JSON.stringify(settings);
+    const newHash = JSON.stringify(settings);
+    const hashChanged = newHash !== lastSettingsHash.current;
+    lastSettingsHash.current = newHash;
 
     // Re-render location display instantly from cached raw data if available
     // This ensures location display updates immediately when settings change
@@ -239,10 +236,17 @@ export default function OverlayPage() {
         const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
         // Always update location state when settings change, even if formatted result is empty
         // This ensures the display mode change is reflected immediately
-        OverlayLogger.location('Location display mode changed', {
-          mode: settings.locationDisplay,
-          display: formatted.primary || formatted.country || 'none'
-        });
+        if (hashChanged) {
+          OverlayLogger.location('Location display mode changed', {
+            mode: settings.locationDisplay,
+            display: formatted.primary || formatted.country || 'none',
+            rawLocation: {
+              city: lastRawLocation.current.city,
+              neighbourhood: lastRawLocation.current.neighbourhood,
+              suburb: lastRawLocation.current.suburb
+            }
+          });
+        }
         setLocation({
           primary: formatted.primary || '',
           country: formatted.country,
@@ -269,13 +273,6 @@ export default function OverlayPage() {
       }
       if (locationWeatherHideTimeoutRef.current) {
         clearTimeout(locationWeatherHideTimeoutRef.current);
-      }
-      // Cleanup todo list visibility timers
-      if (todoListVisibilityTimerRef.current) {
-        clearTimeout(todoListVisibilityTimerRef.current);
-      }
-      if (todoListFadeTimerRef.current) {
-        clearTimeout(todoListFadeTimerRef.current);
       }
       // Cleanup completed todo timers
       completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
@@ -575,68 +572,7 @@ export default function OverlayPage() {
     };
   }, [timezone, isRealTimezone]);
 
-  // Set up todo list visibility cycle: show for 15 seconds every 5 minutes with fade transitions
-  useEffect(() => {
-    const SHOW_DURATION = 15 * 1000; // 15 seconds in milliseconds
-    const CYCLE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
-    const FADE_DURATION = 500; // 500ms fade transition
-    
-    const fadeIn = () => {
-      // Set visible first, then fade in
-      setShowTodoList(true);
-      requestAnimationFrame(() => {
-        setTodoListOpacity(1);
-      });
-    };
-    
-    const fadeOut = () => {
-      // Fade out first, then hide after transition
-      setTodoListOpacity(0);
-      todoListFadeTimerRef.current = setTimeout(() => {
-        setShowTodoList(false);
-      }, FADE_DURATION);
-    };
-    
-    const scheduleCycle = () => {
-      // Clear any existing timers
-      if (todoListVisibilityTimerRef.current) {
-        clearTimeout(todoListVisibilityTimerRef.current);
-      }
-      if (todoListFadeTimerRef.current) {
-        clearTimeout(todoListFadeTimerRef.current);
-      }
-      
-      // Fade in todo list immediately
-      fadeIn();
-      
-      // Fade out after 15 seconds (accounting for fade duration)
-      todoListVisibilityTimerRef.current = setTimeout(() => {
-        fadeOut();
-        
-        // Fade in again after 5 minutes (5 minutes - 15 seconds = 4 minutes 45 seconds)
-        todoListVisibilityTimerRef.current = setTimeout(() => {
-          scheduleCycle(); // Recursively schedule next cycle
-        }, CYCLE_DURATION - SHOW_DURATION);
-      }, SHOW_DURATION);
-    };
-    
-    // Store reference to scheduleCycle for resetting when new todos are added
-    scheduleCycleRef.current = scheduleCycle;
-    
-    // Start the cycle
-    scheduleCycle();
-    
-    return () => {
-      if (todoListVisibilityTimerRef.current) {
-        clearTimeout(todoListVisibilityTimerRef.current);
-      }
-      if (todoListFadeTimerRef.current) {
-        clearTimeout(todoListFadeTimerRef.current);
-      }
-    };
-  }, []); // Run once on mount
-
-  // Detect new todo items, unchecked items, or completed items and reset visibility cycle
+  // Track todo changes (for potential future use)
   useEffect(() => {
     if (!settings.todos || settings.todos.length === 0) {
       previousTodoIdsRef.current = new Set();
@@ -645,39 +581,13 @@ export default function OverlayPage() {
     }
 
     const currentTodoIds = new Set(settings.todos.map(todo => todo.id));
-    const previousTodoIds = previousTodoIdsRef.current;
-    const previousCompletionState = previousTodoCompletionStateRef.current;
-
-    // Check if any new todos were added
-    const hasNewTodos = Array.from(currentTodoIds).some(id => !previousTodoIds.has(id));
-
-    // Check if any todos were unchecked (changed from completed to incomplete)
-    const hasUncheckedTodos = settings.todos.some(todo => {
-      const wasCompleted = previousCompletionState.get(todo.id) === true;
-      const isIncomplete = !todo.completed;
-      // If todo was completed before and is now incomplete, it was unchecked
-      return wasCompleted && isIncomplete;
-    });
-
-    // Check if any todos were checked (changed from incomplete to completed)
-    const hasCheckedTodos = settings.todos.some(todo => {
-      const wasIncomplete = previousCompletionState.get(todo.id) === false;
-      const isCompleted = todo.completed;
-      // If todo was incomplete before and is now completed, it was checked
-      return wasIncomplete && isCompleted;
-    });
-
-    if ((hasNewTodos || hasUncheckedTodos || hasCheckedTodos) && scheduleCycleRef.current) {
-      // New todo added, item unchecked, or item checked - reset the visibility cycle immediately
-      scheduleCycleRef.current();
-    }
-
-    // Update previous todo IDs and completion state
-    previousTodoIdsRef.current = currentTodoIds;
     const newCompletionState = new Map<string, boolean>();
     settings.todos.forEach(todo => {
       newCompletionState.set(todo.id, todo.completed);
     });
+
+    // Update previous todo IDs and completion state
+    previousTodoIdsRef.current = currentTodoIds;
     previousTodoCompletionStateRef.current = newCompletionState;
   }, [settings.todos]);
 
@@ -1024,7 +934,7 @@ export default function OverlayPage() {
     // Set up real-time updates
     const eventSource = setupSSE();
     
-    // Fallback polling mechanism - check for settings changes every 5 seconds
+    // Fallback polling mechanism - check for settings changes every 2 seconds for faster updates
     const pollingInterval = setInterval(async () => {
       try {
         const res = await fetch(`/api/get-settings?_t=${Date.now()}`, { 
@@ -1036,21 +946,24 @@ export default function OverlayPage() {
         });
         if (res.ok) {
           const data = await res.json();
-          const newHash = JSON.stringify(data);
-          if (newHash !== lastSettingsHash.current) {
-            lastSettingsHash.current = newHash;
-            OverlayLogger.settings('Settings updated via polling', { 
-              locationDisplay: data.locationDisplay,
-              showWeather: data.showWeather,
-              showMinimap: data.showMinimap 
-            });
-            setSettings(data); // UI updates immediately
+          if (data) {
+            const newHash = JSON.stringify(data);
+            if (newHash !== lastSettingsHash.current) {
+              lastSettingsHash.current = newHash;
+              OverlayLogger.settings('Settings updated via polling', { 
+                locationDisplay: data.locationDisplay,
+                showWeather: data.showWeather,
+                showMinimap: data.showMinimap 
+              });
+              setSettings(data); // UI updates immediately - this triggers location re-formatting
+            }
           }
         }
-      } catch {
-        // Ignore polling errors - SSE is primary, polling is fallback
+      } catch (error) {
+        // Log polling errors for debugging
+        OverlayLogger.warn('Settings polling failed', { error });
       }
-    }, 5000); // Check every 5 seconds
+    }, 2000); // Check every 2 seconds for faster updates
     
     // Cleanup on unmount
     return () => {
@@ -1462,18 +1375,24 @@ export default function OverlayPage() {
                     if (loc && hasUsefulData) {
                       // Full location data available - use it
                       // Use settingsRef to get the current settings value (not stale closure value)
-                      const formatted = formatLocation(loc, settingsRef.current.locationDisplay);
+                      const currentDisplayMode = settingsRef.current.locationDisplay;
+                      const formatted = formatLocation(loc, currentDisplayMode);
                       lastRawLocation.current = loc;
                         
                         // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
                         if (formatted.primary.trim() || formatted.country) {
                         OverlayLogger.location('Location updated', {
-                          mode: settingsRef.current.locationDisplay,
+                          mode: currentDisplayMode,
                           primary: formatted.primary.trim() || 'none',
                           country: formatted.country || 'none',
                           city: loc.city || loc.town || 'none',
-                          neighbourhood: loc.neighbourhood || loc.suburb || 'none'
+                          neighbourhood: loc.neighbourhood || loc.suburb || 'none',
+                          rawData: {
+                            hasCity: !!loc.city,
+                            hasNeighbourhood: !!loc.neighbourhood,
+                            hasSuburb: !!loc.suburb
+                          }
                         });
                         setLocation({
                             primary: formatted.primary.trim() || '', // Ensure no leading/trailing whitespace
@@ -1848,15 +1767,9 @@ export default function OverlayPage() {
         </div>
 
         {/* To-Do List - Bottom Right */}
-        {/* Show todo list only when visibility timer allows (15 seconds every 5 minutes) */}
-        {settings.showTodoList && showTodoList && visibleTodos.length > 0 && (
-          <div 
-            className="bottom-right"
-            style={{
-              opacity: todoListOpacity,
-              transition: 'opacity 0.5s ease-in-out'
-            }}
-          >
+        {/* Show todo list when enabled and there are visible todos */}
+        {settings.showTodoList && visibleTodos.length > 0 && (
+          <div className="bottom-right">
             <div className="overlay-box todo-list-box">
               {visibleTodos
                 .sort((a, b) => {
