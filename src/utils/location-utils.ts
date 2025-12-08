@@ -435,14 +435,60 @@ export function formatLocation(
       }
       
       if (cityName) {
-        // We have a city name - format as "City, State" or "City, Country Code" (max 2 categories)
-        // Exclude the category used in primary from secondary line
-        const cityDisplay = formatCityWithContext(location, cityName, countryInfo, primaryCategory);
-        return {
-          primary,
-          country: cityDisplay,
-          countryCode: location.countryCode || ''
-        };
+        // Check if city name fits within character limit
+        if (cityName.length <= MAX_CHARACTER_LIMIT) {
+          // City fits - show city only on line 2
+          return {
+            primary,
+            country: cityName,
+            countryCode: location.countryCode || ''
+          };
+        } else {
+          // City too long - fallback to state, country format
+          const state = location.state || location.province || location.region;
+          if (state && countryInfo) {
+            // Try "State, Country Code" first (most concise)
+            const countryCode = location.countryCode || '';
+            if (countryCode) {
+              const stateWithCountryCode = `${state}, ${countryCode.toUpperCase()}`;
+              if (stateWithCountryCode.length <= MAX_CHARACTER_LIMIT) {
+                return {
+                  primary,
+                  country: stateWithCountryCode,
+                  countryCode: location.countryCode || ''
+                };
+              }
+            }
+            // Try "State, Country" if country code format doesn't fit
+            const stateWithCountry = `${state}, ${countryInfo.country}`;
+            if (stateWithCountry.length <= MAX_CHARACTER_LIMIT) {
+              return {
+                primary,
+                country: stateWithCountry,
+                countryCode: location.countryCode || ''
+              };
+            }
+            // If state+country doesn't fit, just show state
+            if (state.length <= MAX_CHARACTER_LIMIT) {
+              return {
+                primary,
+                country: state,
+                countryCode: location.countryCode || ''
+              };
+            }
+          }
+          // No state or state doesn't fit - fallback to country only
+          if (countryInfo) {
+            const countryDisplay = countryInfo.country.length <= MAX_CHARACTER_LIMIT
+              ? countryInfo.country
+              : (location.countryCode || countryInfo.country).toUpperCase();
+            return {
+              primary,
+              country: countryDisplay,
+              countryCode: location.countryCode || ''
+            };
+          }
+        }
       }
       // No city available - fall back to normal state/country display
     }

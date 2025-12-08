@@ -14,6 +14,18 @@ export const TIMERS = {
   MAP_MIN_INTERVAL_SLOW: 20000,  // <10 km/h (was 30s)
   MAP_MIN_INTERVAL_MED: 10000,   // 10–50 km/h (was 15s)
   MAP_MIN_INTERVAL_FAST: 6000,   // >50 km/h (was 8s)
+  
+  // GPS freshness and staleness timeouts
+  GPS_FRESHNESS_TIMEOUT: 15 * 60 * 1000, // 15 minutes
+  GPS_STALE_TIMEOUT: 10000, // 10 seconds
+  WEATHER_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
+  LOCATION_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
+  
+  // Minimap and speed thresholds
+  MINIMAP_FADE_DURATION: 1000, // 1 second
+  WALKING_PACE_THRESHOLD: 5, // km/h
+  SETTINGS_POLLING_INTERVAL: 2000, // 2 seconds
+  MINIMAP_STALENESS_CHECK_INTERVAL: 1000, // 1 second
 } as const;
 
 export const THRESHOLDS = {
