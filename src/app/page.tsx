@@ -504,14 +504,19 @@ export default function AdminPage() {
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
                   { 
-                    value: 'neighborhood', 
-                    label: 'Neighborhood', 
+                    value: 'neighbourhood', 
+                    label: 'Neighbourhood', 
                     icon: '🏘️'
                   },
                   { 
                     value: 'city', 
                     label: 'City', 
                     icon: '🏙️'
+                  },
+                  { 
+                    value: 'state', 
+                    label: 'State', 
+                    icon: '🗺️'
                   },
                   { 
                     value: 'country', 
@@ -597,10 +602,10 @@ export default function AdminPage() {
                 value={settings.mapZoomLevel}
                 onChange={(value) => handleSettingsChange({ mapZoomLevel: value as MapZoomLevel })}
                 options={[
-                  { value: 'neighborhood', label: 'Neighborhood', icon: '🏘️' },
+                  { value: 'neighbourhood', label: 'Neighbourhood', icon: '🏘️' },
                   { value: 'city', label: 'City', icon: '🏙️' },
-                  { value: 'regional', label: 'Regional', icon: '🗺️' },
-                  { value: 'national', label: 'National', icon: '🌍' },
+                  { value: 'state', label: 'State', icon: '🗺️' },
+                  { value: 'country', label: 'Country', icon: '🌍' },
                   { value: 'ocean', label: 'Ocean', icon: '🌊' },
                   { value: 'continental', label: 'Continental', icon: '🌎' }
                 ]}

@@ -17,10 +17,10 @@ interface MapLibreMinimapProps {
 
 const MINIMAP_CONFIG = {
   ZOOM_LEVELS: {
-    neighborhood: 13,  // Neighborhood - streets & buildings
+    neighbourhood: 13,  // Neighbourhood - streets & buildings
     city: 11,          // City - whole city view
-    regional: 8,       // Regional - state/province view
-    national: 5,       // National - country view
+    state: 8,          // State - state/province view
+    country: 5,       // Country - country view
     ocean: 3,          // Ocean - coastal view from sea
     continental: 1     // Continental - trans-oceanic, see entire ocean
   },

@@ -1,7 +1,7 @@
 // Centralized settings types and constants
 
-export type LocationDisplayMode = 'neighborhood' | 'city' | 'country' | 'custom' | 'hidden';
-export type MapZoomLevel = 'neighborhood' | 'city' | 'regional' | 'national' | 'ocean' | 'continental';
+export type LocationDisplayMode = 'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden';
+export type MapZoomLevel = 'neighbourhood' | 'city' | 'state' | 'country' | 'ocean' | 'continental';
 
 export interface TodoItem {
   id: string;
@@ -23,7 +23,7 @@ export interface OverlaySettings {
 
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
-  locationDisplay: 'neighborhood',
+  locationDisplay: 'neighbourhood',
   customLocation: '',
   showCountryName: true,
   showWeather: true,
