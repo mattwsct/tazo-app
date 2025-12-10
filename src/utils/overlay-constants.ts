@@ -26,56 +26,15 @@ export const TIMERS = {
   WALKING_PACE_THRESHOLD: 5, // km/h
   SETTINGS_POLLING_INTERVAL: 2000, // 2 seconds
   MINIMAP_STALENESS_CHECK_INTERVAL: 1000, // 1 second
-} as const;
-
-export const THRESHOLDS = {
-  // Location threshold - weather doesn't need movement threshold
-  LOCATION_MOVEMENT_THRESHOLD: 10, // meters - more responsive for IRL streaming
-  
-  SPEED_SHOW: 10, // 10 km/h
-  SPEED_READINGS_REQUIRED: 2,
-  HIGH_SPEED_THRESHOLD: 50, // km/h
-  BULLET_TRAIN_SPEED: 200, // km/h
-  // Static map gate
-  MAP_PIXEL_CHANGE: 8, // minimum pixel movement to refresh image
-  
-} as const;
-
-// Simplified polling intervals
-export const DYNAMIC_TIMERS = {
-  // Unified update intervals
-  UPDATE_INTERVAL: 60000, // 1 minute
-  MOVEMENT_THRESHOLD: 10, // 10 meters
+  MINIMAP_SPEED_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when speed drops below threshold
+  MINIMAP_GPS_STALE_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when GPS becomes stale
 } as const;
 
 export const API_KEYS = {
   RTIRL: process.env.NEXT_PUBLIC_RTIRL_PULL_KEY,
   LOCATIONIQ: process.env.NEXT_PUBLIC_LOCATIONIQ_KEY,
   PULSOID: process.env.NEXT_PUBLIC_PULSOID_TOKEN,
-  MAPBOX: process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
   OPENWEATHER: process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY,
-} as const;
-
-// API rate limits for free tiers (per-second only, no daily limits since overlay refreshes)
-export const API_RATE_LIMITS = {
-  LOCATIONIQ_FREE: {
-    PER_SECOND_LIMIT: 1,
-    COOLDOWN_MS: 1000, // 1 second between calls
-  },
-  MAPBOX_FREE: {
-    PER_SECOND_LIMIT: 10,
-    COOLDOWN_MS: 100, // 100ms between calls
-  },
-} as const;
-
-// Location granularity levels for smart update frequency
-export const LOCATION_GRANULARITY = {
-  NEIGHBORHOOD: 'neighbourhood',
-  SUBURB: 'suburb', 
-  TOWN: 'town',
-  CITY: 'city',
-  STATE: 'state',
-  COUNTRY: 'country',
 } as const;
 
 // Weather mapping constants

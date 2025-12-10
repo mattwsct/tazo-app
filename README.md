@@ -31,7 +31,7 @@ NEXT_PUBLIC_OPENWEATHERMAP_KEY=your_openweathermap_key
 
 # Optional - Additional Features
 NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token
-NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
+# Note: Map tiles use free CartoDB (no API key needed)
 
 # Optional - Admin Panel & Settings Sync
 ADMIN_PASSWORD=your_admin_password
@@ -58,17 +58,21 @@ npm run dev
 - **Fade transitions** - Smooth 1-second fade in/out for better visual experience
 
 ### Location Display Modes
-The overlay supports 5 location display modes, each showing different levels of geographic detail:
+The overlay supports 6 location display modes, each showing different levels of geographic detail:
 
-- **Neighborhood** - Most precise: Shows neighborhood/suburb/district names (e.g., "Downtown", "SoHo", "Shinjuku")
-  - Falls back to city → county → state if neighborhood data unavailable
+- **Neighbourhood** - Most precise: Shows neighbourhood/suburb/district names (e.g., "Downtown", "SoHo", "Shinjuku")
+  - Falls back to city → state → country if neighbourhood data unavailable
   - Best for: City exploration, walking tours, detailed location tracking
   
 - **City** - City-level precision: Shows city/town/municipality names (e.g., "Austin", "Tokyo", "Paris")
-  - Falls back to county → state if city data unavailable
+  - Falls back to state → country if city data unavailable
   - Best for: General travel, transit, city-to-city movement
   
-- **Country** - Broadest GPS mode: Shows only country name (and state if country was abbreviated, e.g., "Texas, USA")
+- **State** - State/province level: Shows state/province/prefecture names (e.g., "California", "Tokyo Prefecture", "Ontario")
+  - Falls back to country if state data unavailable
+  - Best for: Regional tracking, state-level movement
+  
+- **Country** - Broadest GPS mode: Shows only country name (e.g., "United States", "Japan", "France")
   - Primary line stays empty, country shown on second line with flag
   - Best for: International flights, country-level tracking
   
@@ -80,6 +84,95 @@ The overlay supports 5 location display modes, each showing different levels of 
 - **Hidden** - No location displayed: Completely hides location section
   - Weather and minimap still function independently
   - Best for: Weather-only or minimap-only overlays
+
+### Location Formatting Logic
+
+The location display system uses a hierarchical fallback system with duplicate name detection to ensure clean, non-redundant location displays.
+
+#### Fallback Hierarchy
+The system follows a strict hierarchy: **neighbourhood → city → state → country**
+
+Each precision level checks all fields within its category before falling back to the next broadest category:
+
+1. **Neighbourhood Mode** (`'neighbourhood'`):
+   - Checks: `neighbourhood`, `quarter`, `ward`, `borough`, `district`, `suburb`
+   - If no valid neighbourhood found → falls back to city
+   - If no city found → falls back to state
+   - If no state found → falls back to country
+
+2. **City Mode** (`'city'`):
+   - Checks: `city`, `municipality`, `town`, `village`, `hamlet`
+   - If no valid city found → falls back to state
+   - If no state found → falls back to country
+   - **Important**: Never falls back to neighbourhood (would be more specific, not broader)
+
+3. **State Mode** (`'state'`):
+   - Checks: `state`, `province`, `region`, `county`
+   - If no valid state found → falls back to country
+   - **Important**: Never falls back to city or neighbourhood (would be more specific)
+
+4. **Country Mode** (`'country'`):
+   - Shows only country name (shortened if >20 characters)
+   - No fallback needed (country is the broadest category)
+
+#### Duplicate Name Detection
+
+To prevent redundant displays like "Downtown Los Angeles, Los Angeles" or "Tokyo, Tokyo Prefecture", the system checks for overlapping names:
+
+- **Primary Line**: Determined by selected precision level (neighbourhood/city/state/country)
+- **Second Line**: Shows the next broadest category, but skips any names that overlap with the primary
+
+**Overlap Detection Rules**:
+- Checks if one name contains the other (case-insensitive)
+- Checks if all words from shorter name appear in longer name
+- Example: "Downtown Los Angeles" overlaps with "Los Angeles" → skip city, show state instead
+- Example: "Tokyo" overlaps with "Tokyo Prefecture" → skip state, show country instead
+
+**Second Line Logic**:
+- For **neighbourhood** primary → tries city → state → country (skipping overlaps)
+- For **city** primary → tries state → country (skipping overlaps)
+- For **state** primary → tries country only (skipping overlaps)
+- For **country** primary → no second line (country is broadest)
+
+#### Field Categories
+
+Location data from LocationIQ API is organized into categories:
+
+- **Neighbourhood Fields**: `neighbourhood`, `quarter`, `ward`, `borough`, `district`, `suburb`
+- **City Fields**: `city`, `municipality`, `town`, `village`, `hamlet`
+- **State Fields**: `state`, `province`, `region`, `county`
+- **Country**: `country` (with `countryCode` for flag display)
+
+**Important Notes**:
+- `suburb` is treated as a neighbourhood field, not a city field
+- `county` is part of the state category (includes states, provinces, prefectures, regions)
+- Field names vary by country but hierarchy is generally consistent worldwide
+
+#### Validation Rules
+
+Before using a location name, it must pass validation:
+
+- Not empty
+- Not longer than 20 characters (display limit)
+- Not just a number (e.g., "123", "5")
+- Not ending with space + number (e.g., "Honmachi 3", "Block 12")
+- Numbers in the middle are OK (e.g., "4th Avenue", "21st Street")
+
+#### Mode Switching Behavior
+
+When switching display modes in the admin panel:
+
+1. **Instant Update**: Location re-formats immediately using cached location data (`lastRawLocation.current`)
+2. **No GPS Wait**: No need to wait for new GPS update - uses existing location data
+3. **Fallback Respect**: If selected mode has no data, falls back according to hierarchy
+4. **Duplicate Prevention**: Second line automatically adjusts to avoid duplicates
+
+**Example Scenarios**:
+- Switch from "Neighbourhood" to "City" → immediately shows city if available, or state if city unavailable
+- Switch from "City" to "State" → immediately shows state if available, or country if state unavailable
+- If location has "Downtown Los Angeles" (neighbourhood) and "Los Angeles" (city):
+  - Neighbourhood mode: "Downtown Los Angeles" (primary), "California" (state, city skipped due to overlap)
+  - City mode: "Los Angeles" (primary), "California" (state)
 
 ### At-Sea Detection
 When GPS coordinates can't be reverse geocoded (ocean/remote areas):
@@ -97,9 +190,11 @@ When GPS coordinates can't be reverse geocoded (ocean/remote areas):
 
 Access at `http://localhost:3000` to configure:
 
-- **Location Display** - Choose precision level (Neighborhood/City/Country) or custom text
+- **Location Display** - Choose precision level (Neighbourhood/City/State/Country) or custom text
   - Changes apply immediately to overlay via real-time sync
   - Location re-formats instantly when mode changes (uses cached location data)
+  - Each mode follows fallback hierarchy: neighbourhood → city → state → country
+  - Duplicate names automatically detected and skipped on second line
   
 - **Custom Location** - Enter custom text when "Custom" mode is selected
   - Auto-saves after 1 second of no typing (debounced)
@@ -114,13 +209,13 @@ Access at `http://localhost:3000` to configure:
   - **Auto on Movement** - Shows when speed >5 km/h, hides when stationary or GPS stale
   - **Hidden** - Minimap completely hidden
   
-- **Map Zoom** - 6 levels from Continental (1) to Neighborhood (13)
+- **Map Zoom** - 6 levels from Continental (1) to Neighbourhood (13)
   - Continental (1) - Trans-oceanic view
   - Ocean (3) - Coastal view from sea
-  - National (5) - Country view
-  - Regional (8) - State/province view
-  - City (11) - Whole city view
-  - Neighborhood (13) - Streets & buildings
+  - Country (5) - Country view (matches "Country" location display mode)
+  - State (8) - State/province view (matches "State" location display mode)
+  - City (11) - Whole city view (matches "City" location display mode)
+  - Neighbourhood (13) - Streets & buildings (matches "Neighbourhood" location display mode)
 
 - **To-Do List** - Add, edit, complete, and delete tasks
   - Shows on overlay when enabled
@@ -240,12 +335,15 @@ npm run lint     # Run linter
    - Water body detection for cruise/ocean scenarios
 
 3. **API Efficient**: Minimize calls while keeping data fresh
-   - Adaptive location update thresholds based on speed:
-     - Flights (>200 km/h): 1km threshold
-     - Driving (50-200 km/h): 100m threshold  
-     - Walking (<50 km/h): 10m threshold
-   - Weather updates every 5 minutes (time-based, not movement-based)
-   - Aggressive caching with 30-minute validity windows
+   - **Location updates**: Adaptive thresholds based on speed + API limit enforcement:
+     - Minimum 18 seconds between calls (ensures <5,000/day limit)
+     - Flights (>200 km/h): 1km distance threshold
+     - Driving (50-200 km/h): 100m distance threshold  
+     - Walking (<50 km/h): 10m distance threshold
+     - Rate limiting: 1 call/second + 5,000 calls/day (enforced client-side)
+   - **Weather updates**: Every 5 minutes (time-based, not movement-based)
+     - Rate limiting: 50 calls/minute (well under 60/min limit)
+   - **Aggressive caching**: 30-minute validity windows for location/weather data
 
 4. **Performance Critical**: Smooth 60fps for OBS capture
    - CSS transitions for smooth appearance/disappearance
@@ -269,17 +367,26 @@ npm run lint     # Run linter
 - **Walking**: Low speed (<50 km/h), frequent updates (10m threshold), neighborhood or city display
 
 ### Location Display Mode Selection Guide
-- **Neighborhood**: Use when you want maximum detail (e.g., "Downtown", "SoHo", "Shinjuku")
+- **Neighbourhood**: Use when you want maximum detail (e.g., "Downtown", "SoHo", "Shinjuku")
   - Best for: Walking tours, city exploration, detailed location tracking
-  - Falls back to city if neighborhood data unavailable
+  - Falls back to city → state → country if neighbourhood data unavailable
+  - Second line shows city (or state/country if city overlaps with neighbourhood)
   
 - **City**: Use for general city-level tracking (e.g., "Austin", "Tokyo", "Paris")
   - Best for: General travel, transit, city-to-city movement
   - Most commonly used mode
+  - Falls back to state → country if city data unavailable
+  - Second line shows state (or country if state overlaps with city)
   
-- **Country**: Use for broad geographic tracking (e.g., "USA", "Japan", "France")
+- **State**: Use for state/province-level tracking (e.g., "California", "Tokyo Prefecture", "Ontario")
+  - Best for: Regional tracking, state-level movement, showing administrative divisions
+  - Falls back to country if state data unavailable
+  - Second line shows country only
+  
+- **Country**: Use for broad geographic tracking (e.g., "United States", "Japan", "France")
   - Best for: International flights, country-level tracking
-  - Shows state if country was abbreviated (e.g., "Texas, USA")
+  - Primary line stays empty, country shown on second line with flag
+  - No fallback needed (country is broadest category)
   
 - **Custom**: Use for specific landmarks or pre-planned locations
   - Best for: Specific venues, custom location names, pre-planned routes
@@ -293,9 +400,48 @@ npm run lint     # Run linter
 - **Icons**: 24px for weather icons, drop shadows for visibility
 
 ### API Rate Limits (Free Tier)
-- **LocationIQ**: 1 call/second, 5,000 calls/day
-- **OpenWeatherMap**: 60 calls/minute, 1,000,000 calls/month
-- **Mapbox**: Cached tiles, minimal direct API calls
+
+All API limits are enforced client-side to prevent quota exhaustion:
+
+#### LocationIQ (Reverse Geocoding)
+- **Per-second limit**: 1 call/second (strictly enforced)
+- **Daily limit**: 5,000 calls/day (enforced with 90% safety margin = 4,500/day max)
+- **Implementation**: 
+  - **Dual-layer protection**:
+    1. **Time gate**: Minimum 18 seconds between calls (ensures ~4,800 calls/day max, safely under 5,000 limit)
+       - Calculation: 5,000/day = ~208/hour = ~3.5/min = 1 call every ~17.3 seconds
+       - Using 18 seconds provides safety margin for normal operation
+    2. **Rate limiter**: `checkRateLimit('locationiq')` enforces 1 call/second + daily counter
+       - Prevents burst traffic if multiple GPS updates arrive quickly
+       - Tracks daily usage and blocks if daily limit (4,500/day) is reached
+       - Handles edge cases (rapid GPS updates, app restarts, etc.)
+  - Combined with distance thresholds (10m/100m/1000m based on speed) to avoid unnecessary calls
+  - **Why both layers?** Time gate prevents excessive calls during normal operation, while rate limiter provides burst protection and daily limit enforcement
+- **Usage**: ~1,440 calls/day typical (well under limit even for 24/7 streaming)
+
+#### OpenWeatherMap (Weather & Timezone)
+- **Per-minute limit**: 60 calls/minute (enforced at 50 calls/minute for safety)
+- **Monthly limit**: 1,000,000 calls/month (no daily tracking needed - very conservative usage)
+- **Implementation**:
+  - Weather updates every 5 minutes (time-based, not movement-based)
+  - Rate limiting enforced via `checkRateLimit('openweathermap')` with 2-second cooldown
+- **Usage**: ~288 calls/day typical (0.03% of monthly limit)
+
+#### Map Tiles (CartoDB - Free, No Authentication Required)
+- **Tile source**: CartoDB Voyager (day) / Dark Matter (night) - free, no API key needed
+- **Implementation**:
+  - MapLibre GL automatically caches tiles - only downloads new tiles when panning to new areas
+  - Map updates use smooth panning (`easeTo`) - no new tile downloads unless moving to new geographic area
+  - Throttled to max 1 update per 500ms to prevent excessive map operations
+- **Usage**: Minimal - tiles cached, only new tiles downloaded when traveling to new areas
+- **Note**: Mapbox token not required - using free CartoDB tiles instead
+
+#### Rate Limiting Strategy
+- **Per-second limits**: Enforced immediately to prevent burst traffic
+- **Daily limits**: Tracked and enforced for LocationIQ (most restrictive)
+- **Cooldown periods**: Minimum time between calls (1s for LocationIQ, 2s for OpenWeatherMap)
+- **Adaptive thresholds**: Distance-based thresholds (10m/100m/1000m) reduce API calls when moving slowly
+- **Time gates**: Minimum intervals between calls (18s for location, 5min for weather) ensure limits aren't exceeded
 
 ### Important Code Patterns
 - **Data Caching**: Always cache data for smooth transitions (30-minute validity windows)
@@ -314,7 +460,10 @@ npm run lint     # Run linter
   - Always extract only settings properties: `const { type, timestamp, ...settingsData } = data`
   - Location re-formats immediately when settings change (uses `lastRawLocation.current`)
   
-- **API Efficiency**: Use adaptive thresholds based on speed
+- **API Efficiency**: Use adaptive thresholds based on speed + rate limiting
+  - **Rate limiting**: Use `checkRateLimit()` from `rate-limiting.ts` (enforces per-second + daily limits)
+  - **Location updates**: Minimum 18 seconds between calls (ensures <5,000/day LocationIQ limit)
+  - **Distance thresholds**: 10m (walking), 100m (driving), 1000m (flying) - reduces calls when moving slowly
   - Track successful fetches separately from last attempt times (`lastSuccessfulWeatherFetch`, `lastSuccessfulLocationFetch`)
   - Use refs for synchronous updates (GPS timestamps, API call tracking)
   - Prevent concurrent API calls with `weatherFetchInProgress` and `locationFetchInProgress` flags
@@ -323,6 +472,14 @@ npm run lint     # Run linter
   - `useEffect` watches `settings` and re-formats `lastRawLocation.current` immediately
   - No need to wait for new GPS update to see display mode change
   - Falls back gracefully if formatting fails (keeps existing display)
+  - **Fallback Logic**: Each precision level checks all fields in its category before falling back
+    - Neighbourhood: checks neighbourhood fields → city → state → country
+    - City: checks city fields → state → country (never neighbourhood)
+    - State: checks state fields → country (never city/neighbourhood)
+  - **Duplicate Detection**: Second line skips names that overlap with primary line
+    - Uses `hasOverlappingNames()` to check if one name contains another
+    - Checks all fields within category before moving to next category
+    - Example: "Downtown Los Angeles" (primary) → skips "Los Angeles" (city), shows "California" (state)
 
 ### Design Improvements Implemented
 - ✅ Enhanced text shadows for better readability on stream
@@ -344,10 +501,14 @@ npm run lint     # Run linter
    - **Fix**: Ensure `useEffect` watching `settings` re-formats `lastRawLocation.current` immediately
    - **Check**: Location should update instantly when display mode changes (no GPS update needed)
 
-3. **Location Showing "Neighborhood" When "City" Selected**
-   - **Cause**: Location data might have neighborhood fields but not city fields
-   - **Fix**: Check `getLocationByPrecision()` fallback order - city mode should prioritize city fields
+3. **Location Showing Wrong Precision Level**
+   - **Cause**: Location data might not have fields for selected precision level
+   - **Fix**: Check `getLocationByPrecision()` fallback order:
+     - Neighbourhood mode: neighbourhood → city → state → country
+     - City mode: city → state → country (never falls back to neighbourhood)
+     - State mode: state → country (never falls back to city/neighbourhood)
    - **Check**: Verify `formatLocation()` is called with correct `displayMode` parameter
+   - **Note**: Fallback is intentional - if city data unavailable, shows state/country instead
 
 4. **Country Name Without Flag**
    - **Cause**: LocationIQ returned country name but no country code
@@ -365,9 +526,11 @@ npm run lint     # Run linter
    - **Check**: `WALKING_PACE_THRESHOLD = 5` in overlay page code
 
 7. **Location Display Modes**
-   - **Actual modes**: `'neighborhood' | 'city' | 'country' | 'custom' | 'hidden'`
-   - **Not**: "State" mode (doesn't exist - use "Country" mode instead)
+   - **Actual modes**: `'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden'`
+   - **Note**: Uses British spelling `'neighbourhood'` (not `'neighborhood'`)
+   - **Fallback hierarchy**: neighbourhood → city → state → country
    - **Check**: `LocationDisplayMode` type in `src/types/settings.ts`
+   - **Duplicate detection**: Second line skips overlapping names (e.g., "Downtown Los Angeles" + "Los Angeles" → shows state instead)
 
 8. **Settings Sync Timing**
    - **SSE**: Primary method, instant (<1 second)

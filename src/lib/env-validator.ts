@@ -27,7 +27,6 @@ export function validateEnvironment(): EnvValidationResult {
     'NEXT_PUBLIC_RTIRL_PULL_KEY',
     'NEXT_PUBLIC_LOCATIONIQ_KEY',
     'NEXT_PUBLIC_PULSOID_TOKEN',
-    'NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN',
     'OBS_PASSWORD',
   ];
 

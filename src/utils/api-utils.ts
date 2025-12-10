@@ -111,13 +111,8 @@ export async function fetchLocationFromLocationIQ(
     return { location: null, was404: false };
   }
 
-  // Check rate limits (per-second only)
-  if (!checkRateLimit('locationiq')) {
-    const error = 'Rate limit exceeded';
-    ApiLogger.warn('locationiq', error);
-    recordApiFailure('locationiq', error, true);
-    return { location: null, was404: false };
-  }
+  // Rate limiting is checked in overlay/page.tsx before calling this function
+  // Don't check again here to avoid double-checking and race conditions
 
   try {
     ApiLogger.info('locationiq', 'Fetching location data', { 
@@ -285,12 +280,8 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     return null;
   }
 
-  if (!checkRateLimit('openweathermap')) {
-    const error = 'Rate limit exceeded';
-    ApiLogger.warn('openweathermap', error);
-    recordApiFailure('openweathermap', error, true);
-    return null;
-  }
+  // Rate limiting is checked in overlay/page.tsx before calling this function
+  // Don't check again here to avoid double-checking and race conditions
   
   try {
     ApiLogger.info('openweathermap', 'Fetching weather, timezone, and sunrise/sunset data', { lat, lon });

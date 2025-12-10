@@ -21,7 +21,6 @@ export function performStartupValidation(): void {
     rtirl: !!process.env.NEXT_PUBLIC_RTIRL_PULL_KEY,
     locationiq: !!process.env.NEXT_PUBLIC_LOCATIONIQ_KEY,
     pulsoid: !!process.env.NEXT_PUBLIC_PULSOID_TOKEN,
-    mapbox: !!process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN,
     kv: !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
     auth: !!process.env.ADMIN_PASSWORD,
   };

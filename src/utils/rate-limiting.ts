@@ -18,7 +18,7 @@ export const RATE_LIMITS: Record<string, RateLimit> = {
     // Monthly limit: 1,000,000 calls/month - no daily tracking needed (very conservative usage)
   },
   locationiq: { 
-    calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 2, // 2 per second (matches free tier burst limit)
+    calls: 0, lastReset: Date.now(), resetInterval: 1000, max: 1, // 1 per second (free tier limit)
     lastCallTime: 0,
     dailyCalls: 0,
     dailyReset: Date.now(),
@@ -34,12 +34,6 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
   const limit = RATE_LIMITS[api];
   const now = Date.now();
   
-  // Enforce cooldown period (minimum 1 second between calls for LocationIQ, 2s for OpenWeatherMap)
-  const cooldownPeriod = api === 'locationiq' ? 1000 : (api === 'openweathermap' ? 2000 : 500);
-  if (now - limit.lastCallTime < cooldownPeriod) {
-    return false;
-  }
-  
   // Reset per-second limits when interval expires
   if (now - limit.lastReset > limit.resetInterval) {
     limit.calls = 0;
@@ -48,6 +42,13 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
   
   // Check if per-second limit reached
   if (limit.calls >= limit.max) {
+    return false;
+  }
+  
+  // Enforce cooldown period (minimum 1 second between calls for LocationIQ, 2s for OpenWeatherMap)
+  // Skip cooldown check if this is the first call (lastCallTime === 0) or if enough time has passed
+  const cooldownPeriod = api === 'locationiq' ? 1000 : (api === 'openweathermap' ? 2000 : 500);
+  if (limit.lastCallTime > 0 && now - limit.lastCallTime < cooldownPeriod) {
     return false;
   }
   
@@ -66,6 +67,7 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
     }
   }
   
+  // All checks passed - allow the call
   limit.calls++;
   limit.lastCallTime = now; // Update last call time
   

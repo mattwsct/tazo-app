@@ -128,15 +128,37 @@ function getLocationByPrecision(
   // Priority: state → province (prefectures) → region → county
   const stateFields: (keyof LocationData)[] = ['state', 'province', 'region', 'county'];
   
-  // Both modes share the same fallback chain: city → state
-  // Neighbourhood mode adds neighbourhood fields at the beginning for more precision
+  // Fallback hierarchy: neighbourhood → city → state → country
+  // Each precision level tries its category first, then falls back to next broadest if no valid names exist
   
   if (precision === 'neighbourhood') {
     // Try neighbourhood fields first
     const neighbourhoodName = tryFields(neighbourhoodFields);
     if (neighbourhoodName) return { name: neighbourhoodName, category: 'neighbourhood' };
     
-    // Fall through to shared fallback chain (city → state)
+    // Fallback to city if no neighbourhood found
+    const cityName = tryFields(cityFields);
+    if (cityName) return { name: cityName, category: 'city' };
+    
+    // Fallback to state if no city found
+    const stateName = tryFields(stateFields);
+    if (stateName) return { name: stateName, category: 'state' };
+    
+    // If nothing worked, return empty (will use country as last resort in formatLocation)
+    return { name: '', category: 'country' };
+  }
+  
+  if (precision === 'city') {
+    // Try city fields first
+    const cityName = tryFields(cityFields);
+    if (cityName) return { name: cityName, category: 'city' };
+    
+    // Fallback to state if no city found
+    const stateName = tryFields(stateFields);
+    if (stateName) return { name: stateName, category: 'state' };
+    
+    // If nothing worked, return empty (will use country as last resort in formatLocation)
+    return { name: '', category: 'country' };
   }
   
   if (precision === 'state') {
@@ -144,23 +166,11 @@ function getLocationByPrecision(
     const stateName = tryFields(stateFields);
     if (stateName) return { name: stateName, category: 'state' };
     
-    // Fallback to city if no state category fields available
-    const cityName = tryFields(cityFields);
-    if (cityName) return { name: cityName, category: 'city' };
-    
     // If nothing worked, return empty (will use country as last resort in formatLocation)
     return { name: '', category: 'country' };
   }
-    
-  // Shared fallback chain for city mode: city → state
-  const cityName = tryFields(cityFields);
-  if (cityName) return { name: cityName, category: 'city' };
-    
-  // State category (state, province, region, county)
-  const stateName = tryFields(stateFields);
-  if (stateName) return { name: stateName, category: 'state' };
 
-  // If nothing worked, return empty (will use country as last resort in formatLocation)
+  // Unknown precision, return empty
   return { name: '', category: 'country' };
 }
 
@@ -252,6 +262,48 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 }
 
 // === 📏 UTILITY FUNCTIONS ===
+
+/**
+ * Checks if two location names overlap (one contains the other)
+ * Used to prevent duplicate names like "Downtown Los Angeles" + "Los Angeles"
+ * or "Tokyo" + "Tokyo Prefecture"
+ * 
+ * @param name1 First location name
+ * @param name2 Second location name
+ * @returns true if one name contains the other (case-insensitive)
+ */
+function hasOverlappingNames(name1: string, name2: string): boolean {
+  if (!name1 || !name2) return false;
+  
+  const normalized1 = name1.toLowerCase().trim();
+  const normalized2 = name2.toLowerCase().trim();
+  
+  // Check if one contains the other (as a whole word or exact match)
+  // This catches cases like:
+  // - "Downtown Los Angeles" contains "Los Angeles"
+  // - "Tokyo" is contained in "Tokyo Prefecture"
+  // - "Los Angeles" contains "Los Angeles" (exact match)
+  
+  // Split into words for more accurate matching
+  const words1 = normalized1.split(/\s+/);
+  const words2 = normalized2.split(/\s+/);
+  
+  // Check if all words from the shorter name appear in the longer name
+  const shorter = words1.length <= words2.length ? words1 : words2;
+  const longer = words1.length > words2.length ? words1 : words2;
+  
+  // If shorter name has all its words in longer name, they overlap
+  if (shorter.length > 0 && shorter.every(word => longer.includes(word))) {
+    return true;
+  }
+  
+  // Also check simple substring match (catches exact matches and simple containment)
+  if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
+    return true;
+  }
+  
+  return false;
+}
 
 /**
  * Gets the best city name by selecting the first available city field
@@ -354,7 +406,16 @@ export function formatLocation(
     
     // Show state on line 1, country ONLY on line 2 (exclude state from second line)
     // When state mode is selected, second line should only show country, not state or other broader options
+    // Check for duplicate names (e.g., if state name overlaps with country name)
     const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+    // If state and country names overlap, hide the duplicate
+    if (countryDisplay && hasOverlappingNames(primary, countryDisplay)) {
+      return {
+        primary: primary,
+        country: undefined, // Hide duplicate country on line 2
+        countryCode: location.countryCode || ''
+      };
+    }
     return {
       primary: primary,
       country: countryDisplay,
@@ -375,7 +436,7 @@ export function formatLocation(
     const requestedCategory = displayMode === 'neighbourhood' ? 'neighbourhood' : 
                               displayMode === 'city' ? 'city' : 
                               displayMode === 'state' ? 'state' : 'country';
-    const nextBroadestCategory = getNextBroadestCategory(location, requestedCategory);
+    const nextBroadestCategory = getNextBroadestCategory(location, requestedCategory, '');
     if (nextBroadestCategory) {
       return { 
         primary: '', // Line 1 stays blank
@@ -401,7 +462,8 @@ export function formatLocation(
   
   // Show next broadest category on second line
   // Hierarchy: neighborhood → city → state → country
-  const nextBroadestCategory = getNextBroadestCategory(location, primaryCategory);
+  // Skip categories that have overlapping names with the primary location
+  const nextBroadestCategory = getNextBroadestCategory(location, primaryCategory, primary);
   const countryDisplay = nextBroadestCategory ? nextBroadestCategory : undefined;
   return {
     primary,
@@ -413,18 +475,37 @@ export function formatLocation(
 /**
  * Gets the next broadest category in the hierarchy: neighbourhood → city → state → country
  * Returns the formatted name for display on the second line
+ * Skips categories that have overlapping names with the primary location
+ * 
+ * @param location Location data
+ * @param currentCategory Current category of the primary location
+ * @param primaryName Primary location name to check for duplicates
+ * @returns Formatted name for the next broadest category, or undefined if none found
  */
 function getNextBroadestCategory(
   location: LocationData,
-  currentCategory: LocationCategory
+  currentCategory: LocationCategory,
+  primaryName: string
 ): string | undefined {
-  const tryFields = (fields: (keyof LocationData)[]): string | null => {
+  /**
+   * Tries all fields within a category, skipping overlapping names
+   * Only moves to next category if ALL fields in current category overlap or are invalid
+   * This ensures we maintain precision when possible (e.g., try all city fields before falling back to state)
+   */
+  const tryFields = (fields: (keyof LocationData)[], skipIfOverlaps: boolean = true): string | null => {
+    // Check each field in priority order
     for (const field of fields) {
       const value = location[field] as string | undefined;
       if (value && isValidLocationName(value)) {
+        // Skip if this value overlaps with the primary name, continue to next field in same category
+        if (skipIfOverlaps && hasOverlappingNames(primaryName, value)) {
+          continue; // Try next field in same category
+        }
+        // Found a non-overlapping value in this category
         return value;
       }
     }
+    // All fields in this category either overlap or are invalid - move to next category
     return null;
   };
 
@@ -439,26 +520,43 @@ function getNextBroadestCategory(
       // Next broadest: city
       const cityName = tryFields(cityFields);
       if (cityName) return cityName;
-      // Fallback to state if no city
+      // Fallback to state if no city (or city overlaps)
       const stateName = tryFields(stateFields);
       if (stateName) return stateName;
-      // Fallback to country if no state
-      return countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      // Fallback to country if no state (or state overlaps)
+      const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      // Check if country overlaps (e.g., "Singapore, Singapore")
+      if (countryDisplay && !hasOverlappingNames(primaryName, countryDisplay)) {
+        return countryDisplay;
+      }
+      return undefined;
     
     case 'city':
       // Next broadest: state category (includes state, province/prefecture, region, county)
       const state = tryFields(stateFields);
       if (state) return state;
-      // Fallback to country if no state category fields
-      return countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      // Fallback to country if no state category fields (or state overlaps)
+      const countryDisplay2 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      if (countryDisplay2 && !hasOverlappingNames(primaryName, countryDisplay2)) {
+        return countryDisplay2;
+      }
+      return undefined;
     
     case 'county':
       // County is now part of state category, so next broadest is country
-      return countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      const countryDisplay3 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      if (countryDisplay3 && !hasOverlappingNames(primaryName, countryDisplay3)) {
+        return countryDisplay3;
+      }
+      return undefined;
     
     case 'state':
       // Next broadest: country
-      return countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      const countryDisplay4 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      if (countryDisplay4 && !hasOverlappingNames(primaryName, countryDisplay4)) {
+        return countryDisplay4;
+      }
+      return undefined;
     
     case 'country':
       // No broader category, return undefined
@@ -466,7 +564,11 @@ function getNextBroadestCategory(
     
     default:
       // Unknown category, fallback to country
-      return countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      const countryDisplay5 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+      if (countryDisplay5 && !hasOverlappingNames(primaryName, countryDisplay5)) {
+        return countryDisplay5;
+      }
+      return undefined;
   }
 }
 

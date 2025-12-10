@@ -46,7 +46,6 @@ function formatMessage(level: LogLevel, context: string, message: string): strin
   // Enhanced emojis and colors for different contexts
   const contextStyles = {
     'API-LOCATIONIQ': { emoji: '🗺️', color: '#4A90E2' },
-    'API-MAPBOX': { emoji: '🗺️', color: '#7ED321' },
     'API-OPENMETEO': { emoji: '🌤️', color: '#50E3C2' },
     'OVERLAY': { emoji: '📺', color: '#F5A623' },
     'WEATHER': { emoji: '🌦️', color: '#50E3C2' },
@@ -75,7 +74,6 @@ function formatMessage(level: LogLevel, context: string, message: string): strin
 function getLogStyles(level: LogLevel, context: string): string[] {
   const contextStyles = {
     'API-LOCATIONIQ': { emoji: '🗺️', color: '#4A90E2' },
-    'API-MAPBOX': { emoji: '🗺️', color: '#7ED321' },
     'API-OPENMETEO': { emoji: '🌤️', color: '#50E3C2' },
     'OVERLAY': { emoji: '📺', color: '#F5A623' },
     'WEATHER': { emoji: '🌦️', color: '#50E3C2' },
