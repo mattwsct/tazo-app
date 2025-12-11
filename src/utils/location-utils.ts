@@ -34,9 +34,9 @@ export interface LocationData {
 }
 
 export interface LocationDisplay {
-  primary: string;  // Most precise available location
-  country?: string; // Country name with flag (Line 2)
-  countryCode?: string; // ISO country code for flag display
+  primary: string;  // Most precise available location (Line 1)
+  country?: string; // Secondary line - next broadest category (Line 2). Can be city, state, or country name depending on primary category
+  countryCode?: string; // ISO country code for flag display (always the actual country, regardless of what's in 'country' field)
 }
 
 // === 🎯 LOCATION PRECISION LEVELS ===
@@ -83,16 +83,17 @@ function isValidLocationName(name: string): boolean {
  * it automatically falls back to the next less specific level.
  * 
  * Fallback hierarchy:
- * - neighbourhood: neighbourhood/suburb/ward → city/town → state → country
- * - city: city/town → state → country
- * - state: state/province/prefecture/region/county → country
+ * - neighbourhood: neighbourhood/suburb/ward → city/town/county → state → country
+ * - city: city/town/county → state → country
+ * - state: state/province/prefecture/region → country
  * 
  * Both modes share the same fallback chain (city → state).
  * Neighbourhood mode adds neighbourhood fields at the beginning for more precision.
  * 
  * Global compatibility:
  * - Works worldwide as LocationIQ provides country-appropriate fields
- * - State category includes: state, province (prefectures), region, county
+ * - City category includes: city, municipality, town, village, hamlet, county (metropolitan areas)
+ * - State category includes: state, province (prefectures), region
  * - Field names vary by country but hierarchy is generally consistent
  * - Only area-based locations are used (no street addresses/road names)
  */
@@ -114,19 +115,21 @@ function getLocationByPrecision(
   // === CATEGORY DEFINITIONS ===
   // Each category contains specific fields from LocationIQ API, ordered by priority
   
-  // NEIGHBOURHOOD: Smallest local areas within cities
-  // Fields: neighbourhood, quarter, ward, borough, district, suburb
-  const neighbourhoodFields: (keyof LocationData)[] = ['neighbourhood', 'quarter', 'ward', 'borough', 'district', 'suburb'];
+  // NEIGHBOURHOOD: Smallest local areas within cities (ordered from most specific to least specific)
+  // Fields: neighbourhood (most specific) → quarter → ward → suburb → district → borough (least specific)
+  const neighbourhoodFields: (keyof LocationData)[] = ['neighbourhood', 'quarter', 'ward', 'suburb', 'district', 'borough'];
   
-  // CITY: Settlements and urban areas
-  // Fields: city, municipality, town, village, hamlet
+  // CITY: Settlements and urban areas (ordered from most appropriate to least appropriate)
+  // Fields: city (most appropriate) → municipality → town → county → village → hamlet (least appropriate)
   // NOTE: Suburb is NOT included - it's a neighbourhood field, not a city field
-  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'village', 'hamlet'];
+  // NOTE: County is included here as it often represents metropolitan areas (e.g., Gold Coast)
+  // NOTE: County comes before village/hamlet as metropolitan areas are more city-like than small settlements
+  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
   
-  // STATE: Large administrative divisions (includes states, provinces, prefectures, regions, counties)
-  // Fields: state, province, region, county
-  // Priority: state → province (prefectures) → region → county
-  const stateFields: (keyof LocationData)[] = ['state', 'province', 'region', 'county'];
+  // STATE: Large administrative divisions (includes states, provinces, prefectures, regions)
+  // Fields: state, province, region
+  // Priority: state → province (prefectures) → region
+  const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
   
   // Fallback hierarchy: neighbourhood → city → state → country
   // Each precision level tries its category first, then falls back to next broadest if no valid names exist
@@ -162,7 +165,7 @@ function getLocationByPrecision(
   }
   
   if (precision === 'state') {
-    // Try state category fields (state, province, region, county)
+    // Try state category fields (state, province, region)
     const stateName = tryFields(stateFields);
     if (stateName) return { name: stateName, category: 'state' };
     
@@ -264,13 +267,19 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 // === 📏 UTILITY FUNCTIONS ===
 
 /**
- * Checks if two location names overlap (one contains the other)
- * Used to prevent duplicate names like "Downtown Los Angeles" + "Los Angeles"
- * or "Tokyo" + "Tokyo Prefecture"
+ * Checks if two location names overlap (one contains the other or shares significant words)
+ * Used to prevent duplicate names in location display
+ * 
+ * Handles these duplicate scenarios:
+ * - Exact matches: "Tokyo" = "Tokyo" (city vs prefecture), "New York" = "New York" (city vs state)
+ * - Substring containment: "Tokyo" in "Tokyo Prefecture", "New York" in "New York State"
+ * - Multi-word overlap: "Downtown Los Angeles" + "Los Angeles County" (shares "Los", "Angeles")
+ * - City-country duplicates: "Singapore" = "Singapore" (city vs country)
+ * - Neighbourhood-city duplicates: "Downtown Los Angeles" + "Los Angeles" (city contained in neighbourhood)
  * 
  * @param name1 First location name
  * @param name2 Second location name
- * @returns true if one name contains the other (case-insensitive)
+ * @returns true if one name contains the other or they share 2+ significant words (case-insensitive)
  */
 function hasOverlappingNames(name1: string, name2: string): boolean {
   if (!name1 || !name2) return false;
@@ -278,15 +287,17 @@ function hasOverlappingNames(name1: string, name2: string): boolean {
   const normalized1 = name1.toLowerCase().trim();
   const normalized2 = name2.toLowerCase().trim();
   
-  // Check if one contains the other (as a whole word or exact match)
-  // This catches cases like:
-  // - "Downtown Los Angeles" contains "Los Angeles"
-  // - "Tokyo" is contained in "Tokyo Prefecture"
-  // - "Los Angeles" contains "Los Angeles" (exact match)
+  // Check exact match or simple substring containment first
+  if (normalized1 === normalized2) return true;
+  if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
+    return true;
+  }
   
   // Split into words for more accurate matching
-  const words1 = normalized1.split(/\s+/);
-  const words2 = normalized2.split(/\s+/);
+  const words1 = normalized1.split(/\s+/).filter(w => w.length > 0);
+  const words2 = normalized2.split(/\s+/).filter(w => w.length > 0);
+  
+  if (words1.length === 0 || words2.length === 0) return false;
   
   // Check if all words from the shorter name appear in the longer name
   const shorter = words1.length <= words2.length ? words1 : words2;
@@ -297,8 +308,12 @@ function hasOverlappingNames(name1: string, name2: string): boolean {
     return true;
   }
   
-  // Also check simple substring match (catches exact matches and simple containment)
-  if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
+  // Check if they share 2+ significant words (catches cases like "Downtown Los Angeles" + "Los Angeles County")
+  // This prevents showing "Los Angeles" twice when we have "Downtown Los Angeles" and "Los Angeles County"
+  const commonWords = shorter.filter(word => longer.includes(word));
+  // If they share 2 or more words, consider them overlapping
+  // This catches: "Downtown Los Angeles" vs "Los Angeles County" (shares "Los", "Angeles")
+  if (commonWords.length >= 2) {
     return true;
   }
   
@@ -406,9 +421,9 @@ export function formatLocation(
     
     // Show state on line 1, country ONLY on line 2 (exclude state from second line)
     // When state mode is selected, second line should only show country, not state or other broader options
-    // Check for duplicate names (e.g., if state name overlaps with country name)
+    // Check for duplicate names (e.g., if state name overlaps with country name like "Singapore" state vs "Singapore" country)
     const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-    // If state and country names overlap, hide the duplicate
+    // If state and country names overlap, hide the duplicate country
     if (countryDisplay && hasOverlappingNames(primary, countryDisplay)) {
       return {
         primary: primary,
@@ -449,14 +464,17 @@ export function formatLocation(
   }
   
   // Check for duplicate names (e.g., "Singapore, Singapore" or "Monaco, Monaco")
-  // If primary matches country, hide primary and show only country with flag on line 2
-  if (countryInfo && primary.toLowerCase() === countryInfo.country.toLowerCase()) {
+  // If primary matches or overlaps with country, hide primary and show only country with flag on line 2
+  // Uses overlap detection to catch exact matches and cases like "Singapore" vs "Republic of Singapore"
+  if (countryInfo) {
     const countryDisplay = formatCountryName(countryInfo.country, location.countryCode || '');
-    return {
-      primary: '', // Hide duplicate on line 1
-      country: countryDisplay, // Show country with flag on line 2
-      countryCode: location.countryCode || ''
-    };
+    if (countryDisplay && hasOverlappingNames(primary, countryDisplay)) {
+      return {
+        primary: '', // Hide duplicate on line 1
+        country: countryDisplay, // Show country with flag on line 2
+        countryCode: location.countryCode || ''
+      };
+    }
   }
   
   
@@ -509,9 +527,9 @@ function getNextBroadestCategory(
     return null;
   };
 
-  // Field definitions (same as above, for consistency)
-  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'village', 'hamlet'];
-  const stateFields: (keyof LocationData)[] = ['state', 'province', 'region', 'county'];
+  // Field definitions (same as above, for consistency - must match ordering above)
+  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
+  const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
   const countryInfo = getCountry(location);
 
   // Hierarchy: neighbourhood → city → state → country
@@ -532,7 +550,7 @@ function getNextBroadestCategory(
       return undefined;
     
     case 'city':
-      // Next broadest: state category (includes state, province/prefecture, region, county)
+      // Next broadest: state category (includes state, province/prefecture, region)
       const state = tryFields(stateFields);
       if (state) return state;
       // Fallback to country if no state category fields (or state overlaps)
@@ -543,7 +561,9 @@ function getNextBroadestCategory(
       return undefined;
     
     case 'county':
-      // County is now part of state category, so next broadest is country
+      // County is now part of city category, so next broadest is state, then country
+      const stateForCounty = tryFields(stateFields);
+      if (stateForCounty) return stateForCounty;
       const countryDisplay3 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
       if (countryDisplay3 && !hasOverlappingNames(primaryName, countryDisplay3)) {
         return countryDisplay3;

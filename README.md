@@ -136,16 +136,17 @@ To prevent redundant displays like "Downtown Los Angeles, Los Angeles" or "Tokyo
 
 #### Field Categories
 
-Location data from LocationIQ API is organized into categories:
+Location data from LocationIQ API is organized into categories (ordered from most appropriate to least appropriate):
 
-- **Neighbourhood Fields**: `neighbourhood`, `quarter`, `ward`, `borough`, `district`, `suburb`
-- **City Fields**: `city`, `municipality`, `town`, `village`, `hamlet`
-- **State Fields**: `state`, `province`, `region`, `county`
+- **Neighbourhood Fields**: `neighbourhood` → `quarter` → `ward` → `suburb` → `district` → `borough`
+- **City Fields**: `city` → `municipality` → `town` → `county` → `village` → `hamlet`
+- **State Fields**: `state` → `province` → `region`
 - **Country**: `country` (with `countryCode` for flag display)
 
 **Important Notes**:
 - `suburb` is treated as a neighbourhood field, not a city field
-- `county` is part of the state category (includes states, provinces, prefectures, regions)
+- `county` is part of the city category (represents metropolitan areas like Gold Coast)
+- Fields are tried in order - first valid field found is used
 - Field names vary by country but hierarchy is generally consistent worldwide
 
 #### Validation Rules

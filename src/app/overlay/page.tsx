@@ -185,6 +185,7 @@ export default function OverlayPage() {
   }, []);
 
   // Minimap visibility logic: Show when speed > 5 km/h and GPS fresh, hide when GPS stale
+  // Uses speed from RTIRL or calculated from coordinate changes
   const updateMinimapVisibility = useCallback(() => {
     const now = Date.now();
     const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
@@ -192,7 +193,7 @@ export default function OverlayPage() {
     
     clearTimer(minimapFadeTimeoutRef);
     
-    // Use ref to avoid dependency on currentSpeed state
+    // Use ref to avoid dependency on currentSpeed state (prevents infinite loops)
     const speed = currentSpeedRef.current;
     
     if (settings.minimapSpeedBased) {
@@ -222,21 +223,56 @@ export default function OverlayPage() {
         if (speed > WALKING_PACE_THRESHOLD) {
           // Speed > 5 km/h and GPS fresh - show minimap
           speedBelowThresholdSinceRef.current = null; // Clear speed grace period tracking
-          if (!minimapVisible) setMinimapVisible(true);
+          if (!minimapVisible) {
+            console.log('🗺️ MINIMAP: Showing (speed > threshold)', {
+              speed: `${speed} km/h`,
+              threshold: `${WALKING_PACE_THRESHOLD} km/h`,
+              gpsStale: false
+            });
+            setMinimapVisible(true);
+          }
           setMinimapOpacity(0.95);
         } else if (minimapVisible) {
           // Speed <= 5 km/h - track when it dropped below threshold
           if (speedBelowThresholdSinceRef.current === null) {
             speedBelowThresholdSinceRef.current = now; // Mark when speed dropped below threshold
+            console.log('🗺️ MINIMAP: Speed dropped below threshold, starting grace period', {
+              speed: `${speed} km/h`,
+              threshold: `${WALKING_PACE_THRESHOLD} km/h`,
+              gracePeriodSeconds: MINIMAP_SPEED_GRACE_PERIOD / 1000
+            });
           }
           
           const timeSinceBelowThreshold = now - speedBelowThresholdSinceRef.current;
           if (timeSinceBelowThreshold >= MINIMAP_SPEED_GRACE_PERIOD) {
             // Grace period elapsed - hide minimap
+            console.log('🗺️ MINIMAP: Hiding (grace period elapsed)', {
+              speed: `${speed} km/h`,
+              threshold: `${WALKING_PACE_THRESHOLD} km/h`,
+              timeBelowThreshold: `${Math.round(timeSinceBelowThreshold / 1000)}s`
+            });
             setMinimapOpacity(0);
             minimapFadeTimeoutRef.current = setTimeout(() => setMinimapVisible(false), MINIMAP_FADE_DURATION);
+          } else {
+            // Still in grace period
+            const remainingSeconds = Math.round((MINIMAP_SPEED_GRACE_PERIOD - timeSinceBelowThreshold) / 1000);
+            if (remainingSeconds % 10 === 0 || remainingSeconds <= 5) {
+              // Log every 10 seconds or in last 5 seconds
+              console.log('🗺️ MINIMAP: Still visible (grace period)', {
+                speed: `${speed} km/h`,
+                remainingSeconds: `${remainingSeconds}s`
+              });
+            }
           }
           // If still in grace period, keep minimap visible
+        } else {
+          // Minimap not visible and speed below threshold - log occasionally
+          if (speed > 0 && Math.random() < 0.1) { // Log ~10% of the time to avoid spam
+            console.log('🗺️ MINIMAP: Hidden (speed below threshold)', {
+              speed: `${speed} km/h`,
+              threshold: `${WALKING_PACE_THRESHOLD} km/h`
+            });
+          }
         }
       }
     } else if (settings.showMinimap) {
@@ -248,10 +284,16 @@ export default function OverlayPage() {
       } else {
         setMinimapOpacity(0.95);
       }
-    } else if (minimapVisible) {
-      // Manual hide mode
-      setMinimapOpacity(0);
-      minimapFadeTimeoutRef.current = setTimeout(() => setMinimapVisible(false), MINIMAP_FADE_DURATION);
+    } else {
+      // Manual hide mode (showMinimap is false and minimapSpeedBased is false)
+      // Hide immediately when manually turned off (no fade delay)
+      if (minimapVisible) {
+        console.log('🗺️ MINIMAP: Hiding immediately (manual mode turned off)');
+        setMinimapVisible(false);
+        setMinimapOpacity(0);
+        // Clear any pending fade timeout
+        clearTimer(minimapFadeTimeoutRef);
+      }
     }
   }, [settings.showMinimap, settings.minimapSpeedBased, minimapVisible]);
 
@@ -283,7 +325,8 @@ export default function OverlayPage() {
         if (hashChanged) {
           OverlayLogger.location('Location display mode changed', {
             mode: settings.locationDisplay,
-            display: formatted.primary || formatted.country || 'none',
+            primary: formatted.primary || 'none',
+            secondary: formatted.country || 'none', // Secondary line (city/state/country)
             rawLocation: {
               city: lastRawLocation.current!.city,
               neighbourhood: lastRawLocation.current!.neighbourhood,
@@ -311,15 +354,32 @@ export default function OverlayPage() {
     }
   }, [settings]);
 
-  // Update minimap visibility when relevant state changes (removed currentSpeed from deps to prevent loops)
+  // Update minimap visibility when relevant state changes
   useEffect(() => {
-    // Clear grace period refs when switching modes or disabling minimap
-    if (!settings.minimapSpeedBased) {
-      speedBelowThresholdSinceRef.current = null;
-      gpsStaleSinceRef.current = null;
+    try {
+      // Clear grace period refs when switching modes or disabling minimap
+      if (!settings.minimapSpeedBased) {
+        speedBelowThresholdSinceRef.current = null;
+        gpsStaleSinceRef.current = null;
+      }
+      updateMinimapVisibility();
+    } catch (error) {
+      OverlayLogger.error('Failed to update minimap visibility in effect', error);
+      // Don't throw - allow overlay to continue functioning
     }
-    updateMinimapVisibility();
   }, [settings.showMinimap, settings.minimapSpeedBased, updateMinimapVisibility]);
+
+  // Update minimap visibility when speed changes (speed-based mode only)
+  useEffect(() => {
+    if (settings.minimapSpeedBased) {
+      try {
+        updateMinimapVisibility();
+      } catch (error) {
+        OverlayLogger.error('Failed to update minimap visibility on speed change', error);
+        // Don't throw - allow overlay to continue functioning
+      }
+    }
+  }, [currentSpeed, settings.minimapSpeedBased, updateMinimapVisibility]);
 
   // Periodic check for GPS staleness to auto-hide minimap when GPS stops updating
   useEffect(() => {
@@ -327,7 +387,14 @@ export default function OverlayPage() {
       return; // Only check if speed-based mode is enabled
     }
 
-    const stalenessCheckInterval = setInterval(updateMinimapVisibility, MINIMAP_STALENESS_CHECK_INTERVAL);
+    const stalenessCheckInterval = setInterval(() => {
+      try {
+        updateMinimapVisibility();
+      } catch (error) {
+        OverlayLogger.error('Failed to update minimap visibility in staleness check', error);
+        // Don't throw - allow overlay to continue functioning
+      }
+    }, MINIMAP_STALENESS_CHECK_INTERVAL);
 
     return () => {
       clearInterval(stalenessCheckInterval);
@@ -380,9 +447,52 @@ export default function OverlayPage() {
       return hasChromeError || hasChromeInSource;
     };
     
+    // Track error count with bounded array to prevent memory leaks
+    const MAX_ERRORS_BEFORE_RELOAD = 10;
+    const ERROR_WINDOW_MS = 60000; // 1 minute window
+    const errorTimestamps: number[] = [];
+    const MAX_ERROR_ARRAY_SIZE = 20; // Cap array size to prevent unbounded growth
+    
+    const cleanupOldErrors = (now: number) => {
+      // Remove errors older than 1 minute
+      while (errorTimestamps.length > 0 && now - errorTimestamps[0] > ERROR_WINDOW_MS) {
+        errorTimestamps.shift();
+      }
+      // Also cap array size to prevent unbounded growth
+      if (errorTimestamps.length > MAX_ERROR_ARRAY_SIZE) {
+        errorTimestamps.shift(); // Remove oldest
+      }
+    };
+    
     const handleError = (event: ErrorEvent) => {
       // Suppress known harmless Chrome API errors from RTIRL
       if (isHarmlessChromeError(event.message, event.filename)) {
+        event.preventDefault();
+        return;
+      }
+      
+      // Track error rate with bounded array
+      const now = Date.now();
+      errorTimestamps.push(now);
+      cleanupOldErrors(now);
+      
+      // If too many errors in short time, trigger reload
+      if (errorTimestamps.length >= MAX_ERRORS_BEFORE_RELOAD) {
+        OverlayLogger.error('Too many errors detected, triggering reload', {
+          errorCount: errorTimestamps.length,
+          lastError: {
+            message: event.message,
+            filename: event.filename,
+            lineno: event.lineno,
+            colno: event.colno
+          }
+        });
+        // Clear error timestamps to prevent immediate reload loop
+        errorTimestamps.length = 0;
+        // Reload after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
         event.preventDefault();
         return;
       }
@@ -392,7 +502,8 @@ export default function OverlayPage() {
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
-        error: event.error
+        error: event.error,
+        errorCount: errorTimestamps.length
       });
       // Don't prevent default - let the error boundary handle it
     };
@@ -405,9 +516,31 @@ export default function OverlayPage() {
         return;
       }
       
+      // Track rejection rate with bounded array
+      const now = Date.now();
+      errorTimestamps.push(now);
+      cleanupOldErrors(now);
+      
+      // If too many rejections in short time, trigger reload
+      if (errorTimestamps.length >= MAX_ERRORS_BEFORE_RELOAD) {
+        OverlayLogger.error('Too many promise rejections detected, triggering reload', {
+          errorCount: errorTimestamps.length,
+          lastRejection: event.reason
+        });
+        // Clear error timestamps to prevent immediate reload loop
+        errorTimestamps.length = 0;
+        // Reload after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        event.preventDefault();
+        return;
+      }
+      
       OverlayLogger.error('Unhandled promise rejection caught', {
         reason: event.reason,
-        promise: event.promise
+        promise: event.promise,
+        errorCount: errorTimestamps.length
       });
       // Prevent the default behavior to avoid console errors
       event.preventDefault();
@@ -1018,18 +1151,41 @@ export default function OverlayPage() {
     if (location?.countryCode) {
       setFlagLoaded(false); // Reset flag loaded state when country changes
       const img = new Image();
-      img.onload = () => setFlagLoaded(true);
-      img.onerror = () => setFlagLoaded(false);
+      let isActive = true; // Track if component is still mounted
+      
+      img.onload = () => {
+        if (isActive) setFlagLoaded(true);
+      };
+      img.onerror = () => {
+        if (isActive) setFlagLoaded(false);
+      };
       img.src = `https://flagcdn.com/${location.countryCode}.svg`;
+      
+      // Cleanup: prevent state updates if component unmounts or country changes
+      return () => {
+        isActive = false;
+        // Clear image reference to allow garbage collection
+        img.src = '';
+      };
     }
   }, [location?.countryCode]);
 
 
 
-  // RTIRL connection
+  // RTIRL connection - use ref to track if listener is already set up
+  const rtirlListenerSetupRef = useRef(false);
+  
   useEffect(() => {
+    // Prevent multiple listener setups if component remounts
+    if (rtirlListenerSetupRef.current) {
+      return;
+    }
+    
     const setupRTIRLListener = () => {
       if (typeof window !== 'undefined' && window.RealtimeIRL && API_KEYS.RTIRL) {
+        // Mark as set up to prevent duplicates
+        rtirlListenerSetupRef.current = true;
+        
         try {
           window.RealtimeIRL.forPullKey(API_KEYS.RTIRL).addListener((p: unknown) => {
           try {
@@ -1180,13 +1336,40 @@ export default function OverlayPage() {
             // BUT only trust it if GPS data was fresh (not stale before this update)
             if (typeof payload === 'object' && payload !== null && 'speed' in payload) {
               const rtirlPayload = payload as RTIRLPayload;
-              if (typeof rtirlPayload.speed === 'number' && rtirlPayload.speed >= 0) {
+              const rawSpeedValue = rtirlPayload.speed;
+              
+              // Debug: Log what we received from RTIRL
+              if (isFirstGpsUpdate || isFirstFreshGps || (typeof rawSpeedValue !== 'undefined' && rawSpeedValue !== null)) {
+                console.log('📊 RTIRL SPEED FIELD:', {
+                  'Has speed field?': 'speed' in payload,
+                  'Raw speed value': rawSpeedValue,
+                  'Speed type': typeof rawSpeedValue,
+                  'Is number?': typeof rawSpeedValue === 'number',
+                  'Is valid?': typeof rawSpeedValue === 'number' && rawSpeedValue >= 0,
+                  'Will use?': typeof rawSpeedValue === 'number' && rawSpeedValue >= 0 && !wasGpsDataStale
+                });
+              }
+              
+              if (typeof rawSpeedValue === 'number' && rawSpeedValue >= 0) {
                 // Only use RTIRL speed if GPS data was fresh (not stale)
                 // If GPS was stale, the speed might be stale too, so ignore it
                 if (!wasGpsDataStale) {
-                  rtirlSpeed = rtirlPayload.speed;
+                  rtirlSpeed = rawSpeedValue;
+                  console.log('✅ Using RTIRL speed:', `${rtirlSpeed} km/h`);
+                } else {
+                  console.log('⚠️ RTIRL speed ignored (GPS was stale):', `${rawSpeedValue} km/h`);
                 }
                 // If GPS was stale, rtirlSpeed remains 0
+              } else if (rawSpeedValue !== undefined && rawSpeedValue !== null) {
+                console.warn('⚠️ RTIRL speed field exists but has invalid type/value:', {
+                  value: rawSpeedValue,
+                  type: typeof rawSpeedValue
+                });
+              }
+            } else {
+              // Log when speed field is missing
+              if (isFirstGpsUpdate || isFirstFreshGps) {
+                console.log('ℹ️ RTIRL payload has no speed field. Will calculate from coordinates.');
               }
             }
             
@@ -1219,28 +1402,43 @@ export default function OverlayPage() {
             const speedKmh = wasGpsDataStale ? 0 : (rtirlSpeed > 0 ? rtirlSpeed : calculatedSpeed);
             const roundedSpeed = Math.round(speedKmh);
             
-            // Log speed details for debugging (only in development)
-            if (process.env.NODE_ENV === 'development') {
-              // Log on first updates or when speed changes significantly (> 2 km/h difference)
-              const speedChanged = Math.abs(roundedSpeed - currentSpeed) > 2;
-              if (isFirstGpsUpdate || isFirstFreshGps || speedChanged) {
-                OverlayLogger.overlay('Speed update', {
-                  rtirlSpeed: rtirlSpeed > 0 ? rtirlSpeed : 'not available',
-                  calculatedSpeed: calculatedSpeed > 0 ? calculatedSpeed : 'not calculated',
-                  finalSpeed: roundedSpeed,
-                  wasGpsDataStale,
-                  hasSpeedInPayload: 'speed' in (payload as object),
-                  speedType: rtirlSpeed > 0 ? 'RTIRL' : (calculatedSpeed > 0 ? 'calculated' : 'none')
-                });
-              }
+            // Enhanced speed logging for debugging - always log to help diagnose issues
+            const speedChanged = Math.abs(roundedSpeed - currentSpeed) > 1; // Log if speed changes by 1+ km/h
+            const shouldLogSpeed = isFirstGpsUpdate || isFirstFreshGps || speedChanged || roundedSpeed > 0;
+            
+            if (shouldLogSpeed) {
+              // Log detailed speed information
+              console.log('🚗 SPEED DEBUG:', {
+                'RTIRL Speed (raw)': rtirlSpeed > 0 ? `${rtirlSpeed.toFixed(2)} km/h` : 'NOT IN PAYLOAD',
+                'Calculated Speed': calculatedSpeed > 0 ? `${calculatedSpeed.toFixed(2)} km/h` : 'NOT CALCULATED',
+                'Final Speed': `${roundedSpeed} km/h`,
+                'Speed Source': rtirlSpeed > 0 ? 'RTIRL' : (calculatedSpeed > 0 ? 'CALCULATED' : 'NONE'),
+                'GPS Stale?': wasGpsDataStale,
+                'Payload Has Speed?': 'speed' in (payload as object),
+                'Payload Speed Value': (payload as { speed?: unknown }).speed,
+                'Above Threshold (5km/h)?': roundedSpeed > WALKING_PACE_THRESHOLD,
+                'Minimap Should Show?': roundedSpeed > WALKING_PACE_THRESHOLD && !wasGpsDataStale,
+                'Previous Speed': currentSpeed,
+                'Speed Changed?': speedChanged
+              });
               
-              // Log GPS updates for debugging (only on first updates to reduce spam)
+              // Also log full payload structure occasionally to see what RTIRL sends
               if (isFirstGpsUpdate || isFirstFreshGps) {
-                OverlayLogger.overlay('GPS update received', {
-                  fresh: isFresh,
-                  age: now - gpsUpdateTime,
-                  coordinates: [lat, lon],
-                  speed: roundedSpeed
+                console.log('📦 RTIRL PAYLOAD STRUCTURE:', {
+                  'Has speed field?': 'speed' in payload,
+                  'Speed value': (payload as { speed?: unknown }).speed,
+                  'Speed type': typeof (payload as { speed?: unknown }).speed,
+                  'All payload keys': Object.keys(payload),
+                  'Location keys': payload.location ? Object.keys(payload.location) : 'no location',
+                  'Full payload (sanitized)': {
+                    ...payload,
+                    location: payload.location ? {
+                      lat: payload.location.lat,
+                      lon: payload.location.lon,
+                      hasTimezone: !!payload.location.timezone,
+                      hasCountryCode: !!payload.location.countryCode
+                    } : null
+                  }
                 });
               }
             }
@@ -1253,7 +1451,13 @@ export default function OverlayPage() {
             // Note: lastGpsTimestamp.current is already updated above
             
             // Trigger minimap visibility update after GPS data is processed
-            updateMinimapVisibilityRef.current();
+            // This will check for movement and update minimap visibility accordingly
+            try {
+              updateMinimapVisibilityRef.current();
+            } catch (error) {
+              OverlayLogger.error('Failed to update minimap visibility', error);
+              // Don't throw - allow overlay to continue functioning
+            }
             
             // Kick off location + weather fetches on coordinate updates with gating
             (async () => {
@@ -1451,13 +1655,25 @@ export default function OverlayPage() {
                         OverlayLogger.location('Location updated', {
                           mode: currentDisplayMode,
                           primary: formatted.primary.trim() || 'none',
-                          country: formatted.country || 'none',
+                          secondary: formatted.country || 'none', // Secondary line (city/state/country depending on primary category)
                           city: loc.city || loc.town || 'none',
                           neighbourhood: loc.neighbourhood || loc.suburb || 'none',
                           rawData: {
-                            hasCity: !!loc.city,
+                            // Neighbourhood-level fields
                             hasNeighbourhood: !!loc.neighbourhood,
-                            hasSuburb: !!loc.suburb
+                            hasSuburb: !!loc.suburb,
+                            // City-level fields
+                            hasCity: !!loc.city,
+                            hasTown: !!loc.town,
+                            hasMunicipality: !!loc.municipality,
+                            hasCounty: !!loc.county,
+                            // State-level fields
+                            hasState: !!loc.state,
+                            hasProvince: !!loc.province,
+                            hasRegion: !!loc.region,
+                            // Country-level fields
+                            hasCountry: !!loc.country,
+                            hasCountryCode: !!loc.countryCode
                           }
                         });
                         setLocation({
@@ -1526,7 +1742,7 @@ export default function OverlayPage() {
                       if (fallbackLocation.country || (fallbackLocation.primary && fallbackLocation.primary.trim())) {
                         setLocation({
                           primary: fallbackLocation.primary.trim() || '', // Ocean name or empty
-                          country: fallbackLocation.country, // Country name if estimable
+                          country: fallbackLocation.country, // Secondary line (country name if estimable, or ocean name)
                           countryCode: fallbackLocation.countryCode || ''
                         });
                         lastSuccessfulLocationFetch.current = Date.now(); // Track successful location fetch
@@ -1590,6 +1806,10 @@ export default function OverlayPage() {
     // 2. The listener is set up once and doesn't need to be recreated when functions change
     // 3. If functions need to access latest values, they should use refs (which they already do)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      // Reset flag on unmount so listener can be set up again if component remounts
+      rtirlListenerSetupRef.current = false;
+    };
   }, []); // Empty deps - RTIRL listener should only be set up once on mount
 
   // Note: Overlay visibility is handled directly in the style prop using hasReceivedFreshGps
@@ -1604,13 +1824,13 @@ export default function OverlayPage() {
     if (settings.locationDisplay === 'custom') {
       return {
         primary: settings.customLocation?.trim() || '',
-        country: location?.country, // Show the actual country name
+        country: location?.country, // Secondary line (city/state/country) - in custom mode this shows the actual country name
         countryCode: location?.countryCode?.toUpperCase()
       };
     }
     
     // Show location data if available
-    // For 'country' mode, primary will be empty but country will have country data
+    // For 'country' mode, primary will be empty but country field will have the country name
     if (location && (location.primary || location.country)) {
       return {
         ...location,
@@ -1698,7 +1918,7 @@ export default function OverlayPage() {
   }, [weather, getWeatherIcon]); // getWeatherIcon already depends on sunriseSunset/timezone via isNightTime
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary autoReload={true} reloadDelay={5000}>
       <div 
         className="overlay-container obs-render"
         style={{
@@ -1752,7 +1972,7 @@ export default function OverlayPage() {
                   </div>
                   )}
                   {locationDisplay.country && (
-                    // Only show country name/flag if:
+                    // Only show secondary line (city/state/country) with flag if:
                     // 1. Not in custom mode (always show for GPS modes), OR
                     // 2. In custom mode AND showCountryName is enabled
                     (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
