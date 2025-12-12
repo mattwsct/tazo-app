@@ -3,7 +3,8 @@ import { kv } from '@vercel/kv';
 import { logKVUsage } from '@/lib/api-auth';
 import { validateEnvironment } from '@/lib/env-validator';
 import { OverlayLogger } from '@/lib/logger';
- 
+
+export const dynamic = 'force-dynamic';
 
 async function handleGET() {
   try {
@@ -28,7 +29,13 @@ async function handleGET() {
       OverlayLogger.settings('Final combined settings', combinedSettings);
     }
     
-    return NextResponse.json(combinedSettings);
+    return NextResponse.json(combinedSettings, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
   } catch {
     return NextResponse.json({ error: 'Failed to load settings' },
       { status: 500 });

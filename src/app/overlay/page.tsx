@@ -960,6 +960,15 @@ function OverlayPage() {
 
   // Load settings and set up real-time updates
   useEffect(() => {
+    // Helper function to create a stable hash from settings (sorts keys for consistency)
+    const createSettingsHash = (settings: OverlaySettings): string => {
+      const sorted = Object.keys(settings).sort().reduce((acc, key) => {
+        acc[key] = settings[key as keyof OverlaySettings];
+        return acc;
+      }, {} as Record<string, unknown>);
+      return JSON.stringify(sorted);
+    };
+    
     const loadSettings = async () => {
       try {
         // Add cache busting and force fresh data
@@ -976,6 +985,8 @@ function OverlayPage() {
         const data = await res.json();
         if (data) {
           setSettings(data);
+          // Set initial hash to prevent false positives on first poll
+          lastSettingsHash.current = createSettingsHash(data);
         }
         // If no data but request succeeded, keep existing settings (don't reset to defaults)
       } catch (error) {
@@ -1010,6 +1021,8 @@ function OverlayPage() {
               showMinimap: settingsData.showMinimap 
             });
             setSettings(settingsData as OverlaySettings);
+            // Update hash to prevent polling from detecting this as a new change
+            lastSettingsHash.current = createSettingsHash(settingsData as OverlaySettings);
           }
       } catch {
           // Ignore malformed SSE messages
@@ -1057,7 +1070,7 @@ function OverlayPage() {
         if (res.ok) {
           const data = await res.json();
           if (data) {
-            const newHash = JSON.stringify(data);
+            const newHash = createSettingsHash(data);
             if (newHash !== lastSettingsHash.current) {
               lastSettingsHash.current = newHash;
               OverlayLogger.settings('Settings updated via polling', { 
