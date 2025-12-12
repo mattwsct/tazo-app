@@ -1,6 +1,6 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
-const MAX_CHARACTER_LIMIT = 20; // Single limit for both primary and country lines
+const MAX_CHARACTER_LIMIT = 16; // Single limit for both primary and secondary lines
 
 export interface LocationData {
   country?: string;
@@ -35,8 +35,8 @@ export interface LocationData {
 
 export interface LocationDisplay {
   primary: string;  // Most precise available location (Line 1)
-  country?: string; // Secondary line - next broadest category (Line 2). Can be city, state, or country name depending on primary category
-  countryCode?: string; // ISO country code for flag display (always the actual country, regardless of what's in 'country' field)
+  secondary?: string; // Secondary line - next broadest category (Line 2). Can be city, state, or country name depending on primary category
+  countryCode?: string; // ISO country code for flag display (always the actual country, regardless of what's in 'secondary' field)
 }
 
 // === 🎯 LOCATION PRECISION LEVELS ===
@@ -79,7 +79,7 @@ function isValidLocationName(name: string): boolean {
  * Gets the best location name for a given precision level with automatic fallback
  * Returns both the location name and the category it came from
  * 
- * If the requested precision level has names that are too long (>20 chars),
+ * If the requested precision level has names that are too long (>16 chars),
  * it automatically falls back to the next less specific level.
  * 
  * Fallback hierarchy:
@@ -181,7 +181,7 @@ function getLocationByPrecision(
  * Gets country for a location with character limit and smart shortening
  * 
  * Rules:
- * - If name fits (≤20 chars), use it
+ * - If name fits (≤16 chars), use it
  * - If too long, try smart shortening (e.g., "USA", "UK", "DR Congo")
  * - As last resort, use country code
  * 
@@ -214,7 +214,7 @@ export function formatCountryName(countryName: string, countryCode = ''): string
   
   // Smart shortening for common long country names (keeping them readable)
   // Strategy: Use common abbreviations/accepted short names, but keep them readable (not just codes)
-  // For countries >20 chars, we provide readable shortenings that are still recognizable
+  // For countries >16 chars, we provide readable shortenings that are still recognizable
   const commonShortenings: Record<string, string> = {
     // Very long names (>25 chars) - use common abbreviations
     'united kingdom of great britain and northern ireland': 'United Kingdom',
@@ -223,7 +223,7 @@ export function formatCountryName(countryName: string, countryCode = ''): string
     'saint vincent and the grenadines': 'St. Vincent',
     'central african republic': 'Central Africa',
     
-    // Long names (20-25 chars) - use readable shortenings
+    // Long names (16-25 chars) - use readable shortenings
     'united states': 'United States',
     'united kingdom': 'United Kingdom',
     'bosnia and herzegovina': 'Bosnia',
@@ -234,7 +234,7 @@ export function formatCountryName(countryName: string, countryCode = ''): string
     'czech republic': 'Czechia',
     'dominican republic': 'Dominican Rep.',
     'united arab emirates': 'UAE',
-    'trinidad and tobago': 'Trinidad & Tobago',
+    'trinidad and tobago': 'Trinidad',
     'sao tome and principe': 'São Tomé',
     'antigua and barbuda': 'Antigua',
     'saint kitts and nevis': 'St. Kitts',
@@ -354,13 +354,13 @@ export function shortenCountryName(countryName: string, countryCode = ''): strin
 // === 🎨 MAIN LOCATION FORMATTING ===
 
 /**
- * Formats location data for overlay display with 20-character limits
+ * Formats location data for overlay display with 16-character limits
  * 
  * Rules:
  * - Precise: Shows most specific location with country
  * - Broad: Shows broader location with country
  * - Region: Shows state/province with country
- * - Country line: Country name if ≤20 chars, else country code
+ * - Secondary line: Country name if ≤16 chars, else country code
  * 
  * @example
  * // City mode: Shows city with state/country context
@@ -381,21 +381,21 @@ export function formatLocation(
   location: LocationData | null, 
   displayMode: 'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden' = 'neighbourhood'
 ): LocationDisplay {
-  if (!location || displayMode === 'hidden') return { primary: '', country: undefined };
+  if (!location || displayMode === 'hidden') return { primary: '', secondary: undefined };
   
   // For country mode, show only shortened country name/flag (no primary location, no state)
   if (displayMode === 'country') {
     const countryInfo = getCountry(location);
     // Use shortened country name directly, not state+country format
-    const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-    return { primary: '', country: countryDisplay, countryCode: location.countryCode || '' };
+    const secondaryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+    return { primary: '', secondary: secondaryDisplay, countryCode: location.countryCode || '' };
   }
   
   // For custom mode, we still need the country name/flag, just not the primary location
   if (displayMode === 'custom') {
     const countryInfo = getCountry(location);
-    const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-    return { primary: '', country: countryDisplay, countryCode: location.countryCode || '' };
+    const secondaryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+    return { primary: '', secondary: secondaryDisplay, countryCode: location.countryCode || '' };
   }
   
   // For state mode, show state on line 1 and country on line 2
@@ -409,31 +409,31 @@ export function formatLocation(
     if (!primary) {
       if (countryInfo) {
         // When state mode is selected, second line should only show country
-        const countryDisplay = formatCountryName(countryInfo.country, location.countryCode || '');
+        const secondaryDisplay = formatCountryName(countryInfo.country, location.countryCode || '');
         return { 
           primary: '', // Line 1 stays blank
-          country: countryDisplay, // Line 2 shows country with flag
+          secondary: secondaryDisplay, // Line 2 shows country with flag
           countryCode: location.countryCode || ''
         };
       }
-      return { primary: '', country: undefined };
+      return { primary: '', secondary: undefined };
     }
     
     // Show state on line 1, country ONLY on line 2 (exclude state from second line)
     // When state mode is selected, second line should only show country, not state or other broader options
     // Check for duplicate names (e.g., if state name overlaps with country name like "Singapore" state vs "Singapore" country)
-    const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+    const secondaryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
     // If state and country names overlap, hide the duplicate country
-    if (countryDisplay && hasOverlappingNames(primary, countryDisplay)) {
+    if (secondaryDisplay && hasOverlappingNames(primary, secondaryDisplay)) {
       return {
         primary: primary,
-        country: undefined, // Hide duplicate country on line 2
+        secondary: undefined, // Hide duplicate country on line 2
         countryCode: location.countryCode || ''
       };
     }
     return {
       primary: primary,
-      country: countryDisplay,
+      secondary: secondaryDisplay,
       countryCode: location.countryCode || ''
     };
   }
@@ -455,23 +455,23 @@ export function formatLocation(
     if (nextBroadestCategory) {
       return { 
         primary: '', // Line 1 stays blank
-        country: nextBroadestCategory, // Line 2 shows next broadest category
+        secondary: nextBroadestCategory, // Line 2 shows next broadest category
         countryCode: location.countryCode || ''
       };
     }
     // No location data at all
-    return { primary: '', country: undefined };
+    return { primary: '', secondary: undefined };
   }
   
   // Check for duplicate names (e.g., "Singapore, Singapore" or "Monaco, Monaco")
   // If primary matches or overlaps with country, hide primary and show only country with flag on line 2
   // Uses overlap detection to catch exact matches and cases like "Singapore" vs "Republic of Singapore"
   if (countryInfo) {
-    const countryDisplay = formatCountryName(countryInfo.country, location.countryCode || '');
-    if (countryDisplay && hasOverlappingNames(primary, countryDisplay)) {
+    const secondaryDisplay = formatCountryName(countryInfo.country, location.countryCode || '');
+    if (secondaryDisplay && hasOverlappingNames(primary, secondaryDisplay)) {
       return {
         primary: '', // Hide duplicate on line 1
-        country: countryDisplay, // Show country with flag on line 2
+        secondary: secondaryDisplay, // Show country with flag on line 2
         countryCode: location.countryCode || ''
       };
     }
@@ -482,10 +482,10 @@ export function formatLocation(
   // Hierarchy: neighborhood → city → state → country
   // Skip categories that have overlapping names with the primary location
   const nextBroadestCategory = getNextBroadestCategory(location, primaryCategory, primary);
-  const countryDisplay = nextBroadestCategory ? nextBroadestCategory : undefined;
+  const secondaryDisplay = nextBroadestCategory ? nextBroadestCategory : undefined;
   return {
     primary,
-    country: countryDisplay,
+    secondary: secondaryDisplay,
     countryCode: location.countryCode || ''
   };
 }

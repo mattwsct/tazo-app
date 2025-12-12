@@ -88,7 +88,7 @@ function OverlayPage() {
   const [timeDisplay, setTimeDisplay] = useState({ time: '', date: '' });
   const [location, setLocation] = useState<{ 
     primary: string; 
-    country?: string;
+    secondary?: string;
     countryCode?: string;
   } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
@@ -285,7 +285,7 @@ function OverlayPage() {
           OverlayLogger.location('Location display mode changed', {
             mode: settings.locationDisplay,
             primary: formatted.primary || 'none',
-            secondary: formatted.country || 'none', // Secondary line (city/state/country)
+            secondary: formatted.secondary || 'none', // Secondary line (city/state/country)
             rawLocation: {
               city: lastRawLocation.current!.city,
               neighbourhood: lastRawLocation.current!.neighbourhood,
@@ -295,7 +295,7 @@ function OverlayPage() {
         }
         setLocation({
           primary: formatted.primary || '',
-          country: formatted.country,
+          secondary: formatted.secondary,
           countryCode: lastRawLocation.current!.countryCode || ''
         });
         setHasIncompleteLocationData(false); // Clear incomplete flag when re-formatting
@@ -492,7 +492,7 @@ function OverlayPage() {
   }, [createDateTimeFormatters]);
 
   // Helper functions to update data and mark GPS as received (consolidates repeated patterns)
-  const updateLocation = useCallback((locationData: { primary: string; country?: string; countryCode?: string }) => {
+  const updateLocation = useCallback((locationData: { primary: string; secondary?: string; countryCode?: string }) => {
     setLocation(locationData);
     lastSuccessfulLocationFetch.current = Date.now();
     markGpsReceived();
@@ -1466,13 +1466,13 @@ function OverlayPage() {
                         
                         // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
-                        if (formatted.primary.trim() || formatted.country) {
+                        if (formatted.primary.trim() || formatted.secondary) {
                         // Log location updates with essential info only (reduce verbosity)
                         // Full rawData is available in API logger if needed for debugging
                         OverlayLogger.location('Location updated', {
                           mode: currentDisplayMode,
                           primary: formatted.primary.trim() || 'none',
-                          secondary: formatted.country || 'none', // Secondary line (city/state/country depending on primary category)
+                          secondary: formatted.secondary || 'none', // Secondary line (city/state/country depending on primary category)
                           city: loc.city || loc.town || 'none',
                           neighbourhood: loc.neighbourhood || loc.suburb || 'none',
                           state: loc.state || loc.province || loc.region || 'none',
@@ -1480,7 +1480,7 @@ function OverlayPage() {
                         });
                         updateLocation({
                           primary: formatted.primary.trim() || '',
-                          country: formatted.country,
+                          secondary: formatted.secondary,
                           countryCode: loc.countryCode || ''
                         });
                         setHasIncompleteLocationData(false);
@@ -1517,7 +1517,7 @@ function OverlayPage() {
                         const formattedCountryName = formatCountryName(rawCountryName, countryCode);
                         updateLocation({
                           primary: formattedCountryName,
-                          country: undefined,
+                          secondary: undefined,
                           countryCode: countryCode
                         });
                       }
@@ -1532,10 +1532,10 @@ function OverlayPage() {
                       OverlayLogger.warn('LocationIQ failed, using country-only fallback');
                       
                       const fallbackLocation = createLocationWithCountryFallback(lat!, lon!, locationIQWas404);
-                      if (fallbackLocation.country || (fallbackLocation.primary && fallbackLocation.primary.trim())) {
+                      if (fallbackLocation.secondary || (fallbackLocation.primary && fallbackLocation.primary.trim())) {
                         updateLocation({
                           primary: fallbackLocation.primary.trim() || '',
-                          country: fallbackLocation.country,
+                          secondary: fallbackLocation.secondary,
                           countryCode: fallbackLocation.countryCode || ''
                         });
                         setHasIncompleteLocationData(false);
@@ -1623,14 +1623,14 @@ function OverlayPage() {
     if (settings.locationDisplay === 'custom') {
       return {
         primary: settings.customLocation?.trim() || '',
-        country: location?.country, // Secondary line (city/state/country) - in custom mode this shows the actual country name
+        secondary: location?.secondary, // Secondary line (city/state/country) - in custom mode this shows the actual country name
         countryCode: location?.countryCode?.toUpperCase()
       };
     }
     
     // Show location data if available
-    // For 'country' mode, primary will be empty but country field will have the country name
-    if (location && (location.primary || location.country)) {
+    // For 'country' mode, primary will be empty but secondary field will have the country name
+    if (location && (location.primary || location.secondary)) {
       return {
         ...location,
         countryCode: location.countryCode?.toUpperCase()
@@ -1775,14 +1775,14 @@ function OverlayPage() {
                     <div className="location-main">{locationDisplay.primary}</div>
                   </div>
                   )}
-                  {locationDisplay.country && (
+                  {locationDisplay.secondary && (
                     // Only show secondary line (city/state/country) with flag if:
                     // 1. Not in custom mode (always show for GPS modes), OR
                     // 2. In custom mode AND showCountryName is enabled
                     (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
                     <div className={`location location-line location-sub-line ${!locationDisplay.primary ? 'country-only' : ''}`}>
                       <div className="location-sub">
-                        {locationDisplay.country}
+                        {locationDisplay.secondary}
                         {locationDisplay.countryCode && (
                           <LocationFlag 
                             countryCode={locationDisplay.countryCode} 

@@ -18,7 +18,7 @@ export function createCoordinateFallback(lat: number, lon: number): LocationDisp
   
   return {
     primary: `${latRounded}, ${lonRounded}`,
-    country: undefined // No country info available
+    secondary: undefined // No country info available
   };
 }
 
@@ -54,13 +54,13 @@ export function createLocationWithCountryFallback(
   // Don't show country line for water bodies (would be duplicate)
   // Show country only if we're on land (not water) and can estimate it
   // IMPORTANT: Don't show water bodies as countries - only show actual countries
-  const country = shouldShowWater || countryInfo?.isWater 
+  const secondary = shouldShowWater || countryInfo?.isWater 
     ? undefined 
     : countryInfo?.name;
   
   return {
     primary,
-    country,
+    secondary,
     countryCode: countryInfo?.code || undefined,
     isWater: shouldShowWater || false
   };
