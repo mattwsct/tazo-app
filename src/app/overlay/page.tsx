@@ -81,7 +81,7 @@ const LocationFlag = ({ countryCode, flagLoaded, getEmojiFlag }: {
   </span>
 );
 
-export default function OverlayPage() {
+function OverlayPage() {
   useRenderPerformance('OverlayPage');
 
   // State
@@ -476,9 +476,10 @@ export default function OverlayPage() {
       errorTimestamps.push(now);
       cleanupOldErrors(now);
       
-      // If too many errors in short time, trigger reload
+      // Don't reload on errors - keep elements visible indefinitely
+      // Just log the error for debugging
       if (errorTimestamps.length >= MAX_ERRORS_BEFORE_RELOAD) {
-        OverlayLogger.error('Too many errors detected, triggering reload', {
+        OverlayLogger.error('Too many errors detected (not reloading - keeping elements visible)', {
           errorCount: errorTimestamps.length,
           lastError: {
             message: event.message,
@@ -487,12 +488,9 @@ export default function OverlayPage() {
             colno: event.colno
           }
         });
-        // Clear error timestamps to prevent immediate reload loop
+        // Clear error timestamps to prevent log spam
         errorTimestamps.length = 0;
-        // Reload after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        // Don't reload - keep showing the overlay
         event.preventDefault();
         return;
       }
@@ -521,18 +519,16 @@ export default function OverlayPage() {
       errorTimestamps.push(now);
       cleanupOldErrors(now);
       
-      // If too many rejections in short time, trigger reload
+      // Don't reload on promise rejections - keep elements visible indefinitely
+      // Just log the rejection for debugging
       if (errorTimestamps.length >= MAX_ERRORS_BEFORE_RELOAD) {
-        OverlayLogger.error('Too many promise rejections detected, triggering reload', {
+        OverlayLogger.error('Too many promise rejections detected (not reloading - keeping elements visible)', {
           errorCount: errorTimestamps.length,
           lastRejection: event.reason
         });
-        // Clear error timestamps to prevent immediate reload loop
+        // Clear error timestamps to prevent log spam
         errorTimestamps.length = 0;
-        // Reload after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        // Don't reload - keep showing the overlay
         event.preventDefault();
         return;
       }
@@ -1025,12 +1021,13 @@ export default function OverlayPage() {
         const data = await res.json();
         if (data) {
           setSettings(data);
-        } else {
-          setSettings(DEFAULT_OVERLAY_SETTINGS);
         }
-      } catch {
-        // Failed to load settings, using defaults
-        setSettings(DEFAULT_OVERLAY_SETTINGS);
+        // If no data but request succeeded, keep existing settings (don't reset to defaults)
+      } catch (error) {
+        // Failed to load settings - keep existing settings instead of resetting
+        // This ensures elements stay visible even when API fails
+        OverlayLogger.warn('Settings load failed, keeping existing settings', { error });
+        // Don't reset to defaults - keep what we have
       }
     };
     
@@ -2061,3 +2058,16 @@ export default function OverlayPage() {
     </ErrorBoundary>
   );
 }
+
+// Export wrapped version that doesn't auto-reload on errors
+function OverlayPageWrapper() {
+  return (
+    <ErrorBoundary 
+      autoReload={false} // Disable auto-reload - keep elements visible indefinitely
+    >
+      <OverlayPage />
+    </ErrorBoundary>
+  );
+}
+
+export default OverlayPageWrapper;
