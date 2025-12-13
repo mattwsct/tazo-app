@@ -127,8 +127,8 @@ function OverlayPage() {
   // API rate limiting tracking (per-second only)
   // GPS update tracking for minimap
   const minimapFadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const speedBelowThresholdSinceRef = useRef<number | null>(null); // Track when speed dropped below threshold
-  const gpsStaleSinceRef = useRef<number | null>(null); // Track when GPS became stale
+  // Track last 3 speed readings for minimap visibility (need 3 consecutive readings > 5 km/h)
+  const speedReadingsRef = useRef<number[]>([]); // Array of last 3 speed readings
   
   // GPS freshness tracking for location/weather display
   const locationWeatherHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -177,8 +177,9 @@ function OverlayPage() {
     setHasReceivedFreshGps(false);
   }, []);
 
-  // Minimap visibility logic: Show when speed > 5 km/h and GPS fresh, hide when GPS stale
-  // Uses speed from RTIRL or calculated from coordinate changes
+  // Simplified minimap visibility logic:
+  // - Show if speed > 5 km/h for 3 consecutive readings AND GPS is fresh
+  // - Hide if speed < 5 km/h OR GPS is stale
   const updateMinimapVisibility = useCallback(() => {
     const now = Date.now();
     const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
@@ -190,49 +191,38 @@ function OverlayPage() {
     const speed = currentSpeedRef.current;
     
     if (settings.minimapSpeedBased) {
+      // Check if GPS is stale - hide immediately if stale
       if (isGpsStale) {
-        // GPS stale - track when it became stale and check grace period
-        if (gpsStaleSinceRef.current === null) {
-          gpsStaleSinceRef.current = now; // Mark when GPS became stale
+        if (minimapVisible) {
+          setMinimapVisible(false);
+          setMinimapOpacity(0);
         }
-        
-        const timeSinceStale = now - gpsStaleSinceRef.current;
-        if (timeSinceStale >= MINIMAP_GPS_STALE_GRACE_PERIOD) {
-          // Grace period elapsed - hide minimap
-          if (minimapVisible) {
-            setMinimapOpacity(0);
-            minimapFadeTimeoutRef.current = setTimeout(() => setMinimapVisible(false), MINIMAP_FADE_DURATION);
-          }
-          // Only update speed state if it's actually > 0 (prevents unnecessary re-renders)
-          if (speed > 0) {
-            setCurrentSpeed(0);
-          }
-        }
-        // If still in grace period, keep minimap visible
-      } else {
-        // GPS is fresh - clear stale tracking
-        gpsStaleSinceRef.current = null;
-        
-        if (speed > WALKING_PACE_THRESHOLD) {
-          // Speed > 5 km/h and GPS fresh - show minimap
-          speedBelowThresholdSinceRef.current = null; // Clear speed grace period tracking
+        // Clear speed readings when GPS is stale
+        speedReadingsRef.current = [];
+        return;
+      }
+      
+      // GPS is fresh - check speed readings
+      // Check if we have 3 consecutive readings > 5 km/h
+      const hasThreeHighSpeedReadings = speedReadingsRef.current.length >= 3 && 
+        speedReadingsRef.current.every(s => s > WALKING_PACE_THRESHOLD);
+      
+      if (speed > WALKING_PACE_THRESHOLD) {
+        // Speed > 5 km/h - show minimap if we have 3 consecutive readings > 5 km/h
+        if (hasThreeHighSpeedReadings) {
           if (!minimapVisible) {
             setMinimapVisible(true);
+            setMinimapOpacity(0.95);
+          } else {
+            setMinimapOpacity(0.95);
           }
-          setMinimapOpacity(0.95);
-        } else if (minimapVisible) {
-          // Speed <= 5 km/h - track when it dropped below threshold
-          if (speedBelowThresholdSinceRef.current === null) {
-            speedBelowThresholdSinceRef.current = now;
-          }
-          
-          const timeSinceBelowThreshold = now - speedBelowThresholdSinceRef.current;
-          if (timeSinceBelowThreshold >= MINIMAP_SPEED_GRACE_PERIOD) {
-            // Grace period elapsed - hide minimap
-            setMinimapOpacity(0);
-            minimapFadeTimeoutRef.current = setTimeout(() => setMinimapVisible(false), MINIMAP_FADE_DURATION);
-          }
-          // If still in grace period, keep minimap visible
+        }
+      } else {
+        // Speed < 5 km/h - hide minimap immediately and clear readings
+        speedReadingsRef.current = [];
+        if (minimapVisible) {
+          setMinimapVisible(false);
+          setMinimapOpacity(0);
         }
       }
     } else if (settings.showMinimap) {
@@ -247,6 +237,7 @@ function OverlayPage() {
     } else {
       // Manual hide mode (showMinimap is false and minimapSpeedBased is false)
       // Hide immediately when manually turned off (no fade delay)
+      speedReadingsRef.current = []; // Clear readings when manually hidden
       if (minimapVisible) {
         setMinimapVisible(false);
         setMinimapOpacity(0);
@@ -319,10 +310,9 @@ function OverlayPage() {
   // Update minimap visibility when relevant state changes
   useEffect(() => {
     try {
-      // Clear grace period refs when switching modes or disabling minimap
+      // Clear speed readings when switching modes or disabling minimap
       if (!settings.minimapSpeedBased) {
-        speedBelowThresholdSinceRef.current = null;
-        gpsStaleSinceRef.current = null;
+        speedReadingsRef.current = [];
       }
       updateMinimapVisibility();
     } catch (error) {
@@ -1267,6 +1257,15 @@ function OverlayPage() {
               const roundedSpeed = Math.round(speedKmh);
               
               setCurrentSpeed(roundedSpeed);
+              
+              // Track speed readings for minimap visibility (need 3 consecutive readings > 5 km/h)
+              if (settingsRef.current.minimapSpeedBased) {
+                speedReadingsRef.current.push(roundedSpeed);
+                // Keep only last 3 readings
+                if (speedReadingsRef.current.length > 3) {
+                  speedReadingsRef.current.shift(); // Remove oldest reading
+                }
+              }
               
               // Store coordinates and timestamps for next speed calculation
               lastCoords.current = [lat, lon];
