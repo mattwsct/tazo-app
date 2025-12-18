@@ -274,11 +274,22 @@ function OverlayPage() {
     }
   }, [settings.showMinimap, settings.minimapSpeedBased, minimapVisible]);
 
-  // Update settings hash and re-format location whenever settings change
+  // Track the last locationDisplay value to detect actual changes
+  const lastLocationDisplayRef = useRef<string | undefined>(undefined);
+
+  // Update settings hash and re-format location ONLY when locationDisplay changes
   useEffect(() => {
     const newHash = JSON.stringify(settings);
     const hashChanged = newHash !== lastSettingsHash.current;
+    const locationDisplayChanged = settings.locationDisplay !== lastLocationDisplayRef.current;
     lastSettingsHash.current = newHash;
+    lastLocationDisplayRef.current = settings.locationDisplay;
+
+    // Only re-format location when locationDisplay actually changes
+    // Other settings changes (showWeather, showMinimap, etc.) don't need location re-formatting
+    if (!locationDisplayChanged) {
+      return; // Skip re-formatting if locationDisplay hasn't changed
+    }
 
     // Re-render location display instantly from cached raw data if available
     // This ensures location display updates immediately when settings change
@@ -294,25 +305,21 @@ function OverlayPage() {
       lastRawLocation.current.district
     );
     
-    // Always re-format location when settings change if we have complete location data
-    // This ensures the display mode change is reflected immediately, even if locationDisplay memo hasn't updated yet
+    // Re-format location when locationDisplay changes if we have complete location data
     if (hasCompleteLocationData && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current!, settings.locationDisplay);
-        // Always update location state when settings change, even if formatted result is empty
-        // This ensures the display mode change is reflected immediately
-        if (hashChanged) {
-          OverlayLogger.location('Location display mode changed', {
-            mode: settings.locationDisplay,
-            primary: formatted.primary || 'none',
-            secondary: formatted.secondary || 'none', // Secondary line (city/state/country)
-            rawLocation: {
-              city: lastRawLocation.current!.city,
-              neighbourhood: lastRawLocation.current!.neighbourhood,
-              suburb: lastRawLocation.current!.suburb
-            }
-          });
-        }
+        // Log only when locationDisplay actually changes
+        OverlayLogger.location('Location display mode changed', {
+          mode: settings.locationDisplay,
+          primary: formatted.primary || 'none',
+          secondary: formatted.secondary || 'none', // Secondary line (city/state/country)
+          rawLocation: {
+            city: lastRawLocation.current!.city,
+            neighbourhood: lastRawLocation.current!.neighbourhood,
+            suburb: lastRawLocation.current!.suburb
+          }
+        });
         // Force update location state to trigger re-render with new format
         setLocation({
           primary: formatted.primary || '',
@@ -324,24 +331,24 @@ function OverlayPage() {
         OverlayLogger.warn('Location re-formatting failed on settings change', { error });
         // Ignore formatting errors; UI will update on next normal cycle
       }
-    } else if (hashChanged && !hasCompleteLocationData) {
-      // Log when settings change but we don't have complete location data yet
+    } else if (locationDisplayChanged && !hasCompleteLocationData) {
+      // Log when locationDisplay changes but we don't have complete location data yet
       // Only log if we actually have raw location data but it's incomplete (helps debug formatting issues)
       if (lastRawLocation.current) {
-        OverlayLogger.location('Settings changed but no complete location data available yet', {
+        OverlayLogger.location('Location display mode changed but no complete location data available yet', {
           mode: settings.locationDisplay,
           hasRawLocation: true,
           willUpdateOnNextFetch: true
         });
       } else {
         // No raw location data at all - log for debugging
-        OverlayLogger.location('Settings changed but no raw location data cached yet', {
+        OverlayLogger.location('Location display mode changed but no raw location data cached yet', {
           mode: settings.locationDisplay,
           willUpdateOnNextFetch: true
         });
       }
     }
-  }, [settings]);
+  }, [settings.locationDisplay]); // Only depend on locationDisplay, not entire settings object
 
   // Update minimap visibility when relevant state changes
   useEffect(() => {
