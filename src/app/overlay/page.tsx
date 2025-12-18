@@ -267,6 +267,8 @@ function OverlayPage() {
       lastRawLocation.current.district
     );
     
+    // Always re-format location when settings change if we have complete location data
+    // This ensures the display mode change is reflected immediately, even if locationDisplay memo hasn't updated yet
     if (hasCompleteLocationData && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current!, settings.locationDisplay);
@@ -284,6 +286,7 @@ function OverlayPage() {
             }
           });
         }
+        // Force update location state to trigger re-render with new format
         setLocation({
           primary: formatted.primary || '',
           secondary: formatted.secondary,
@@ -301,6 +304,12 @@ function OverlayPage() {
         OverlayLogger.location('Settings changed but no complete location data available yet', {
           mode: settings.locationDisplay,
           hasRawLocation: true,
+          willUpdateOnNextFetch: true
+        });
+      } else {
+        // No raw location data at all - log for debugging
+        OverlayLogger.location('Settings changed but no raw location data cached yet', {
+          mode: settings.locationDisplay,
           willUpdateOnNextFetch: true
         });
       }
@@ -1614,6 +1623,8 @@ function OverlayPage() {
   }, []); // Run once on mount
 
   // Memoized display values
+  // IMPORTANT: This memo re-formats location from raw data when settings change
+  // This ensures location display updates immediately when settings change, even if location state hasn't updated yet
   const locationDisplay = useMemo(() => {
     if (settings.locationDisplay === 'hidden') {
       return null;
@@ -1627,6 +1638,34 @@ function OverlayPage() {
       };
     }
     
+    // If we have raw location data, re-format it with current settings to ensure display mode changes are reflected immediately
+    // This handles the case where settings change but location state hasn't updated yet
+    const hasCompleteLocationData = lastRawLocation.current && (
+      lastRawLocation.current.city || 
+      lastRawLocation.current.town || 
+      lastRawLocation.current.village || 
+      lastRawLocation.current.municipality ||
+      lastRawLocation.current.neighbourhood || 
+      lastRawLocation.current.suburb || 
+      lastRawLocation.current.district
+    );
+    
+    if (hasCompleteLocationData) {
+      try {
+        const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
+        // Return formatted location with current settings
+        return {
+          primary: formatted.primary || '',
+          secondary: formatted.secondary,
+          countryCode: formatted.countryCode?.toUpperCase()
+        };
+      } catch (error) {
+        // If formatting fails, fall back to location state
+        OverlayLogger.warn('Location formatting failed in memo, using location state', { error });
+      }
+    }
+    
+    // Fallback to location state if no raw data or formatting failed
     // Show location data if available
     // For 'country' mode, primary will be empty but secondary field will have the country name
     if (location && (location.primary || location.secondary)) {
