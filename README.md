@@ -249,7 +249,9 @@ Settings changes propagate to overlay in real-time via:
 - **LocationIQ** - Reverse geocoding ([locationiq.com](https://locationiq.com/))
   - **English Names**: API requests include `accept-language=en` parameter to request English location names
   - **Normalization**: Location names are normalized to English equivalents when possible
-  - **Fallback**: If English names aren't available in LocationIQ's database, local names may appear (rare)
+  - **Non-Latin Script Filtering**: Location names with non-Latin alphabets (Japanese, Chinese, Arabic, Cyrillic, etc.) are automatically skipped, falling back to the next precision level (e.g., city → state → country)
+  - **Accented Characters**: Accented Latin characters (é, ñ, ü, etc.) are allowed and displayed normally
+  - **Fallback**: If English names aren't available or contain non-Latin scripts, the system automatically falls back to broader location levels
 - **OpenWeatherMap** - Weather & sunrise/sunset ([openweathermap.org](https://openweathermap.org/))
 
 ### Optional

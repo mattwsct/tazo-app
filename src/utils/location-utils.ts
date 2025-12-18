@@ -50,11 +50,49 @@ type LocationCategory = 'neighbourhood' | 'city' | 'county' | 'state' | 'country
 // === 🔍 SIMPLE FILTERING ===
 
 /**
+ * Checks if a string contains only Latin script (including accented characters)
+ * Allows: A-Z, a-z, accented characters (é, ñ, ü, etc.), spaces, hyphens, apostrophes
+ * Rejects: Non-Latin alphabets (Japanese, Chinese, Arabic, Cyrillic, etc.)
+ */
+function isLatinScript(name: string): boolean {
+  if (!name) return false;
+  
+  const trimmed = name.trim();
+  
+  // Check for common non-Latin script ranges:
+  // - Japanese: Hiragana (3040-309F), Katakana (30A0-30FF), Kanji (4E00-9FAF)
+  // - Chinese: CJK Unified Ideographs (4E00-9FFF)
+  // - Arabic: Arabic (0600-06FF)
+  // - Cyrillic: Cyrillic (0400-04FF)
+  // - Korean: Hangul (AC00-D7AF)
+  // - Thai: Thai (0E00-0E7F)
+  // - Hebrew: Hebrew (0590-05FF)
+  // - Greek: Greek (0370-03FF) - might want to allow this, but keeping strict for now
+  const nonLatinPattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u0600-\u06FF\u0400-\u04FF\uAC00-\uD7AF\u0E00-\u0E7F\u0590-\u05FF]/;
+  
+  if (nonLatinPattern.test(trimmed)) {
+    return false;
+  }
+  
+  // Allow Latin characters (A-Z, a-z), accented Latin (À-ÿ), spaces, hyphens, apostrophes, periods, numbers
+  // This covers: Basic Latin, Latin-1 Supplement (accents), and common punctuation
+  const latinPattern = /^[A-Za-zÀ-ÿ\s\-'.,0-9]+$/;
+  
+  return latinPattern.test(trimmed);
+}
+
+/**
  * Simple validation for location names
- * Skips: empty names, names ending with numbers (technical addresses), names too long
+ * Skips: empty names, names ending with numbers (technical addresses), names too long, non-Latin alphabets
  */
 function isValidLocationName(name: string): boolean {
   if (!name || name.length > MAX_CHARACTER_LIMIT) {
+    return false;
+  }
+  
+  // Skip if it contains non-Latin alphabet characters (Japanese, Chinese, Arabic, Cyrillic, etc.)
+  // Keep accented Latin characters (é, ñ, ü, etc.)
+  if (!isLatinScript(name)) {
     return false;
   }
   
