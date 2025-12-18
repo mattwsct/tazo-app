@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+  
+  // Add version parameter to overlay URL server-side to prevent OBS caching
+  // This ensures the version parameter is present BEFORE OBS caches the page
+  if (pathname === '/overlay') {
+    const hasVersion = searchParams.has('v');
+    
+    if (!hasVersion) {
+      // Generate a build-time version (use timestamp at build time, or current timestamp as fallback)
+      // In production, this should be set as an environment variable at build time
+      const buildVersion = process.env.NEXT_PUBLIC_BUILD_VERSION || Date.now().toString();
+      
+      // Rewrite URL to include version parameter (internal rewrite, not redirect)
+      const url = request.nextUrl.clone();
+      url.searchParams.set('v', buildVersion);
+      return NextResponse.rewrite(url);
+    }
+  }
   
   // Skip authentication for login page and login API
   if (pathname === '/login' || pathname === '/api/login') {
@@ -30,5 +47,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/api/:path*', '/login']
+  matcher: ['/', '/api/:path*', '/login', '/overlay']
 }; 
