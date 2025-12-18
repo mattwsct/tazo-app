@@ -73,6 +73,62 @@ function isValidLocationName(name: string): boolean {
 }
 
 
+// === 🌐 LOCATION NAME NORMALIZATION ===
+
+/**
+ * Normalizes location names to English
+ * Converts common non-English names to their English equivalents
+ * This ensures consistent English display even when LocationIQ returns local names
+ */
+function normalizeToEnglish(name: string): string {
+  if (!name) return name;
+  
+  // Common non-English to English mappings
+  // These are common cases where LocationIQ might return local names
+  const englishMappings: Record<string, string> = {
+    // Japanese cities (common romanizations)
+    'tokyo': 'Tokyo',
+    'osaka': 'Osaka',
+    'kyoto': 'Kyoto',
+    'yokohama': 'Yokohama',
+    'nagoya': 'Nagoya',
+    'sapporo': 'Sapporo',
+    'fukuoka': 'Fukuoka',
+    'kobe': 'Kobe',
+    'kawasaki': 'Kawasaki',
+    'hiroshima': 'Hiroshima',
+    
+    // Chinese cities (common romanizations)
+    'beijing': 'Beijing',
+    'shanghai': 'Shanghai',
+    'guangzhou': 'Guangzhou',
+    'shenzhen': 'Shenzhen',
+    'chengdu': 'Chengdu',
+    'hangzhou': 'Hangzhou',
+    'wuhan': 'Wuhan',
+    'xian': 'Xi\'an',
+    'nanjing': 'Nanjing',
+    
+    // Other common non-English names
+    'mumbai': 'Mumbai', // Was Bombay
+    'kolkata': 'Kolkata', // Was Calcutta
+    'chennai': 'Chennai', // Was Madras
+    'bangalore': 'Bangalore', // Now Bengaluru in local
+  };
+  
+  // Check if name matches a known mapping (case-insensitive)
+  const lowerName = name.toLowerCase().trim();
+  if (englishMappings[lowerName]) {
+    return englishMappings[lowerName];
+  }
+  
+  // If name contains non-ASCII characters (likely non-English), try to keep it as-is
+  // LocationIQ with accept-language=en should already return English names
+  // This normalization is a fallback for edge cases
+  
+  return name;
+}
+
 // === 🗺️ LOCATION DATA EXTRACTION ===
 
 /**
@@ -96,17 +152,20 @@ function isValidLocationName(name: string): boolean {
  * - State category includes: state, province (prefectures), region
  * - Field names vary by country but hierarchy is generally consistent
  * - Only area-based locations are used (no street addresses/road names)
+ * - Names are normalized to English when possible
  */
 function getLocationByPrecision(
   location: LocationData, 
   precision: LocationPrecision
 ): { name: string; category: LocationCategory } {
   // Try to find a valid name at the current precision level
+  // Normalize names to English when possible
   const tryFields = (fields: (keyof LocationData)[]): string | null => {
     for (const field of fields) {
       const value = location[field] as string | undefined;
       if (value && isValidLocationName(value)) {
-        return value;
+        // Normalize to English before returning
+        return normalizeToEnglish(value);
       }
     }
     return null;

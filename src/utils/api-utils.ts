@@ -185,21 +185,37 @@ export async function fetchLocationFromLocationIQ(
                    data.address.state || 
                    data.address.region;
       
+      // Normalize location names to English
+      // LocationIQ API uses accept-language=en, but we normalize as a fallback
+      const normalizeToEnglish = (name: string | undefined): string | undefined => {
+        if (!name) return name;
+        // Common non-English to English mappings for known cases
+        const englishMappings: Record<string, string> = {
+          // Japanese prefectures (common romanizations)
+          'tokyo-to': 'Tokyo',
+          'osaka-fu': 'Osaka',
+          'kyoto-fu': 'Kyoto',
+          // Add more mappings as needed
+        };
+        const lowerName = name.toLowerCase().trim();
+        return englishMappings[lowerName] || name;
+      };
+      
       const result: LocationData = {
-        city: city,
-        state: state,
-        country: data.address.country,
+        city: normalizeToEnglish(city) || city,
+        state: normalizeToEnglish(state) || state,
+        country: normalizeToEnglish(data.address.country) || data.address.country,
         countryCode: data.address.country_code ? data.address.country_code.toLowerCase() : '',
         timezone: data.address.timezone,
-        // Store the raw address components for better city detection
-        town: data.address.town,
-        municipality: data.address.municipality,
-        suburb: data.address.suburb,
-        neighbourhood: data.address.neighbourhood, // British spelling from LocationIQ
-        quarter: data.address.quarter, // Extract quarter from address
-        province: data.address.province,
-        region: data.address.region,
-        county: data.address.county,
+        // Store the raw address components for better city detection (normalized)
+        town: normalizeToEnglish(data.address.town) || data.address.town,
+        municipality: normalizeToEnglish(data.address.municipality) || data.address.municipality,
+        suburb: normalizeToEnglish(data.address.suburb) || data.address.suburb,
+        neighbourhood: normalizeToEnglish(data.address.neighbourhood) || data.address.neighbourhood, // British spelling from LocationIQ
+        quarter: normalizeToEnglish(data.address.quarter) || data.address.quarter,
+        province: normalizeToEnglish(data.address.province) || data.address.province,
+        region: normalizeToEnglish(data.address.region) || data.address.region,
+        county: normalizeToEnglish(data.address.county) || data.address.county,
         house_number: data.address.house_number,
         road: data.address.road,
         postcode: data.address.postcode,

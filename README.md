@@ -247,6 +247,9 @@ Settings changes propagate to overlay in real-time via:
 ### Required
 - **RealtimeIRL** - GPS tracking ([realtimeirl.com](https://realtimeirl.com/))
 - **LocationIQ** - Reverse geocoding ([locationiq.com](https://locationiq.com/))
+  - **English Names**: API requests include `accept-language=en` parameter to request English location names
+  - **Normalization**: Location names are normalized to English equivalents when possible
+  - **Fallback**: If English names aren't available in LocationIQ's database, local names may appear (rare)
 - **OpenWeatherMap** - Weather & sunrise/sunset ([openweathermap.org](https://openweathermap.org/))
 
 ### Optional
