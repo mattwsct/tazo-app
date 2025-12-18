@@ -20,8 +20,20 @@ export function middleware(request: NextRequest) {
     }
   }
   
-  // Skip authentication for login page and login API
-  if (pathname === '/login' || pathname === '/api/login') {
+  // Skip authentication for public routes
+  // - Login page and login API
+  // - Overlay page (public, used by OBS)
+  // - Public API endpoints needed by overlay (get-settings, settings-stream, health)
+  const publicRoutes = [
+    '/login',
+    '/api/login',
+    '/overlay',
+    '/api/get-settings',
+    '/api/settings-stream',
+    '/api/health'
+  ];
+  
+  if (publicRoutes.includes(pathname)) {
     return NextResponse.next();
   }
   

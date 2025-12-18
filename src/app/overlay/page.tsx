@@ -84,23 +84,8 @@ const LocationFlag = ({ countryCode, flagLoaded, getEmojiFlag }: {
 function OverlayPage() {
   useRenderPerformance('OverlayPage');
 
-  // Version parameter is now added server-side via middleware
-  // This ensures OBS receives the version parameter BEFORE caching the page
-  // Client-side fallback: only add version if middleware didn't (shouldn't happen in production)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      const currentVersion = url.searchParams.get('v');
-      
-      // Only add version client-side if middleware didn't (fallback for development)
-      if (!currentVersion) {
-        const buildVersion = process.env.NEXT_PUBLIC_BUILD_VERSION || Date.now().toString();
-        url.searchParams.set('v', buildVersion);
-        // Use replaceState to avoid adding to history
-        window.history.replaceState({}, '', url.toString());
-      }
-    }
-  }, []);
+  // Version parameter is added server-side via middleware to prevent OBS caching
+  // No client-side code needed - middleware handles it before the page loads
 
   // State
   const [timeDisplay, setTimeDisplay] = useState({ time: '', date: '' });
