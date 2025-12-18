@@ -84,6 +84,23 @@ const LocationFlag = ({ countryCode, flagLoaded, getEmojiFlag }: {
 function OverlayPage() {
   useRenderPerformance('OverlayPage');
 
+  // Add version query parameter to URL to force cache refresh in OBS
+  // This ensures OBS always loads the latest version of the overlay
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const currentVersion = url.searchParams.get('v');
+      const buildVersion = process.env.NEXT_PUBLIC_BUILD_VERSION || Date.now().toString();
+      
+      // Only update URL if version is missing or different (prevents infinite redirects)
+      if (!currentVersion || currentVersion !== buildVersion) {
+        url.searchParams.set('v', buildVersion);
+        // Use replaceState to avoid adding to history
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  }, []);
+
   // State
   const [timeDisplay, setTimeDisplay] = useState({ time: '', date: '' });
   const [location, setLocation] = useState<{ 

@@ -256,10 +256,32 @@ Set environment variables in Vercel dashboard → Project Settings → Environme
 
 ### OBS Setup
 1. Add **Browser Source** in OBS
-2. URL: `https://your-domain.com/overlay`
+2. URL: `https://your-domain.com/overlay` (or `http://localhost:3000/overlay` for local development)
 3. Width: `1920`, Height: `1080`
 4. Check "Shutdown source when not visible"
-5. Refresh browser when scene becomes active: ✓
+5. **Refresh browser when scene becomes active**: ✓ (Important!)
+6. **Disable browser source caching** (if available in your OBS version):
+   - Right-click browser source → Properties → Advanced
+   - Uncheck "Disable caching" (or enable "Refresh cache on show" if available)
+
+**Important: Preventing Cache Issues in OBS**
+
+The overlay includes multiple cache-busting mechanisms:
+- ✅ **HTTP Cache Headers**: `Cache-Control: no-cache, no-store, must-revalidate`
+- ✅ **Version Query Parameter**: Automatically appends `?v=<timestamp>` to force refresh
+- ✅ **API Cache Busting**: Settings API calls include timestamp parameters
+
+**If settings changes don't appear in OBS:**
+1. **Refresh the browser source**: Right-click → Refresh
+2. **Restart OBS**: Sometimes OBS caches aggressively
+3. **Check URL**: Ensure URL includes version parameter (e.g., `/overlay?v=1234567890`)
+4. **Clear OBS cache** (if available): OBS Settings → Advanced → Clear Browser Cache
+
+**Alternative: Use OBS Browser Source "Interact" Window**
+- Right-click browser source → Interact
+- Open browser DevTools (F12) in the interact window
+- Check Console tab for errors and settings update logs
+- This allows debugging without affecting your stream
 
 ## 📊 API Usage
 

@@ -61,7 +61,24 @@ const nextConfig: NextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'geolocation=()'
-          }
+          },
+          // Force no caching for OBS browser sources
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate, max-age=0',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
+          {
+            key: 'ETag',
+            value: '',
+          },
         ],
       },
     ];
