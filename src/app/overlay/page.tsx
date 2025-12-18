@@ -136,6 +136,10 @@ function OverlayPage() {
   // GPS freshness tracking for location/weather display
   const locationWeatherHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Minimap speed-based visibility tracking
+  const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 5 km/h
+  const MINIMAP_HIDE_DELAY = 15000; // 15 seconds - hide after low speed or no GPS updates
+  
   // Helper: Check if GPS update is fresh (within 15 minutes)
   const isGpsUpdateFresh = (gpsUpdateTime: number, now: number, _isFirstUpdate?: boolean): boolean => {
     return (now - gpsUpdateTime) <= GPS_FRESHNESS_TIMEOUT;
@@ -181,12 +185,12 @@ function OverlayPage() {
   }, []);
 
   // Simplified minimap visibility logic:
-  // - Show if speed > 5 km/h for 3 consecutive readings AND GPS is fresh
-  // - Hide if speed < 5 km/h OR GPS is stale
+  // - Show: Speed > 5 km/h for 3 consecutive RTIRL updates
+  // - Hide: Speed < 5 km/h for more than 15 seconds OR no GPS updates in 15 seconds
   const updateMinimapVisibility = useCallback(() => {
     const now = Date.now();
     const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
-    const isGpsStale = timeSinceLastGps > GPS_STALE_TIMEOUT;
+    const isGpsStale = timeSinceLastGps > MINIMAP_HIDE_DELAY; // 15 seconds without GPS updates
     
     clearTimer(minimapFadeTimeoutRef);
     
@@ -194,14 +198,15 @@ function OverlayPage() {
     const speed = currentSpeedRef.current;
     
     if (settings.minimapSpeedBased) {
-      // Check if GPS is stale - hide immediately if stale
+      // Check if GPS is stale (no updates in 15 seconds) - hide after delay
       if (isGpsStale) {
         if (minimapVisible) {
           setMinimapVisible(false);
           setMinimapOpacity(0);
         }
-        // Clear speed readings when GPS is stale
+        // Clear speed readings and low speed timer when GPS is stale
         speedReadingsRef.current = [];
+        lowSpeedStartTimeRef.current = null;
         return;
       }
       
@@ -213,6 +218,9 @@ function OverlayPage() {
       if (speed > WALKING_PACE_THRESHOLD) {
         // Speed > 5 km/h - show minimap if we have 3 consecutive readings > 5 km/h
         if (hasThreeHighSpeedReadings) {
+          // Reset low speed timer since we're moving
+          lowSpeedStartTimeRef.current = null;
+          
           if (!minimapVisible) {
             setMinimapVisible(true);
             setMinimapOpacity(0.95);
@@ -221,15 +229,30 @@ function OverlayPage() {
           }
         }
       } else {
-        // Speed < 5 km/h - hide minimap immediately and clear readings
-        speedReadingsRef.current = [];
+        // Speed < 5 km/h - start timer, hide after 15 seconds
         if (minimapVisible) {
-          setMinimapVisible(false);
-          setMinimapOpacity(0);
+          // Start tracking when speed dropped below threshold
+          if (lowSpeedStartTimeRef.current === null) {
+            lowSpeedStartTimeRef.current = now;
+          }
+          
+          // Check if 15 seconds have passed since speed dropped
+          const timeSinceLowSpeed = now - lowSpeedStartTimeRef.current;
+          if (timeSinceLowSpeed >= MINIMAP_HIDE_DELAY) {
+            setMinimapVisible(false);
+            setMinimapOpacity(0);
+            speedReadingsRef.current = [];
+            lowSpeedStartTimeRef.current = null;
+          }
+        } else {
+          // Already hidden - clear readings and timer
+          speedReadingsRef.current = [];
+          lowSpeedStartTimeRef.current = null;
         }
       }
     } else if (settings.showMinimap) {
       // Manual show mode
+      lowSpeedStartTimeRef.current = null; // Clear low speed timer in manual mode
       if (!minimapVisible) {
         setMinimapVisible(true);
         setMinimapOpacity(0);
@@ -240,7 +263,8 @@ function OverlayPage() {
     } else {
       // Manual hide mode (showMinimap is false and minimapSpeedBased is false)
       // Hide immediately when manually turned off (no fade delay)
-      speedReadingsRef.current = []; // Clear readings when manually hidden
+      speedReadingsRef.current = [];
+      lowSpeedStartTimeRef.current = null;
       if (minimapVisible) {
         setMinimapVisible(false);
         setMinimapOpacity(0);
@@ -322,9 +346,10 @@ function OverlayPage() {
   // Update minimap visibility when relevant state changes
   useEffect(() => {
     try {
-      // Clear speed readings when switching modes or disabling minimap
+      // Clear speed readings and timers when switching modes or disabling minimap
       if (!settings.minimapSpeedBased) {
         speedReadingsRef.current = [];
+        lowSpeedStartTimeRef.current = null;
       }
       updateMinimapVisibility();
     } catch (error) {
@@ -1234,6 +1259,7 @@ function OverlayPage() {
               } else if (isFirstGpsUpdate) {
                 // First GPS update AND it's stale - only clear if both weather and location data are also stale
                 // Keep data if it's still valid (within validity timeout)
+                // This is normal on first load - GPS might be stale but we'll get fresh data soon
                 const weatherAge = lastSuccessfulWeatherFetch.current > 0 
                   ? now - lastSuccessfulWeatherFetch.current 
                   : Infinity;
@@ -1243,12 +1269,18 @@ function OverlayPage() {
                 if (weatherAge > WEATHER_DATA_VALIDITY_TIMEOUT && locationAge > LOCATION_DATA_VALIDITY_TIMEOUT) {
                   setWeather(null);
                   setLocation(null);
-                  OverlayLogger.warn('First GPS update is stale and both weather/location data are old - clearing');
+                  // Only log in development - this is expected behavior on first load
+                  if (process.env.NODE_ENV === 'development') {
+                    OverlayLogger.warn('First GPS update is stale and both weather/location data are old - clearing (will fetch fresh data)');
+                  }
                 } else {
                   // Keep data even if GPS is stale initially - show overlay if we have valid data
                   // Set hasReceivedFreshGps to true so overlay appears even with stale initial GPS
                   markGpsReceived();
-                  OverlayLogger.warn('First GPS update is stale but data is still valid - keeping cached data and showing overlay');
+                  // Only log in development - this is expected behavior
+                  if (process.env.NODE_ENV === 'development') {
+                    OverlayLogger.warn('First GPS update is stale but data is still valid - keeping cached data and showing overlay');
+                  }
                 }
               }
               
@@ -1276,6 +1308,10 @@ function OverlayPage() {
                 // Keep only last 3 readings
                 if (speedReadingsRef.current.length > 3) {
                   speedReadingsRef.current.shift(); // Remove oldest reading
+                }
+                // Reset low speed timer when we get a new GPS update (GPS is fresh)
+                if (roundedSpeed > WALKING_PACE_THRESHOLD) {
+                  lowSpeedStartTimeRef.current = null;
                 }
               }
               
