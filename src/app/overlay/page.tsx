@@ -138,7 +138,7 @@ function OverlayPage() {
   
   // Minimap speed-based visibility tracking
   const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 5 km/h
-  const MINIMAP_HIDE_DELAY = 15000; // 15 seconds - hide after low speed or no GPS updates
+  const MINIMAP_HIDE_DELAY = 60000; // 1 minute - hide after low speed or no GPS updates
   
   // Helper: Check if GPS update is fresh (within 15 minutes)
   const isGpsUpdateFresh = (gpsUpdateTime: number, now: number, _isFirstUpdate?: boolean): boolean => {
@@ -186,11 +186,11 @@ function OverlayPage() {
 
   // Simplified minimap visibility logic:
   // - Show: Speed > 5 km/h for 3 consecutive RTIRL updates
-  // - Hide: Speed < 5 km/h for more than 15 seconds OR no GPS updates in 15 seconds
+  // - Hide: Speed < 5 km/h for more than 1 minute OR no GPS updates in 1 minute
   const updateMinimapVisibility = useCallback(() => {
     const now = Date.now();
     const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
-    const isGpsStale = timeSinceLastGps > MINIMAP_HIDE_DELAY; // 15 seconds without GPS updates
+    const isGpsStale = timeSinceLastGps > MINIMAP_HIDE_DELAY; // 1 minute without GPS updates
     
     clearTimer(minimapFadeTimeoutRef);
     
@@ -198,7 +198,7 @@ function OverlayPage() {
     const speed = currentSpeedRef.current;
     
     if (settings.minimapSpeedBased) {
-      // Check if GPS is stale (no updates in 15 seconds) - hide after delay
+      // Check if GPS is stale (no updates in 1 minute) - hide after delay
       if (isGpsStale) {
         if (minimapVisible) {
           setMinimapVisible(false);
@@ -229,14 +229,14 @@ function OverlayPage() {
           }
         }
       } else {
-        // Speed < 5 km/h - start timer, hide after 15 seconds
+        // Speed < 5 km/h - start timer, hide after 1 minute
         if (minimapVisible) {
           // Start tracking when speed dropped below threshold
           if (lowSpeedStartTimeRef.current === null) {
             lowSpeedStartTimeRef.current = now;
           }
           
-          // Check if 15 seconds have passed since speed dropped
+          // Check if 1 minute has passed since speed dropped
           const timeSinceLowSpeed = now - lowSpeedStartTimeRef.current;
           if (timeSinceLowSpeed >= MINIMAP_HIDE_DELAY) {
             setMinimapVisible(false);
