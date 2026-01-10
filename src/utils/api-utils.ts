@@ -348,13 +348,16 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     }
     
     // Extract timezone data
+    // NOTE: OpenWeatherMap only provides a numeric offset (seconds), not an IANA timezone name
+    // LocationIQ provides the actual IANA timezone name and is preferred
+    // This is a simplified fallback mapping - LocationIQ should handle most cases accurately
     if (data.timezone && typeof data.timezone === 'number') {
-      // Convert timezone offset to IANA timezone string
+      // Convert timezone offset to hours
       const offsetHours = Math.round(data.timezone / 3600);
       
-      // Map timezone offsets to IANA timezone names
-      // Note: Offset includes DST, so same offset can map to different timezones
-      // For US locations, we need to use coordinate/state info for accuracy
+      // Simple offset-to-timezone mapping (fallback only)
+      // This is approximate - same offset can map to different timezones (e.g., -4 could be Eastern or Central with DST)
+      // LocationIQ provides accurate IANA timezone names and should be used when available
       const timezoneMap: Record<number, string> = {
         9: 'Asia/Tokyo',
         8: 'Asia/Shanghai',
@@ -369,48 +372,61 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
         [-1]: 'Atlantic/Azores',
         [-2]: 'Atlantic/South_Georgia',
         [-3]: 'America/Sao_Paulo',
-        [-4]: 'America/New_York',
-        [-5]: 'America/Chicago', // CST/CDT: -6/-5
-        [-6]: 'America/Chicago', // Most common: Central Time
-        [-7]: 'America/Denver', // MST/MDT: -7/-6
-        [-8]: 'America/Los_Angeles', // PST/PDT: -8/-7
+        [-4]: 'America/New_York', // Eastern Time (EDT) - approximate, LocationIQ preferred
+        [-5]: 'America/Chicago', // Default fallback - will be refined by coordinates for US
+        [-6]: 'America/Chicago', // Central Time (CST) - approximate, LocationIQ preferred
+        [-7]: 'America/Denver', // Mountain Time - approximate, LocationIQ preferred
+        [-8]: 'America/Los_Angeles', // Pacific Time - approximate, LocationIQ preferred
         [-9]: 'Pacific/Gambier',
         [-10]: 'Pacific/Honolulu',
         [-11]: 'Pacific/Midway',
         [-12]: 'Pacific/Baker'
       };
       
-      // Try to get timezone from map, with fallback
+      // Use simple offset mapping as base
       timezone = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || 'UTC';
       
-      // For US locations, improve accuracy based on coordinates
-      // Texas (Galveston) should be America/Chicago (Central Time)
-      // This is a simplified check - could be improved with full state/coordinate mapping
-      if (lat >= 25 && lat <= 37 && lon >= -106 && lon <= -93) {
-        // Texas region - Central Time
-        if (offsetHours === -5 || offsetHours === -6) {
-          timezone = 'America/Chicago';
-        }
-      } else if (lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66) {
-        // General US region - refine based on common offsets
-        if (offsetHours === -5 && (lat < 40 || lon < -100)) {
-          timezone = 'America/Chicago'; // Central Time (includes DST)
-        } else if (offsetHours === -6 && (lat < 40 || lon < -100)) {
-          timezone = 'America/Chicago'; // Central Time (no DST)
-        } else if (offsetHours === -4 && (lat >= 38 && lon >= -85)) {
-          timezone = 'America/New_York'; // Eastern Time
-        } else if (offsetHours === -7 && (lat >= 35 && lon >= -124 && lon <= -102)) {
-          timezone = 'America/Denver'; // Mountain Time
-        } else if (offsetHours === -8 && (lat >= 32 && lon >= -124 && lon <= -102)) {
-          timezone = 'America/Los_Angeles'; // Pacific Time
+      // For US locations, refine timezone based on coordinates (when LocationIQ doesn't provide timezone)
+      // This handles cases where same offset maps to different US timezones
+      if (lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66) {
+        // US region - use coordinates to determine correct timezone
+        if (offsetHours === -5) {
+          // -5 offset can be Eastern Time (EST) or Central Time (CDT)
+          // Eastern Time: roughly east of -87° longitude (includes Florida, Georgia, Carolinas, etc.)
+          if (lon >= -87) {
+            timezone = 'America/New_York'; // Eastern Time (EST)
+          } else {
+            timezone = 'America/Chicago'; // Central Time (CDT)
+          }
+        } else if (offsetHours === -4) {
+          // -4 offset is Eastern Time (EDT) - covers entire Eastern US
+          if (lon >= -87) {
+            timezone = 'America/New_York'; // Eastern Time (EDT)
+          }
+        } else if (offsetHours === -6) {
+          // -6 offset is Central Time (CST) - covers central US
+          if (lon >= -106 && lon <= -85) {
+            timezone = 'America/Chicago'; // Central Time (CST)
+          }
+        } else if (offsetHours === -7) {
+          // -7 offset is Mountain Time (MDT) - covers mountain states
+          if (lon >= -124 && lon <= -102) {
+            timezone = 'America/Denver'; // Mountain Time
+          }
+        } else if (offsetHours === -8) {
+          // -8 offset is Pacific Time (PST) - covers west coast
+          if (lon >= -124 && lon <= -102) {
+            timezone = 'America/Los_Angeles'; // Pacific Time
+          }
         }
       }
       
-      ApiLogger.info('openweathermap', 'Timezone data received', { 
+      ApiLogger.info('openweathermap', 'Timezone data received (fallback - LocationIQ preferred)', { 
         timezone, 
         offsetHours, 
         rawOffsetSeconds: data.timezone,
-        coordinates: { lat, lon }
+        coordinates: { lat, lon },
+        note: 'OpenWeatherMap provides offset only - LocationIQ provides accurate IANA timezone name'
       });
     }
     

@@ -145,8 +145,10 @@ function OverlayPage() {
     return (now - gpsUpdateTime) <= GPS_FRESHNESS_TIMEOUT;
   };
   
-  // Helper: Check if timezone is real (not UTC placeholder)
-  const isRealTimezone = (tz: string | null): boolean => tz !== null && tz !== 'UTC';
+  // Helper: Check if timezone is valid (not null/undefined/UTC placeholder)
+  const isValidTimezone = (tz: string | null | undefined): boolean => {
+    return tz !== null && tz !== undefined && tz !== 'UTC';
+  };
   
   // Helper: Clear timeout safely
   const clearTimer = (timerRef: React.MutableRefObject<NodeJS.Timeout | null>) => {
@@ -174,15 +176,9 @@ function OverlayPage() {
     currentSpeedRef.current = currentSpeed;
   }, [currentSpeed]);
 
-  // Helper to mark GPS as received
-  const markGpsReceived = useCallback(() => {
-    setHasReceivedFreshGps(true);
-  }, []);
-
-  // Helper to mark GPS as stale
-  const markGpsStale = useCallback(() => {
-    setHasReceivedFreshGps(false);
-  }, []);
+  // Helper functions - simple setters don't need useCallback
+  const markGpsReceived = () => setHasReceivedFreshGps(true);
+  const markGpsStale = () => setHasReceivedFreshGps(false);
 
   // Simplified minimap visibility logic:
   // - Show: Speed > 5 km/h for 3 consecutive RTIRL updates
@@ -350,7 +346,7 @@ function OverlayPage() {
     }
   }, [settings.locationDisplay]); // Only depend on locationDisplay, not entire settings object
 
-  // Update minimap visibility when relevant state changes
+  // Combined minimap visibility updates - simpler than multiple separate effects
   useEffect(() => {
     try {
       // Clear speed readings and timers when switching modes or disabling minimap
@@ -360,41 +356,24 @@ function OverlayPage() {
       }
       updateMinimapVisibility();
     } catch (error) {
-      OverlayLogger.error('Failed to update minimap visibility in effect', error);
+      OverlayLogger.error('Failed to update minimap visibility', error);
       // Don't throw - allow overlay to continue functioning
     }
-  }, [settings.showMinimap, settings.minimapSpeedBased, updateMinimapVisibility]);
+  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, updateMinimapVisibility]);
 
-  // Update minimap visibility when speed changes (speed-based mode only)
+  // Periodic check for GPS staleness (speed-based mode only)
   useEffect(() => {
-    if (settings.minimapSpeedBased) {
-      try {
-        updateMinimapVisibility();
-      } catch (error) {
-        OverlayLogger.error('Failed to update minimap visibility on speed change', error);
-        // Don't throw - allow overlay to continue functioning
-      }
-    }
-  }, [currentSpeed, settings.minimapSpeedBased, updateMinimapVisibility]);
+    if (!settings.minimapSpeedBased) return;
 
-  // Periodic check for GPS staleness to auto-hide minimap when GPS stops updating
-  useEffect(() => {
-    if (!settings.minimapSpeedBased) {
-      return; // Only check if speed-based mode is enabled
-    }
-
-    const stalenessCheckInterval = setInterval(() => {
+    const interval = setInterval(() => {
       try {
         updateMinimapVisibility();
       } catch (error) {
         OverlayLogger.error('Failed to update minimap visibility in staleness check', error);
-        // Don't throw - allow overlay to continue functioning
       }
     }, MINIMAP_STALENESS_CHECK_INTERVAL);
 
-    return () => {
-      clearInterval(stalenessCheckInterval);
-    };
+    return () => clearInterval(interval);
   }, [settings.minimapSpeedBased, updateMinimapVisibility]);
 
   // Cleanup timers on unmount
@@ -428,10 +407,7 @@ function OverlayPage() {
   
 
   // Refs
-  const timeFormatter = useRef<Intl.DateTimeFormat | null>(null);
-  const dateFormatter = useRef<Intl.DateTimeFormat | null>(null);
   const timeUpdateTimer = useRef<NodeJS.Timeout | null>(null);
-  const timeSyncTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Global error handling - suppress harmless errors, log others
   useEffect(() => {
@@ -481,49 +457,52 @@ function OverlayPage() {
   }, []);
 
 
-  // Create date/time formatters
-  const createDateTimeFormatters = useCallback((timezone: string) => {
+  // Helper function to format time/date using timezone
+  // Uses toLocaleString directly - simpler than storing formatters in refs
+  const formatTime = useCallback((tz: string | null): { time: string; date: string } => {
+    if (!isValidTimezone(tz)) {
+      return { time: '', date: '' };
+    }
+    
+    // TypeScript: tz is guaranteed to be string here due to isValidTimezone check
+    const timezone = tz as string;
+    
     try {
-      timeFormatter.current = new Intl.DateTimeFormat('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: timezone,
-      });
-      dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        timeZone: timezone,
-      });
-      
-      // DateTime formatters created - time will update via useEffect when timezone is set
+      const now = new Date();
+      return {
+        time: now.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: timezone,
+        }),
+        date: now.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: timezone,
+        }),
+      };
     } catch (error) {
-      OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone, error });
+      OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone: tz, error });
       // Fallback to UTC
-      timeFormatter.current = new Intl.DateTimeFormat('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: 'UTC',
-      });
-      dateFormatter.current = new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        timeZone: 'UTC',
-      });
+      const now = new Date();
+      return {
+        time: now.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'UTC',
+        }),
+        date: now.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'UTC',
+        }),
+      };
     }
   }, []);
-
-  // Don't set UTC as default - wait for real timezone from API
-  // This prevents showing wrong time initially
-  
-  // Helper to set timezone and create formatters (often called together)
-  const setTimezoneAndFormatters = useCallback((newTimezone: string) => {
-    createDateTimeFormatters(newTimezone);
-    setTimezone(newTimezone);
-  }, [createDateTimeFormatters]);
 
   // Helper functions to update data and mark GPS as received (consolidates repeated patterns)
   const updateLocation = useCallback((locationData: { primary: string; secondary?: string; countryCode?: string }) => {
@@ -538,10 +517,14 @@ function OverlayPage() {
     markGpsReceived();
   }, [markGpsReceived]);
 
+  // Single function to update timezone - used by all sources (LocationIQ, OpenWeatherMap, RTIRL)
   const updateTimezone = useCallback((timezoneData: string) => {
-    setTimezoneAndFormatters(timezoneData);
+    if (!isValidTimezone(timezoneData)) {
+      return; // Don't set invalid timezones
+    }
+    setTimezone(timezoneData);
     markGpsReceived();
-  }, [markGpsReceived, setTimezoneAndFormatters]);
+  }, [markGpsReceived]);
 
   // Extract GPS coordinates from RTIRL payload
   const extractCoordinates = useCallback((payload: RTIRLPayload): [number, number] | null => {
@@ -621,130 +604,49 @@ function OverlayPage() {
     return 0;
   }, []);
   
-  // Update time display immediately when formatters are created and timezone is set
+  // Time and date updates - simplified single useEffect
+  // Updates immediately when timezone changes, then every minute
   useEffect(() => {
-    // isRealTimezone is a pure function, no need to include in deps
-    if (!isRealTimezone(timezone) || !timeFormatter.current || !dateFormatter.current) return;
-    
-    // Immediately update time display when formatters are ready
-    const now = new Date();
-    setTimeDisplay({
-      time: timeFormatter.current.format(now),
-      date: dateFormatter.current.format(now)
-    });
-  }, [timezone]); // Removed isRealTimezone from deps - it's a pure function that doesn't change
-
-  // Time and date updates - aligned to minute boundary with drift correction
-  // Only update when we have a real timezone (not UTC)
-  useEffect(() => {
-    if (!isRealTimezone(timezone) || !timeFormatter.current || !dateFormatter.current) return;
+    if (!isValidTimezone(timezone)) {
+      setTimeDisplay({ time: '', date: '' });
+      return;
+    }
     
     let isActive = true;
-    let lastExpectedUpdate = 0;
-    let driftCorrectionCount = 0;
-    const MAX_DRIFT_CORRECTIONS = 10; // Prevent infinite drift corrections
     
-    function updateTimeAndDate() {
+    // Update function - formats time using current timezone
+    const updateTime = () => {
       if (!isActive) return;
-      
-      try {
-        const now = new Date();
-        const formattedTime = timeFormatter.current!.format(now);
-        setTimeDisplay({
-          time: formattedTime,
-          date: dateFormatter.current!.format(now)
-        });
-        
-        // Drift correction: check if we're significantly off schedule
-        const currentTime = now.getTime();
-        const expectedTime = lastExpectedUpdate + 60000; // Expected next update time
-        const drift = Math.abs(currentTime - expectedTime);
-        
-        // If we're more than 5 seconds off, resync to the next minute boundary
-        if (lastExpectedUpdate > 0 && drift > 5000 && driftCorrectionCount < MAX_DRIFT_CORRECTIONS) {
-          driftCorrectionCount++;
-          resyncToMinuteBoundary();
-          return;
-        }
-        
-        lastExpectedUpdate = currentTime;
-      } catch (error) {
-        OverlayLogger.error('Time update failed', error);
-        // Fallback to basic time display
-        const now = new Date();
-        setTimeDisplay({
-          time: now.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit', 
-            hour12: true,
-            timeZone: timezone || 'UTC'
-          }),
-          date: now.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric',
-            timeZone: timezone || 'UTC'
-          })
-        });
+      const formatted = formatTime(timezone);
+      if (isActive) {
+        setTimeDisplay(formatted);
       }
-    }
+    };
     
-    function resyncToMinuteBoundary() {
-      // Clear existing timers
-      if (timeUpdateTimer.current) {
-        clearInterval(timeUpdateTimer.current);
-        timeUpdateTimer.current = null;
-      }
-      if (timeSyncTimeout.current) {
-        clearTimeout(timeSyncTimeout.current);
-        timeSyncTimeout.current = null;
-      }
-      
-      // Calculate delay until the next exact minute boundary
-      const now = new Date();
-      const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-      
-      // Schedule sync to next minute boundary
-      timeSyncTimeout.current = setTimeout(() => {
-        if (!isActive) return;
-        
-        updateTimeAndDate();
-        lastExpectedUpdate = Date.now();
-        
-        // Start regular interval from this exact boundary
-        timeUpdateTimer.current = setInterval(updateTimeAndDate, 60000);
-      }, Math.max(0, msUntilNextMinute));
-    }
+    // Immediate update when timezone changes
+    updateTime();
     
-    // Immediate update so UI isn't blank
-    updateTimeAndDate();
-    lastExpectedUpdate = Date.now();
+    // Calculate delay until next minute boundary for clean updates
+    const now = new Date();
+    const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
     
-    // Clear any existing timers before setting new ones
-    if (timeUpdateTimer.current) {
-      clearInterval(timeUpdateTimer.current);
-      timeUpdateTimer.current = null;
-    }
-    if (timeSyncTimeout.current) {
-      clearTimeout(timeSyncTimeout.current);
-      timeSyncTimeout.current = null;
-    }
-
-    // Initial sync to minute boundary
-    resyncToMinuteBoundary();
+    // Schedule first update at minute boundary, then every minute
+    const timeoutId = setTimeout(() => {
+      if (!isActive) return;
+      updateTime();
+      // Start interval for regular updates
+      timeUpdateTimer.current = setInterval(updateTime, 60000);
+    }, Math.max(0, msUntilNextMinute));
     
     return () => {
       isActive = false;
-      if (timeSyncTimeout.current) {
-        clearTimeout(timeSyncTimeout.current);
-        timeSyncTimeout.current = null;
-      }
+      clearTimeout(timeoutId);
       if (timeUpdateTimer.current) {
         clearInterval(timeUpdateTimer.current);
         timeUpdateTimer.current = null;
       }
     };
-  }, [timezone]); // Removed isRealTimezone from deps - it's a pure function that doesn't change
+  }, [timezone, formatTime]);
 
 
   // Filter todos based on completion timestamps (hide if completed > 60 seconds ago)
@@ -1133,17 +1035,17 @@ function OverlayPage() {
 
   // RTIRL connection - use refs to avoid re-running on timezone/settings changes
   const timezoneRef = useRef(timezone);
-  const createDateTimeFormattersRef = useRef(createDateTimeFormatters);
   const updateMinimapVisibilityRef = useRef(updateMinimapVisibility);
   const settingsRef = useRef(settings);
+  const updateTimezoneRef = useRef(updateTimezone);
   
   // Update refs when values change (needed for RTIRL listener closure)
   useEffect(() => {
     timezoneRef.current = timezone;
-    createDateTimeFormattersRef.current = createDateTimeFormatters;
     updateMinimapVisibilityRef.current = updateMinimapVisibility;
     settingsRef.current = settings;
-  }, [timezone, createDateTimeFormatters, updateMinimapVisibility, settings]);
+    updateTimezoneRef.current = updateTimezone;
+  }, [timezone, updateMinimapVisibility, settings, updateTimezone]);
 
   // Preload flag image when country code is available
   useEffect(() => {
@@ -1196,14 +1098,10 @@ function OverlayPage() {
               // RTIRL payload received - only log in development if needed for debugging
               // Removed verbose logging to reduce console spam
               
-              // Handle timezone from RTIRL
-              if (payload.location?.timezone && payload.location.timezone !== timezoneRef.current) {
-                try {
-                  createDateTimeFormattersRef.current(payload.location.timezone);
-                  setTimezone(payload.location.timezone);
-                } catch {
-                  // Ignore timezone errors
-                }
+              // Handle timezone from RTIRL (lowest priority - will be overridden by LocationIQ/OpenWeatherMap)
+              // Only use RTIRL timezone if we don't have a valid timezone yet
+              if (payload.location?.timezone && !isValidTimezone(timezoneRef.current)) {
+                updateTimezoneRef.current(payload.location.timezone);
               }
               
               // Extract GPS coordinates
@@ -1425,8 +1323,15 @@ function OverlayPage() {
                         OverlayLogger.warn('Weather result missing weather data');
                       }
                       
-                      // OpenWeatherMap timezone is ONLY a fallback (less accurate than LocationIQ)
-                      if (result.timezone && !isRealTimezone(timezone)) {
+                      // OpenWeatherMap timezone: Always update when fetching weather for current coordinates
+                      // LocationIQ will override with more accurate timezone if available
+                      // This ensures timezone updates when moving to new locations
+                      if (result.timezone) {
+                        OverlayLogger.weather('Updating timezone from OpenWeatherMap', { 
+                          timezone: result.timezone,
+                          previousTimezone: timezoneRef.current,
+                          coordinates: { lat, lon }
+                        });
                         updateTimezone(result.timezone);
                       }
                       
@@ -1541,7 +1446,13 @@ function OverlayPage() {
                       }
                       
                       // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
+                      // Always update timezone from LocationIQ when available, even if we already have one
+                      // This ensures timezone updates correctly when moving between locations
                       if (loc.timezone) {
+                        OverlayLogger.location('Updating timezone from LocationIQ', { 
+                          timezone: loc.timezone,
+                          previousTimezone: timezoneRef.current 
+                        });
                         updateTimezone(loc.timezone);
                       }
                       // Note: If LocationIQ doesn't provide timezone, OpenWeatherMap will set it as fallback
@@ -1794,7 +1705,8 @@ function OverlayPage() {
     }
     
     const display = {
-      temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`,
+      temperatureCelsius: `${weather.temp}°C`,
+      temperatureFahrenheit: `${celsiusToFahrenheit(weather.temp)}°F`,
       icon: getWeatherIcon(weather.desc)
     };
     return display;
@@ -1815,8 +1727,8 @@ function OverlayPage() {
       >
         <div className="top-left">
           <div className="overlay-box">
-            {/* Only show time when we have a real timezone (not UTC) */}
-            {isRealTimezone(timezone) && timeDisplay.time && (
+            {/* Only show time when we have a valid timezone (not UTC) */}
+            {isValidTimezone(timezone) && timeDisplay.time && (
               <div className="time time-left time-line">
                 <div className="time-display">
                   <span className="time-value">{timeDisplay.time.split(' ')[0]}</span>
@@ -1825,8 +1737,8 @@ function OverlayPage() {
               </div>
             )}
 
-            {/* Only show date when we have a real timezone (not UTC) */}
-            {isRealTimezone(timezone) && timeDisplay.date && (
+            {/* Only show date when we have a valid timezone (not UTC) */}
+            {isValidTimezone(timezone) && timeDisplay.date && (
               <div className="date date-left date-line">
                 {timeDisplay.date}
               </div>
@@ -1887,7 +1799,8 @@ function OverlayPage() {
                 <div className="weather-container">
                   <div className="weather-content">
                     <div className="weather-temperature">
-                      {weatherDisplay.temperature}
+                      <div>{weatherDisplay.temperatureCelsius}</div>
+                      <div>{weatherDisplay.temperatureFahrenheit}</div>
                     </div>
                     <span className="weather-icon">
                       {weatherDisplay.icon}

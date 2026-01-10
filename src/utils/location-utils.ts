@@ -231,46 +231,28 @@ function getLocationByPrecision(
   // Fallback hierarchy: neighbourhood → city → state → country
   // Each precision level tries its category first, then falls back to next broadest if no valid names exist
   
-  if (precision === 'neighbourhood') {
-    // Try neighbourhood fields first
-    const neighbourhoodName = tryFields(neighbourhoodFields);
-    if (neighbourhoodName) return { name: neighbourhoodName, category: 'neighbourhood' };
-    
-    // Fallback to city if no neighbourhood found
-    const cityName = tryFields(cityFields);
-    if (cityName) return { name: cityName, category: 'city' };
-    
-    // Fallback to state if no city found
-    const stateName = tryFields(stateFields);
-    if (stateName) return { name: stateName, category: 'state' };
-    
-    // If nothing worked, return empty (will use country as last resort in formatLocation)
-    return { name: '', category: 'country' };
+  // Define fallback chains for each precision level
+  const fallbackChains: Record<LocationPrecision, (keyof LocationData)[][]> = {
+    neighbourhood: [neighbourhoodFields, cityFields, stateFields],
+    city: [cityFields, stateFields],
+    state: [stateFields],
+  };
+  
+  const chain = fallbackChains[precision] || [];
+  
+  // Try each level in the fallback chain
+  for (let i = 0; i < chain.length; i++) {
+    const name = tryFields(chain[i]);
+    if (name) {
+      // Map field groups to categories
+      const category: LocationCategory = 
+        i === 0 && precision === 'neighbourhood' ? 'neighbourhood' :
+        (chain[i] === cityFields ? 'city' : 'state');
+      return { name, category };
+    }
   }
   
-  if (precision === 'city') {
-    // Try city fields first
-    const cityName = tryFields(cityFields);
-    if (cityName) return { name: cityName, category: 'city' };
-    
-    // Fallback to state if no city found
-    const stateName = tryFields(stateFields);
-    if (stateName) return { name: stateName, category: 'state' };
-    
-    // If nothing worked, return empty (will use country as last resort in formatLocation)
-    return { name: '', category: 'country' };
-  }
-  
-  if (precision === 'state') {
-    // Try state category fields (state, province, region)
-    const stateName = tryFields(stateFields);
-    if (stateName) return { name: stateName, category: 'state' };
-    
-    // If nothing worked, return empty (will use country as last resort in formatLocation)
-    return { name: '', category: 'country' };
-  }
-
-  // Unknown precision, return empty
+  // If nothing worked, return empty (will use country as last resort in formatLocation)
   return { name: '', category: 'country' };
 }
 
