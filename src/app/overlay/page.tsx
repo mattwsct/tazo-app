@@ -1698,6 +1698,44 @@ function OverlayPage() {
     return isNight ? '🌙' : '🌤️';
   }, [isNightTime]);
 
+  // Refs for measuring text widths
+  const locationTextRef = useRef<HTMLDivElement>(null);
+  const temperatureTextRef = useRef<HTMLDivElement>(null);
+  const [shouldUseMultilineTemp, setShouldUseMultilineTemp] = useState(false);
+
+  // Measure text widths to determine if temperature should be multiline
+  useEffect(() => {
+    if (!locationTextRef.current || !temperatureTextRef.current || !location || !weather) {
+      setShouldUseMultilineTemp(false);
+      return;
+    }
+
+    // Create a temporary canvas to measure text widths accurately
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setShouldUseMultilineTemp(false);
+      return;
+    }
+
+    // Get computed styles from the location element to match font
+    const locationStyles = window.getComputedStyle(locationTextRef.current);
+    context.font = `${locationStyles.fontWeight} ${locationStyles.fontSize} ${locationStyles.fontFamily}`;
+
+    // Measure location text width (primary + secondary if both exist)
+    const locationText = location.primary + (location.secondary ? ' ' + location.secondary : '');
+    const locationWidth = context.measureText(locationText).width;
+
+    // Measure temperature text width
+    const tempStyles = window.getComputedStyle(temperatureTextRef.current);
+    context.font = `${tempStyles.fontWeight} ${tempStyles.fontSize} ${tempStyles.fontFamily}`;
+    const temperatureText = `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`;
+    const temperatureWidth = context.measureText(temperatureText).width;
+
+    // Use multiline if location is shorter than temperature
+    setShouldUseMultilineTemp(locationWidth < temperatureWidth);
+  }, [location, weather]);
+
   const weatherDisplay = useMemo(() => {
     if (!weather) {
     // No weather data - return null (no logging to reduce console spam)
@@ -1705,6 +1743,7 @@ function OverlayPage() {
     }
     
     const display = {
+      temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`,
       temperatureCelsius: `${weather.temp}°C`,
       temperatureFahrenheit: `${celsiusToFahrenheit(weather.temp)}°F`,
       icon: getWeatherIcon(weather.desc)
@@ -1767,7 +1806,7 @@ function OverlayPage() {
             {((settings.locationDisplay === 'custom') || locationDisplay) && locationDisplay && (
               <>
                   {locationDisplay.primary && (
-                  <div className="location location-line">
+                  <div className="location location-line" ref={locationTextRef}>
                     <div className="location-main">{locationDisplay.primary}</div>
                   </div>
                   )}
@@ -1798,9 +1837,18 @@ function OverlayPage() {
               <div className="weather weather-line">
                 <div className="weather-container">
                   <div className="weather-content">
-                    <div className="weather-temperature">
-                      <div>{weatherDisplay.temperatureCelsius}</div>
-                      <div>{weatherDisplay.temperatureFahrenheit}</div>
+                    <div 
+                      className={`weather-temperature ${shouldUseMultilineTemp ? 'multiline' : ''}`}
+                      ref={temperatureTextRef}
+                    >
+                      {shouldUseMultilineTemp ? (
+                        <>
+                          <div>{weatherDisplay.temperatureCelsius}</div>
+                          <div>{weatherDisplay.temperatureFahrenheit}</div>
+                        </>
+                      ) : (
+                        weatherDisplay.temperature
+                      )}
                     </div>
                     <span className="weather-icon">
                       {weatherDisplay.icon}
