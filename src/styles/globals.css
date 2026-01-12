@@ -322,16 +322,6 @@ body.overlay-page {
   line-height: 1; /* Ensure consistent line height */
 }
 
-.heart-rate-label {
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  opacity: 0.9;
-  text-transform: uppercase;
-  text-align: left;
-  line-height: 1; /* Ensure consistent line height */
-  vertical-align: baseline; /* Align to baseline for consistency with AM/PM */
-}
-
 /* === LOCATION DISPLAY STYLES === */
 .location-line {
   display: flex;
@@ -403,14 +393,6 @@ body.overlay-page {
 .location-flag-small {
   border-radius: 2px;
 }
-
-.location-flag-emoji-small {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-
 
 /* === WEATHER DISPLAY STYLES === */
 .weather-line {
@@ -608,30 +590,13 @@ body.overlay-page {
 }
 
 .minimap-placeholder {
-  width: 100%;
-  height: 100%;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(30, 20, 60, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 20, 60, 0.3);
-  border-radius: 50%;
-}
-
-.placeholder-content {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.placeholder-icon {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.6;
-}
-
-.placeholder-text {
-  font-size: 0.875rem;
-  font-weight: 500;
-  opacity: 0.8;
 }
 
 /* === ANIMATIONS === */
@@ -662,36 +627,6 @@ body.overlay-page {
   }
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInNoMove {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-}
 
 /* === 🚨 ERROR BOUNDARY STYLES === */
 .error-boundary {
@@ -728,20 +663,6 @@ body.overlay-page {
 
 /* Minimap styling - handled by main .minimap rule above */
 
-.minimap-placeholder {
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: #f8fafc;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  font-size: 0.875rem;
-}
-
 .error-details {
   margin-top: 1rem;
   text-align: left;
@@ -759,104 +680,4 @@ body.overlay-page {
   font-size: 0.8rem;
   overflow-x: auto;
   margin-top: 0.5rem;
-}
-
-
-.goal-celebration {
-  margin-top: 12px;
-  text-align: center;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  animation: celebration 2s ease-in-out infinite;
-}
-
-.celebration-text {
-  font-size: 14px;
-  font-weight: 700;
-  color: #00ff88;
-  /* Simplified text-shadow for OBS compatibility */
-  text-shadow: 0 0 5px rgba(0, 255, 136, 0.8);
-  /* OBS-friendly rendering */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-/* Animations */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
-  }
-}
-
-@keyframes goalReached {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes latestSubPulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.02);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-}
-
-@keyframes celebration {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.02);
-    opacity: 0.9;
-  }
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .kick-sub-goal {
-    bottom: 10px;
-    right: 10px;
-    max-width: 280px;
-    min-width: 220px;
-  }
-  
-  .kick-sub-goal-container {
-    padding: 12px;
-  }
-  
-  .kick-text {
-    font-size: 13px;
-  }
-  
-  .current-subs {
-    font-size: 16px;
-  }
-  
-  .goal-subs {
-    font-size: 14px;
-  }
 }
