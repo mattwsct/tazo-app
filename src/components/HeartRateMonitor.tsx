@@ -252,13 +252,37 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
           }
         };
         
-        pulsoidSocket.onerror = (error) => {
+        pulsoidSocket.onerror = (event) => {
           if (isDestroyed) return;
           
-          // Only log significant errors, not connection interruptions
-          if (pulsoidSocket?.readyState === WebSocket.CLOSED || 
-              pulsoidSocket?.readyState === WebSocket.CLOSING) {
-            HeartRateLogger.error('Pulsoid WebSocket connection error:', error);
+          // Extract meaningful error information from the Event object
+          const errorInfo: Record<string, unknown> = {
+            type: event.type,
+            isTrusted: event.isTrusted,
+            readyState: pulsoidSocket?.readyState,
+          };
+          
+          // Try to extract more details if available
+          if (event instanceof ErrorEvent) {
+            errorInfo.message = event.message;
+            errorInfo.filename = event.filename;
+            errorInfo.lineno = event.lineno;
+            errorInfo.colno = event.colno;
+          }
+          
+          // Only log significant errors, not connection interruptions during normal operation
+          // Connection interruptions during page reload are normal and don't need error logging
+          const isSignificantError = pulsoidSocket?.readyState === WebSocket.CLOSED && 
+                                     event.type === 'error' &&
+                                     !event.isTrusted; // Browser-triggered errors are usually interruptions
+          
+          if (isSignificantError) {
+            HeartRateLogger.error('Pulsoid WebSocket connection error', errorInfo);
+          } else {
+            // Log as info for normal connection interruptions
+            HeartRateLogger.info('Pulsoid WebSocket connection interrupted (will reconnect)', {
+              readyState: pulsoidSocket?.readyState
+            });
           }
           isConnecting = false;
         };
@@ -338,13 +362,10 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </div>
-            {/* Numbers and text - always white */}
+            {/* Numbers - always white */}
             <div className="heart-rate-text">
               <span className="heart-rate-value">
                 {currentBpm}
-              </span>
-              <span className="heart-rate-label">
-                BPM
               </span>
             </div>
           </div>

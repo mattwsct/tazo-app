@@ -225,20 +225,22 @@ body.overlay-page {
 
 .time-display {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline; /* Align to text baseline for proper AM/PM alignment */
   gap: var(--gap-xs); /* Use CSS variable instead of hardcoded 4px */
 }
 
 .time-value {
   font-size: var(--font-size-xl);
   font-weight: 600;
+  line-height: 1; /* Ensure consistent line height */
 }
 
 .time-period {
   font-size: 0.45em;
   font-weight: 700;
   text-transform: uppercase;
-  align-self: flex-end;
+  line-height: 1; /* Ensure consistent line height */
+  vertical-align: baseline; /* Align to baseline */
 }
 
 .date,
@@ -307,7 +309,7 @@ body.overlay-page {
 .heart-rate-text {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: baseline; /* Consistent with time display - align to baseline */
   gap: var(--gap-sm);
   line-height: 1;
   flex: 1;
@@ -317,6 +319,7 @@ body.overlay-page {
   font-size: var(--font-size-lg);
   font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 1; /* Ensure consistent line height */
 }
 
 .heart-rate-label {
@@ -325,8 +328,8 @@ body.overlay-page {
   opacity: 0.9;
   text-transform: uppercase;
   text-align: left;
-  align-self: center;
-  transform: translateY(-1px);
+  line-height: 1; /* Ensure consistent line height */
+  vertical-align: baseline; /* Align to baseline for consistency with AM/PM */
 }
 
 /* === LOCATION DISPLAY STYLES === */
@@ -392,7 +395,8 @@ body.overlay-page {
   align-items: center;
   justify-content: center;
   margin-left: var(--gap-sm);
-  width: 24px;
+  width: 32px;
+  height: 20px;
   flex-shrink: 0;
 }
 
@@ -461,11 +465,6 @@ body.overlay-page {
   font-variant-numeric: tabular-nums;
 }
 
-.weather-temperature.multiline {
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0;
-}
 
 .weather-icon {
   display: inline-flex;

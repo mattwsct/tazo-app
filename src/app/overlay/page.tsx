@@ -54,32 +54,25 @@ const HeartRateMonitor = dynamic(() => import('@/components/HeartRateMonitor'), 
   loading: () => null
 });
 
-// Flag component to reduce duplication
-const LocationFlag = ({ countryCode, flagLoaded, getEmojiFlag }: { 
-  countryCode: string; 
-  flagLoaded: boolean; 
-  getEmojiFlag: (code: string) => string;
-}) => (
-  <span className="location-flag-inline">
-    {flagLoaded ? (
+// Flag component - simple SVG only, hidden until loaded to prevent alt text flash
+const LocationFlag = ({ countryCode }: { countryCode: string }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  
+  return (
+    <span className="location-flag-inline">
       <img
-                        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
-                        alt={`Country: ${countryCode}`}
-                        width={32}
-                        height={20}
-                        className="location-flag-small"
+        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
+        alt={`Country: ${countryCode}`}
+        width={32}
+        height={20}
+        className="location-flag-small"
+        style={{ opacity: isLoaded ? 1 : 0, transition: 'opacity 0.2s' }}
+        onLoad={() => setIsLoaded(true)}
+        onError={() => setIsLoaded(true)} // Show even on error to avoid alt text flash
       />
-    ) : (
-      <span 
-        className="location-flag-emoji-small"
-        style={{ fontSize: '16px', lineHeight: '16px' }}
-        title={`Country: ${countryCode}`}
-      >
-        {getEmojiFlag(countryCode)}
-      </span>
-    )}
-  </span>
-);
+    </span>
+  );
+};
 
 function OverlayPage() {
   useRenderPerformance('OverlayPage');
@@ -100,7 +93,6 @@ function OverlayPage() {
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
-  const [flagLoaded, setFlagLoaded] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(0.95); // Track opacity for fade transitions
   const [hasReceivedFreshGps, setHasReceivedFreshGps] = useState(false); // Track if we've received at least one fresh GPS update
@@ -387,14 +379,6 @@ function OverlayPage() {
     };
   }, []);
 
-  // Get emoji flag for country code (fast fallback)
-  const getEmojiFlag = (countryCode: string): string => {
-    const codePoints = countryCode
-      .toUpperCase()
-      .split('')
-      .map(char => 127397 + char.charCodeAt(0));
-    return String.fromCodePoint(...codePoints);
-  };
 
 
 
@@ -1047,29 +1031,6 @@ function OverlayPage() {
     updateTimezoneRef.current = updateTimezone;
   }, [timezone, updateMinimapVisibility, settings, updateTimezone]);
 
-  // Preload flag image when country code is available
-  useEffect(() => {
-    if (location?.countryCode) {
-      setFlagLoaded(false); // Reset flag loaded state when country changes
-      const img = new Image();
-      let isActive = true; // Track if component is still mounted
-      
-      img.onload = () => {
-        if (isActive) setFlagLoaded(true);
-      };
-      img.onerror = () => {
-        if (isActive) setFlagLoaded(false);
-      };
-      img.src = `https://flagcdn.com/${location.countryCode}.svg`;
-      
-      // Cleanup: prevent state updates if component unmounts or country changes
-      return () => {
-        isActive = false;
-        // Clear image reference to allow garbage collection
-        img.src = '';
-      };
-    }
-  }, [location?.countryCode]);
 
 
 
@@ -1568,11 +1529,11 @@ function OverlayPage() {
     };
   }, []); // Empty deps - RTIRL listener should only be set up once on mount
 
-  // Fade-in delay: Start overlay hidden, then fade in after 1.5 seconds to prevent flashing
+  // Fade-in delay: Start overlay hidden, then fade in after 2 seconds to allow everything to load
   useEffect(() => {
     const fadeInTimer = setTimeout(() => {
       setOverlayVisible(true);
-    }, 1500); // 1.5 second delay before fade-in
+    }, 2000); // 2 second delay before fade-in to allow flags, images, and data to load
 
     return () => {
       clearTimeout(fadeInTimer);
@@ -1698,43 +1659,6 @@ function OverlayPage() {
     return isNight ? '🌙' : '🌤️';
   }, [isNightTime]);
 
-  // Refs for measuring text widths
-  const locationTextRef = useRef<HTMLDivElement>(null);
-  const temperatureTextRef = useRef<HTMLDivElement>(null);
-  const [shouldUseMultilineTemp, setShouldUseMultilineTemp] = useState(false);
-
-  // Measure text widths to determine if temperature should be multiline
-  useEffect(() => {
-    if (!locationTextRef.current || !temperatureTextRef.current || !location || !weather) {
-      setShouldUseMultilineTemp(false);
-      return;
-    }
-
-    // Create a temporary canvas to measure text widths accurately
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) {
-      setShouldUseMultilineTemp(false);
-      return;
-    }
-
-    // Get computed styles from the location element to match font
-    const locationStyles = window.getComputedStyle(locationTextRef.current);
-    context.font = `${locationStyles.fontWeight} ${locationStyles.fontSize} ${locationStyles.fontFamily}`;
-
-    // Measure location text width (primary + secondary if both exist)
-    const locationText = location.primary + (location.secondary ? ' ' + location.secondary : '');
-    const locationWidth = context.measureText(locationText).width;
-
-    // Measure temperature text width
-    const tempStyles = window.getComputedStyle(temperatureTextRef.current);
-    context.font = `${tempStyles.fontWeight} ${tempStyles.fontSize} ${tempStyles.fontFamily}`;
-    const temperatureText = `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`;
-    const temperatureWidth = context.measureText(temperatureText).width;
-
-    // Use multiline if location is shorter than temperature
-    setShouldUseMultilineTemp(locationWidth < temperatureWidth);
-  }, [location, weather]);
 
   const weatherDisplay = useMemo(() => {
     if (!weather) {
@@ -1744,8 +1668,6 @@ function OverlayPage() {
     
     const display = {
       temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`,
-      temperatureCelsius: `${weather.temp}°C`,
-      temperatureFahrenheit: `${celsiusToFahrenheit(weather.temp)}°F`,
       icon: getWeatherIcon(weather.desc)
     };
     return display;
@@ -1806,7 +1728,7 @@ function OverlayPage() {
             {((settings.locationDisplay === 'custom') || locationDisplay) && locationDisplay && (
               <>
                   {locationDisplay.primary && (
-                  <div className="location location-line" ref={locationTextRef}>
+                  <div className="location location-line">
                     <div className="location-main">{locationDisplay.primary}</div>
                   </div>
                   )}
@@ -1821,8 +1743,6 @@ function OverlayPage() {
                         {locationDisplay.countryCode && (
                           <LocationFlag 
                             countryCode={locationDisplay.countryCode} 
-                            flagLoaded={flagLoaded} 
-                            getEmojiFlag={getEmojiFlag} 
                           />
                         )}
                       </div>
@@ -1837,18 +1757,8 @@ function OverlayPage() {
               <div className="weather weather-line">
                 <div className="weather-container">
                   <div className="weather-content">
-                    <div 
-                      className={`weather-temperature ${shouldUseMultilineTemp ? 'multiline' : ''}`}
-                      ref={temperatureTextRef}
-                    >
-                      {shouldUseMultilineTemp ? (
-                        <>
-                          <div>{weatherDisplay.temperatureCelsius}</div>
-                          <div>{weatherDisplay.temperatureFahrenheit}</div>
-                        </>
-                      ) : (
-                        weatherDisplay.temperature
-                      )}
+                    <div className="weather-temperature">
+                      {weatherDisplay.temperature}
                     </div>
                     <span className="weather-icon">
                       {weatherDisplay.icon}
