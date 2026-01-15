@@ -408,9 +408,10 @@ body.overlay-page {
 
 .weather-container {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   justify-content: flex-end;
-  gap: var(--gap-lg);
+  gap: var(--gap-xs);
 }
 
 .weather-content {
@@ -422,16 +423,16 @@ body.overlay-page {
 }
 
 .weather-description {
-  font-size: var(--font-size-sm);
-  font-weight: 800;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-sm);
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-uppercase);
-  opacity: 0.9;
-  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  line-height: 1;
+  margin-top: 2px;
 }
 
 .weather-temperature {

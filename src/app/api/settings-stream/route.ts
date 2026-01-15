@@ -104,10 +104,10 @@ export async function GET(request: NextRequest): Promise<Response> {
       sendSSE(JSON.stringify({ type: 'connected', timestamp: Date.now() }));
       
       // Send current settings immediately (allow unauthenticated read access)
-      // Small delay to ensure connection is fully established
-      setTimeout(() => {
-        checkForUpdates();
-      }, 100);
+        // Small delay to ensure connection is fully established
+        setTimeout(() => {
+          checkForUpdates();
+        }, 100);
       
       // Check for updates every 2 seconds for more responsive updates
       const interval = setInterval(checkForUpdates, 2000);

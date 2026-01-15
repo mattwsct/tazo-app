@@ -251,8 +251,8 @@ function getLocationByPrecision(
       return { name, category };
     }
   }
-  
-  // If nothing worked, return empty (will use country as last resort in formatLocation)
+    
+    // If nothing worked, return empty (will use country as last resort in formatLocation)
   return { name: '', category: 'country' };
 }
 

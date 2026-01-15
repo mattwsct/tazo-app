@@ -411,12 +411,12 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
         } else if (offsetHours === -7) {
           // -7 offset is Mountain Time (MDT) - covers mountain states
           if (lon >= -124 && lon <= -102) {
-            timezone = 'America/Denver'; // Mountain Time
+          timezone = 'America/Denver'; // Mountain Time
           }
         } else if (offsetHours === -8) {
           // -8 offset is Pacific Time (PST) - covers west coast
           if (lon >= -124 && lon <= -102) {
-            timezone = 'America/Los_Angeles'; // Pacific Time
+          timezone = 'America/Los_Angeles'; // Pacific Time
           }
         }
       }

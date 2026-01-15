@@ -59,19 +59,19 @@ const LocationFlag = ({ countryCode }: { countryCode: string }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   
   return (
-    <span className="location-flag-inline">
+  <span className="location-flag-inline">
       <img
-        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
-        alt={`Country: ${countryCode}`}
-        width={32}
-        height={20}
-        className="location-flag-small"
+                        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
+                        alt={`Country: ${countryCode}`}
+                        width={32}
+                        height={20}
+                        className="location-flag-small"
         style={{ opacity: isLoaded ? 1 : 0, transition: 'opacity 0.2s' }}
         onLoad={() => setIsLoaded(true)}
         onError={() => setIsLoaded(true)} // Show even on error to avoid alt text flash
       />
-    </span>
-  );
+  </span>
+);
 };
 
 function OverlayPage() {
@@ -227,8 +227,8 @@ function OverlayPage() {
           // Check if 1 minute has passed since speed dropped
           const timeSinceLowSpeed = now - lowSpeedStartTimeRef.current;
           if (timeSinceLowSpeed >= MINIMAP_HIDE_DELAY) {
-            setMinimapVisible(false);
-            setMinimapOpacity(0);
+          setMinimapVisible(false);
+          setMinimapOpacity(0);
             speedReadingsRef.current = [];
             lowSpeedStartTimeRef.current = null;
           }
@@ -298,16 +298,16 @@ function OverlayPage() {
       try {
         const formatted = formatLocation(lastRawLocation.current!, settings.locationDisplay);
         // Log only when locationDisplay actually changes
-        OverlayLogger.location('Location display mode changed', {
-          mode: settings.locationDisplay,
-          primary: formatted.primary || 'none',
-          secondary: formatted.secondary || 'none', // Secondary line (city/state/country)
-          rawLocation: {
-            city: lastRawLocation.current!.city,
-            neighbourhood: lastRawLocation.current!.neighbourhood,
-            suburb: lastRawLocation.current!.suburb
-          }
-        });
+          OverlayLogger.location('Location display mode changed', {
+            mode: settings.locationDisplay,
+            primary: formatted.primary || 'none',
+            secondary: formatted.secondary || 'none', // Secondary line (city/state/country)
+            rawLocation: {
+              city: lastRawLocation.current!.city,
+              neighbourhood: lastRawLocation.current!.neighbourhood,
+              suburb: lastRawLocation.current!.suburb
+            }
+          });
         // Force update location state to trigger re-render with new format
         setLocation({
           primary: formatted.primary || '',
@@ -455,16 +455,16 @@ function OverlayPage() {
       const now = new Date();
       return {
         time: now.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: timezone,
         }),
         date: now.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          timeZone: timezone,
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: timezone,
         }),
       };
     } catch (error) {
@@ -473,16 +473,16 @@ function OverlayPage() {
       const now = new Date();
       return {
         time: now.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: 'UTC',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'UTC',
         }),
         date: now.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          timeZone: 'UTC',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
         }),
       };
     }
@@ -604,23 +604,23 @@ function OverlayPage() {
       const formatted = formatTime(timezone);
       if (isActive) {
         setTimeDisplay(formatted);
-      }
+        }
     };
     
     // Immediate update when timezone changes
     updateTime();
-    
+      
     // Calculate delay until next minute boundary for clean updates
-    const now = new Date();
-    const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-    
+      const now = new Date();
+      const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+      
     // Schedule first update at minute boundary, then every minute
     const timeoutId = setTimeout(() => {
-      if (!isActive) return;
+        if (!isActive) return;
       updateTime();
       // Start interval for regular updates
       timeUpdateTimer.current = setInterval(updateTime, 60000);
-    }, Math.max(0, msUntilNextMinute));
+      }, Math.max(0, msUntilNextMinute));
     
     return () => {
       isActive = false;
@@ -1145,7 +1145,7 @@ function OverlayPage() {
                   markGpsReceived();
                   // Only log in development - this is expected behavior
                   if (process.env.NODE_ENV === 'development') {
-                    OverlayLogger.warn('First GPS update is stale but data is still valid - keeping cached data and showing overlay');
+                  OverlayLogger.warn('First GPS update is stale but data is still valid - keeping cached data and showing overlay');
                   }
                 }
               }
@@ -1659,6 +1659,33 @@ function OverlayPage() {
     return isNight ? '🌙' : '🌤️';
   }, [isNightTime]);
 
+  // Check if weather condition is notable (affects IRL streaming)
+  const isNotableWeatherCondition = useCallback((desc: string): boolean => {
+    const d = desc.toLowerCase();
+    
+    // Notable conditions that affect IRL streaming
+    return (
+      d.includes('rain') ||
+      d.includes('drizzle') ||
+      d.includes('storm') ||
+      d.includes('thunder') ||
+      d.includes('snow') ||
+      d.includes('sleet') ||
+      d.includes('hail') ||
+      d.includes('fog') ||
+      d.includes('mist') ||
+      d.includes('haze') ||
+      d.includes('wind') ||
+      d.includes('gale') ||
+      d.includes('hurricane') ||
+      d.includes('typhoon') ||
+      d.includes('tornado') ||
+      d.includes('blizzard') ||
+      d.includes('freezing') ||
+      d.includes('extreme')
+    );
+  }, []);
+
 
   const weatherDisplay = useMemo(() => {
     if (!weather) {
@@ -1668,10 +1695,11 @@ function OverlayPage() {
     
     const display = {
       temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`,
-      icon: getWeatherIcon(weather.desc)
+      icon: getWeatherIcon(weather.desc),
+      description: isNotableWeatherCondition(weather.desc) ? weather.desc : null
     };
     return display;
-  }, [weather, getWeatherIcon]); // getWeatherIcon already depends on sunriseSunset/timezone via isNightTime
+  }, [weather, getWeatherIcon, isNotableWeatherCondition]); // getWeatherIcon already depends on sunriseSunset/timezone via isNightTime
 
   return (
     <ErrorBoundary autoReload={false}>
@@ -1764,6 +1792,11 @@ function OverlayPage() {
                       {weatherDisplay.icon}
                     </span>
                   </div>
+                  {weatherDisplay.description && (
+                    <div className="weather-description">
+                      {weatherDisplay.description}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
