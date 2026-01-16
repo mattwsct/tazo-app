@@ -399,6 +399,57 @@ npm run lint     # Run linter
    - Progressive enhancement (show what you have)
    - Priority: Location > Weather > Minimap
 
+### GPS Staleness Behavior
+
+The overlay automatically shows/hides location and weather based on GPS data freshness to ensure accurate information display:
+
+#### How It Works
+
+**Core Behavior**: Location and weather automatically appear when GPS is fresh and disappear when GPS becomes stale, continuously toggling based on RTIRL updates.
+
+1. **On Initial Load/Refresh**:
+   - **Stale GPS (>15 minutes old)**: 
+     - ✅ Time/Date: **Visible** (timezone from RTIRL or OpenWeatherMap)
+     - ❌ Location: **Hidden** (no API calls made)
+     - ❌ Weather: **Hidden** (no API calls made, unless timezone needed)
+     - ❌ Minimap: **Hidden**
+   - **Fresh GPS (<15 minutes old)**:
+     - ✅ All elements visible and APIs fetch normally
+
+2. **During Runtime**:
+   - **GPS becomes stale (>15 minutes old)**:
+     - Location/weather automatically hide after 15-minute timeout
+     - Timezone continues updating from RTIRL (ensures accurate time/date)
+     - Minimap hides if speed-based mode is enabled
+   - **Fresh GPS data arrives**:
+     - Location/weather immediately reappear
+     - APIs fetch fresh data for location and weather
+     - Minimap shows if speed-based mode and movement detected
+   - **Cycle repeats**: As GPS alternates between fresh and stale, location/weather toggle accordingly
+
+3. **Timezone Updates**:
+   - **Always updates** from RTIRL, even when GPS is stale
+   - Falls back to OpenWeatherMap if RTIRL doesn't provide timezone
+   - Ensures time/date display remains accurate regardless of GPS staleness
+
+#### Key Behaviors
+
+- **Time/Date**: Always visible (uses timezone from last RTIRL update, regardless of staleness)
+- **Location/Weather**: Automatically hide when GPS is stale, reappear when fresh
+- **Minimap**: Hidden when GPS is stale (if speed-based mode enabled)
+- **API Calls**: Prevented for location/weather when GPS is stale (saves API quota)
+- **Timezone Fetching**: Still occurs when needed (for accurate time display)
+- **Automatic Toggle**: No manual intervention needed - location/weather appear/disappear based on GPS freshness
+
+#### Technical Details
+
+- **GPS Freshness Timeout**: 15 minutes (`GPS_FRESHNESS_TIMEOUT`)
+- **GPS Stale Detection**: 10 seconds without updates (`GPS_STALE_TIMEOUT`)
+- **Data Validity**: 30 minutes (cached data remains usable even if GPS becomes stale)
+- **State Management**: `hasReceivedFreshGps` flag (with ref for async callbacks) controls location/weather visibility
+- **Timezone Priority**: RTIRL → LocationIQ → OpenWeatherMap (always updates regardless of GPS staleness)
+- **Timestamp Handling**: Uses reception time when RTIRL is actively sending updates, payload timestamp when not receiving updates
+
 ### Common Scenarios
 - **Flying**: High speed (>200 km/h), infrequent location updates (1km threshold), country-level display recommended
 - **Cruising**: International waters, water body detection critical, show nearest country, ocean zoom level
@@ -560,6 +611,7 @@ All API limits are enforced client-side to prevent quota exhaustion:
    - **Data Validity** (30 min): How long cached data remains usable (weather/location cache)
    - **GPS Stale** (10 sec): When GPS data is considered stale (no updates received)
    - **Important**: Data can be valid (cached) even if GPS is stale - this allows instant re-display
+   - **See "GPS Staleness Behavior" section above for complete details on how staleness is handled**
 
 6. **Minimap Speed Threshold**
    - **Actual**: 5 km/h (walking pace), not 10 km/h as might be documented elsewhere
