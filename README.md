@@ -52,8 +52,7 @@ npm run dev
 
 ### Smart GPS Minimap
 - **Auto-show when moving** (>5 km/h) - Shows when speed exceeds walking pace
-- **Auto-hide when stationary** - Hides when speed drops below 5 km/h or GPS becomes stale
-- **GPS staleness detection** - Hides if no GPS updates received in 10 seconds
+- **Auto-hide when stationary** - Hides when speed drops below 5 km/h
 - **Day/night map styling** - Based on real sunrise/sunset times from OpenWeatherMap API
 - **Fade transitions** - Smooth 1-second fade in/out for better visual experience
 
@@ -207,7 +206,7 @@ Access at `http://localhost:3000` to configure:
   
 - **Minimap** - Three display modes:
   - **Always Show** - Minimap always visible (if GPS data available)
-  - **Auto on Movement** - Shows when speed >5 km/h, hides when stationary or GPS stale
+  - **Auto on Movement** - Shows when speed >5 km/h, hides when stationary
   - **Hidden** - Minimap completely hidden
   
 - **Map Zoom** - 6 levels from Continental (1) to Neighbourhood (13)
@@ -399,56 +398,14 @@ npm run lint     # Run linter
    - Progressive enhancement (show what you have)
    - Priority: Location > Weather > Minimap
 
-### GPS Staleness Behavior
+### Location & Weather Visibility
 
-The overlay automatically shows/hides location and weather based on GPS data freshness to ensure accurate information display:
+Location and weather are always shown based on the latest RTIRL data. Use the "Hidden" option in the Location Display mode to manually hide both location and weather when needed (e.g., during flights).
 
-#### How It Works
-
-**Core Behavior**: Location and weather automatically appear when GPS is fresh and disappear when GPS becomes stale, continuously toggling based on RTIRL updates.
-
-1. **On Initial Load/Refresh**:
-   - **Stale GPS (>15 minutes old)**: 
-     - ✅ Time/Date: **Visible** (timezone from RTIRL or OpenWeatherMap)
-     - ❌ Location: **Hidden** (no API calls made)
-     - ❌ Weather: **Hidden** (no API calls made, unless timezone needed)
-     - ❌ Minimap: **Hidden**
-   - **Fresh GPS (<15 minutes old)**:
-     - ✅ All elements visible and APIs fetch normally
-
-2. **During Runtime**:
-   - **GPS becomes stale (>15 minutes old)**:
-     - Location/weather automatically hide after 15-minute timeout
-     - Timezone continues updating from RTIRL (ensures accurate time/date)
-     - Minimap hides if speed-based mode is enabled
-   - **Fresh GPS data arrives**:
-     - Location/weather immediately reappear
-     - APIs fetch fresh data for location and weather
-     - Minimap shows if speed-based mode and movement detected
-   - **Cycle repeats**: As GPS alternates between fresh and stale, location/weather toggle accordingly
-
-3. **Timezone Updates**:
-   - **Always updates** from RTIRL, even when GPS is stale
-   - Falls back to OpenWeatherMap if RTIRL doesn't provide timezone
-   - Ensures time/date display remains accurate regardless of GPS staleness
-
-#### Key Behaviors
-
-- **Time/Date**: Always visible (uses timezone from last RTIRL update, regardless of staleness)
-- **Location/Weather**: Automatically hide when GPS is stale, reappear when fresh
-- **Minimap**: Hidden when GPS is stale (if speed-based mode enabled)
-- **API Calls**: Prevented for location/weather when GPS is stale (saves API quota)
-- **Timezone Fetching**: Still occurs when needed (for accurate time display)
-- **Automatic Toggle**: No manual intervention needed - location/weather appear/disappear based on GPS freshness
-
-#### Technical Details
-
-- **GPS Freshness Timeout**: 15 minutes (`GPS_FRESHNESS_TIMEOUT`)
-- **GPS Stale Detection**: 10 seconds without updates (`GPS_STALE_TIMEOUT`)
-- **Data Validity**: 30 minutes (cached data remains usable even if GPS becomes stale)
-- **State Management**: `hasReceivedFreshGps` flag (with ref for async callbacks) controls location/weather visibility
-- **Timezone Priority**: RTIRL → LocationIQ → OpenWeatherMap (always updates regardless of GPS staleness)
-- **Timestamp Handling**: Uses reception time when RTIRL is actively sending updates, payload timestamp when not receiving updates
+- **Location Display Modes**: Neighbourhood, City, State, Country, Custom, or Hidden
+- **Hidden Mode**: Hides both location and weather display (useful for flights, privacy, etc.)
+- **Weather**: Updates every 5 minutes automatically
+- **Timezone**: Always updates from RTIRL/LocationIQ/OpenWeatherMap to ensure accurate time/date display
 
 ### Common Scenarios
 - **Flying**: High speed (>200 km/h), infrequent location updates (1km threshold), country-level display recommended
