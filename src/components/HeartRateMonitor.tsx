@@ -24,6 +24,7 @@ const HEART_RATE_CONFIG = {
   ANIMATION_DELAY: 1000, // 1 second delay before updating animation speed
   MAX_RECONNECT_ATTEMPTS: 10,
   CONNECTION_DEBOUNCE: 30000, // 30 seconds - optimal for IRL streams with brief connection drops (tunnels, rural areas)
+  COLOR_DEBOUNCE: 5000, // 5 seconds - debounce color changes to prevent rapid flashing
 } as const;
 
 // === 💗 HEART RATE MONITOR COMPONENT ===
@@ -41,11 +42,13 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   });
   const [smoothHeartRate, setSmoothHeartRate] = useState(0);
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
+  const [debouncedBpm, setDebouncedBpm] = useState(0); // Debounced BPM for color calculation
   
   // Refs for managing timeouts
   const heartRateTimer = useRef<NodeJS.Timeout | null>(null);
   const animationTimer = useRef<NodeJS.Timeout | null>(null);
   const connectionTimer = useRef<NodeJS.Timeout | null>(null);
+  const colorDebounceTimer = useRef<NodeJS.Timeout | null>(null);
   const currentBpmRef = useRef(0);
 
   // === 💗 DEBOUNCED CONNECTION STATE UPDATE ===
@@ -68,6 +71,30 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
       connectionTimer.current = null;
     }, HEART_RATE_CONFIG.CONNECTION_DEBOUNCE);
   }, []);
+
+  // === 💗 DEBOUNCED BPM FOR COLOR CALCULATION ===
+  useEffect(() => {
+    if (heartRate.bpm > 0 && heartRate.isConnected) {
+      // Clear any existing color debounce timer
+      if (colorDebounceTimer.current) {
+        clearTimeout(colorDebounceTimer.current);
+      }
+      
+      // Debounce BPM updates for color calculation (5-10 seconds)
+      colorDebounceTimer.current = setTimeout(() => {
+        setDebouncedBpm(heartRate.bpm);
+      }, HEART_RATE_CONFIG.COLOR_DEBOUNCE);
+      
+      return () => {
+        if (colorDebounceTimer.current) {
+          clearTimeout(colorDebounceTimer.current);
+        }
+      };
+    } else {
+      // Reset debounced BPM when disconnected
+      setDebouncedBpm(0);
+    }
+  }, [heartRate.bpm, heartRate.isConnected]);
 
   // === 💗 SMOOTH HEART RATE TRANSITIONS ===
   useEffect(() => {
@@ -117,6 +144,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
         setHeartRate(prev => ({ ...prev, bpm: 0 }));
         setSmoothHeartRate(0);
         setStableAnimationBpm(0);
+        setDebouncedBpm(0);
       }, HEART_RATE_CONFIG.TIMEOUT);
       
       return () => {
@@ -128,6 +156,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
       setHeartRate(prev => ({ ...prev, bpm: 0 }));
       setSmoothHeartRate(0);
       setStableAnimationBpm(0);
+      setDebouncedBpm(0);
       
       // Clear any existing timeouts
       if (heartRateTimer.current) {
@@ -137,6 +166,10 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
       if (animationTimer.current) {
         clearTimeout(animationTimer.current);
         animationTimer.current = null;
+      }
+      if (colorDebounceTimer.current) {
+        clearTimeout(colorDebounceTimer.current);
+        colorDebounceTimer.current = null;
       }
     }
   }, [heartRate.bpm, heartRate.isConnected, stableAnimationBpm, updateConnectionState, smoothHeartRate]);
@@ -329,6 +362,11 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
         clearTimeout(connectionTimer.current);
         connectionTimer.current = null;
       }
+      
+      if (colorDebounceTimer.current) {
+        clearTimeout(colorDebounceTimer.current);
+        colorDebounceTimer.current = null;
+      }
     };
       }, [pulsoidToken, onConnected, updateConnectionState]); // Include onConnected dependency
 
@@ -339,18 +377,30 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
 
   // Get current heart rate
   const currentBpm = Math.round(smoothHeartRate || heartRate.bpm);
+  
+  // Calculate color based on debounced BPM (only for numbers, not heart icon)
+  // Use debouncedBpm if available, otherwise use currentBpm for initial display
+  const bpmForColor = debouncedBpm > 0 ? debouncedBpm : currentBpm;
+  let textColor: string;
+  if (bpmForColor < 95) {
+    textColor = '#FFFFFF'; // White
+  } else if (bpmForColor >= 95 && bpmForColor <= 115) {
+    textColor = '#FF8888'; // Light red
+  } else {
+    textColor = '#FF4444'; // Red (same as heart icon)
+  }
 
   return (
     <ErrorBoundary>
       <div className="heart-rate-wrapper">
         <div className="heart-rate">
           <div className="heart-rate-content">
-            {/* Heart icon - always red */}
+            {/* Heart icon - always red (same as high heart rate color) */}
             <div 
               className="heart-rate-icon beating"
               style={{
                 animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s',
-                color: '#FF4444' // Always red
+                color: '#FF4444' // Always red, consistent with high heart rate text color
               }}
             >
               <svg 
@@ -362,9 +412,15 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </div>
-            {/* Numbers - always white */}
+            {/* Numbers - color changes based on BPM */}
             <div className="heart-rate-text">
-              <span className="heart-rate-value">
+              <span 
+                className="heart-rate-value"
+                style={{
+                  color: textColor,
+                  transition: 'color 0.5s ease-in-out' // Smooth color transition
+                }}
+              >
                 {currentBpm}
               </span>
             </div>

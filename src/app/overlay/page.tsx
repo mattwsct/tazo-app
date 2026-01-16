@@ -1633,21 +1633,15 @@ function OverlayPage() {
   };
 
   // Get weather icon based on description and time of day
-  const getWeatherIcon = useCallback((desc: string): string => {
+  const getWeatherIcon = useCallback((desc: string): string | null => {
     const d = desc.toLowerCase();
-    const isNight = isNightTime();
     
-    // Clear/Sunny conditions - show sun during day, moon at night
-    if (d.includes('clear') || d.includes('sunny')) {
-      return isNight ? '🌙' : '☀️';
+    // Hide icon for clear/partly cloudy conditions (not notable for IRL streaming)
+    if (d.includes('clear') || d.includes('sunny') || d.includes('partly') || d.includes('few clouds')) {
+      return null;
     }
     
-    // Partly cloudy - show appropriate icon for day/night
-    if (d.includes('partly') || d.includes('few clouds')) {
-      return isNight ? '☁️' : '🌤️';
-    }
-    
-    // Other conditions (same day or night)
+    // Other notable conditions
     if (d.includes('cloud')) return '☁️';
     if (d.includes('rain') || d.includes('drizzle')) return '🌧️';
     if (d.includes('storm') || d.includes('thunder')) return '⛈️';
@@ -1655,9 +1649,9 @@ function OverlayPage() {
     if (d.includes('fog') || d.includes('mist') || d.includes('haze')) return '🌫️';
     if (d.includes('wind')) return '💨';
     
-    // Default - check if night for fallback
-    return isNight ? '🌙' : '🌤️';
-  }, [isNightTime]);
+    // Default fallback
+    return '☁️';
+  }, []);
 
   // Check if weather condition is notable (affects IRL streaming)
   const isNotableWeatherCondition = useCallback((desc: string): boolean => {
@@ -1788,9 +1782,11 @@ function OverlayPage() {
                     <div className="weather-temperature">
                       {weatherDisplay.temperature}
                     </div>
-                    <span className="weather-icon">
-                      {weatherDisplay.icon}
-                    </span>
+                    {weatherDisplay.icon && (
+                      <span className="weather-icon">
+                        {weatherDisplay.icon}
+                      </span>
+                    )}
                   </div>
                   {weatherDisplay.description && (
                     <div className="weather-description">

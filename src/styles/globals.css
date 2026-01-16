@@ -297,7 +297,7 @@ body.overlay-page {
   /* Ensure SVG renders properly in OBS */
   shape-rendering: geometricPrecision;
   text-rendering: optimizeLegibility;
-  /* Subtle, OBS-friendly glow (avoids hard black stroke) */
+  /* Subtle, OBS-friendly glow (heart icon is always red) */
   filter: drop-shadow(0 0 4px rgba(255, 68, 68, 0.5))
           drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }

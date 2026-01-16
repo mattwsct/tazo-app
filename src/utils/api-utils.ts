@@ -65,7 +65,7 @@ async function fetchWithRetry(
 
 // === 🌤️ WEATHER TYPES ===
 export interface WeatherData {
-  temp: number;
+  temp: number; // "feels like" temperature (more accurate for IRL streaming)
   desc: string;
 }
 
@@ -338,13 +338,22 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     let sunriseSunset: SunriseSunsetData | null = null;
     
     // Extract weather data
-    if (data.main && typeof data.main.temp === 'number' && data.weather && data.weather[0]) {
+    // Use "feels like" temperature as it's more accurate for IRL streaming (accounts for wind, humidity, etc.)
+    if (data.main && typeof data.main.feels_like === 'number' && data.weather && data.weather[0]) {
+      weather = {
+        temp: Math.round(data.main.feels_like), // Use "feels like" temperature
+        desc: data.weather[0].description || 'unknown',
+      };
+      
+      ApiLogger.info('openweathermap', 'Weather data received', weather);
+    } else if (data.main && typeof data.main.temp === 'number' && data.weather && data.weather[0]) {
+      // Fallback to regular temp if feels_like is not available
       weather = {
         temp: Math.round(data.main.temp),
         desc: data.weather[0].description || 'unknown',
       };
       
-      ApiLogger.info('openweathermap', 'Weather data received', weather);
+      ApiLogger.info('openweathermap', 'Weather data received (using regular temp as feels_like unavailable)', weather);
     }
     
     // Extract timezone data
