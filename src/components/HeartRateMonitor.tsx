@@ -389,6 +389,12 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   } else {
     textColor = '#FF4444'; // Red (same as heart icon)
   }
+  
+  // Use white text shadow for high heartrate (darker red) to improve readability
+  // against dark backgrounds and real-world content
+  const textShadow = textColor === '#FF4444' 
+    ? '0 0 4px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(255, 255, 255, 0.4)'
+    : undefined; // Use default CSS text-shadow for other colors
 
   return (
     <ErrorBoundary>
@@ -418,7 +424,8 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 className="heart-rate-value"
                 style={{
                   color: textColor,
-                  transition: 'color 0.5s ease-in-out' // Smooth color transition
+                  textShadow: textShadow,
+                  transition: 'color 0.5s ease-in-out, text-shadow 0.5s ease-in-out' // Smooth color and shadow transitions
                 }}
               >
                 {currentBpm}
