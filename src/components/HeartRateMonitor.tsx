@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { HeartRateLogger } from '@/lib/logger';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 // === 💗 HEART RATE TYPES & CONSTANTS ===
 interface PulsoidHeartRateData {
@@ -19,8 +20,6 @@ interface HeartRateState {
 const HEART_RATE_CONFIG = {
   TIMEOUT: 30000, // 30 seconds - hide if no data (more forgiving for IRL streaming)
   CHANGE_THRESHOLD: 5, // 5 BPM - minimum change to update animation
-  TRANSITION_STEPS: 20, // Number of smooth transition steps
-  STEP_DURATION: 100, // ms per step (2 seconds total)
   ANIMATION_DELAY: 1000, // 1 second delay before updating animation speed
   MAX_RECONNECT_ATTEMPTS: 10,
   CONNECTION_DEBOUNCE: 30000, // 30 seconds - optimal for IRL streams with brief connection drops (tunnels, rural areas)
@@ -40,9 +39,22 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     lastUpdate: 0,
     isConnected: false,
   });
-  const [smoothHeartRate, setSmoothHeartRate] = useState(0);
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
   const [debouncedBpm, setDebouncedBpm] = useState(0); // Debounced BPM for color calculation
+  
+  // Use animated value hook for smooth BPM transitions
+  // Integer precision, 1 BPM threshold, 1400ms max duration (more responsive)
+  // Reduced from 2000ms for better responsiveness while maintaining smoothness
+  const smoothHeartRate = useAnimatedValue(
+    heartRate.isConnected && heartRate.bpm > 0 ? heartRate.bpm : null,
+    {
+      immediateThreshold: 1, // 1 BPM - good for gradual changes
+      durationMultiplier: 35, // Faster multiplier for more responsive feel
+      maxDuration: 1400, // 1.4 seconds max - more responsive than 2s, still smooth
+      precision: 0,
+      allowNull: true,
+    }
+  ) ?? 0;
   
   // Refs for managing timeouts
   const heartRateTimer = useRef<NodeJS.Timeout | null>(null);
@@ -105,56 +117,31 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
         heartRateTimer.current = null;
       }
       
-      // Smoothly transition to new BPM over 2 seconds
-      const currentBpm = smoothHeartRate || heartRate.bpm;
-      const targetBpm = heartRate.bpm;
-      const steps = HEART_RATE_CONFIG.TRANSITION_STEPS;
-      const stepSize = (targetBpm - currentBpm) / steps;
-      const stepDuration = HEART_RATE_CONFIG.STEP_DURATION;
-      
-      let step = 0;
-      const transitionInterval = setInterval(() => {
-        step++;
-        const newBpm = currentBpm + (stepSize * step);
-        setSmoothHeartRate(newBpm);
-        
-        if (step >= steps) {
-          clearInterval(transitionInterval);
-          setSmoothHeartRate(targetBpm);
-        }
-      }, stepDuration);
-      
       // Update animation BPM with a delay to prevent abrupt changes
       if (animationTimer.current) {
         clearTimeout(animationTimer.current);
       }
       
       // Only update animation speed if the change is significant
-      const bpmDifference = Math.abs(targetBpm - stableAnimationBpm);
+      const bpmDifference = Math.abs(heartRate.bpm - stableAnimationBpm);
       if (bpmDifference > HEART_RATE_CONFIG.CHANGE_THRESHOLD || stableAnimationBpm === 0) {
         animationTimer.current = setTimeout(() => {
-          setStableAnimationBpm(targetBpm);
+          setStableAnimationBpm(heartRate.bpm);
         }, HEART_RATE_CONFIG.ANIMATION_DELAY);
       }
       
-      // Set timeout to hide heart rate if no new data after 5 seconds
+      // Set timeout to hide heart rate if no new data after timeout period
       heartRateTimer.current = setTimeout(() => {
         HeartRateLogger.info('Heart rate data timeout - hiding monitor');
         updateConnectionState(false);
         setHeartRate(prev => ({ ...prev, bpm: 0 }));
-        setSmoothHeartRate(0);
         setStableAnimationBpm(0);
         setDebouncedBpm(0);
       }, HEART_RATE_CONFIG.TIMEOUT);
-      
-      return () => {
-        clearInterval(transitionInterval);
-      };
     } else if (!heartRate.isConnected && heartRate.bpm > 0) {
       // Connection lost - immediately clear heart rate data
       HeartRateLogger.info('Heart rate connection lost - hiding monitor');
       setHeartRate(prev => ({ ...prev, bpm: 0 }));
-      setSmoothHeartRate(0);
       setStableAnimationBpm(0);
       setDebouncedBpm(0);
       
@@ -172,7 +159,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
         colorDebounceTimer.current = null;
       }
     }
-  }, [heartRate.bpm, heartRate.isConnected, stableAnimationBpm, updateConnectionState, smoothHeartRate]);
+  }, [heartRate.bpm, heartRate.isConnected, stableAnimationBpm, updateConnectionState]);
 
   // === 💗 PULSOID WEBSOCKET CONNECTION ===
   useEffect(() => {
@@ -252,7 +239,6 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
           
           // Immediately clear heart rate data when connection is lost
           setHeartRate(prev => ({ ...prev, bpm: 0, isConnected: false }));
-          setSmoothHeartRate(0);
           setStableAnimationBpm(0);
           
           // Clear any existing timeouts

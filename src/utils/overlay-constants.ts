@@ -66,6 +66,7 @@ export interface TimeoutRefs {
 
 export interface RTIRLPayload {
   speed?: number;
+  altitude?: number | { EGM96?: number; WGS84?: number }; // Altitude in meters (can be number or object with EGM96/WGS84)
   location?: { lat: number; lon: number; countryCode?: string; timezone?: string };
   timestamp?: number; // Unix timestamp (milliseconds) of when the GPS update was made
   time?: number; // Alternative timestamp field name

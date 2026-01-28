@@ -1,14 +1,16 @@
 # 🎮 Tazo Streaming Overlay
 
-A modern, real-time streaming overlay for IRL streams with GPS tracking, weather display, and heart rate monitoring.
+A modern, real-time streaming overlay for IRL streams with GPS tracking, weather display, heart rate monitoring, altitude/speed tracking, and smooth animated value transitions.
 
 ## ✨ Features
 
 - **📍 Real-time GPS Location** - Smart minimap that shows/hides based on movement
-- **🌤️ Live Weather** - Temperature with day/night-aware icons
-- **💓 Heart Rate Monitor** - Pulsoid integration for live heart rate display
+- **🌤️ Live Weather** - Temperature with day/night-aware weather icons and conditions
+- **💓 Heart Rate Monitor** - Pulsoid integration with smooth animated value transitions
+- **📊 Altitude & Speed** - Real-time elevation and movement speed with smart auto-display
 - **🌊 At-Sea Mode** - Automatic water body detection for cruise/ocean streaming
 - **🗺️ Smart Location Display** - City, state, or custom location names with country flags
+- **✨ Smooth Animations** - Optimized value transitions for speed, altitude, and heart rate
 - **🎨 Clean UI** - Modern, responsive design optimized for OBS
 
 ## 🚀 Quick Start
@@ -183,8 +185,20 @@ When GPS coordinates can't be reverse geocoded (ocean/remote areas):
 ### Weather Integration
 - Temperature in both °C and °F
 - Day/night weather icons (based on astronomical sunrise/sunset)
+- Weather condition text (auto-shows for notable conditions like rain, snow, storms)
 - Auto-updates every 5 minutes
 - Location-based weather for your current GPS position
+
+### Altitude & Speed Display
+- **Altitude**: Shows elevation in meters and feet
+  - Auto mode: Displays when elevation is changing (>5m/min) or above 150m threshold
+  - Speed-based staleness: 5-minute timeout for slow speeds (hiking), 1-minute for fast speeds
+  - Smooth animated transitions between values
+  
+- **Speed**: Shows movement speed in km/h and mph
+  - Auto mode: Displays when speed ≥10 km/h and GPS data is fresh
+  - Hides when stationary or GPS data is stale
+  - Smooth animated transitions between values
 
 ## 🔧 Admin Panel Settings
 
@@ -203,6 +217,21 @@ Access at `http://localhost:3000` to configure:
 - **Weather** - Show/hide temperature display
   - Temperature updates every 5 minutes automatically
   - Shows both °C and °F
+  
+- **Weather Condition** - Control weather icon and description display:
+  - **Always** - Always show icon and description
+  - **Auto** - Show only for notable conditions (rain, snow, storms, fog, etc.)
+  - **Hidden** - Hide icon and description (temperature still shown)
+  
+- **Altitude Display** - Control elevation display:
+  - **Always** - Always show altitude when GPS data available
+  - **Auto** - Show when elevation is changing or above 150m (notable elevation)
+  - **Hidden** - Hide altitude completely
+  
+- **Speed Display** - Control movement speed display:
+  - **Always** - Always show speed when GPS data available
+  - **Auto** - Show when speed ≥10 km/h and GPS is fresh
+  - **Hidden** - Hide speed completely
   
 - **Minimap** - Three display modes:
   - **Always Show** - Minimap always visible (if GPS data available)
@@ -311,11 +340,12 @@ Rate limiting and cooldowns are built-in to prevent quota issues.
 
 ## 🛠️ Tech Stack
 
-- **Next.js 15** - React framework with app router
+- **Next.js 16** - React framework with app router
 - **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
-- **MapLibre GL** - Map rendering
+- **CSS Modules** - Component-scoped styling
+- **MapLibre GL** - WebGL-based map rendering
 - **Server-Sent Events** - Real-time settings sync
+- **Custom Hooks** - Reusable animation logic (`useAnimatedValue`)
 
 ## 📝 Commands
 
@@ -389,6 +419,8 @@ npm run lint     # Run linter
    - Hardware acceleration (transform: translateZ(0))
    - Backface visibility optimizations
    - Minimal re-renders with proper React memoization
+   - Smooth value animations using `requestAnimationFrame` with easeOutCubic easing
+   - Optimized animation thresholds to reduce jitter (1 km/h for speed, 1m for altitude)
 
 5. **Graceful Degradation**: Always show something, even if APIs fail
    - **GPS Freshness**: Location/weather/minimap hide when GPS update is >15 minutes old
@@ -498,6 +530,13 @@ All API limits are enforced client-side to prevent quota exhaustion:
   - `GPS_FRESHNESS_TIMEOUT`: 15 minutes (when to hide location/weather)
   - `GPS_STALE_TIMEOUT`: 10 seconds (when GPS data is considered stale)
   
+- **Value Animations**: Use `useAnimatedValue` hook for smooth transitions
+  - Speed: 1 km/h threshold, 35ms/unit multiplier, 1000ms max duration
+  - Altitude: 1m threshold, 25ms/meter multiplier, 1200ms max duration
+  - Heart rate: 1 BPM threshold, 35ms/BPM multiplier, 1400ms max duration
+  - All use easeOutCubic easing for natural feel
+  - Prevents jittery updates from GPS fluctuations
+  
 - **Incomplete Data Handling**: Hide incomplete data rather than show errors
   - `hasIncompleteLocationData` flag: Set when LocationIQ returns country name but no country code
   - Entire top-right section (location/weather/minimap) hides when flag is true
@@ -536,6 +575,9 @@ All API limits are enforced client-side to prevent quota exhaustion:
 - ✅ Adaptive location update thresholds based on speed
 - ✅ Smooth CSS transitions for appearance/disappearance
 - ✅ Tabular numbers for consistent temperature display
+- ✅ Smooth animated value transitions (speed, altitude, heart rate)
+- ✅ Optimized animation settings (easeOutCubic easing, adaptive thresholds)
+- ✅ Code optimizations (reusable hooks, removed duplicate code, memoization)
 
 ### Common Issues & Gotchas for AI Assistants
 
@@ -583,8 +625,35 @@ All API limits are enforced client-side to prevent quota exhaustion:
 
 8. **Settings Sync Timing**
    - **SSE**: Primary method, instant (<1 second)
-   - **Polling**: Fallback, checks every 5 seconds
+   - **Polling**: Fallback, checks every 2 seconds
    - **Both**: Should work, but SSE preferred for real-time updates
+
+9. **Animation Performance**
+   - All value animations use `useAnimatedValue` hook for consistency
+   - Speed/altitude/heart rate share same animation logic (DRY principle)
+   - Thresholds optimized to reduce GPS jitter (1 km/h for speed, 1m for altitude)
+   - EaseOutCubic easing provides smooth, natural feel
+
+### Code Architecture
+
+**Reusable Components & Hooks**
+- `useAnimatedValue` - Custom hook for smooth numeric value transitions
+  - Used by speed, altitude, and heart rate displays
+  - Configurable thresholds, durations, and precision
+  - RequestAnimationFrame-based for smooth 60fps animations
+
+**Component Structure**
+- `OverlayPage` - Main overlay component with GPS/weather/location logic
+- `HeartRateMonitor` - Pulsoid WebSocket integration with animated BPM
+- `MapLibreMinimap` - WebGL-based map rendering with day/night styling
+- `ErrorBoundary` - Graceful error handling for component failures
+
+**Utilities**
+- `location-utils.ts` - Location formatting, fallback logic, duplicate detection
+- `api-utils.ts` - External API integrations (LocationIQ, OpenWeatherMap)
+- `rate-limiting.ts` - API rate limit enforcement (per-second + daily limits)
+- `unit-conversions.ts` - Metric/imperial conversions
+- `fallback-utils.ts` - Fallback data creation when APIs fail
 
 ### Future Enhancement Ideas
 - Smart location name truncation with ellipsis

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import dynamic from 'next/dynamic';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRenderPerformance } from '@/lib/performance';
 import { OverlayLogger } from '@/lib/logger';
-import { celsiusToFahrenheit } from '@/utils/unit-conversions';
+import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
 import { API_KEYS, TIMERS, type RTIRLPayload } from '@/utils/overlay-constants';
 
 // Extract constants for cleaner code
@@ -92,6 +93,7 @@ function OverlayPage() {
   const [sunriseSunset, setSunriseSunset] = useState<SunriseSunsetData | null>(null);
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [currentAltitude, setCurrentAltitude] = useState<number | null>(null);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(0.95); // Track opacity for fade transitions
@@ -125,12 +127,16 @@ function OverlayPage() {
   // Track last 3 speed readings for minimap visibility (need 3 consecutive readings > 5 km/h)
   const speedReadingsRef = useRef<number[]>([]); // Array of last 3 speed readings
   
-  // GPS freshness tracking for location/weather display
-  const locationWeatherHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
   // Minimap speed-based visibility tracking
   const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 5 km/h
   const MINIMAP_HIDE_DELAY = 60000; // 1 minute - hide after low speed or no GPS updates
+  
+  // Speed and altitude staleness tracking
+  const lastSpeedUpdateTime = useRef(0); // Track when speed was last updated
+  const lastAltitudeUpdateTime = useRef(0); // Track when altitude was last updated
+  const altitudeHistory = useRef<Array<{ altitude: number; timestamp: number }>>([]); // Track altitude over time for change detection
+  const [speedUpdateTimestamp, setSpeedUpdateTimestamp] = useState(0); // State to trigger re-renders
+  const [altitudeUpdateTimestamp, setAltitudeUpdateTimestamp] = useState(0); // State to trigger re-renders
   
   // Helper: Check if GPS update is fresh (within 15 minutes)
   const isGpsUpdateFresh = (gpsUpdateTime: number, now: number): boolean => {
@@ -170,13 +176,6 @@ function OverlayPage() {
   }, [currentSpeed]);
 
 
-  // GPS staleness no longer controls location/weather visibility
-  // Visibility is now controlled by "Hidden" option in location display mode
-  // This function is kept for potential future use but doesn't hide location/weather
-  const handleGpsStaleness = useCallback((gpsUpdateTime: number, now: number, isFirstUpdate: boolean, wasReceivingUpdates: boolean) => {
-    // No longer auto-hiding location/weather based on GPS staleness
-    // "Hidden" mode in admin panel controls visibility instead
-  }, []);
   
   // Simplified minimap visibility logic:
   // - Show: Speed > 5 km/h for 3 consecutive RTIRL updates
@@ -364,7 +363,6 @@ function OverlayPage() {
   useEffect(() => {
     return () => {
       clearTimer(minimapFadeTimeoutRef);
-      clearTimer(locationWeatherHideTimeoutRef);
       // Cleanup completed todo timers
       completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
       completedTodoTimersRef.current.clear();
@@ -897,9 +895,17 @@ function OverlayPage() {
         
         const data = await res.json();
         if (data) {
-          setSettings(data);
+          // Merge with defaults to ensure new fields (altitudeDisplay, speedDisplay, weatherConditionDisplay) are initialized
+          const mergedSettings = {
+            ...DEFAULT_OVERLAY_SETTINGS,
+            ...data,
+            weatherConditionDisplay: data.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
+            altitudeDisplay: data.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
+            speedDisplay: data.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
+          };
+          setSettings(mergedSettings);
           // Set initial hash to prevent false positives on first poll
-          lastSettingsHash.current = createSettingsHash(data);
+          lastSettingsHash.current = createSettingsHash(mergedSettings);
           settingsLoadedRef.current = true; // Mark settings as loaded
         }
         // If no data but request succeeded, keep existing settings (don't reset to defaults)
@@ -929,14 +935,22 @@ function OverlayPage() {
             // Extract only settings properties, exclude SSE metadata (type, timestamp)
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { type: _type, timestamp: _timestamp, ...settingsData } = data;
+            // Merge with defaults to ensure new fields (altitudeDisplay, speedDisplay, weatherConditionDisplay) are initialized
+            const mergedSettings = {
+              ...DEFAULT_OVERLAY_SETTINGS,
+              ...settingsData,
+              weatherConditionDisplay: settingsData.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
+              altitudeDisplay: settingsData.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
+              speedDisplay: settingsData.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
+            } as OverlaySettings;
             OverlayLogger.settings('Settings updated via SSE', { 
-              locationDisplay: settingsData.locationDisplay,
-              showWeather: settingsData.showWeather,
-              showMinimap: settingsData.showMinimap 
+              locationDisplay: mergedSettings.locationDisplay,
+              showWeather: mergedSettings.showWeather,
+              showMinimap: mergedSettings.showMinimap 
             });
-            setSettings(settingsData as OverlaySettings);
+            setSettings(mergedSettings);
             // Update hash to prevent polling from detecting this as a new change
-            lastSettingsHash.current = createSettingsHash(settingsData as OverlaySettings);
+            lastSettingsHash.current = createSettingsHash(mergedSettings);
             settingsLoadedRef.current = true; // Mark settings as loaded
           }
       } catch {
@@ -1068,6 +1082,7 @@ function OverlayPage() {
               OverlayLogger.overlay('RTIRL update received', {
                 coordinates: { lat, lon },
                 speed: payload.speed || 0,
+                altitude: payload.altitude !== undefined ? payload.altitude : 'not provided',
                 timestamp: payloadTimestamp,
                 timestampAge: Math.round(timeSincePayload / 1000),
                 timestampAgeMinutes: Math.round(timeSincePayload / 60000),
@@ -1102,9 +1117,6 @@ function OverlayPage() {
               // Check if GPS update is fresh (for logging purposes only - no longer controls visibility)
               const isFresh = isGpsUpdateFresh(payloadTimestamp, now);
               
-              // GPS staleness no longer controls visibility - manual toggle in admin panel does
-              handleGpsStaleness(payloadTimestamp, now, isFirstGpsUpdate, isReceivingUpdates);
-              
               // Get previous coordinates and GPS timestamp for speed calculation
               const prevCoords = lastCoords.current;
               const prevGpsTimestamp = lastGpsTimestamp.current;
@@ -1123,6 +1135,38 @@ function OverlayPage() {
               const roundedSpeed = Math.round(speedKmh);
               
               setCurrentSpeed(roundedSpeed);
+              lastSpeedUpdateTime.current = now;
+              setSpeedUpdateTimestamp(now); // Trigger re-render
+              
+              // Extract altitude from RTIRL payload
+              // RTIRL provides altitude as either a number or an object with EGM96/WGS84
+              let altitudeValue: number | null = null;
+              if (payload.altitude !== undefined) {
+                if (typeof payload.altitude === 'number' && payload.altitude >= 0) {
+                  altitudeValue = payload.altitude;
+                } else if (typeof payload.altitude === 'object' && payload.altitude !== null) {
+                  // Prefer EGM96 (more accurate for elevation above sea level), fallback to WGS84
+                  const altitudeObj = payload.altitude as { EGM96?: number; WGS84?: number };
+                  if (altitudeObj.EGM96 !== undefined && typeof altitudeObj.EGM96 === 'number' && altitudeObj.EGM96 >= 0) {
+                    altitudeValue = altitudeObj.EGM96;
+                  } else if (altitudeObj.WGS84 !== undefined && typeof altitudeObj.WGS84 === 'number' && altitudeObj.WGS84 >= 0) {
+                    altitudeValue = altitudeObj.WGS84;
+                  }
+                }
+              }
+              
+              if (altitudeValue !== null) {
+                const roundedAltitude = Math.round(altitudeValue);
+                setCurrentAltitude(roundedAltitude);
+                lastAltitudeUpdateTime.current = now;
+                
+                // Track altitude history for change detection (keep last 2 minutes)
+                altitudeHistory.current.push({ altitude: roundedAltitude, timestamp: now });
+                const twoMinutesAgo = now - (2 * 60 * 1000);
+                altitudeHistory.current = altitudeHistory.current.filter(entry => entry.timestamp > twoMinutesAgo);
+                
+                setAltitudeUpdateTimestamp(now); // Trigger re-render
+              }
               
               // Track speed readings for minimap visibility (need 3 consecutive readings > 5 km/h)
               if (settingsRef.current.minimapSpeedBased) {
@@ -1566,7 +1610,8 @@ function OverlayPage() {
 
 
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
-  const isNightTime = (): boolean => {
+  // Memoized to avoid recalculating on every render
+  const isNightTime = useMemo((): boolean => {
     if (!sunriseSunset) {
       // Fallback to simple time-based check if no API data
       OverlayLogger.warn('No sunrise/sunset data available, using fallback detection');
@@ -1597,27 +1642,47 @@ function OverlayPage() {
       OverlayLogger.error('Day/night calculation error', error);
       return false;
     }
-  };
+  }, [sunriseSunset, timezone]);
 
   // Get weather icon based on description and time of day
-  const getWeatherIcon = useCallback((desc: string): string | null => {
+  // Returns emoji string
+  const getWeatherIcon = useCallback((desc: string, showForAllConditions: boolean = false, isNight: boolean = false): string | null => {
     const d = desc.toLowerCase();
     
-    // Hide icon for clear/partly cloudy conditions (not notable for IRL streaming)
-    if (d.includes('clear') || d.includes('sunny') || d.includes('partly') || d.includes('few clouds')) {
+    // Hide icon for clear/partly cloudy conditions unless showing all conditions
+    if (!showForAllConditions && (d.includes('clear') || d.includes('sunny') || d.includes('partly') || d.includes('few clouds'))) {
       return null;
     }
     
-    // Other notable conditions
-    if (d.includes('cloud')) return '☁️';
-    if (d.includes('rain') || d.includes('drizzle')) return '🌧️';
-    if (d.includes('storm') || d.includes('thunder')) return '⛈️';
-    if (d.includes('snow')) return '❄️';
-    if (d.includes('fog') || d.includes('mist') || d.includes('haze')) return '🌫️';
-    if (d.includes('wind')) return '💨';
+    // Map conditions to emojis with day/night variants
+    if (d.includes('clear') || d.includes('sunny')) {
+      return isNight ? '🌙' : '☀️';
+    }
+    if (d.includes('rain') || d.includes('drizzle')) {
+      return '🌧️';
+    }
+    if (d.includes('storm') || d.includes('thunder')) {
+      return '⛈️';
+    }
+    if (d.includes('snow')) {
+      return '❄️';
+    }
+    if (d.includes('fog') || d.includes('mist') || d.includes('haze')) {
+      return '🌫️';
+    }
+    if (d.includes('wind')) {
+      return '💨';
+    }
+    if (d.includes('cloud') || d.includes('partly') || d.includes('few clouds')) {
+      // Partly cloudy: sun behind cloud during day, moon behind cloud at night
+      if (d.includes('partly') || d.includes('few clouds')) {
+        return isNight ? '☁️🌙' : '⛅';
+      }
+      return '☁️'; // Full clouds
+    }
     
     // Default fallback
-    return '☁️';
+    return isNight ? '🌙' : '☀️';
   }, []);
 
   // Check if weather condition is notable (affects IRL streaming)
@@ -1654,13 +1719,145 @@ function OverlayPage() {
     return null;
     }
     
+    // Determine if icon and description should be shown based on display mode
+    let showIcon = false;
+    let showDescription = false;
+    
+    if (settings.weatherConditionDisplay === 'always') {
+      // Always show icon and description
+      showIcon = true;
+      showDescription = true;
+    } else if (settings.weatherConditionDisplay === 'auto') {
+      // Only show for notable conditions
+      const isNotable = isNotableWeatherCondition(weather.desc);
+      showIcon = isNotable;
+      showDescription = isNotable;
+    }
+    // 'hidden' mode: showIcon and showDescription remain false
+    
+    const icon = showIcon ? getWeatherIcon(weather.desc, settings.weatherConditionDisplay === 'always', isNightTime) : null;
+    const description = showDescription ? weather.desc : null;
+    
     const display = {
-      temperature: `${weather.temp}°C / ${celsiusToFahrenheit(weather.temp)}°F`,
-      icon: getWeatherIcon(weather.desc),
-      description: isNotableWeatherCondition(weather.desc) ? weather.desc : null
+      temperature: `${weather.temp}°C (${celsiusToFahrenheit(weather.temp)}°F)`,
+      icon: icon,
+      description: description
     };
     return display;
-  }, [weather, getWeatherIcon, isNotableWeatherCondition]); // getWeatherIcon already depends on sunriseSunset/timezone via isNightTime
+  }, [weather, settings.weatherConditionDisplay, getWeatherIcon, isNotableWeatherCondition, isNightTime]);
+
+  // Animated speed value (1 decimal precision, 1 km/h threshold, 1000ms max)
+  // Increased threshold to 1 km/h to reduce GPS jitter, increased max duration for smoother large changes
+  const displayedSpeed = useAnimatedValue(currentSpeed, {
+    immediateThreshold: 1, // 1 km/h - reduces jittery updates from GPS fluctuations
+    durationMultiplier: 35, // Slightly slower for smoother feel
+    maxDuration: 1000, // 1 second max - smoother for large changes (0→60 km/h)
+    precision: 1,
+    allowNull: false,
+  }) ?? 0;
+
+  // Animated altitude value (integer precision, 1m threshold, 1200ms max, allows null)
+  // Slightly increased max duration for smoother large elevation changes (e.g., elevators, GPS jumps)
+  const displayedAltitude = useAnimatedValue(currentAltitude, {
+    immediateThreshold: 1, // 1m - good for gradual hiking changes
+    durationMultiplier: 25, // Slightly slower for smoother feel
+    maxDuration: 1200, // 1.2 seconds max - smoother for large jumps while still responsive
+    precision: 0,
+    allowNull: true,
+  });
+
+  // Altitude display logic
+  const altitudeDisplay = useMemo(() => {
+    // Hide if no altitude data
+    if (currentAltitude === null || displayedAltitude === null) {
+      return null;
+    }
+    
+    // Check display mode first
+    if (settings.altitudeDisplay === 'hidden') {
+      return null;
+    }
+    
+    // Check staleness only for "auto" mode - "always" mode shows even if stale
+    if (settings.altitudeDisplay === 'auto') {
+      const now = Date.now();
+      const timeSinceAltitudeUpdate = lastAltitudeUpdateTime.current > 0 ? (now - lastAltitudeUpdateTime.current) : Infinity;
+      
+      // Speed-based staleness timeout for altitude
+      // Slow speeds (hiking): longer timeout (5 minutes)
+      // Fast speeds (driving/train): shorter timeout (1 minute) - elevation less relevant
+      const isMovingFast = currentSpeed > 30; // km/h threshold
+      const ALTITUDE_STALE_TIMEOUT = isMovingFast ? (1 * 60 * 1000) : (5 * 60 * 1000); // 1 min fast, 5 min slow
+      const isAltitudeStale = timeSinceAltitudeUpdate > ALTITUDE_STALE_TIMEOUT;
+      
+      // Hide if stale in auto mode
+      if (isAltitudeStale) {
+        return null;
+      }
+      
+      // Check if elevation is changing over time (for hiking scenarios)
+      // Look at altitude changes over the last 60 seconds
+      const oneMinuteAgo = now - (60 * 1000);
+      const recentHistory = altitudeHistory.current.filter(entry => entry.timestamp > oneMinuteAgo);
+      
+      let isElevationChanging = false;
+      if (recentHistory.length >= 2) {
+        const oldest = recentHistory[0].altitude;
+        const newest = recentHistory[recentHistory.length - 1].altitude;
+        const changeOverMinute = Math.abs(newest - oldest);
+        // If elevation changed by >5m in the last minute, consider it changing
+        // This catches slow climbing (e.g., 5m/min hiking pace)
+        isElevationChanging = changeOverMinute > 5;
+      }
+      
+      // Auto mode: show if elevation is changing OR if it's notable (>150m)
+      // This handles both scenarios:
+      // 1. Hiking up hills (elevation changing slowly but consistently)
+      // 2. Already at notable elevation (even if not currently changing)
+      // 150m threshold catches elevated areas (Hollywood Hills, Austin hills) while filtering out most city centers
+      const isNotable = isElevationChanging || currentAltitude > 150;
+      
+      if (!isNotable) {
+        return null;
+      }
+    }
+    
+    // Show altitude (either always mode, or auto mode with notable conditions)
+    const altitudeM = displayedAltitude;
+    const altitudeFt = metersToFeet(altitudeM);
+    return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
+  }, [currentAltitude, displayedAltitude, settings.altitudeDisplay, currentSpeed, altitudeUpdateTimestamp]);
+
+  // Speed display logic
+  const speedDisplay = useMemo(() => {
+    // Check display mode first
+    if (settings.speedDisplay === 'hidden') {
+      return null;
+    }
+    
+    // Check staleness only for "auto" mode - "always" mode shows even if stale
+    if (settings.speedDisplay === 'auto') {
+      const now = Date.now();
+      const timeSinceSpeedUpdate = lastSpeedUpdateTime.current > 0 ? (now - lastSpeedUpdateTime.current) : Infinity;
+      const isSpeedStale = timeSinceSpeedUpdate > GPS_STALE_TIMEOUT; // 10 seconds
+      
+      // Hide if stale or speed is 0 in auto mode
+      if (isSpeedStale || currentSpeed === 0) {
+        return null;
+      }
+      
+      // Auto mode: show if >= 10 km/h (above walking pace)
+      if (currentSpeed < 10) {
+        return null;
+      }
+    }
+    
+    // Show speed (either always mode, or auto mode with speed >= 10 km/h)
+    // In always mode, show even if speed is 0
+    const speedKmh = displayedSpeed;
+    const speedMph = kmhToMph(speedKmh);
+    return { value: speedKmh, formatted: `${Math.round(speedKmh)} km/h (${Math.round(speedMph)} mph)` };
+  }, [currentSpeed, displayedSpeed, settings.speedDisplay, speedUpdateTimestamp]);
 
   return (
     <ErrorBoundary autoReload={false}>
@@ -1743,23 +1940,45 @@ function OverlayPage() {
             {/* Weather - show if we have weather data (already checked that locationDisplay !== 'hidden' above) */}
             {weatherDisplay && settings.showWeather && (
               <div className="weather weather-line">
-                <div className="weather-container">
-                  <div className="weather-content">
-                    <div className="weather-temperature">
-                      {weatherDisplay.temperature}
-                    </div>
-                    {weatherDisplay.icon && (
-                      <span className="weather-icon">
-                        {weatherDisplay.icon}
-                      </span>
-                    )}
+                <div className="weather-text-group">
+                  <div className="weather-temperature">
+                    {weatherDisplay.temperature}
                   </div>
-                  {weatherDisplay.description && (
-                    <div className="weather-description">
-                      {weatherDisplay.description}
+                  {(weatherDisplay.icon || weatherDisplay.description) && (
+                    <div className="weather-condition-group">
+                      {weatherDisplay.description && (
+                        <span className="weather-description-text">
+                          {weatherDisplay.description}
+                        </span>
+                      )}
+                      {weatherDisplay.icon && (
+                        <span className="weather-icon-inline">
+                          {weatherDisplay.icon}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+            
+            {/* Altitude & Speed - grouped together */}
+            {(altitudeDisplay || speedDisplay) && (
+              <div className="movement-data-group">
+                {altitudeDisplay && (
+                  <div className="weather weather-line movement-data-line">
+                    <div className="weather-temperature">
+                      {altitudeDisplay.formatted}
+                    </div>
+                  </div>
+                )}
+                {speedDisplay && (
+                  <div className="weather weather-line movement-data-line">
+                    <div className="weather-temperature">
+                      {speedDisplay.formatted}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1778,7 +1997,7 @@ function OverlayPage() {
                     isVisible={minimapVisible}
                     zoomLevel={settings.mapZoomLevel}
                     timezone={timezone || undefined}
-                    isNight={isNightTime()}
+                    isNight={isNightTime}
                   />
                 </ErrorBoundary>
               ) : (

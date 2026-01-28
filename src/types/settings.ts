@@ -2,6 +2,7 @@
 
 export type LocationDisplayMode = 'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden';
 export type MapZoomLevel = 'neighbourhood' | 'city' | 'state' | 'country' | 'ocean' | 'continental';
+export type DisplayMode = 'always' | 'auto' | 'hidden';
 
 export interface TodoItem {
   id: string;
@@ -14,9 +15,12 @@ export interface OverlaySettings {
   customLocation?: string;
   showCountryName: boolean;
   showWeather: boolean;
+  weatherConditionDisplay: DisplayMode;
   showMinimap: boolean;
   minimapSpeedBased: boolean;
   mapZoomLevel: MapZoomLevel;
+  altitudeDisplay: DisplayMode;
+  speedDisplay: DisplayMode;
   todos?: TodoItem[];
   showTodoList?: boolean;
 }
@@ -27,9 +31,12 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   customLocation: '',
   showCountryName: true,
   showWeather: true,
+  weatherConditionDisplay: 'auto',
   showMinimap: false,
   minimapSpeedBased: false,
   mapZoomLevel: 'city',
+  altitudeDisplay: 'auto',
+  speedDisplay: 'auto',
   todos: [],
   showTodoList: false,
 };
@@ -41,9 +48,12 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos'>, 'b
   customLocation: 'string',
   showCountryName: 'boolean',
   showWeather: 'boolean',
+  weatherConditionDisplay: 'string',
   showMinimap: 'boolean',
   minimapSpeedBased: 'boolean',
   mapZoomLevel: 'string',
+  altitudeDisplay: 'string',
+  speedDisplay: 'string',
   showTodoList: 'boolean'
 };
 

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, TodoItem } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
 import '@/styles/admin.css';
 
 declare global {
@@ -317,6 +317,192 @@ export default function AdminPage() {
       <main className="main-content">
         <div className="settings-container">
           
+          {/* Location Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>📍 Location</h2>
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Location Mode</label>
+              <RadioGroup
+                value={settings.locationDisplay}
+                onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
+                options={[
+                  { 
+                    value: 'neighbourhood', 
+                    label: 'Neighbourhood', 
+                    icon: '🏘️'
+                  },
+                  { 
+                    value: 'city', 
+                    label: 'City', 
+                    icon: '🏙️'
+                  },
+                  { 
+                    value: 'state', 
+                    label: 'State', 
+                    icon: '🗺️'
+                  },
+                  { 
+                    value: 'country', 
+                    label: 'Country', 
+                    icon: '🌍'
+                  },
+                  { 
+                    value: 'custom', 
+                    label: 'Custom', 
+                    icon: '✏️'
+                  },
+                  { 
+                    value: 'hidden', 
+                    label: 'Hidden', 
+                    icon: '🚫'
+                  }
+                ]}
+              />
+              
+              {/* Custom location input */}
+              {settings.locationDisplay === 'custom' && (
+                <div className="custom-location-input">
+                  <label className="input-label">Custom Location Text</label>
+                  <input
+                    type="text"
+                    value={customLocationInput}
+                    onChange={(e) => handleCustomLocationChange(e.target.value)}
+                    placeholder="Enter custom location (e.g., 'Tokyo, Japan' or 'Las Vegas Strip')"
+                    className="text-input"
+                    maxLength={50}
+                  />
+                  
+                  {/* Country name toggle for custom location */}
+                  <div className="checkbox-group" style={{ marginTop: '12px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.showCountryName}
+                        onChange={(e) => handleSettingsChange({ showCountryName: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">🏴 Show Country Name & Flag</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+              
+            </div>
+          </section>
+
+          {/* Weather Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>🌤️ Weather</h2>
+            </div>
+            
+            <div className="setting-group">
+              <div className="checkbox-group" style={{ marginBottom: '16px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showWeather ?? false}
+                    onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Show Temperature</span>
+                </label>
+              </div>
+              
+              <label className="group-label">Condition Icon & Text</label>
+              <RadioGroup
+                value={settings.weatherConditionDisplay || 'auto'}
+                onChange={(value) => handleSettingsChange({ weatherConditionDisplay: value as DisplayMode })}
+                options={[
+                  { value: 'always', label: 'Always Show', icon: '👁️' },
+                  { value: 'auto', label: 'Auto', icon: '🌧️', description: 'Shows icon/text for rain, storms, snow, etc.' },
+                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
+                ]}
+              />
+            </div>
+          </section>
+
+          {/* Map Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>🗺️ Map</h2>
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Display Mode</label>
+              <RadioGroup
+                value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
+                onChange={(value) => {
+                  if (value === 'always') {
+                    handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
+                  } else if (value === 'speed') {
+                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
+                  } else {
+                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
+                  }
+                }}
+                options={[
+                  { value: 'always', label: 'Always Show', icon: '👁️' },
+                  { value: 'speed', label: 'Auto on Movement', icon: '🏃' },
+                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
+                ]}
+              />
+              
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Zoom Level</label>
+              <RadioGroup
+                value={settings.mapZoomLevel}
+                onChange={(value) => handleSettingsChange({ mapZoomLevel: value as MapZoomLevel })}
+                options={[
+                  { value: 'neighbourhood', label: 'Neighbourhood', icon: '🏘️' },
+                  { value: 'city', label: 'City', icon: '🏙️' },
+                  { value: 'state', label: 'State', icon: '🗺️' },
+                  { value: 'country', label: 'Country', icon: '🌍' },
+                  { value: 'ocean', label: 'Ocean', icon: '🌊' },
+                  { value: 'continental', label: 'Continental', icon: '🌎' }
+                ]}
+              />
+            </div>
+          </section>
+
+          {/* Altitude & Speed Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>📊 Altitude & Speed</h2>
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Altitude Display</label>
+              <RadioGroup
+                value={settings.altitudeDisplay || 'auto'}
+                onChange={(value) => handleSettingsChange({ altitudeDisplay: value as DisplayMode })}
+                options={[
+                  { value: 'always', label: 'Always Show', icon: '👁️' },
+                  { value: 'auto', label: 'Auto', icon: '📈', description: 'Shows when elevation is changing or when moving' },
+                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
+                ]}
+              />
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Speed Display</label>
+              <RadioGroup
+                value={settings.speedDisplay || 'auto'}
+                onChange={(value) => handleSettingsChange({ speedDisplay: value as DisplayMode })}
+                options={[
+                  { value: 'always', label: 'Always Show', icon: '👁️' },
+                  { value: 'auto', label: 'Auto', icon: '🏃', description: 'Shows when ≥10 km/h and GPS is fresh' },
+                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
+                ]}
+              />
+            </div>
+          </section>
+
           {/* To-Do List Section */}
           <section className="settings-section">
             <div className="section-header">
@@ -488,128 +674,6 @@ export default function AdminPage() {
                   </div>
                 </>
               )}
-            </div>
-          </section>
-          
-          {/* Location & Display Section */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>📍 Location</h2>
-            </div>
-            
-            <div className="setting-group">
-              <label className="group-label">Location Mode</label>
-              <RadioGroup
-                value={settings.locationDisplay}
-                onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
-                options={[
-                  { 
-                    value: 'neighbourhood', 
-                    label: 'Neighbourhood', 
-                    icon: '🏘️'
-                  },
-                  { 
-                    value: 'city', 
-                    label: 'City', 
-                    icon: '🏙️'
-                  },
-                  { 
-                    value: 'state', 
-                    label: 'State', 
-                    icon: '🗺️'
-                  },
-                  { 
-                    value: 'country', 
-                    label: 'Country', 
-                    icon: '🌍'
-                  },
-                  { 
-                    value: 'custom', 
-                    label: 'Custom', 
-                    icon: '✏️'
-                  },
-                  { 
-                    value: 'hidden', 
-                    label: 'Hidden', 
-                    icon: '🚫'
-                  }
-                ]}
-              />
-              
-              {/* Custom location input */}
-              {settings.locationDisplay === 'custom' && (
-                <div className="custom-location-input">
-                  <label className="input-label">Custom Location Text</label>
-                  <input
-                    type="text"
-                    value={customLocationInput}
-                    onChange={(e) => handleCustomLocationChange(e.target.value)}
-                    placeholder="Enter custom location (e.g., 'Tokyo, Japan' or 'Las Vegas Strip')"
-                    className="text-input"
-                    maxLength={50}
-                  />
-                  
-                  {/* Country name toggle for custom location */}
-                  <div className="checkbox-group" style={{ marginTop: '12px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.showCountryName}
-                        onChange={(e) => handleSettingsChange({ showCountryName: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">🏴 Show Country Name & Flag</span>
-                    </label>
-                  </div>
-                </div>
-              )}
-              
-            </div>
-          </section>
-
-
-          {/* Map Section */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>🗺️ Map</h2>
-            </div>
-            
-            <div className="setting-group">
-              <label className="group-label">Display Mode</label>
-              <RadioGroup
-                value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
-                onChange={(value) => {
-                  if (value === 'always') {
-                    handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
-                  } else if (value === 'speed') {
-                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
-                  } else {
-                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
-                  }
-                }}
-                options={[
-                  { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'speed', label: 'Auto on Movement', icon: '🏃' },
-                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
-                ]}
-              />
-              
-            </div>
-            
-            <div className="setting-group">
-              <label className="group-label">Zoom Level</label>
-              <RadioGroup
-                value={settings.mapZoomLevel}
-                onChange={(value) => handleSettingsChange({ mapZoomLevel: value as MapZoomLevel })}
-                options={[
-                  { value: 'neighbourhood', label: 'Neighbourhood', icon: '🏘️' },
-                  { value: 'city', label: 'City', icon: '🏙️' },
-                  { value: 'state', label: 'State', icon: '🗺️' },
-                  { value: 'country', label: 'Country', icon: '🌍' },
-                  { value: 'ocean', label: 'Ocean', icon: '🌊' },
-                  { value: 'continental', label: 'Continental', icon: '🌎' }
-                ]}
-              />
             </div>
           </section>
           
