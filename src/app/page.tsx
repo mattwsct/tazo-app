@@ -393,38 +393,6 @@ export default function AdminPage() {
             </div>
           </section>
 
-          {/* Weather Section */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>🌤️ Weather</h2>
-            </div>
-            
-            <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '16px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showWeather ?? false}
-                    onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Show Temperature</span>
-                </label>
-              </div>
-              
-              <label className="group-label">Condition Icon & Text</label>
-              <RadioGroup
-                value={settings.weatherConditionDisplay || 'auto'}
-                onChange={(value) => handleSettingsChange({ weatherConditionDisplay: value as DisplayMode })}
-                options={[
-                  { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'auto', label: 'Auto', icon: '🌧️', description: 'Shows icon/text for rain, storms, snow, etc.' },
-                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
-                ]}
-              />
-            </div>
-          </section>
-
           {/* Map Section */}
           <section className="settings-section">
             <div className="section-header">
@@ -465,6 +433,38 @@ export default function AdminPage() {
                   { value: 'country', label: 'Country', icon: '🌍' },
                   { value: 'ocean', label: 'Ocean', icon: '🌊' },
                   { value: 'continental', label: 'Continental', icon: '🌎' }
+                ]}
+              />
+            </div>
+          </section>
+
+          {/* Weather Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>🌤️ Weather</h2>
+            </div>
+            
+            <div className="setting-group">
+              <div className="checkbox-group" style={{ marginBottom: '16px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showWeather ?? false}
+                    onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Show Temperature</span>
+                </label>
+              </div>
+              
+              <label className="group-label">Condition Icon & Text</label>
+              <RadioGroup
+                value={settings.weatherConditionDisplay || 'auto'}
+                onChange={(value) => handleSettingsChange({ weatherConditionDisplay: value as DisplayMode })}
+                options={[
+                  { value: 'always', label: 'Always Show', icon: '👁️' },
+                  { value: 'auto', label: 'Auto', icon: '🌧️', description: 'Shows icon/text for rain, storms, snow, etc.' },
+                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />
             </div>
