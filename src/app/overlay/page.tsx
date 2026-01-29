@@ -1679,9 +1679,9 @@ function OverlayPage() {
       return '💨';
     }
     if (d.includes('cloud') || d.includes('partly') || d.includes('few clouds')) {
-      // Partly cloudy: sun behind cloud during day, moon behind cloud at night
+      // Partly cloudy: sun behind cloud during day, just cloud at night (no single moon+cloud emoji)
       if (d.includes('partly') || d.includes('few clouds')) {
-        return isNight ? '☁️🌙' : '⛅';
+        return isNight ? '☁️' : '⛅';
       }
       return '☁️'; // Full clouds
     }

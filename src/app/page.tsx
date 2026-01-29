@@ -453,7 +453,7 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Show Temperature</span>
+                  <span className="checkbox-text">Show Temp/Weather</span>
                 </label>
               </div>
               

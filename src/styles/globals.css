@@ -426,7 +426,7 @@ body.overlay-page {
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-sm);
+  gap: var(--gap-md); /* Increased from sm to md for better visual balance */
   line-height: 1; /* Prevent extra line height from adding space */
   margin: 0; /* Ensure no margin */
   padding: 0; /* Ensure no padding */
@@ -444,14 +444,6 @@ body.overlay-page {
   margin: 0;
   padding: 0;
   line-height: 1;
-}
-
-.weather-condition-group {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--gap-sm);
 }
 
 .weather-description-text {
@@ -514,9 +506,7 @@ body.overlay-page {
   transform: translateZ(0);
   backface-visibility: hidden;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
-  margin-left: var(--gap-sm); /* Spacing between text and icon */
-  margin-right: 0;
-  margin-top: 0;
+  margin: 0; /* Remove margin - gap handles spacing */
   margin-bottom: 0;
   height: 1em; /* Match text line height */
 }
