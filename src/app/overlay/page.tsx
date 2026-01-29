@@ -1812,10 +1812,16 @@ function OverlayPage() {
         }
       }
       
-      // Calculate change from last shown altitude (baseline)
+      // Initialize baseline on first GPS update (don't show yet)
+      if (lastShownAltitude.current === null && !isAltitudeStale) {
+        lastShownAltitude.current = currentAltitude;
+        return null; // Don't show on first update - wait for actual change
+      }
+      
+      // Calculate change from baseline (only if baseline exists)
       const changeFromBaseline = lastShownAltitude.current !== null
         ? Math.abs(currentAltitude - lastShownAltitude.current)
-        : Infinity; // No baseline yet
+        : 0; // No baseline means no change yet
       
       // Check if we should show elevation (only detect new changes if GPS is fresh)
       const hasNotableChange = !isAltitudeStale && changeFromBaseline >= CHANGE_THRESHOLD;
