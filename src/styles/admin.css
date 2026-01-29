@@ -711,12 +711,14 @@ body {
 
 .radio-group.segmented .radio-option .radio-description {
   font-size: 0.7rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
   display: block;
   opacity: 0.8;
-  line-height: 1.1;
+  line-height: 1.2;
+  word-wrap: break-word;
+  hyphens: auto;
 }
 .section-subtitle {
   color: rgba(255, 255, 255, 0.7);
@@ -1008,8 +1010,11 @@ body {
   }
   
   .radio-group.segmented .radio-option .radio-description {
-    font-size: 0.65rem;
-    line-height: 1.1;
+    font-size: 0.7rem;
+    line-height: 1.3;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
   }
   
   .radio-group.segmented .radio-option .radio-icon {
@@ -1056,7 +1061,8 @@ body {
     min-width: 0;
     padding: 0.625rem 0.25rem;
     font-size: 0.75rem;
-    min-height: 2.5rem;
+    min-height: auto;
+    padding-bottom: 0.75rem;
   }
   
   .radio-group.segmented .radio-option .radio-label {
@@ -1101,7 +1107,9 @@ body {
   .radio-group.segmented .radio-option .radio-description {
     font-size: 0.7rem;
     white-space: normal;
-    line-height: 1.2;
+    line-height: 1.3;
+    overflow: visible;
+    text-overflow: clip;
   }
   
   .radio-group.segmented .radio-option .radio-icon {

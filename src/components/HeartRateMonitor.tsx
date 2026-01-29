@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { HeartRateLogger } from '@/lib/logger';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
+import { HEART_RATE_ANIMATION } from '@/utils/overlay-constants';
 
 // === 💗 HEART RATE TYPES & CONSTANTS ===
 interface PulsoidHeartRateData {
@@ -42,16 +43,11 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
   const [debouncedBpm, setDebouncedBpm] = useState(0); // Debounced BPM for color calculation
   
-  // Use animated value hook for smooth BPM transitions
-  // Integer precision, 1 BPM threshold, 1400ms max duration (more responsive)
-  // Reduced from 2000ms for better responsiveness while maintaining smoothness
+  // Use animated value hook for smooth BPM transitions - counts through each integer (70, 71, 72...)
   const smoothHeartRate = useAnimatedValue(
     heartRate.isConnected && heartRate.bpm > 0 ? heartRate.bpm : null,
     {
-      immediateThreshold: 1, // 1 BPM - good for gradual changes
-      durationMultiplier: 35, // Faster multiplier for more responsive feel
-      maxDuration: 1400, // 1.4 seconds max - more responsive than 2s, still smooth
-      precision: 0,
+      ...HEART_RATE_ANIMATION,
       allowNull: true,
     }
   ) ?? 0;

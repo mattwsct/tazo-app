@@ -483,7 +483,7 @@ export default function AdminPage() {
                 onChange={(value) => handleSettingsChange({ altitudeDisplay: value as DisplayMode })}
                 options={[
                   { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'auto', label: 'Auto', icon: '📈', description: 'Shows when elevation is changing or when moving' },
+                  { value: 'auto', label: 'Auto', icon: '📈', description: 'Shows when ≥10m change or ≥5 m/min climbing. Stays 5 min after change stops' },
                   { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />
@@ -496,7 +496,7 @@ export default function AdminPage() {
                 onChange={(value) => handleSettingsChange({ speedDisplay: value as DisplayMode })}
                 options={[
                   { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'auto', label: 'Auto', icon: '🏃', description: 'Shows when ≥10 km/h and GPS is fresh' },
+                  { value: 'auto', label: 'Auto', icon: '🏃', description: 'Shows when ≥10 km/h. Hides when GPS stale (>10s)' },
                   { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />

@@ -191,13 +191,18 @@ When GPS coordinates can't be reverse geocoded (ocean/remote areas):
 
 ### Altitude & Speed Display
 - **Altitude**: Shows elevation in meters and feet
-  - Auto mode: Displays when elevation is changing (>5m/min) or above 150m threshold
-  - Speed-based staleness: 5-minute timeout for slow speeds (hiking), 1-minute for fast speeds
+  - Auto mode: Smart detection of notable elevation changes
+    - Shows when altitude changes by ≥10m (sudden changes like elevators)
+    - Shows when climbing/descending at ≥5 m/min (gradual changes like hiking)
+    - Continues showing for 5 minutes after change stops
+    - Keeps showing if rate continues ≥5 m/min (resets timer while actively climbing)
+    - Hides when GPS data is stale (>5 minutes old) - same timeout as display duration
   - Smooth animated transitions between values
   
 - **Speed**: Shows movement speed in km/h and mph
-  - Auto mode: Displays when speed ≥10 km/h and GPS data is fresh
-  - Hides when stationary or GPS data is stale
+  - Auto mode: Displays when speed ≥10 km/h and GPS data is fresh (<10 seconds old)
+  - Hides when GPS data is stale (>10 seconds old) - regardless of speed value
+  - Hides when speed <10 km/h (even if GPS is fresh)
   - Smooth animated transitions between values
 
 ## 🔧 Admin Panel Settings
@@ -224,13 +229,18 @@ Access at `http://localhost:3000` to configure:
   - **Hidden** - Hide icon and description (temperature still shown)
   
 - **Altitude Display** - Control elevation display:
-  - **Always** - Always show altitude when GPS data available
-  - **Auto** - Show when elevation is changing or above 150m (notable elevation)
+  - **Always** - Always show altitude when GPS data available (even if stale)
+  - **Auto** - Smart detection of notable elevation changes:
+    - Shows when altitude changes by ≥10m (sudden changes like elevators)
+    - Shows when climbing/descending at ≥5 m/min (gradual changes like hiking)
+    - Continues showing for 5 minutes after change stops
+    - Keeps showing if rate continues ≥5 m/min (resets timer while actively climbing)
+    - Hides when GPS data is stale (>5 minutes old) - same timeout as display duration
   - **Hidden** - Hide altitude completely
   
 - **Speed Display** - Control movement speed display:
-  - **Always** - Always show speed when GPS data available
-  - **Auto** - Show when speed ≥10 km/h and GPS is fresh
+  - **Always** - Always show speed when GPS data available (even if stale)
+  - **Auto** - Show when speed ≥10 km/h AND GPS is fresh (<10 seconds old). Hides when GPS is stale (regardless of speed) or when speed <10 km/h
   - **Hidden** - Hide speed completely
   
 - **Minimap** - Three display modes:
@@ -530,11 +540,11 @@ All API limits are enforced client-side to prevent quota exhaustion:
   - `GPS_FRESHNESS_TIMEOUT`: 15 minutes (when to hide location/weather)
   - `GPS_STALE_TIMEOUT`: 10 seconds (when GPS data is considered stale)
   
-- **Value Animations**: Use `useAnimatedValue` hook for smooth transitions
-  - Speed: 1 km/h threshold, 35ms/unit multiplier, 1000ms max duration
-  - Altitude: 1m threshold, 25ms/meter multiplier, 1200ms max duration
-  - Heart rate: 1 BPM threshold, 35ms/BPM multiplier, 1400ms max duration
-  - All use easeOutCubic easing for natural feel
+- **Value Animations**: Use `useAnimatedValue` hook for smooth integer counting transitions
+  - Speed: 80ms per km/h, counts through each integer (50, 51, 52...)
+  - Altitude: 200ms per meter, counts through each integer (100, 101, 102...)
+  - Heart rate: 100ms per BPM, counts through each integer (70, 71, 72...)
+  - All use linear easing for integers to ensure each value is visible
   - Prevents jittery updates from GPS fluctuations
   
 - **Incomplete Data Handling**: Hide incomplete data rather than show errors

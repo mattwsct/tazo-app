@@ -30,6 +30,39 @@ export const TIMERS = {
   MINIMAP_GPS_STALE_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when GPS becomes stale
 } as const;
 
+// Animation configurations for integer counting - different speeds for different metrics
+// Ensures each integer is visible during transitions (70, 71, 72...)
+
+// Heart rate: Moderate speed - changes 1-3 BPM typically, can jump 5-10 during exercise
+// 100ms/BPM = 1s for 10 BPM change - fast enough to feel responsive, slow enough to see each number
+export const HEART_RATE_ANIMATION = {
+  immediateThreshold: 0.1,
+  durationMultiplier: 100, // 100ms per BPM
+  maxDuration: 2000, // 2 seconds max (for 20+ BPM jumps)
+  precision: 0,
+} as const;
+
+// Speed: Faster - GPS updates frequently, changes rapidly when accelerating/decelerating
+// 80ms/km/h = 0.8s for 10 km/h change - responsive and dynamic feel
+export const SPEED_ANIMATION = {
+  immediateThreshold: 0.1,
+  durationMultiplier: 80, // 80ms per km/h
+  maxDuration: 2000, // 2 seconds max (for 25+ km/h changes)
+  precision: 0,
+} as const;
+
+// Elevation: Slower - changes gradually (1-5m typically), can afford to be more contemplative
+// 200ms/m = 2s for 10m change - slower, more deliberate feel
+export const ELEVATION_ANIMATION = {
+  immediateThreshold: 0.1,
+  durationMultiplier: 200, // 200ms per meter
+  maxDuration: 4000, // 4 seconds max (for 20+ meter jumps like elevators)
+  precision: 0,
+} as const;
+
+// Legacy: Keep for backwards compatibility (defaults to heart rate speed)
+export const INTEGER_COUNTING_ANIMATION = HEART_RATE_ANIMATION;
+
 export const API_KEYS = {
   RTIRL: process.env.NEXT_PUBLIC_RTIRL_PULL_KEY,
   LOCATIONIQ: process.env.NEXT_PUBLIC_LOCATIONIQ_KEY,

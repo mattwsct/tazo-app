@@ -8,7 +8,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useRenderPerformance } from '@/lib/performance';
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
-import { API_KEYS, TIMERS, type RTIRLPayload } from '@/utils/overlay-constants';
+import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION, type RTIRLPayload } from '@/utils/overlay-constants';
 
 // Extract constants for cleaner code
 const {
@@ -96,7 +96,7 @@ function OverlayPage() {
   const [currentAltitude, setCurrentAltitude] = useState<number | null>(null);
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const [minimapVisible, setMinimapVisible] = useState(false);
-  const [minimapOpacity, setMinimapOpacity] = useState(0.95); // Track opacity for fade transitions
+  const [minimapOpacity, setMinimapOpacity] = useState(1.0); // Fully opaque for better readability
   const [hasIncompleteLocationData, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
   const [overlayVisible, setOverlayVisible] = useState(false); // Track if overlay should be visible (fade-in delay)
   const settingsLoadedRef = useRef(false); // Track if settings have been loaded from API (prevents logging initial default state change)
@@ -132,11 +132,16 @@ function OverlayPage() {
   const MINIMAP_HIDE_DELAY = 60000; // 1 minute - hide after low speed or no GPS updates
   
   // Speed and altitude staleness tracking
-  const lastSpeedUpdateTime = useRef(0); // Track when speed was last updated
-  const lastAltitudeUpdateTime = useRef(0); // Track when altitude was last updated
-  const altitudeHistory = useRef<Array<{ altitude: number; timestamp: number }>>([]); // Track altitude over time for change detection
+  // Track GPS timestamps (from payload), not reception times, so staleness works when stationary
+  const lastSpeedGpsTimestamp = useRef(0); // Track GPS timestamp when speed was last updated
+  const lastAltitudeGpsTimestamp = useRef(0); // Track GPS timestamp when altitude was last updated
   const [speedUpdateTimestamp, setSpeedUpdateTimestamp] = useState(0); // State to trigger re-renders
   const [altitudeUpdateTimestamp, setAltitudeUpdateTimestamp] = useState(0); // State to trigger re-renders
+  
+  // Altitude notable change detection (for auto mode)
+  const altitudeHistory = useRef<Array<{ altitude: number; timestamp: number }>>([]); // Track altitude over time for rate calculation
+  const lastShownAltitude = useRef<number | null>(null); // Baseline altitude when elevation was last shown
+  const lastShownTimestamp = useRef<number | null>(null); // When elevation was last shown (for 5-minute timer)
   
   // Helper: Check if GPS update is fresh (within 15 minutes)
   const isGpsUpdateFresh = (gpsUpdateTime: number, now: number): boolean => {
@@ -216,9 +221,9 @@ function OverlayPage() {
           
           if (!minimapVisible) {
             setMinimapVisible(true);
-            setMinimapOpacity(0.95);
+            setMinimapOpacity(1.0);
           } else {
-            setMinimapOpacity(0.95);
+            setMinimapOpacity(1.0);
           }
         }
       } else {
@@ -249,9 +254,9 @@ function OverlayPage() {
       if (!minimapVisible) {
         setMinimapVisible(true);
         setMinimapOpacity(0);
-        requestAnimationFrame(() => setMinimapOpacity(0.95));
+        requestAnimationFrame(() => setMinimapOpacity(1.0));
       } else {
-        setMinimapOpacity(0.95);
+        setMinimapOpacity(1.0);
       }
     } else {
       // Manual hide mode (showMinimap is false and minimapSpeedBased is false)
@@ -1135,7 +1140,7 @@ function OverlayPage() {
               const roundedSpeed = Math.round(speedKmh);
               
               setCurrentSpeed(roundedSpeed);
-              lastSpeedUpdateTime.current = now;
+              lastSpeedGpsTimestamp.current = payloadTimestamp; // Track GPS timestamp, not reception time
               setSpeedUpdateTimestamp(now); // Trigger re-render
               
               // Extract altitude from RTIRL payload
@@ -1158,9 +1163,9 @@ function OverlayPage() {
               if (altitudeValue !== null) {
                 const roundedAltitude = Math.round(altitudeValue);
                 setCurrentAltitude(roundedAltitude);
-                lastAltitudeUpdateTime.current = now;
+                lastAltitudeGpsTimestamp.current = payloadTimestamp; // Track GPS timestamp, not reception time
                 
-                // Track altitude history for change detection (keep last 2 minutes)
+                // Track altitude history for rate calculation (keep last 2 minutes)
                 altitudeHistory.current.push({ altitude: roundedAltitude, timestamp: now });
                 const twoMinutesAgo = now - (2 * 60 * 1000);
                 altitudeHistory.current = altitudeHistory.current.filter(entry => entry.timestamp > twoMinutesAgo);
@@ -1746,27 +1751,19 @@ function OverlayPage() {
     return display;
   }, [weather, settings.weatherConditionDisplay, getWeatherIcon, isNotableWeatherCondition, isNightTime]);
 
-  // Animated speed value (1 decimal precision, 1 km/h threshold, 1000ms max)
-  // Increased threshold to 1 km/h to reduce GPS jitter, increased max duration for smoother large changes
+  // Animated speed value - counts through each integer (50, 51, 52...) - faster for responsiveness
   const displayedSpeed = useAnimatedValue(currentSpeed, {
-    immediateThreshold: 1, // 1 km/h - reduces jittery updates from GPS fluctuations
-    durationMultiplier: 35, // Slightly slower for smoother feel
-    maxDuration: 1000, // 1 second max - smoother for large changes (0→60 km/h)
-    precision: 1,
+    ...SPEED_ANIMATION,
     allowNull: false,
   }) ?? 0;
 
-  // Animated altitude value (integer precision, 1m threshold, 1200ms max, allows null)
-  // Slightly increased max duration for smoother large elevation changes (e.g., elevators, GPS jumps)
+  // Animated altitude value - counts through each integer (100, 101, 102...) - slower, more contemplative
   const displayedAltitude = useAnimatedValue(currentAltitude, {
-    immediateThreshold: 1, // 1m - good for gradual hiking changes
-    durationMultiplier: 25, // Slightly slower for smoother feel
-    maxDuration: 1200, // 1.2 seconds max - smoother for large jumps while still responsive
-    precision: 0,
+    ...ELEVATION_ANIMATION,
     allowNull: true,
   });
 
-  // Altitude display logic
+  // Altitude display logic - hybrid change + rate detection for notable elevation
   const altitudeDisplay = useMemo(() => {
     // Hide if no altitude data
     if (currentAltitude === null || displayedAltitude === null) {
@@ -1778,55 +1775,85 @@ function OverlayPage() {
       return null;
     }
     
-    // Check staleness only for "auto" mode - "always" mode shows even if stale
+    // "Always" mode: show regardless of staleness or notable changes
+    if (settings.altitudeDisplay === 'always') {
+      const altitudeM = displayedAltitude;
+      const altitudeFt = metersToFeet(altitudeM);
+      return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
+    }
+    
+    // "Auto" mode: show only for notable elevation changes
     if (settings.altitudeDisplay === 'auto') {
       const now = Date.now();
-      const timeSinceAltitudeUpdate = lastAltitudeUpdateTime.current > 0 ? (now - lastAltitudeUpdateTime.current) : Infinity;
       
-      // Speed-based staleness timeout for altitude
-      // Slow speeds (hiking): longer timeout (5 minutes)
-      // Fast speeds (driving/train): shorter timeout (1 minute) - elevation less relevant
-      const isMovingFast = currentSpeed > 30; // km/h threshold
-      const ALTITUDE_STALE_TIMEOUT = isMovingFast ? (1 * 60 * 1000) : (5 * 60 * 1000); // 1 min fast, 5 min slow
-      const isAltitudeStale = timeSinceAltitudeUpdate > ALTITUDE_STALE_TIMEOUT;
+      // Notable change detection parameters
+      const CHANGE_THRESHOLD = 10; // meters - catches sudden changes (elevators, GPS jumps)
+      const RATE_THRESHOLD = 5; // meters per minute - catches gradual climbing (hiking pace)
+      const RATE_WINDOW = 60 * 1000; // 60 seconds - window for rate calculation
+      const DISPLAY_DURATION = 5 * 60 * 1000; // 5 minutes - how long to keep showing after change stops (also staleness timeout)
       
-      // Hide if stale in auto mode
-      if (isAltitudeStale) {
-        return null;
+      // Check GPS staleness - only used to prevent detecting new changes (timer handles hiding)
+      const timeSinceAltitudeUpdate = lastAltitudeGpsTimestamp.current > 0 ? (now - lastAltitudeGpsTimestamp.current) : Infinity;
+      const isAltitudeStale = timeSinceAltitudeUpdate > DISPLAY_DURATION; // 5 minutes
+      
+      // Calculate rate of change over last 60 seconds (only if GPS is fresh)
+      let rateOfChange = 0; // meters per minute
+      if (!isAltitudeStale) {
+        const oneMinuteAgo = now - RATE_WINDOW;
+        const recentHistory = altitudeHistory.current.filter(entry => entry.timestamp > oneMinuteAgo);
+        
+        if (recentHistory.length >= 2) {
+          const oldest = recentHistory[0];
+          const newest = recentHistory[recentHistory.length - 1];
+          const timeDiffMinutes = (newest.timestamp - oldest.timestamp) / (60 * 1000);
+          if (timeDiffMinutes > 0) {
+            rateOfChange = Math.abs(newest.altitude - oldest.altitude) / timeDiffMinutes;
+          }
+        }
       }
       
-      // Check if elevation is changing over time (for hiking scenarios)
-      // Look at altitude changes over the last 60 seconds
-      const oneMinuteAgo = now - (60 * 1000);
-      const recentHistory = altitudeHistory.current.filter(entry => entry.timestamp > oneMinuteAgo);
+      // Calculate change from last shown altitude (baseline)
+      const changeFromBaseline = lastShownAltitude.current !== null
+        ? Math.abs(currentAltitude - lastShownAltitude.current)
+        : Infinity; // No baseline yet
       
-      let isElevationChanging = false;
-      if (recentHistory.length >= 2) {
-        const oldest = recentHistory[0].altitude;
-        const newest = recentHistory[recentHistory.length - 1].altitude;
-        const changeOverMinute = Math.abs(newest - oldest);
-        // If elevation changed by >5m in the last minute, consider it changing
-        // This catches slow climbing (e.g., 5m/min hiking pace)
-        isElevationChanging = changeOverMinute > 5;
-      }
+      // Check if we should show elevation (only detect new changes if GPS is fresh)
+      const hasNotableChange = !isAltitudeStale && changeFromBaseline >= CHANGE_THRESHOLD;
+      const hasNotableRate = !isAltitudeStale && rateOfChange >= RATE_THRESHOLD;
+      const isCurrentlyShowing = lastShownTimestamp.current !== null;
       
-      // Auto mode: show if elevation is changing OR if it's notable (>150m)
-      // This handles both scenarios:
-      // 1. Hiking up hills (elevation changing slowly but consistently)
-      // 2. Already at notable elevation (even if not currently changing)
-      // 150m threshold catches elevated areas (Hollywood Hills, Austin hills) while filtering out most city centers
-      const isNotable = isElevationChanging || currentAltitude > 150;
-      
-      if (!isNotable) {
+      if (hasNotableChange || hasNotableRate) {
+        // Show elevation - set baseline and start/reset timer
+        if (!isCurrentlyShowing || hasNotableChange) {
+          // New notable change detected - reset baseline
+          lastShownAltitude.current = currentAltitude;
+        }
+        lastShownTimestamp.current = now;
+      } else if (isCurrentlyShowing) {
+        // Currently showing - check if we should keep showing
+        const timeSinceShown = now - lastShownTimestamp.current!;
+        
+        if (timeSinceShown < DISPLAY_DURATION) {
+          // Still within 5-minute display window - keep showing
+          // (Timer naturally handles staleness - if GPS is stale, no new changes detected, timer expires)
+        } else {
+          // 5 minutes elapsed with no notable change - hide
+          // This covers both: changes stopped OR GPS went stale (can't detect new changes)
+          lastShownAltitude.current = null;
+          lastShownTimestamp.current = null;
+          return null;
+        }
+      } else {
+        // Not showing and no notable change - hide
         return null;
       }
     }
     
-    // Show altitude (either always mode, or auto mode with notable conditions)
+    // Show altitude (auto mode with notable change detected)
     const altitudeM = displayedAltitude;
     const altitudeFt = metersToFeet(altitudeM);
     return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
-  }, [currentAltitude, displayedAltitude, settings.altitudeDisplay, currentSpeed, altitudeUpdateTimestamp]);
+  }, [currentAltitude, displayedAltitude, settings.altitudeDisplay, altitudeUpdateTimestamp]);
 
   // Speed display logic
   const speedDisplay = useMemo(() => {
@@ -1838,11 +1865,12 @@ function OverlayPage() {
     // Check staleness only for "auto" mode - "always" mode shows even if stale
     if (settings.speedDisplay === 'auto') {
       const now = Date.now();
-      const timeSinceSpeedUpdate = lastSpeedUpdateTime.current > 0 ? (now - lastSpeedUpdateTime.current) : Infinity;
+      // Use GPS timestamp for staleness check (not reception time) - works correctly when stationary
+      const timeSinceSpeedUpdate = lastSpeedGpsTimestamp.current > 0 ? (now - lastSpeedGpsTimestamp.current) : Infinity;
       const isSpeedStale = timeSinceSpeedUpdate > GPS_STALE_TIMEOUT; // 10 seconds
       
-      // Hide if stale or speed is 0 in auto mode
-      if (isSpeedStale || currentSpeed === 0) {
+      // Hide if stale (regardless of speed value)
+      if (isSpeedStale) {
         return null;
       }
       

@@ -35,19 +35,27 @@ export function useAnimatedValue(
     allowNull ? null : (targetValue ?? 0)
   );
   const animationRef = useRef<number | null>(null);
+  const currentValueRef = useRef<number | null>(displayedValue);
+
+  // Keep ref in sync with displayed value (for use in effect closure)
+  useEffect(() => {
+    currentValueRef.current = displayedValue;
+  }, [displayedValue]);
 
   useEffect(() => {
     // Handle null values
     if (targetValue === null) {
       if (allowNull) {
         setDisplayedValue(null);
+        currentValueRef.current = null;
       }
       return;
     }
 
     // If no displayed value yet, set it immediately
-    if (displayedValue === null && allowNull) {
+    if (currentValueRef.current === null && allowNull) {
       setDisplayedValue(targetValue);
+      currentValueRef.current = targetValue;
       return;
     }
 
@@ -56,38 +64,37 @@ export function useAnimatedValue(
       cancelAnimationFrame(animationRef.current);
     }
 
-    const startValue = displayedValue ?? 0;
-    const endValue = targetValue;
-    const difference = endValue - startValue;
+    // Use current displayed value (wherever animation is) as start point
+    // This ensures smooth continuation when new value arrives mid-animation
+    const startValue = currentValueRef.current ?? 0;
+    const difference = targetValue - startValue;
 
     // If difference is small, update immediately
     if (Math.abs(difference) <= immediateThreshold) {
-      setDisplayedValue(endValue);
+      setDisplayedValue(targetValue);
       return;
     }
 
-    // Animate the change
-    // Duration scales linearly with difference, capped at maxDuration
-    // This provides consistent feel: small changes animate quickly, large changes use max duration
+    // Animate the change - duration scales with difference, capped at maxDuration
     const duration = Math.min(Math.abs(difference) * durationMultiplier, maxDuration);
     const startTime = Date.now();
+    const precisionMultiplier = Math.pow(10, precision);
 
     const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // Use easeOutCubic for smoother, more natural feeling animations
-      // Starts fast, slows down smoothly at the end
-      const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+      const progress = Math.min((Date.now() - startTime) / duration, 1);
       
-      let current: number;
-      if (precision === 0) {
-        current = Math.round(startValue + difference * easeOutCubic);
-      } else {
-        const multiplier = Math.pow(10, precision);
-        current = Math.round((startValue + difference * easeOutCubic) * multiplier) / multiplier;
-      }
+      // Linear easing for integers (shows each value), easeOutCubic for decimals
+      const easedProgress = precision === 0 
+        ? progress 
+        : 1 - Math.pow(1 - progress, 3);
+      
+      const rawValue = startValue + difference * easedProgress;
+      const current = precision === 0
+        ? Math.round(rawValue)
+        : Math.round(rawValue * precisionMultiplier) / precisionMultiplier;
 
       setDisplayedValue(current);
+      currentValueRef.current = current; // Keep ref in sync
 
       if (progress < 1) {
         animationRef.current = requestAnimationFrame(animate);
@@ -103,7 +110,7 @@ export function useAnimatedValue(
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [targetValue, displayedValue, immediateThreshold, durationMultiplier, maxDuration, precision, allowNull]);
+  }, [targetValue, immediateThreshold, durationMultiplier, maxDuration, precision, allowNull]);
 
   return displayedValue;
 }
