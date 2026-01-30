@@ -138,11 +138,6 @@ function OverlayPage() {
   const [speedUpdateTimestamp, setSpeedUpdateTimestamp] = useState(0); // State to trigger re-renders
   const [altitudeUpdateTimestamp, setAltitudeUpdateTimestamp] = useState(0); // State to trigger re-renders
   
-  // Altitude notable change detection (for auto mode)
-  const altitudeHistory = useRef<Array<{ altitude: number; timestamp: number }>>([]); // Track altitude over time for rate calculation
-  const lastShownAltitude = useRef<number | null>(null); // Baseline altitude when elevation was last shown
-  const lastShownTimestamp = useRef<number | null>(null); // When elevation was last shown (for 5-minute timer)
-  
   // Helper: Check if GPS update is fresh (within 15 minutes)
   const isGpsUpdateFresh = (gpsUpdateTime: number, now: number): boolean => {
     return (now - gpsUpdateTime) <= GPS_FRESHNESS_TIMEOUT;
@@ -560,10 +555,13 @@ function OverlayPage() {
     if (wasGpsDataStale) return 0;
     
     // Try RTIRL speed first (preferred source)
+    // RTIRL provides speed in m/s (meters per second), convert to km/h
     if (typeof payload === 'object' && payload !== null && 'speed' in payload) {
       const rawSpeedValue = (payload as RTIRLPayload).speed;
       if (typeof rawSpeedValue === 'number' && rawSpeedValue >= 0) {
-        return rawSpeedValue;
+        // Convert m/s to km/h: multiply by 3.6
+        // Example: 25.5 m/s × 3.6 = 91.8 km/h (≈ 57 mph)
+        return rawSpeedValue * 3.6;
       }
     }
     
@@ -1164,12 +1162,6 @@ function OverlayPage() {
                 const roundedAltitude = Math.round(altitudeValue);
                 setCurrentAltitude(roundedAltitude);
                 lastAltitudeGpsTimestamp.current = payloadTimestamp; // Track GPS timestamp, not reception time
-                
-                // Track altitude history for rate calculation (keep last 2 minutes)
-                altitudeHistory.current.push({ altitude: roundedAltitude, timestamp: now });
-                const twoMinutesAgo = now - (2 * 60 * 1000);
-                altitudeHistory.current = altitudeHistory.current.filter(entry => entry.timestamp > twoMinutesAgo);
-                
                 setAltitudeUpdateTimestamp(now); // Trigger re-render
               }
               
@@ -1782,75 +1774,24 @@ function OverlayPage() {
       return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
     }
     
-    // "Auto" mode: show only for notable elevation changes
+    // "Auto" mode: show only when above notable elevation threshold (e.g., mountains/hills)
     if (settings.altitudeDisplay === 'auto') {
       const now = Date.now();
       
-      // Notable change detection parameters
-      const CHANGE_THRESHOLD = 10; // meters - catches sudden changes (elevators, GPS jumps)
-      const RATE_THRESHOLD = 5; // meters per minute - catches gradual climbing (hiking pace)
-      const RATE_WINDOW = 60 * 1000; // 60 seconds - window for rate calculation
-      const DISPLAY_DURATION = 5 * 60 * 1000; // 5 minutes - how long to keep showing after change stops (also staleness timeout)
-      
-      // Check GPS staleness - only used to prevent detecting new changes (timer handles hiding)
+      // Check GPS staleness - hide if GPS data is older than 1 minute
       const timeSinceAltitudeUpdate = lastAltitudeGpsTimestamp.current > 0 ? (now - lastAltitudeGpsTimestamp.current) : Infinity;
-      const isAltitudeStale = timeSinceAltitudeUpdate > DISPLAY_DURATION; // 5 minutes
+      const ALTITUDE_STALE_TIMEOUT = 60 * 1000; // 1 minute
+      const isAltitudeStale = timeSinceAltitudeUpdate > ALTITUDE_STALE_TIMEOUT;
       
-      // Calculate rate of change over last 60 seconds (only if GPS is fresh)
-      let rateOfChange = 0; // meters per minute
-      if (!isAltitudeStale) {
-        const oneMinuteAgo = now - RATE_WINDOW;
-        const recentHistory = altitudeHistory.current.filter(entry => entry.timestamp > oneMinuteAgo);
-        
-        if (recentHistory.length >= 2) {
-          const oldest = recentHistory[0];
-          const newest = recentHistory[recentHistory.length - 1];
-          const timeDiffMinutes = (newest.timestamp - oldest.timestamp) / (60 * 1000);
-          if (timeDiffMinutes > 0) {
-            rateOfChange = Math.abs(newest.altitude - oldest.altitude) / timeDiffMinutes;
-          }
-        }
+      // Hide if stale
+      if (isAltitudeStale) {
+        return null;
       }
       
-      // Initialize baseline on first GPS update (don't show yet)
-      if (lastShownAltitude.current === null && !isAltitudeStale) {
-        lastShownAltitude.current = currentAltitude;
-        return null; // Don't show on first update - wait for actual change
-      }
-      
-      // Calculate change from baseline (only if baseline exists)
-      const changeFromBaseline = lastShownAltitude.current !== null
-        ? Math.abs(currentAltitude - lastShownAltitude.current)
-        : 0; // No baseline means no change yet
-      
-      // Check if we should show elevation (only detect new changes if GPS is fresh)
-      const hasNotableChange = !isAltitudeStale && changeFromBaseline >= CHANGE_THRESHOLD;
-      const hasNotableRate = !isAltitudeStale && rateOfChange >= RATE_THRESHOLD;
-      const isCurrentlyShowing = lastShownTimestamp.current !== null;
-      
-      if (hasNotableChange || hasNotableRate) {
-        // Show elevation - set baseline and start/reset timer
-        if (!isCurrentlyShowing || hasNotableChange) {
-          // New notable change detected - reset baseline
-          lastShownAltitude.current = currentAltitude;
-        }
-        lastShownTimestamp.current = now;
-      } else if (isCurrentlyShowing) {
-        // Currently showing - check if we should keep showing
-        const timeSinceShown = now - lastShownTimestamp.current!;
-        
-        if (timeSinceShown < DISPLAY_DURATION) {
-          // Still within 5-minute display window - keep showing
-          // (Timer naturally handles staleness - if GPS is stale, no new changes detected, timer expires)
-        } else {
-          // 5 minutes elapsed with no notable change - hide
-          // This covers both: changes stopped OR GPS went stale (can't detect new changes)
-          lastShownAltitude.current = null;
-          lastShownTimestamp.current = null;
-          return null;
-        }
-      } else {
-        // Not showing and no notable change - hide
+      // Show only if elevation is above threshold (notable elevation like mountains/hills)
+      // 500m threshold filters out almost all major cities, only shows notable mountains/hills
+      const ELEVATION_THRESHOLD = 500; // meters
+      if (currentAltitude < ELEVATION_THRESHOLD) {
         return null;
       }
     }

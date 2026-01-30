@@ -191,12 +191,9 @@ When GPS coordinates can't be reverse geocoded (ocean/remote areas):
 
 ### Altitude & Speed Display
 - **Altitude**: Shows elevation in meters and feet
-  - Auto mode: Smart detection of notable elevation changes
-    - Shows when altitude changes by ≥10m (sudden changes like elevators)
-    - Shows when climbing/descending at ≥5 m/min (gradual changes like hiking)
-    - Continues showing for 5 minutes after change stops
-    - Keeps showing if rate continues ≥5 m/min (resets timer while actively climbing)
-    - Hides when GPS data is stale (>5 minutes old) - same timeout as display duration
+  - Auto mode: Shows when elevation is above 500m (notable elevation like mountains/hills)
+    - Hides when elevation drops below 500m
+    - Hides when GPS data is stale (>1 minute old)
   - Smooth animated transitions between values
   
 - **Speed**: Shows movement speed in km/h and mph
@@ -230,12 +227,9 @@ Access at `http://localhost:3000` to configure:
   
 - **Altitude Display** - Control elevation display:
   - **Always** - Always show altitude when GPS data available (even if stale)
-  - **Auto** - Smart detection of notable elevation changes:
-    - Shows when altitude changes by ≥10m (sudden changes like elevators)
-    - Shows when climbing/descending at ≥5 m/min (gradual changes like hiking)
-    - Continues showing for 5 minutes after change stops
-    - Keeps showing if rate continues ≥5 m/min (resets timer while actively climbing)
-    - Hides when GPS data is stale (>5 minutes old) - same timeout as display duration
+  - **Auto** - Shows when elevation is above 500m (notable elevation like mountains/hills)
+    - Hides when elevation drops below 500m
+    - Hides when GPS data is stale (>1 minute old)
   - **Hidden** - Hide altitude completely
   
 - **Speed Display** - Control movement speed display:

@@ -483,7 +483,7 @@ export default function AdminPage() {
                 onChange={(value) => handleSettingsChange({ altitudeDisplay: value as DisplayMode })}
                 options={[
                   { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'auto', label: 'Auto', icon: '📈', description: 'Shows when ≥10m change or ≥5 m/min climbing. Stays 5 min after change stops' },
+                  { value: 'auto', label: 'Auto', icon: '📈', description: 'Shows when elevation >500m (mountains/hills)' },
                   { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />
