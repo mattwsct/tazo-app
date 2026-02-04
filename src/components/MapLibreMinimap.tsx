@@ -10,7 +10,6 @@ interface MapLibreMinimapProps {
   lon: number;
   isVisible: boolean;
   zoomLevel: MapZoomLevel;
-  timezone?: string;
   isNight?: boolean; // Pass day/night state from parent
 }
 
@@ -30,55 +29,35 @@ const MINIMAP_CONFIG = {
 } as const;
 
 
-// Available map styles - easily switch between them
-const MAP_STYLES = {
-  // CartoDB Voyager (clean, colorful, perfect for daytime)
-  voyager: {
-    version: 8 as const,
-    sources: {
-      'carto-voyager-tiles': {
-        type: 'raster' as const,
-        tiles: [
-          'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-          'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-          'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'
-        ] as string[],
-        tileSize: 256,
-        attribution: '© OpenStreetMap contributors, © CartoDB'
-      }
-    },
-    layers: [{
-      id: 'carto-voyager-tiles',
-      type: 'raster' as const,
-      source: 'carto-voyager-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }]
-  },
-  // CartoDB Dark Matter (clean, dark, perfect for nighttime)
-  dark: {
-    version: 8 as const,
-    sources: {
-      'carto-dark-tiles': {
-        type: 'raster' as const,
-        tiles: [
-          'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-          'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-          'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-        ] as string[],
-        tileSize: 256,
-        attribution: '© OpenStreetMap contributors, © CartoDB'
-      }
-    },
-    layers: [{
-      id: 'carto-dark-tiles',
-      type: 'raster' as const,
-      source: 'carto-dark-tiles',
-      minzoom: 0,
-      maxzoom: 19
-    }]
-  }
-};
+// Map style URLs - using MapTiler Streets-v2 styles (light and dark)
+// MapTiler provides excellent English label support and beautiful map styles
+// Streets-v2 is the classic default style with full labels and place names
+// Requires a free API key from https://cloud.maptiler.com/account/keys/
+// Falls back to OpenFreeMap if no API key is provided
+import { API_KEYS } from '@/utils/overlay-constants';
+
+const MAPTILER_KEY = API_KEYS.MAPTILER;
+
+// MapTiler Streets-v2 styles (light and dark variants)
+const MAPTILER_STYLES = {
+  light: MAPTILER_KEY 
+    ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
+    : null,
+  dark: MAPTILER_KEY
+    ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`
+    : null,
+} as const;
+
+// Fallback to OpenFreeMap if MapTiler key not available
+const FALLBACK_STYLES = {
+  light: 'https://tiles.openfreemap.org/styles/liberty',
+  dark: 'https://tiles.openfreemap.org/styles/positron'
+} as const;
+
+const MAP_STYLE_URLS = {
+  light: MAPTILER_STYLES.light || FALLBACK_STYLES.light,
+  dark: MAPTILER_STYLES.dark || FALLBACK_STYLES.dark,
+} as const;
 
 export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNight = false }: MapLibreMinimapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -107,11 +86,11 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
     
     try {
       // Use the isNight prop passed from parent (based on OpenWeatherMap data)
-      const mapStyle = isNight ? MAP_STYLES.dark : MAP_STYLES.voyager;
+      const styleURL = isNight ? MAP_STYLE_URLS.dark : MAP_STYLE_URLS.light;
 
       map.current = new maplibregl.Map({
         container: mapContainer.current,
-        style: mapStyle,
+        style: styleURL,
         center: [lon, lat],
         zoom: MINIMAP_CONFIG.ZOOM_LEVELS[zoomLevel] || MINIMAP_CONFIG.ZOOM_LEVELS.city,
         interactive: false, // Disable user interaction for overlay
@@ -128,6 +107,38 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
       // Add load event
       map.current.on('load', () => {
         setMapLoaded(true);
+        
+        // Set English labels for fallback styles (MapTiler handles this automatically)
+        // Only needed for OpenFreeMap fallback
+        if (!MAPTILER_KEY) {
+          try {
+            const style = map.current!.getStyle();
+            if (style?.layers) {
+              style.layers.forEach((layer) => {
+                if (layer.type === 'symbol' && layer.layout && 'text-field' in layer.layout) {
+                  const textField = layer.layout['text-field'];
+                  if (textField && typeof textField === 'object' && Array.isArray(textField)) {
+                    if (textField[0] === 'get' && textField[1] !== 'name:en') {
+                      map.current!.setLayoutProperty(layer.id, 'text-field', [
+                        'coalesce',
+                        ['get', 'name:en'],
+                        ['get', 'name']
+                      ]);
+                    }
+                  } else if (typeof textField === 'string' && !textField.includes('name:en')) {
+                    map.current!.setLayoutProperty(layer.id, 'text-field', [
+                      'coalesce',
+                      ['get', 'name:en'],
+                      ['get', 'name']
+                    ]);
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            console.warn('Failed to set English labels:', error);
+          }
+        }
         
         // Add marker
         const markerElement = document.createElement('div');
@@ -186,31 +197,13 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
       updateTimeoutRef.current = null;
     }
 
-    // Calculate movement distance if we have a previous position
-    // Calculate movement distance if previous position exists
-    // Note: Movement distance calculation is available for future pan threshold logic
-    if (prevPosition.current) {
-      const [prevLon, prevLat] = prevPosition.current;
-      // Simple distance calculation (Haversine approximation)
-      const R = 6371000; // Earth radius in meters
-      const dLat = (lat - prevLat) * Math.PI / 180;
-      const dLon = (lon - prevLon) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(prevLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      // Movement distance calculated but not currently used
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _movementDistance = R * c;
-    }
-
-    const MIN_PAN_DISTANCE = 100; // Only pan map if movement > 100m
+    const MIN_PAN_DISTANCE = 100; // meters - threshold for animation duration
     const shouldUpdateNow = timeSinceLastUpdate >= THROTTLE_MS;
 
     const updateMap = () => {
       try {
-        // Recalculate movement distance at update time (in case position changed)
-        let currentMovementDistance = Infinity;
+        // Calculate movement distance for animation duration
+        let movementDistance = Infinity;
         if (prevPosition.current) {
           const [prevLon, prevLat] = prevPosition.current;
           const R = 6371000; // Earth radius in meters
@@ -220,22 +213,19 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
                     Math.cos(prevLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
                     Math.sin(dLon/2) * Math.sin(dLon/2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-          currentMovementDistance = R * c;
+          movementDistance = R * c;
         }
 
-        // Always pan map to keep marker centered at [lon, lat]
-        // Marker stays fixed in center, only map moves
-        // For small movements, use shorter/faster animation to reduce visual impact
-        const animationDuration = currentMovementDistance > MIN_PAN_DISTANCE ? 800 : 300;
+        // Pan map to keep marker centered
+        // Use shorter animation for small movements to reduce visual impact
+        const animationDuration = movementDistance > MIN_PAN_DISTANCE ? 800 : 300;
         
         map.current!.easeTo({
-          center: [lon, lat], // Pan map to keep marker centered
+          center: [lon, lat],
           duration: animationDuration,
           easing: (t) => t * (2 - t) // ease-out function
         });
         
-        // Marker position matches map center, so it stays centered
-        // We still update it to ensure it's at the exact coordinates
         marker.current!.setLngLat([lon, lat]);
         
         // Update previous position and timestamp
@@ -283,10 +273,42 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    const newStyle = isNight ? MAP_STYLES.dark : MAP_STYLES.voyager;
+    const newStyleURL = isNight ? MAP_STYLE_URLS.dark : MAP_STYLE_URLS.light;
     try {
-      map.current.setStyle(newStyle);
-      console.log(`🗺️ Map style updated to ${isNight ? 'dark' : 'light'} mode`);
+      map.current.setStyle(newStyleURL);
+      
+      // Set English labels for fallback styles (MapTiler handles this automatically)
+      if (!MAPTILER_KEY) {
+        map.current.once('style.load', () => {
+          try {
+            const style = map.current!.getStyle();
+            if (style?.layers) {
+              style.layers.forEach((layer) => {
+                if (layer.type === 'symbol' && layer.layout && 'text-field' in layer.layout) {
+                  const textField = layer.layout['text-field'];
+                  if (textField && typeof textField === 'object' && Array.isArray(textField)) {
+                    if (textField[0] === 'get' && textField[1] !== 'name:en') {
+                      map.current!.setLayoutProperty(layer.id, 'text-field', [
+                        'coalesce',
+                        ['get', 'name:en'],
+                        ['get', 'name']
+                      ]);
+                    }
+                  } else if (typeof textField === 'string' && !textField.includes('name:en')) {
+                    map.current!.setLayoutProperty(layer.id, 'text-field', [
+                      'coalesce',
+                      ['get', 'name:en'],
+                      ['get', 'name']
+                    ]);
+                  }
+                }
+              });
+            }
+          } catch (error) {
+            console.warn('Failed to set English labels after style change:', error);
+          }
+        });
+      }
     } catch (error) {
       console.error('Failed to update map style:', error);
     }

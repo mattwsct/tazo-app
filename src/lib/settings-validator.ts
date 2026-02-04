@@ -96,6 +96,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
               weatherConditionDisplay: cleanSettings.weatherConditionDisplay ?? DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
               showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
               minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
+              minimapTheme: cleanSettings.minimapTheme ?? DEFAULT_OVERLAY_SETTINGS.minimapTheme,
               mapZoomLevel: cleanSettings.mapZoomLevel ?? DEFAULT_OVERLAY_SETTINGS.mapZoomLevel,
               altitudeDisplay: cleanSettings.altitudeDisplay ?? DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
               speedDisplay: cleanSettings.speedDisplay ?? DEFAULT_OVERLAY_SETTINGS.speedDisplay,

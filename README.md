@@ -33,7 +33,8 @@ NEXT_PUBLIC_OPENWEATHERMAP_KEY=your_openweathermap_key
 
 # Optional - Additional Features
 NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token
-# Note: Map tiles use free CartoDB (no API key needed)
+NEXT_PUBLIC_MAPTILER_KEY=your_maptiler_key  # Optional - Get free key from https://cloud.maptiler.com/account/keys/
+# Note: Map tiles use MapTiler Basic-v2 (recommended) or fallback to OpenFreeMap if no key provided
 
 # Optional - Admin Panel & Settings Sync
 ADMIN_PASSWORD=your_admin_password

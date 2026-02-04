@@ -4,7 +4,7 @@ export const TIMERS = {
   WEATHER_UPDATE_INTERVAL: 300000, // 5 minutes - weather changes over time
   
   OVERLAY_FADE_TIMEOUT: 5000,
-  MINIMAP_HIDE_DELAY: 10000, // 10s
+  MINIMAP_HIDE_DELAY: 60 * 1000, // 1 minute - hide minimap after low speed or no GPS updates
   SPEED_HIDE_DELAY: 10000, // 10s
   SPEED_DATA_TIMEOUT: 10000, // 10s
   API_COOLDOWN: 60000, // 60s
@@ -28,6 +28,11 @@ export const TIMERS = {
   MINIMAP_STALENESS_CHECK_INTERVAL: 1000, // 1 second
   MINIMAP_SPEED_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when speed drops below threshold
   MINIMAP_GPS_STALE_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when GPS becomes stale
+  ONE_MINUTE: 60 * 1000, // 1 minute in milliseconds
+  DRAMATIC_CHANGE_THRESHOLD: 50000, // 50km - force immediate fetch for timezone/location updates
+  MIN_TIME_SECONDS: 0.5, // Minimum time difference for speed calculation
+  SPEED_STALE_DISTANCE_THRESHOLD: 50, // meters - if moved <50m over >10s, consider speed stale
+  SPEED_STALE_TIME_THRESHOLD: 10, // seconds - time threshold for stale speed detection
 } as const;
 
 // Animation configurations for integer counting - different speeds for different metrics
@@ -68,6 +73,7 @@ export const API_KEYS = {
   LOCATIONIQ: process.env.NEXT_PUBLIC_LOCATIONIQ_KEY,
   PULSOID: process.env.NEXT_PUBLIC_PULSOID_TOKEN,
   OPENWEATHER: process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY,
+  MAPTILER: process.env.NEXT_PUBLIC_MAPTILER_KEY,
 } as const;
 
 // Weather mapping constants

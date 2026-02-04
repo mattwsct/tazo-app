@@ -1,14 +1,48 @@
 "use client";
 
+// React imports
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useAnimatedValue } from '@/hooks/useAnimatedValue';
+
+// Next.js imports
 import dynamic from 'next/dynamic';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+
+// Component imports
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+
+// Hook imports
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
+import { useTodoCompletion } from '@/hooks/useTodoCompletion';
 import { useRenderPerformance } from '@/lib/performance';
+
+// Type imports
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import type { RTIRLPayload } from '@/utils/overlay-constants';
+import type { SunriseSunsetData } from '@/utils/api-utils';
+import type { LocationData } from '@/utils/location-utils';
+
+// Utility imports
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
-import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION, type RTIRLPayload } from '@/utils/overlay-constants';
+import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
+import { distanceInMeters, formatLocation, formatCountryName } from '@/utils/location-utils';
+import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
+import { checkRateLimit } from '@/utils/rate-limiting';
+import { 
+  createLocationWithCountryFallback, 
+  createWeatherFallback, 
+  createSunriseSunsetFallback,
+  isNightTimeFallback
+} from '@/utils/fallback-utils';
+import { 
+  isGpsUpdateFresh, 
+  isValidTimezone, 
+  clearTimer, 
+  safeApiCall,
+  formatTimeUTC,
+  formatTimeWithTimezone,
+  extractAltitude,
+  createSettingsHash
+} from '@/utils/overlay-helpers';
 
 // Extract constants for cleaner code
 const {
@@ -22,27 +56,8 @@ const {
   MINIMAP_STALENESS_CHECK_INTERVAL,
   MINIMAP_SPEED_GRACE_PERIOD,
   MINIMAP_GPS_STALE_GRACE_PERIOD,
+  MINIMAP_HIDE_DELAY,
 } = TIMERS;
-import { distanceInMeters } from '@/utils/location-utils';
-import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ, type SunriseSunsetData } from '@/utils/api-utils';
-import { formatLocation, formatCountryName, type LocationData } from '@/utils/location-utils';
-import { checkRateLimit } from '@/utils/rate-limiting';
-import { 
-  createLocationWithCountryFallback, 
-  createWeatherFallback, 
-  createSunriseSunsetFallback,
-  isNightTimeFallback
-} from '@/utils/fallback-utils';
-
-declare global {
-  interface Window {
-    RealtimeIRL?: {
-      forPullKey: (key: string) => {
-        addListener: (cb: (p: unknown) => void) => void;
-      };
-    };
-  }
-}
 
 // MapLibreMinimap component - WebGL-based map rendering
 const MapLibreMinimap = dynamic(() => import('@/components/MapLibreMinimap'), {
@@ -60,19 +75,19 @@ const LocationFlag = ({ countryCode }: { countryCode: string }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   
   return (
-  <span className="location-flag-inline">
+    <span className="location-flag-inline">
       <img
-                        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
-                        alt={`Country: ${countryCode}`}
-                        width={32}
-                        height={20}
-                        className="location-flag-small"
+        src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
+        alt={`Country: ${countryCode}`}
+        width={32}
+        height={20}
+        className="location-flag-small"
         style={{ opacity: isLoaded ? 1 : 0, transition: 'opacity 0.2s' }}
         onLoad={() => setIsLoaded(true)}
-        onError={() => setIsLoaded(true)} // Show even on error to avoid alt text flash
+        onError={() => setIsLoaded(true)}
       />
-  </span>
-);
+    </span>
+  );
 };
 
 function OverlayPage() {
@@ -102,10 +117,7 @@ function OverlayPage() {
   const settingsLoadedRef = useRef(false); // Track if settings have been loaded from API (prevents logging initial default state change)
   
   // Todo completion tracking with localStorage persistence
-  const [completedTodoTimestamps, setCompletedTodoTimestamps] = useState<Map<string, number>>(new Map()); // Track when todos were completed
-  const completedTodoTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Track timers for hiding completed todos
-  const STORAGE_KEY = 'tazo-completed-todos'; // localStorage key for persistence
-  
+  const visibleTodos = useTodoCompletion(settings.todos);
 
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
@@ -129,7 +141,6 @@ function OverlayPage() {
   
   // Minimap speed-based visibility tracking
   const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 5 km/h
-  const MINIMAP_HIDE_DELAY = 60000; // 1 minute - hide after low speed or no GPS updates
   
   // Speed and altitude staleness tracking
   // Track GPS timestamps (from payload), not reception times, so staleness works when stationary
@@ -137,43 +148,9 @@ function OverlayPage() {
   const lastAltitudeGpsTimestamp = useRef(0); // Track GPS timestamp when altitude was last updated
   const [speedUpdateTimestamp, setSpeedUpdateTimestamp] = useState(0); // State to trigger re-renders
   const [altitudeUpdateTimestamp, setAltitudeUpdateTimestamp] = useState(0); // State to trigger re-renders
-  
-  // Helper: Check if GPS update is fresh (within 15 minutes)
-  const isGpsUpdateFresh = (gpsUpdateTime: number, now: number): boolean => {
-    return (now - gpsUpdateTime) <= GPS_FRESHNESS_TIMEOUT;
-  };
-  
-  // Helper: Check if timezone is valid (not null/undefined/UTC placeholder)
-  const isValidTimezone = (tz: string | null | undefined): boolean => {
-    return tz !== null && tz !== undefined && tz !== 'UTC';
-  };
-  
-  // Helper: Clear timeout safely
-  const clearTimer = (timerRef: React.MutableRefObject<NodeJS.Timeout | null>) => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  
-  // Safe API call wrapper
-  const safeApiCall = async (apiCall: () => Promise<unknown>, context: string): Promise<unknown> => {
-    try {
-      return await apiCall();
-    } catch (error) {
-      OverlayLogger.error(`${context} failed`, error);
-      return null;
-    }
-  };
 
   // Ref to track current speed for minimap visibility (prevents infinite loops)
   const currentSpeedRef = useRef(0);
-  
-  // Update ref when speed changes
-  useEffect(() => {
-    currentSpeedRef.current = currentSpeed;
-  }, [currentSpeed]);
 
 
   
@@ -187,8 +164,8 @@ function OverlayPage() {
     
     clearTimer(minimapFadeTimeoutRef);
     
-    // Use ref to avoid dependency on currentSpeed state (prevents infinite loops)
-    const speed = currentSpeedRef.current;
+    // Use current speed state directly - ref updated inline when needed
+    const speed = currentSpeed;
     
     if (settings.minimapSpeedBased) {
       // Check if GPS is stale (no updates in 1 minute) - hide after delay
@@ -265,7 +242,7 @@ function OverlayPage() {
         clearTimer(minimapFadeTimeoutRef);
       }
     }
-  }, [settings.showMinimap, settings.minimapSpeedBased, minimapVisible]);
+  }, [settings.showMinimap, settings.minimapSpeedBased, minimapVisible, currentSpeed]);
 
   // Track the last locationDisplay value to detect actual changes
   const lastLocationDisplayRef = useRef<string | undefined>(undefined);
@@ -363,9 +340,6 @@ function OverlayPage() {
   useEffect(() => {
     return () => {
       clearTimer(minimapFadeTimeoutRef);
-      // Cleanup completed todo timers
-      completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
-      completedTodoTimersRef.current.clear();
     };
   }, []);
 
@@ -432,7 +406,6 @@ function OverlayPage() {
 
 
   // Helper function to format time/date using timezone
-  // Uses toLocaleString directly - simpler than storing formatters in refs
   const formatTime = useCallback((tz: string | null): { time: string; date: string } => {
     if (!isValidTimezone(tz)) {
       return { time: '', date: '' };
@@ -442,39 +415,10 @@ function OverlayPage() {
     const timezone = tz as string;
     
     try {
-      const now = new Date();
-      return {
-        time: now.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: timezone,
-        }),
-        date: now.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        timeZone: timezone,
-        }),
-      };
+      return formatTimeWithTimezone(timezone);
     } catch (error) {
       OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone: tz, error });
-      // Fallback to UTC
-      const now = new Date();
-      return {
-        time: now.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: 'UTC',
-        }),
-        date: now.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        timeZone: 'UTC',
-        }),
-      };
+      return formatTimeUTC();
     }
   }, []);
 
@@ -559,21 +503,41 @@ function OverlayPage() {
     if (typeof payload === 'object' && payload !== null && 'speed' in payload) {
       const rawSpeedValue = (payload as RTIRLPayload).speed;
       if (typeof rawSpeedValue === 'number' && rawSpeedValue >= 0) {
-        // Convert m/s to km/h: multiply by 3.6
-        // Example: 25.5 m/s × 3.6 = 91.8 km/h (≈ 57 mph)
-        return rawSpeedValue * 3.6;
+        const rtirlSpeedKmh = rawSpeedValue * 3.6;
+        
+        // If RTIRL explicitly says speed = 0, trust it (you're stationary)
+        if (rtirlSpeedKmh === 0) {
+          return 0;
+        }
+        
+        // Check if coordinates contradict RTIRL speed (detect stale RTIRL speed)
+        // If moved <50m over >10 seconds but RTIRL says moving, RTIRL is likely stale
+        if (prevCoords && prevGpsTimestamp > 0) {
+          const movedMeters = distanceInMeters(lat, lon, prevCoords[0], prevCoords[1]);
+          const timeDiffSeconds = (gpsUpdateTime - prevGpsTimestamp) / 1000;
+          
+          // If moved very little over reasonable time but RTIRL says moving, it's stale
+          // Accounts for different RTIRL accuracy settings (1m, 10m, 100m) and GPS drift
+          if (movedMeters < TIMERS.SPEED_STALE_DISTANCE_THRESHOLD && 
+              timeDiffSeconds > TIMERS.SPEED_STALE_TIME_THRESHOLD && 
+              rtirlSpeedKmh > 5) {
+            return 0; // RTIRL speed is stale, coordinates show stationary
+          }
+        }
+        
+        // Otherwise, trust RTIRL speed (it's usually more accurate when moving)
+        return rtirlSpeedKmh;
       }
     }
     
-    // Calculate from coordinates as fallback
+    // Calculate from coordinates as fallback (when RTIRL speed not available)
     if (!prevCoords || prevGpsTimestamp <= 0) return 0;
     
     const movedMeters = distanceInMeters(lat, lon, prevCoords[0], prevCoords[1]);
     const timeDiffSeconds = (gpsUpdateTime - prevGpsTimestamp) / 1000;
     const timeDiffHours = timeDiffSeconds / 3600;
-    const MIN_TIME_SECONDS = 0.5;
     
-    if (timeDiffHours > 0 && timeDiffSeconds >= MIN_TIME_SECONDS && movedMeters > 0) {
+    if (timeDiffHours > 0 && timeDiffSeconds >= TIMERS.MIN_TIME_SECONDS && movedMeters > 0) {
       return (movedMeters / 1000) / timeDiffHours;
     } else if (movedMeters === 0 && timeDiffSeconds > 0) {
       return 0;
@@ -626,263 +590,8 @@ function OverlayPage() {
     };
   }, [timezone, formatTime]);
 
-
-  // Filter todos based on completion timestamps (hide if completed > 60 seconds ago)
-  const visibleTodos = useMemo(() => {
-    if (!settings.todos || settings.todos.length === 0) {
-      return [];
-    }
-
-    const now = Date.now();
-    const ONE_MINUTE = 60 * 1000; // 60 seconds in milliseconds
-
-    return settings.todos.filter((todo) => {
-      if (!todo.completed) {
-        // Always show incomplete todos
-        return true;
-      }
-      
-      // For completed todos, check if they were completed less than 60 seconds ago
-      const completionTime = completedTodoTimestamps.get(todo.id);
-      if (!completionTime) {
-        // No completion timestamp in state - check localStorage for persistence
-        try {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            const storedTimestamps = JSON.parse(stored) as Record<string, number>;
-            const storedTimestamp = storedTimestamps[todo.id];
-            
-            if (storedTimestamp) {
-              // Found in localStorage - check if it's still within 60 seconds
-              const timeSinceCompletion = now - storedTimestamp;
-              const shouldShow = timeSinceCompletion < ONE_MINUTE;
-              if (!shouldShow) {
-                OverlayLogger.overlay(`Hiding completed todo ${todo.id} - completed ${Math.round(timeSinceCompletion / 1000)}s ago`);
-              }
-              return shouldShow;
-            }
-          }
-        } catch (error) {
-          // If localStorage check fails, show the todo (graceful degradation)
-          OverlayLogger.warn('Failed to check localStorage for todo visibility', { error });
-          return true;
-        }
-        
-        // No timestamp found in localStorage - this means it was completed more than 60 seconds ago
-        // and was cleaned up, OR it was never tracked. Hide it to be safe.
-        OverlayLogger.overlay(`Hiding completed todo ${todo.id} - no timestamp found`);
-        return false;
-      }
-      
-      const timeSinceCompletion = now - completionTime;
-      const shouldShow = timeSinceCompletion < ONE_MINUTE;
-      if (!shouldShow) {
-        OverlayLogger.overlay(`Hiding completed todo ${todo.id} - completed ${Math.round(timeSinceCompletion / 1000)}s ago`);
-      }
-      return shouldShow;
-    });
-  }, [settings.todos, completedTodoTimestamps]);
-
-  // Load completed todo timestamps from localStorage on mount and set up timers
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      // Only log if there are timestamps to load (reduces noise)
-      if (stored) {
-        const timestamps = JSON.parse(stored) as Record<string, number>;
-        const now = Date.now();
-        const ONE_MINUTE = 60 * 1000;
-        
-        // Filter out timestamps older than 60 seconds (cleanup old data)
-        const validTimestamps = new Map<string, number>();
-        Object.entries(timestamps).forEach(([id, timestamp]) => {
-          const timeSinceCompletion = now - timestamp;
-          if (timeSinceCompletion < ONE_MINUTE) {
-            validTimestamps.set(id, timestamp);
-            
-            // Set up timer to hide this todo when it reaches 60 seconds
-            const remainingTime = ONE_MINUTE - timeSinceCompletion;
-            const timer = setTimeout(() => {
-              setCompletedTodoTimestamps((current) => {
-                const updated = new Map(current);
-                updated.delete(id);
-                return updated;
-              });
-              completedTodoTimersRef.current.delete(id);
-            }, remainingTime);
-            
-            completedTodoTimersRef.current.set(id, timer);
-          }
-        });
-        
-        setCompletedTodoTimestamps(validTimestamps);
-        // Only log if we actually loaded timestamps (reduces noise on fresh loads)
-        if (validTimestamps.size > 0) {
-          OverlayLogger.overlay(`Loaded ${validTimestamps.size} completed todo timestamps from localStorage`);
-        }
-        
-        // Don't clean up localStorage here - keep old timestamps so we can check them later
-        // Old timestamps (> 60 seconds) will be filtered out in visibleTodos and tracking logic
-      }
-    } catch (error) {
-      // Ignore localStorage errors (e.g., in private browsing mode)
-      OverlayLogger.warn('Failed to load completed todo timestamps from localStorage', { error });
-    }
-  }, []); // Run once on mount
-
-  // Persist completed todo timestamps to localStorage whenever they change
-  // Also clean up old timestamps (> 60 seconds) periodically
-  useEffect(() => {
-    try {
-      const now = Date.now();
-      const ONE_MINUTE = 60 * 1000;
-      
-      // Load existing timestamps to preserve ones not in current state
-      const existing = localStorage.getItem(STORAGE_KEY);
-      const allTimestamps: Record<string, number> = existing 
-        ? JSON.parse(existing) as Record<string, number>
-        : {};
-      
-      // Update with current state timestamps
-      completedTodoTimestamps.forEach((timestamp, id) => {
-        allTimestamps[id] = timestamp;
-      });
-      
-      // Clean up timestamps older than 60 seconds
-      const cleaned: Record<string, number> = {};
-      Object.entries(allTimestamps).forEach(([id, timestamp]) => {
-        const timeSinceCompletion = now - timestamp;
-        if (timeSinceCompletion < ONE_MINUTE) {
-          cleaned[id] = timestamp;
-        }
-      });
-      
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
-    } catch (error) {
-      // Ignore localStorage errors (e.g., quota exceeded)
-      OverlayLogger.warn('Failed to save completed todo timestamps to localStorage', { error });
-    }
-  }, [completedTodoTimestamps]);
-
-  // Track when todos are marked complete and set timer to hide them after 60 seconds
-  useEffect(() => {
-    if (!settings.todos || settings.todos.length === 0) {
-      // Clear timestamps and timers if todos are cleared
-      setCompletedTodoTimestamps(new Map());
-      completedTodoTimersRef.current.forEach((timer) => clearTimeout(timer));
-      completedTodoTimersRef.current.clear();
-      return;
-    }
-
-    const now = Date.now();
-    const ONE_MINUTE = 60 * 1000; // 60 seconds in milliseconds
-
-    // Use functional update to avoid dependency on completedTodoTimestamps
-    setCompletedTodoTimestamps((prevTimestamps) => {
-      const newTimestamps = new Map(prevTimestamps);
-
-      if (!settings.todos) return newTimestamps;
-
-      // Track newly completed todos
-      settings.todos.forEach((todo) => {
-        if (todo.completed) {
-          // Check if this todo was just completed (not in timestamps yet)
-          if (!prevTimestamps.has(todo.id)) {
-            // Check localStorage to see if this was completed before (persistence check)
-            try {
-              const stored = localStorage.getItem(STORAGE_KEY);
-              if (stored) {
-                const storedTimestamps = JSON.parse(stored) as Record<string, number>;
-                const storedTimestamp = storedTimestamps[todo.id];
-                
-                if (storedTimestamp) {
-                  // Found in localStorage - check if it's still within 60 seconds
-                  const timeSinceCompletion = now - storedTimestamp;
-                  if (timeSinceCompletion < ONE_MINUTE) {
-                    // Still within 60 seconds - use the stored timestamp
-                    newTimestamps.set(todo.id, storedTimestamp);
-                    
-                    // Set up timer for remaining time
-                    const remainingTime = ONE_MINUTE - timeSinceCompletion;
-                    const timer = setTimeout(() => {
-                      setCompletedTodoTimestamps((current) => {
-                        const updated = new Map(current);
-                        updated.delete(todo.id);
-                        return updated;
-                      });
-                      completedTodoTimersRef.current.delete(todo.id);
-                    }, remainingTime);
-                    
-                    completedTodoTimersRef.current.set(todo.id, timer);
-                    return; // Skip adding new timestamp
-                  }
-                  // If stored timestamp is > 60 seconds old, don't add it (todo will be hidden)
-                  // Todo was completed more than 60 seconds ago - don't add timestamp (no logging for routine operation)
-                  return; // Don't add timestamp, todo will be filtered out
-                }
-              }
-            } catch (error) {
-              // If localStorage check fails, proceed with new timestamp
-              OverlayLogger.warn('Failed to check localStorage for todo timestamp', { error });
-            }
-            
-            // No stored timestamp or it's expired - record new timestamp
-            newTimestamps.set(todo.id, now);
-            
-            // Set timer to hide this specific todo after 60 seconds
-            const timer = setTimeout(() => {
-              setCompletedTodoTimestamps((current) => {
-                const updated = new Map(current);
-                updated.delete(todo.id);
-                return updated;
-              });
-              completedTodoTimersRef.current.delete(todo.id);
-            }, ONE_MINUTE);
-            
-            completedTodoTimersRef.current.set(todo.id, timer);
-          }
-        } else {
-          // Todo is incomplete - remove from timestamps if it was there
-          if (prevTimestamps.has(todo.id)) {
-            // Clear timer if it exists
-            const timer = completedTodoTimersRef.current.get(todo.id);
-            if (timer) {
-              clearTimeout(timer);
-              completedTodoTimersRef.current.delete(todo.id);
-            }
-            newTimestamps.delete(todo.id);
-          }
-        }
-      });
-
-      // Remove timestamps for todos that no longer exist
-      prevTimestamps.forEach((timestamp, todoId) => {
-        const todoExists = settings.todos?.some((t) => t.id === todoId);
-        if (!todoExists) {
-          const timer = completedTodoTimersRef.current.get(todoId);
-          if (timer) {
-            clearTimeout(timer);
-            completedTodoTimersRef.current.delete(todoId);
-          }
-          newTimestamps.delete(todoId);
-        }
-      });
-
-      return newTimestamps;
-    });
-  }, [settings.todos]); // Removed completedTodoTimestamps from dependencies to avoid infinite loop
-
   // Load settings and set up real-time updates
   useEffect(() => {
-    // Helper function to create a stable hash from settings (sorts keys for consistency)
-    const createSettingsHash = (settings: OverlaySettings): string => {
-      const sorted = Object.keys(settings).sort().reduce((acc, key) => {
-        acc[key] = settings[key as keyof OverlaySettings];
-        return acc;
-      }, {} as Record<string, unknown>);
-      return JSON.stringify(sorted);
-    };
-    
     const loadSettings = async () => {
       try {
         // Add cache busting and force fresh data
@@ -898,13 +607,14 @@ function OverlayPage() {
         
         const data = await res.json();
         if (data) {
-          // Merge with defaults to ensure new fields (altitudeDisplay, speedDisplay, weatherConditionDisplay) are initialized
+          // Merge with defaults to ensure new fields are initialized
           const mergedSettings = {
             ...DEFAULT_OVERLAY_SETTINGS,
             ...data,
             weatherConditionDisplay: data.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
             altitudeDisplay: data.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
             speedDisplay: data.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
+            minimapTheme: data.minimapTheme || DEFAULT_OVERLAY_SETTINGS.minimapTheme,
           };
           setSettings(mergedSettings);
           // Set initial hash to prevent false positives on first poll
@@ -938,13 +648,14 @@ function OverlayPage() {
             // Extract only settings properties, exclude SSE metadata (type, timestamp)
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { type: _type, timestamp: _timestamp, ...settingsData } = data;
-            // Merge with defaults to ensure new fields (altitudeDisplay, speedDisplay, weatherConditionDisplay) are initialized
+            // Merge with defaults to ensure new fields are initialized
             const mergedSettings = {
               ...DEFAULT_OVERLAY_SETTINGS,
               ...settingsData,
               weatherConditionDisplay: settingsData.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
               altitudeDisplay: settingsData.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
               speedDisplay: settingsData.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
+              minimapTheme: settingsData.minimapTheme || DEFAULT_OVERLAY_SETTINGS.minimapTheme,
             } as OverlaySettings;
             OverlayLogger.settings('Settings updated via SSE', { 
               locationDisplay: mergedSettings.locationDisplay,
@@ -1138,25 +849,12 @@ function OverlayPage() {
               const roundedSpeed = Math.round(speedKmh);
               
               setCurrentSpeed(roundedSpeed);
+              currentSpeedRef.current = roundedSpeed; // Update ref for minimap visibility
               lastSpeedGpsTimestamp.current = payloadTimestamp; // Track GPS timestamp, not reception time
               setSpeedUpdateTimestamp(now); // Trigger re-render
               
               // Extract altitude from RTIRL payload
-              // RTIRL provides altitude as either a number or an object with EGM96/WGS84
-              let altitudeValue: number | null = null;
-              if (payload.altitude !== undefined) {
-                if (typeof payload.altitude === 'number' && payload.altitude >= 0) {
-                  altitudeValue = payload.altitude;
-                } else if (typeof payload.altitude === 'object' && payload.altitude !== null) {
-                  // Prefer EGM96 (more accurate for elevation above sea level), fallback to WGS84
-                  const altitudeObj = payload.altitude as { EGM96?: number; WGS84?: number };
-                  if (altitudeObj.EGM96 !== undefined && typeof altitudeObj.EGM96 === 'number' && altitudeObj.EGM96 >= 0) {
-                    altitudeValue = altitudeObj.EGM96;
-                  } else if (altitudeObj.WGS84 !== undefined && typeof altitudeObj.WGS84 === 'number' && altitudeObj.WGS84 >= 0) {
-                    altitudeValue = altitudeObj.WGS84;
-                  }
-                }
-              }
+              const altitudeValue = extractAltitude(payload);
               
               if (altitudeValue !== null) {
                 const roundedAltitude = Math.round(altitudeValue);
@@ -1201,6 +899,10 @@ function OverlayPage() {
               (async () => {
                 const movedMeters = prevCoords ? distanceInMeters(lat, lon, prevCoords[0], prevCoords[1]) : Infinity;
 
+              // Detect dramatic coordinate changes (e.g., jumping continents, long-distance travel)
+              // Force immediate fetch to update timezone/location/weather quickly
+              const isDramaticChange = movedMeters > TIMERS.DRAMATIC_CHANGE_THRESHOLD;
+
               // Adaptive location update threshold based on speed
               // Use the newly calculated speed (roundedSpeed) instead of currentSpeed state
               // This avoids race condition where currentSpeed hasn't updated yet
@@ -1218,11 +920,13 @@ function OverlayPage() {
               
               // Weather updates every 5 minutes regardless of movement
               // Also fetch if we don't have weather data yet or weather is getting stale
+              // OR if dramatic change detected (force immediate update for timezone)
               const hasWeatherData = lastSuccessfulWeatherFetch.current > 0;
               const weatherDataAge = hasWeatherData 
                 ? now - lastSuccessfulWeatherFetch.current 
                 : Infinity;
-              const shouldFetchWeather = lastWeatherTime.current === 0 || 
+              const shouldFetchWeather = isDramaticChange || // Force fetch on dramatic changes
+                lastWeatherTime.current === 0 || 
                 weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL ||
                 !hasWeatherData || // Fetch if no weather data
                 weatherDataAge >= WEATHER_DATA_VALIDITY_TIMEOUT; // Fetch if weather is stale
@@ -1241,8 +945,10 @@ function OverlayPage() {
               // handles edge cases (rapid GPS updates, app restarts, etc.) and provides daily limit protection.
               // Also requires distance threshold to avoid unnecessary calls when stationary.
               // We need country name/flag even in custom location mode
+              // EXCEPTION: Dramatic changes (>50km) bypass gates to update timezone/location immediately
               const LOCATION_MIN_INTERVAL = 18000; // 18 seconds minimum (safely under 5,000/day limit)
-              const shouldFetchLocation = lastLocationTime.current === 0 || 
+              const shouldFetchLocation = isDramaticChange || // Force fetch on dramatic changes
+                lastLocationTime.current === 0 || 
                 (locationElapsed >= LOCATION_MIN_INTERVAL && meetsDistance);
               
               // If settings just updated (hash changed), allow UI update but do not force API refetch here
@@ -1611,7 +1317,10 @@ function OverlayPage() {
   const isNightTime = useMemo((): boolean => {
     if (!sunriseSunset) {
       // Fallback to simple time-based check if no API data
-      OverlayLogger.warn('No sunrise/sunset data available, using fallback detection');
+      // Only log warning at runtime, not during build (expected during static generation)
+      if (typeof window !== 'undefined') {
+        OverlayLogger.warn('No sunrise/sunset data available, using fallback detection');
+      }
       return isNightTimeFallback(timezone || undefined);
     }
     
@@ -1780,7 +1489,7 @@ function OverlayPage() {
       
       // Check GPS staleness - hide if GPS data is older than 1 minute
       const timeSinceAltitudeUpdate = lastAltitudeGpsTimestamp.current > 0 ? (now - lastAltitudeGpsTimestamp.current) : Infinity;
-      const ALTITUDE_STALE_TIMEOUT = 60 * 1000; // 1 minute
+      const ALTITUDE_STALE_TIMEOUT = TIMERS.ONE_MINUTE;
       const isAltitudeStale = timeSinceAltitudeUpdate > ALTITUDE_STALE_TIMEOUT;
       
       // Hide if stale
@@ -1971,8 +1680,7 @@ function OverlayPage() {
                     lon={mapCoords[1]} 
                     isVisible={minimapVisible}
                     zoomLevel={settings.mapZoomLevel}
-                    timezone={timezone || undefined}
-                    isNight={isNightTime}
+                    isNight={settings.minimapTheme === 'auto' ? isNightTime : settings.minimapTheme === 'dark'}
                   />
                 </ErrorBoundary>
               ) : (
@@ -2009,15 +1717,4 @@ function OverlayPage() {
   );
 }
 
-// Export wrapped version that doesn't auto-reload on errors
-function OverlayPageWrapper() {
-  return (
-    <ErrorBoundary 
-      autoReload={false} // Disable auto-reload - keep elements visible indefinitely
-    >
-      <OverlayPage />
-    </ErrorBoundary>
-  );
-}
-
-export default OverlayPageWrapper;
+export default OverlayPage;

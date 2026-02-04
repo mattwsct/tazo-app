@@ -3,18 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode, TodoItem, MinimapTheme } from '@/types/settings';
 import '@/styles/admin.css';
-
-declare global {
-  interface Window {
-    RealtimeIRL?: {
-      forPullKey: (key: string) => {
-        addListener: (cb: (p: unknown) => void) => void;
-      };
-    };
-  }
-}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -433,6 +423,19 @@ export default function AdminPage() {
                   { value: 'country', label: 'Country', icon: '🌍' },
                   { value: 'ocean', label: 'Ocean', icon: '🌊' },
                   { value: 'continental', label: 'Continental', icon: '🌎' }
+                ]}
+              />
+            </div>
+            
+            <div className="setting-group">
+              <label className="group-label">Theme</label>
+              <RadioGroup
+                value={settings.minimapTheme || 'auto'}
+                onChange={(value) => handleSettingsChange({ minimapTheme: value as 'auto' | 'light' | 'dark' })}
+                options={[
+                  { value: 'auto', label: 'Auto', icon: '🌓', description: 'Light during day, dark at night' },
+                  { value: 'light', label: 'Light', icon: '☀️', description: 'Always light theme' },
+                  { value: 'dark', label: 'Dark', icon: '🌙', description: 'Always dark theme' }
                 ]}
               />
             </div>
