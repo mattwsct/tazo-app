@@ -1312,8 +1312,20 @@ function OverlayPage() {
   }, [location, settings.locationDisplay, settings.customLocation]);
 
 
+  // Force periodic recalculation of day/night by updating a timestamp every minute
+  const [dayNightCheckTime, setDayNightCheckTime] = useState(Date.now());
+  
+  useEffect(() => {
+    // Update every minute to recalculate day/night
+    const interval = setInterval(() => {
+      setDayNightCheckTime(Date.now());
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(interval);
+  }, []);
+
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
-  // Memoized to avoid recalculating on every render
+  // Recalculates when sunriseSunset, timezone, or dayNightCheckTime changes
   const isNightTime = useMemo((): boolean => {
     if (!sunriseSunset) {
       // Fallback to simple time-based check if no API data
@@ -1348,7 +1360,7 @@ function OverlayPage() {
       OverlayLogger.error('Day/night calculation error', error);
       return false;
     }
-  }, [sunriseSunset, timezone]);
+  }, [sunriseSunset, timezone, dayNightCheckTime]);
 
   // Get weather icon based on description and time of day
   // Returns emoji string
