@@ -1,0 +1,177 @@
+// === 📍 LOCATION DATA CACHE ===
+// Shared cache for RTIRL, location, weather, and timezone data
+// Used by both overlay (updates cache) and chat commands (reads cache)
+
+import { kv } from '@vercel/kv';
+import { fetchRTIRLData, type RTIRLData } from './rtirl-utils';
+import { fetchLocationFromLocationIQ } from './api-utils';
+import { fetchWeatherAndTimezoneFromOpenWeatherMap } from './api-utils';
+import { fetchCurrentWeather, fetchForecast, parseWeatherData, extractPrecipitationForecast } from './weather-chat';
+import { getCityLocationForChat } from './chat-utils';
+
+export interface CachedLocationData {
+  rtirl: RTIRLData;
+  location: {
+    name: string;
+    countryCode: string | null;
+  } | null;
+  weather: {
+    condition: string;
+    desc: string;
+    tempC: number;
+    feelsLikeC: number;
+    windKmh: number;
+    humidity: number;
+    visibility: number | null;
+  } | null;
+  timezone: string | null;
+  sunriseSunset: {
+    sunrise: number;
+    sunset: number;
+  } | null;
+  forecast: {
+    chance: number;
+    type: string;
+  } | null;
+  cachedAt: number;
+}
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes - weather/location can change
+const CACHE_KEY = 'location_data_cache';
+
+/**
+ * Get cached location data if fresh, otherwise return null
+ */
+export async function getCachedLocationData(): Promise<CachedLocationData | null> {
+  try {
+    const cached = await kv.get<CachedLocationData>(CACHE_KEY);
+    if (!cached) return null;
+
+    const age = Date.now() - cached.cachedAt;
+    if (age > CACHE_TTL) {
+      // Cache expired
+      return null;
+    }
+
+    return cached;
+  } catch (error) {
+    // KV not available or error - return null to trigger fresh fetch
+    return null;
+  }
+}
+
+/**
+ * Update cache with fresh location data
+ */
+export async function updateLocationCache(data: CachedLocationData): Promise<void> {
+  try {
+    await kv.set(CACHE_KEY, data, { ex: Math.ceil(CACHE_TTL / 1000) }); // KV TTL in seconds
+  } catch (error) {
+    // KV not available - silently fail, cache is optional
+    console.warn('Failed to update location cache:', error);
+  }
+}
+
+/**
+ * Fetch and cache all location-related data
+ */
+export async function fetchAndCacheLocationData(): Promise<CachedLocationData | null> {
+  try {
+    // 1. Fetch RTIRL data
+    const rtirlData = await fetchRTIRLData();
+    const { lat, lon } = rtirlData;
+
+    if (lat == null || lon == null) {
+      return null;
+    }
+
+    const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
+    const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
+
+    // 2. Fetch location (parallel with weather)
+    const [locationResult, weatherResult] = await Promise.allSettled([
+      locationiqKey
+        ? fetchLocationFromLocationIQ(lat, lon, locationiqKey)
+        : Promise.resolve({ location: null, was404: false }),
+      openweatherKey
+        ? fetchWeatherAndTimezoneFromOpenWeatherMap(lat, lon, openweatherKey)
+        : Promise.resolve(null),
+    ]);
+
+    // 3. Parse location
+    let location: CachedLocationData['location'] = null;
+    if (locationResult.status === 'fulfilled' && locationResult.value.location) {
+      const cityLocation = getCityLocationForChat(locationResult.value.location);
+      location = {
+        name: cityLocation || '',
+        countryCode: locationResult.value.location.countryCode || null,
+      };
+    }
+
+    // 4. Parse weather and timezone
+    let weather: CachedLocationData['weather'] = null;
+    let timezone: string | null = null;
+    let sunriseSunset: CachedLocationData['sunriseSunset'] = null;
+    let forecast: CachedLocationData['forecast'] = null;
+
+    // 5. Fetch current weather for detailed data (includes sunrise/sunset timestamps)
+    if (openweatherKey) {
+      const currentWeather = await fetchCurrentWeather(lat, lon, openweatherKey);
+      if (currentWeather) {
+        const parsed = parseWeatherData(currentWeather);
+        if (parsed) {
+          weather = parsed;
+        }
+
+        // Extract sunrise/sunset timestamps from OpenWeatherMap response
+        if (currentWeather.sys?.sunrise && currentWeather.sys?.sunset) {
+          sunriseSunset = {
+            sunrise: currentWeather.sys.sunrise, // Unix timestamp
+            sunset: currentWeather.sys.sunset,   // Unix timestamp
+          };
+        }
+
+        // Fetch forecast for precipitation
+        const fc = await fetchForecast(lat, lon, openweatherKey);
+        if (fc) {
+          forecast = extractPrecipitationForecast(fc);
+        }
+      }
+    }
+
+    // Get timezone from weather API
+    if (weatherResult.status === 'fulfilled' && weatherResult.value) {
+      timezone = weatherResult.value.timezone || null;
+    }
+
+    const cachedData: CachedLocationData = {
+      rtirl: rtirlData,
+      location,
+      weather,
+      timezone,
+      sunriseSunset,
+      forecast,
+      cachedAt: Date.now(),
+    };
+
+    // Update cache
+    await updateLocationCache(cachedData);
+
+    return cachedData;
+  } catch (error) {
+    console.error('Failed to fetch location data:', error);
+    return null;
+  }
+}
+
+/**
+ * Get location data (from cache if fresh, otherwise fetch fresh)
+ */
+export async function getLocationData(forceFresh = false): Promise<CachedLocationData | null> {
+  if (!forceFresh) {
+    const cached = await getCachedLocationData();
+    if (cached) return cached;
+  }
+
+  return await fetchAndCacheLocationData();
+}

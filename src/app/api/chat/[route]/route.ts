@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cleanQuery, roundCoordinate, getDisplayLabel } from '@/utils/chat-utils';
+import { cleanQuery, roundCoordinate } from '@/utils/chat-utils';
 import { fetchLocationFromLocationIQ, fetchWeatherAndTimezoneFromOpenWeatherMap } from '@/utils/api-utils';
-import { formatLocationForChat, getCityLocationForChat, pickN } from '@/utils/chat-utils';
+import { getCityLocationForChat, pickN } from '@/utils/chat-utils';
 import { getTravelData } from '@/utils/travel-data';
 import { handleSizeRanking, getSizeRouteConfig, isSizeRoute } from '@/utils/size-ranking';
-import type { LocationData } from '@/utils/location-utils';
+import { fetchRTIRLData } from '@/utils/rtirl-utils';
+import {
+  getWeatherEmoji,
+  isNightTime,
+  formatTemperature,
+  getNotableConditions,
+  fetchCurrentWeather,
+  fetchForecast,
+  parseWeatherData,
+  extractPrecipitationForecast,
+} from '@/utils/weather-chat';
+import { getLocationData } from '@/utils/location-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,25 +60,12 @@ function jsonResponse(obj: unknown, status = 200) {
   });
 }
 
-// Fetch RTIRL GPS data
-async function fetchRTIRLData() {
-  const rtirlKey = process.env.NEXT_PUBLIC_RTIRL_PULL_KEY;
-  if (!rtirlKey) {
-    throw new Error('Missing RTIRL_PULL_KEY');
+// Helper to get API key or return error response
+function requireApiKey(key: string | undefined, name: string) {
+  if (!key) {
+    return { error: `${name} API not configured` };
   }
-
-  const response = await fetch(`https://rtirl.com/api/pull?key=${encodeURIComponent(rtirlKey)}`);
-  if (!response.ok) {
-    throw new Error(`RTIRL error ${response.status}`);
-  }
-
-  const data = await response.json();
-  const baseLoc = data.location || {};
-  const baseLat = baseLoc.latitude ?? data.lat ?? data.latitude ?? null;
-  const baseLon = baseLoc.longitude ?? data.lon ?? data.lng ?? data.longitude ?? null;
-  const updatedAt = data.updatedAt ?? data.reportedAt ?? null;
-
-  return { lat: baseLat, lon: baseLon, updatedAt, raw: data };
+  return null;
 }
 
 export async function OPTIONS() {
@@ -82,9 +80,9 @@ export async function OPTIONS() {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { route: string } }
+  { params }: { params: Promise<{ route: string }> }
 ): Promise<NextResponse> {
-  const route = params.route;
+  const { route } = await params;
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') || '').trim();
 
@@ -153,94 +151,40 @@ export async function GET(
 
   // Routes that require RTIRL
   try {
-    const rtirlData = await fetchRTIRLData();
-    const { lat, lon } = rtirlData;
-
-    if (lat == null || lon == null) {
+    // Use cached location data if available (5min TTL), otherwise fetch fresh
+    const locationData = await getLocationData();
+    
+    if (!locationData || !locationData.rtirl.lat || !locationData.rtirl.lon) {
       return txtResponse('No RTIRL location available', 200);
     }
 
-    // Location route - uses LocationIQ (same as overlay)
+    const { lat, lon } = locationData.rtirl;
+
+    // Location route - uses cached data
     if (route === 'location') {
-      const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
-      if (!locationiqKey) {
-        return txtResponse('LocationIQ API not configured');
+      if (locationData.location?.name) {
+        return txtResponse(locationData.location.name);
       }
-
-      const locationResult = await fetchLocationFromLocationIQ(lat, lon, locationiqKey);
-      if (locationResult.location) {
-        const cityLocation = getCityLocationForChat(locationResult.location);
-        return txtResponse(cityLocation || 'Location unavailable');
-      }
-
-      return txtResponse('');
+      return txtResponse('Location unavailable');
     }
 
-    // Weather route - uses OpenWeatherMap (same as overlay)
+    // Weather route - uses cached data
     if (route === 'weather') {
-      const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
-      if (!openweatherKey) {
-        return txtResponse('Weather API not configured');
-      }
-
-      // Fetch current weather
-      const weatherRes = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${openweatherKey}&units=metric`
-      );
-      
-      if (!weatherRes.ok) {
-        return txtResponse('Weather API unavailable');
-      }
-
-      const ow = await weatherRes.json();
-      if (ow?.main?.temp == null) {
+      if (!locationData.weather) {
         return txtResponse('Weather data unavailable');
       }
 
-      const condition = (ow.weather?.[0]?.main || '').toLowerCase();
-      const desc = (ow.weather?.[0]?.description || '').toLowerCase();
-      const tempC = Math.round(ow.main.temp);
-      const tempF = Math.round(tempC * 9 / 5 + 32);
-      const feelsLikeC = Math.round(ow.main.feels_like || tempC);
-      const feelsLikeF = Math.round(feelsLikeC * 9 / 5 + 32);
-      const windKmh = Math.round((ow.wind?.speed || 0) * 3.6);
-      const humidity = ow.main.humidity || 0;
-      const visibility = ow.visibility ? (ow.visibility / 1000) : null;
+      const { condition, desc, tempC, feelsLikeC, windKmh, humidity, visibility } = locationData.weather;
+      const emoji = getWeatherEmoji(condition, isNightTime());
+      const notableConditions = getNotableConditions({
+        tempC,
+        feelsLikeC,
+        windKmh,
+        humidity,
+        visibility,
+      });
 
-      // Check if it's night time (8 PM to 6 AM)
-      const now = new Date();
-      const hour = now.getHours();
-      const isNight = hour >= 20 || hour < 6;
-      const emojiMap: Record<string, string> = {
-        clear: isNight ? '🌙' : '☀️',
-        clouds: '☁️',
-        rain: '🌧️',
-        drizzle: '🌦️',
-        thunderstorm: '⛈️',
-        snow: '❄️',
-        mist: '🌫️',
-        fog: '🌫️',
-        haze: '🌫️',
-      };
-      const emoji = emojiMap[condition] || (isNight ? '🌙' : '🌤️');
-
-      // Build notable conditions
-      const notableConditions: string[] = [];
-      if (windKmh > 30) notableConditions.push(`wind ${windKmh}km/h`);
-      if (tempC > 35) {
-        notableConditions.push(`very hot (feels like ${feelsLikeC}°C/${feelsLikeF}°F)`);
-      } else if (tempC < 0) {
-        notableConditions.push(`very cold (feels like ${feelsLikeC}°C/${feelsLikeF}°F)`);
-      } else if (Math.abs(tempC - feelsLikeC) >= 5) {
-        notableConditions.push(`feels like ${feelsLikeC}°C/${feelsLikeF}°F`);
-      }
-      if (humidity > 80) notableConditions.push(`high humidity (${humidity}%)`);
-      else if (humidity < 30) notableConditions.push(`low humidity (${humidity}%)`);
-      if (visibility !== null && visibility < 1) {
-        notableConditions.push(`low visibility (${Math.round(visibility * 10) / 10}km)`);
-      }
-
-      let response = `${emoji} ${tempC}°C/${tempF}°F ${desc}`;
+      let response = `${emoji} ${formatTemperature(tempC)} ${desc}`;
       if (notableConditions.length > 0) {
         response += `, ${notableConditions.join(', ')}`;
       }
@@ -248,22 +192,14 @@ export async function GET(
       return txtResponse(response);
     }
 
-    // Forecast route
+    // Forecast route - fetch fresh (not cached, needs full forecast data)
     if (route === 'forecast') {
       const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
-      if (!openweatherKey) {
-        return txtResponse('Forecast API not configured');
-      }
+      const keyError = requireApiKey(openweatherKey, 'Forecast');
+      if (keyError) return txtResponse(keyError.error);
 
-      const forecastRes = await fetch(
-        `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${openweatherKey}&units=metric`
-      );
-
-      if (!forecastRes.ok) {
-        return txtResponse('Forecast API unavailable');
-      }
-
-      const fc = await forecastRes.json();
+      // Forecast needs full data, fetch fresh
+      const fc = await fetchForecast(lat, lon, openweatherKey!);
       if (!fc?.list || !Array.isArray(fc.list) || fc.list.length === 0) {
         return txtResponse('No forecast data available');
       }
@@ -298,18 +234,10 @@ export async function GET(
 
         if (minTempC === Infinity || maxTempC === -Infinity) continue;
 
+        const condition = items[0]?.weather?.[0]?.main?.toLowerCase() || '';
+        const emoji = getWeatherEmoji(condition);
         const minTempF = Math.round(minTempC * 9 / 5 + 32);
         const maxTempF = Math.round(maxTempC * 9 / 5 + 32);
-        const condition = items[0]?.weather?.[0]?.main?.toLowerCase() || '';
-        const emojiMap: Record<string, string> = {
-          clear: '☀️',
-          clouds: '☁️',
-          rain: '🌧️',
-          drizzle: '🌦️',
-          thunderstorm: '⛈️',
-          snow: '❄️',
-        };
-        const emoji = emojiMap[condition] || '🌤️';
 
         out.push(`${emoji} ${dateLabel} ${minTempC}-${maxTempC}°C/${minTempF}-${maxTempF}°F`);
         count++;
@@ -318,46 +246,22 @@ export async function GET(
       return txtResponse(out.length > 0 ? out.join(' | ') : 'No forecast data available');
     }
 
-    // Sun route (sunrise/sunset)
+    // Sun route (sunrise/sunset) - uses cached data
     if (route === 'sun') {
-      const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
-      if (!openweatherKey) {
-        return txtResponse('Sun API not configured');
-      }
-
-      const weatherData = await fetchWeatherAndTimezoneFromOpenWeatherMap(lat, lon, openweatherKey);
-      if (!weatherData?.timezone) {
-        return txtResponse('Timezone unavailable');
-      }
-
-      // Fetch weather for sunrise/sunset
-      const weatherRes = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${openweatherKey}&units=metric`
-      );
-
-      if (!weatherRes.ok || !weatherRes.json) {
-        return txtResponse('Sun data unavailable');
-      }
-
-      const ow = await weatherRes.json();
-      if (!ow?.sys?.sunrise || !ow?.sys?.sunset) {
+      if (!locationData.timezone || !locationData.sunriseSunset) {
         return txtResponse('Sunrise/sunset data unavailable');
       }
 
-      const sunriseUtc = new Date(ow.sys.sunrise * 1000);
-      const sunsetUtc = new Date(ow.sys.sunset * 1000);
-      const sunriseStr = sunriseUtc.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
+      const sunriseUtc = new Date(locationData.sunriseSunset.sunrise * 1000);
+      const sunsetUtc = new Date(locationData.sunriseSunset.sunset * 1000);
+      const timeOptions = {
+        hour: 'numeric' as const,
+        minute: '2-digit' as const,
         hour12: true,
-        timeZone: weatherData.timezone,
-      });
-      const sunsetStr = sunsetUtc.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: weatherData.timezone,
-      });
+        timeZone: locationData.timezone,
+      };
+      const sunriseStr = sunriseUtc.toLocaleTimeString('en-US', timeOptions);
+      const sunsetStr = sunsetUtc.toLocaleTimeString('en-US', timeOptions);
 
       const sunriseIsTomorrow = sunriseUtc.getTime() > sunsetUtc.getTime();
       return txtResponse(
@@ -367,35 +271,29 @@ export async function GET(
       );
     }
 
-    // Time route
+    // Time route - uses cached timezone
     if (route === 'time') {
-      const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
-      if (!openweatherKey) {
-        return txtResponse('Timezone API not configured');
+      if (!locationData.timezone) {
+        return txtResponse('Time unavailable');
       }
 
-      const weatherData = await fetchWeatherAndTimezoneFromOpenWeatherMap(lat, lon, openweatherKey);
-      if (weatherData?.timezone) {
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: weatherData.timezone,
-        });
-        const dateStr = now.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-          timeZone: weatherData.timezone,
-        });
-        return txtResponse(`${timeStr} on ${dateStr} (${weatherData.timezone})`);
-      }
-
-      return txtResponse('Time unavailable');
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: locationData.timezone,
+      });
+      const dateStr = now.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        timeZone: locationData.timezone,
+      });
+      return txtResponse(`${timeStr} on ${dateStr} (${locationData.timezone})`);
     }
 
-    // Map route
+    // Map route - uses cached coordinates
     if (route === 'map') {
       const roundedLat = roundCoordinate(lat);
       const roundedLon = roundCoordinate(lon);
@@ -403,28 +301,21 @@ export async function GET(
       return txtResponse(mapUrl);
     }
 
-    // Travel routes (food, phrase, sidequest)
+    // Travel routes (food, phrase, sidequest) - uses cached country code
     if (route === 'food' || route === 'phrase' || route === 'sidequest') {
-      const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
-      let countryCode: string | null = null;
-
-      if (locationiqKey) {
-        const locationResult = await fetchLocationFromLocationIQ(lat, lon, locationiqKey);
-        countryCode = locationResult.location?.countryCode || null;
-      }
-
+      const countryCode = locationData.location?.countryCode || null;
       const travelData = getTravelData(countryCode);
+      const noDataMsg = 'No local data for this country yet';
 
       if (route === 'food') {
         const foods = pickN(travelData.foods, 3);
-        return txtResponse(foods.length > 0 ? foods.join(' · ') : 'No local data for this country yet');
+        return txtResponse(foods.length > 0 ? foods.join(' · ') : noDataMsg);
       }
 
       if (route === 'phrase') {
         const phrases = pickN(travelData.phrases, 3);
-        if (phrases.length === 0) {
-          return txtResponse('No local data for this country yet');
-        }
+        if (phrases.length === 0) return txtResponse(noDataMsg);
+        
         const lang = phrases[0].lang;
         const formatted = phrases.map((phrase, index) => {
           const phrasePart = phrase.roman
@@ -437,116 +328,37 @@ export async function GET(
 
       if (route === 'sidequest') {
         const sidequests = pickN(travelData.sidequests, 3);
-        return txtResponse(sidequests.length > 0 ? sidequests.join(' · ') : 'No local data for this country yet');
+        return txtResponse(sidequests.length > 0 ? sidequests.join(' · ') : noDataMsg);
       }
     }
 
-    // Status/Homepage route - returns JSON for homepage display
+    // Status/Homepage route - returns JSON for homepage display (uses cached data)
     // Matches format expected by tazo-web homepage (includes emoji, forecast, etc.)
     if (route === 'status' || route === 'homepage') {
-      const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
-      const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
-
-      let locationName = '';
-      if (locationiqKey) {
-        const locationResult = await fetchLocationFromLocationIQ(lat, lon, locationiqKey);
-        locationName = getCityLocationForChat(locationResult.location);
-      }
-
       let weatherData = null;
-      let timezone = null;
-      let forecastData = null;
-      
-      if (openweatherKey) {
-        // Fetch current weather
-        const weatherRes = await fetch(
-          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${openweatherKey}&units=metric`
-        );
-        
-        if (weatherRes.ok) {
-          const ow = await weatherRes.json();
-          if (ow?.main?.temp != null) {
-            const condition = (ow.weather?.[0]?.main || '').toLowerCase();
-            const desc = (ow.weather?.[0]?.description || '').toLowerCase();
-            const now = new Date();
-            const hour = now.getHours();
-            const isNight = hour >= 20 || hour < 6;
-            const emojiMap: Record<string, string> = {
-              clear: isNight ? '🌙' : '☀️',
-              clouds: '☁️',
-              rain: '🌧️',
-              drizzle: '🌦️',
-              thunderstorm: '⛈️',
-              snow: '❄️',
-              mist: '🌫️',
-              fog: '🌫️',
-              haze: '🌫️',
-            };
-            const emoji = emojiMap[condition] || (isNight ? '🌙' : '🌤️');
-            
-            weatherData = {
-              emoji,
-              condition: desc,
-              tempC: Math.round(ow.main.temp),
-              tempF: Math.round(ow.main.temp * 9 / 5 + 32),
-              feelsC: Math.round(ow.main.feels_like || ow.main.temp),
-              feelsF: Math.round((ow.main.feels_like || ow.main.temp) * 9 / 5 + 32),
-              wind: Math.round((ow.wind?.speed || 0) * 3.6), // km/h
-              humidity: ow.main.humidity || 0,
-            };
-          }
-        }
-
-        // Fetch forecast for precipitation chance
-        const forecastRes = await fetch(
-          `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${openweatherKey}&units=metric`
-        );
-        
-        if (forecastRes.ok) {
-          const fc = await forecastRes.json();
-          if (fc?.list && Array.isArray(fc.list)) {
-            const now = new Date();
-            const currentTimestamp = now.getTime();
-            let maxPop = 0;
-            let precipType: string | null = null;
-            
-            for (const item of fc.list) {
-              const forecastTime = new Date(item.dt * 1000);
-              if (forecastTime.getTime() > currentTimestamp - 30 * 60 * 1000 &&
-                  forecastTime.getTime() <= currentTimestamp + 12 * 60 * 60 * 1000) {
-                const pop = Math.round((item.pop || 0) * 100);
-                if (pop > maxPop && pop >= 30) {
-                  maxPop = pop;
-                  const fcCondition = (item.weather?.[0]?.main || '').toLowerCase();
-                  if (fcCondition === 'rain' || fcCondition === 'drizzle') precipType = 'rain';
-                  else if (fcCondition === 'snow') precipType = 'snow';
-                  else if (fcCondition === 'thunderstorm') precipType = 'storms';
-                  else if (pop > 0) precipType = 'precip';
-                }
-                if (forecastTime.getTime() > currentTimestamp + 12 * 60 * 60 * 1000) break;
-              }
-            }
-            
-            if (maxPop > 0) {
-              forecastData = { chance: maxPop, type: precipType };
-            }
-          }
-        }
-
-        // Get timezone from weather data
-        const weatherResult = await fetchWeatherAndTimezoneFromOpenWeatherMap(lat, lon, openweatherKey);
-        timezone = weatherResult?.timezone || null;
+      if (locationData.weather) {
+        const { condition, desc, tempC, feelsLikeC, windKmh, humidity } = locationData.weather;
+        weatherData = {
+          emoji: getWeatherEmoji(condition, isNightTime()),
+          condition: desc,
+          tempC,
+          tempF: Math.round(tempC * 9 / 5 + 32),
+          feelsC: feelsLikeC,
+          feelsF: Math.round(feelsLikeC * 9 / 5 + 32),
+          wind: windKmh,
+          humidity,
+        };
       }
 
       // Format time with timezone
       let timeStr = null;
-      if (timezone) {
+      if (locationData.timezone) {
         try {
           timeStr = new Date().toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,
-            timeZone: timezone,
+            timeZone: locationData.timezone,
           });
         } catch (error) {
           // Invalid timezone, skip
@@ -554,29 +366,30 @@ export async function GET(
       }
 
       return jsonResponse({
-        location: locationName || null,
+        location: locationData.location?.name || null,
         time: timeStr,
-        timezone,
+        timezone: locationData.timezone,
         weather: weatherData,
-        forecast: forecastData,
+        forecast: locationData.forecast,
       });
     }
 
     if (route === 'json') {
       return jsonResponse({
-        rtirl: rtirlData.raw,
+        rtirl: locationData.rtirl.raw,
         lat: roundCoordinate(lat),
         lon: roundCoordinate(lon),
-        updatedAt: rtirlData.updatedAt,
+        updatedAt: locationData.rtirl.updatedAt,
       });
     }
 
     // Debug route
     if (route === 'debug') {
       return jsonResponse({
-        rtirl: { raw: rtirlData.raw, lat: roundCoordinate(lat), lon: roundCoordinate(lon), updatedAt: rtirlData.updatedAt },
+        rtirl: { raw: locationData.rtirl.raw, lat: roundCoordinate(lat), lon: roundCoordinate(lon), updatedAt: locationData.rtirl.updatedAt },
         query: q || null,
         timestamp: new Date().toISOString(),
+        cacheAge: Date.now() - locationData.cachedAt,
         availableRoutes: [
           'status - Raw GPS data',
           'json - Full RTIRL JSON',

@@ -72,7 +72,7 @@ export function pickN<T>(arr: T[], n: number): T[] {
  * Rounds coordinate to 3 decimal places
  */
 export function roundCoordinate(coord: number | null | undefined): number | null {
-  if (coord == null) return coord;
+  if (coord == null || coord === undefined) return null;
   return Math.round(coord * 1000) / 1000;
 }
 
