@@ -90,13 +90,9 @@ These commands work with or without a query. If no query is provided, they use y
 
 ## Size Ranking Commands
 
-Separate routes for each measurement type:
-
 ```
 !inch 5.5 4.5 → $(customapi https://app.tazo.wtf/api/chat/inch?q=$(querystring))
 !cm 14 11.5 → $(customapi https://app.tazo.wtf/api/chat/cm?q=$(querystring))
-!finch 3.5 3.2 → $(customapi https://app.tazo.wtf/api/chat/finch?q=$(querystring))
-!fcm 9.1 8.3 → $(customapi https://app.tazo.wtf/api/chat/fcm?q=$(querystring))
 ```
 
 Or using individual parameters:
@@ -134,6 +130,49 @@ Returns 3 random local phrases with translations based on your current country.
 
 Returns 3 random local activity suggestions based on your current country.
 
+## Stats Commands
+
+### Heart Rate
+
+```
+!hr → $(customapi https://app.tazo.wtf/api/chat/hr)
+```
+
+Returns current heart rate, min/max over last 24h, and average.
+
+Example output: `Current: 75 BPM | Min: 65 (2h ago) | Max: 95 (30m ago) | Avg: 78`
+
+### Speed
+
+```
+!speed → $(customapi https://app.tazo.wtf/api/chat/speed)
+```
+
+Returns current speed and max speed over last 24h.
+
+Example output: `Current: 25 km/h | Max: 120 km/h (1h ago)`
+
+### Altitude
+
+```
+!altitude → $(customapi https://app.tazo.wtf/api/chat/altitude)
+!elevation → $(customapi https://app.tazo.wtf/api/chat/altitude)
+```
+
+Returns current altitude, highest, and lowest over last 24h.
+
+Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago)`
+
+### Combined Stats
+
+```
+!stats → $(customapi https://app.tazo.wtf/api/chat/stats)
+```
+
+Returns combined summary: location, speed, altitude, heart rate, distance traveled, countries/cities visited.
+
+Example output: `Location: Tokyo, Japan 🇯🇵 | Speed: 25 km/h | Altitude: 150 m | HR: 75 BPM | Distance: 12.5 km | Countries: 2`
+
 ## Debug
 
 ```
@@ -148,3 +187,5 @@ Returns debug information about available routes and current RTIRL data.
 
 **Migration Note:** If you're updating from the old `tazo.wtf/api/*` endpoints, simply replace:
 - `https://tazo.wtf/api/` → `https://app.tazo.wtf/api/chat/`
+
+**Note:** Stats commands require the overlay to be sending data updates. The overlay automatically sends heartrate, speed, and altitude data when available.

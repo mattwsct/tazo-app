@@ -125,7 +125,15 @@ function OverlayPage() {
   const lastGpsUpdateTime = useRef(0); // Track when we last got GPS data (use ref for synchronous updates)
   const lastGpsTimestamp = useRef(0); // Track the actual GPS timestamp from payload (not reception time)
   const weatherFetchInProgress = useRef(false); // Track if weather fetch is already in progress
-  const locationFetchInProgress = useRef(false); // Track if location fetch is already in progress
+  const locationFetchInProgress = useRef(false);
+  
+  // Stats update throttling
+  const lastStatsUpdateTime = useRef(0);
+  const lastSentSpeed = useRef<number | null>(null);
+  const lastSentAltitude = useRef<number | null>(null);
+  const STATS_UPDATE_INTERVAL = 5000; // Send stats updates every 5 seconds max
+  const SPEED_CHANGE_THRESHOLD = 2; // Only send if speed changed by 2+ km/h
+  const ALTITUDE_CHANGE_THRESHOLD = 10; // Only send if altitude changed by 10+ meters // Track if location fetch is already in progress
   const lastCoords = useRef<[number, number] | null>(null);
   const lastCoordsTime = useRef(0);
   const lastSettingsHash = useRef<string>('');
@@ -855,12 +863,50 @@ function OverlayPage() {
               
               // Extract altitude from RTIRL payload
               const altitudeValue = extractAltitude(payload);
+              let roundedAltitude: number | null = null;
               
               if (altitudeValue !== null) {
-                const roundedAltitude = Math.round(altitudeValue);
+                roundedAltitude = Math.round(altitudeValue);
                 setCurrentAltitude(roundedAltitude);
                 lastAltitudeGpsTimestamp.current = payloadTimestamp; // Track GPS timestamp, not reception time
                 setAltitudeUpdateTimestamp(now); // Trigger re-render
+              }
+
+              // Send stats updates (throttled)
+              const timeSinceLastUpdate = now - lastStatsUpdateTime.current;
+              const shouldUpdate = timeSinceLastUpdate >= STATS_UPDATE_INTERVAL;
+              const speedChanged = lastSentSpeed.current === null || Math.abs(roundedSpeed - lastSentSpeed.current) >= SPEED_CHANGE_THRESHOLD;
+              const altitudeChanged = roundedAltitude !== null && (lastSentAltitude.current === null || Math.abs(roundedAltitude - lastSentAltitude.current) >= ALTITUDE_CHANGE_THRESHOLD);
+
+              if (shouldUpdate && (speedChanged || altitudeChanged)) {
+                lastStatsUpdateTime.current = now;
+                
+                const statsPayload: Record<string, unknown> = {};
+                
+                if (speedChanged) {
+                  statsPayload.speed = { speed: roundedSpeed, timestamp: payloadTimestamp };
+                  lastSentSpeed.current = roundedSpeed;
+                }
+                
+                if (altitudeChanged && roundedAltitude !== null) {
+                  statsPayload.altitude = { altitude: roundedAltitude, timestamp: payloadTimestamp };
+                  lastSentAltitude.current = roundedAltitude;
+                }
+                
+                statsPayload.location = {
+                  lat,
+                  lon,
+                  timestamp: payloadTimestamp,
+                };
+
+                // Send stats update (fire and forget)
+                fetch('/api/stats/update', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(statsPayload),
+                }).catch(() => {
+                  // Silently fail - stats are optional
+                });
               }
               
               // Track speed readings for minimap visibility (need 3 consecutive readings > 5 km/h)

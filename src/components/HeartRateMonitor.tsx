@@ -222,6 +222,20 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 lastUpdate: data.measured_at,
                 isConnected: true,
               });
+
+              // Send to stats API (fire and forget - don't block UI)
+              fetch('/api/stats/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  heartrate: {
+                    bpm: newBpm,
+                    timestamp: data.measured_at * 1000, // Convert to milliseconds
+                  },
+                }),
+              }).catch(() => {
+                // Silently fail - stats are optional
+              });
             }
           } catch (error) {
             HeartRateLogger.error('Failed to parse Pulsoid data:', error);

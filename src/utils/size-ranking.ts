@@ -3,8 +3,7 @@
 const SIZE_ROUTE_CONFIG: Record<string, { unit: 'inch' | 'cm'; type: 'erect' | 'flaccid' }> = {
   inch: { unit: 'inch', type: 'erect' },
   cm: { unit: 'cm', type: 'erect' },
-  finch: { unit: 'inch', type: 'flaccid' },
-  fcm: { unit: 'cm', type: 'flaccid' },
+  // Note: flaccid commands (finch, fcm) removed - use type parameter instead
 };
 
 const STATS = {

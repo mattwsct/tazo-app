@@ -16,6 +16,7 @@ import {
   extractPrecipitationForecast,
 } from '@/utils/weather-chat';
 import { getLocationData } from '@/utils/location-cache';
+import { getHeartrateStats, getSpeedStats, getAltitudeStats, getDistanceTraveled, getCountriesVisited, getCitiesVisited } from '@/utils/stats-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -422,6 +423,145 @@ export async function GET(
       });
     }
 
+    // Heartrate stats route
+    if (route === 'hr' || route === 'heartrate') {
+      const stats = await getHeartrateStats();
+      
+      if (!stats.hasData) {
+        return txtResponse('Heart rate data not available');
+      }
+
+      const parts: string[] = [];
+      
+      if (stats.current) {
+        const currentText = stats.current.age === 'current'
+          ? `${stats.current.bpm} BPM`
+          : `${stats.current.bpm} BPM (${stats.current.age} ago)`;
+        parts.push(`Current: ${currentText}`);
+      } else {
+        parts.push('Current: Not available');
+      }
+
+      if (stats.min) {
+        parts.push(`Min: ${stats.min.bpm} (${stats.min.age} ago)`);
+      }
+
+      if (stats.max) {
+        parts.push(`Max: ${stats.max.bpm} (${stats.max.age} ago)`);
+      }
+
+      if (stats.avg !== null) {
+        parts.push(`Avg: ${stats.avg}`);
+      }
+
+      return txtResponse(parts.join(' | '));
+    }
+
+    // Speed stats route
+    if (route === 'speed') {
+      const stats = await getSpeedStats();
+      
+      if (!stats.hasData) {
+        return txtResponse('Speed data not available');
+      }
+
+      const parts: string[] = [];
+      
+      if (stats.current) {
+        const currentText = stats.current.age === 'current'
+          ? `${Math.round(stats.current.speed)} km/h`
+          : `${Math.round(stats.current.speed)} km/h (${stats.current.age} ago)`;
+        parts.push(`Current: ${currentText}`);
+      } else {
+        parts.push('Current: Not available');
+      }
+
+      if (stats.max) {
+        parts.push(`Max: ${Math.round(stats.max.speed)} km/h (${stats.max.age} ago)`);
+      }
+
+      return txtResponse(parts.join(' | '));
+    }
+
+    // Altitude stats route
+    if (route === 'altitude' || route === 'elevation') {
+      const stats = await getAltitudeStats();
+      
+      if (!stats.hasData) {
+        return txtResponse('Altitude data not available');
+      }
+
+      const parts: string[] = [];
+      
+      if (stats.current) {
+        const currentText = stats.current.age === 'current'
+          ? `${stats.current.altitude} m`
+          : `${stats.current.altitude} m (${stats.current.age} ago)`;
+        parts.push(`Current: ${currentText}`);
+      } else {
+        parts.push('Current: Not available');
+      }
+
+      if (stats.highest) {
+        parts.push(`Highest: ${stats.highest.altitude} m (${stats.highest.age} ago)`);
+      }
+
+      if (stats.lowest) {
+        parts.push(`Lowest: ${stats.lowest.altitude} m (${stats.lowest.age} ago)`);
+      }
+
+      return txtResponse(parts.join(' | '));
+    }
+
+    // Combined stats route
+    if (route === 'stats') {
+      const [hrStats, speedStats, altStats, distance, countries, cities] = await Promise.all([
+        getHeartrateStats(),
+        getSpeedStats(),
+        getAltitudeStats(),
+        getDistanceTraveled(),
+        getCountriesVisited(),
+        getCitiesVisited(),
+      ]);
+
+      const parts: string[] = [];
+
+      // Location
+      if (locationData.location?.name) {
+        parts.push(`Location: ${locationData.location.name}`);
+      }
+
+      // Speed
+      if (speedStats.current && speedStats.current.age === 'current') {
+        parts.push(`Speed: ${Math.round(speedStats.current.speed)} km/h`);
+      }
+
+      // Altitude
+      if (altStats.current && altStats.current.age === 'current') {
+        parts.push(`Altitude: ${altStats.current.altitude} m`);
+      }
+
+      // Heartrate
+      if (hrStats.current && hrStats.current.age === 'current') {
+        parts.push(`HR: ${hrStats.current.bpm} BPM`);
+      }
+
+      // Distance
+      if (distance !== null) {
+        parts.push(`Distance: ${distance} km`);
+      }
+
+      // Countries/Cities
+      if (countries.length > 0) {
+        parts.push(`Countries: ${countries.length}`);
+      }
+      if (cities.length > 0) {
+        parts.push(`Cities: ${cities.length}`);
+      }
+
+      return txtResponse(parts.length > 0 ? parts.join(' | ') : 'No stats available');
+    }
+
     // Debug route
     if (route === 'debug') {
       return jsonResponse({
@@ -439,6 +579,10 @@ export async function GET(
           'time - Local time',
           'map - Google Maps link',
           'location - City-level location name',
+          'hr - Heart rate stats',
+          'speed - Speed stats',
+          'altitude - Altitude stats',
+          'stats - Combined stats',
         ],
       });
     }
