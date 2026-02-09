@@ -131,6 +131,7 @@ Returns 3 random local activity suggestions based on your current country.
 
 ```
 !hr → $(customapi https://app.tazo.wtf/api/chat/hr)
+!heartrate → $(customapi https://app.tazo.wtf/api/chat/heartrate)
 ```
 
 Returns current heart rate, min/max over last 24h, and average.

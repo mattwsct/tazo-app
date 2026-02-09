@@ -19,9 +19,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const ts = heartrate.timestamp || Date.now();
       // Debug logging (can be removed later)
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Stats Update] Received heartrate:', heartrate.bpm, 'BPM, timestamp:', ts, 'age:', Math.round((Date.now() - ts) / 1000), 'seconds');
+        console.log('[Stats Update] Received heartrate:', heartrate.bpm, 'BPM, timestamp:', ts, 'age:', Math.round((Date.now() - ts) / 1000), 'seconds', 'raw timestamp:', heartrate.timestamp);
       }
       promises.push(storeHeartrate(heartrate.bpm, ts));
+    } else if (heartrate) {
+      // Log if heartrate is present but invalid
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[Stats Update] Invalid heartrate data:', heartrate);
+      }
     }
 
     // Speed update (can be number or object with speed and timestamp)

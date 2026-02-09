@@ -241,9 +241,18 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                     timestamp: timestamp,
                   },
                 }),
-              }).catch(() => {
-                // Silently fail - stats are optional
-              });
+              })
+                .then((res) => {
+                  if (!res.ok && process.env.NODE_ENV === 'development') {
+                    console.warn('[HeartRateMonitor] Stats API error:', res.status, res.statusText);
+                  }
+                })
+                .catch((err) => {
+                  // Log errors in development
+                  if (process.env.NODE_ENV === 'development') {
+                    console.warn('[HeartRateMonitor] Failed to send heartrate to stats API:', err);
+                  }
+                });
             }
           } catch (error) {
             HeartRateLogger.error('Failed to parse Pulsoid data:', error);

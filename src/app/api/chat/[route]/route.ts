@@ -158,6 +158,11 @@ export async function GET(
   if (route === 'hr' || route === 'heartrate') {
     const stats = await getHeartrateStats();
     
+    // Debug logging (can be removed later)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Chat HR] Stats result:', JSON.stringify(stats, null, 2));
+    }
+    
     if (!stats.hasData) {
       return txtResponse('Heart rate data not available');
     }
@@ -293,11 +298,31 @@ export async function GET(
         // Use formatLocation with same displayMode as overlay
         const formatted = formatLocation(rawLocation, displayMode);
         const parts: string[] = [];
-        if (formatted.primary) parts.push(formatted.primary);
-        if (formatted.secondary) parts.push(formatted.secondary);
+        if (formatted.primary && formatted.primary.trim()) parts.push(formatted.primary.trim());
+        if (formatted.secondary && formatted.secondary.trim()) parts.push(formatted.secondary.trim());
         
         if (parts.length > 0) {
           return txtResponse(parts.join(', '));
+        }
+        
+        // Fallback: if formatLocation returned empty, try to get any available location name
+        // This handles edge cases where formatLocation filters out valid names
+        const fallbackParts: string[] = [];
+        if (rawLocation.neighbourhood) fallbackParts.push(rawLocation.neighbourhood);
+        else if (rawLocation.suburb) fallbackParts.push(rawLocation.suburb);
+        else if (rawLocation.city) fallbackParts.push(rawLocation.city);
+        else if (rawLocation.town) fallbackParts.push(rawLocation.town);
+        else if (rawLocation.municipality) fallbackParts.push(rawLocation.municipality);
+        else if (rawLocation.state) fallbackParts.push(rawLocation.state);
+        else if (rawLocation.province) fallbackParts.push(rawLocation.province);
+        
+        if (rawLocation.countryCode && fallbackParts.length > 0) {
+          const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+          if (countryName) fallbackParts.push(countryName);
+        }
+        
+        if (fallbackParts.length > 0) {
+          return txtResponse(fallbackParts.join(', '));
         }
       }
       

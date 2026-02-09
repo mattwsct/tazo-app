@@ -20,7 +20,7 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const STALE_THRESHOLD_MS = 30 * 1000; // 30 seconds - matches overlay timeout
 
 // Sampling intervals to prevent excessive storage
-const HEARTRATE_SAMPLE_INTERVAL = 10 * 1000; // Store heartrate every 10 seconds max (reduced from 15s for better data availability)
+const HEARTRATE_SAMPLE_INTERVAL = 5 * 1000; // Store heartrate every 5 seconds max (reduced for better data availability)
 const SPEED_SAMPLE_INTERVAL = 10 * 1000; // Store speed every 10 seconds max
 const ALTITUDE_SAMPLE_INTERVAL = 30 * 1000; // Store altitude every 30 seconds max
 const LOCATION_SAMPLE_INTERVAL = 60 * 1000; // Store location every 60 seconds max
@@ -102,14 +102,38 @@ export async function storeHeartrate(bpm: number, timestamp?: number): Promise<v
       const timeSinceLast = ts - lastEntry.timestamp;
       const bpmChange = Math.abs(bpm - lastEntry.bpm);
       
-      // Only store if:
-      // 1. Enough time has passed (10s), OR
-      // 2. BPM changed significantly (5+ BPM change), OR
-      // 3. Timestamp is significantly different (might be from different source)
-      if (timeSinceLast < HEARTRATE_SAMPLE_INTERVAL && bpmChange < 5 && Math.abs(timeSinceLast) < 60000) {
-        // Skip this reading - too soon, not significant change, and timestamp is reasonable
-        // But allow if timestamp is very different (might be correcting a clock issue)
-        return;
+      // Debug logging (can be removed later)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Store Heartrate] Received:', bpm, 'BPM, timeSinceLast:', Math.round(timeSinceLast / 1000), 's, bpmChange:', bpmChange);
+      }
+      
+      // Always store if more than 60 seconds have passed (ensures at least one entry per minute)
+      const oneMinute = 60 * 1000;
+      if (timeSinceLast >= oneMinute) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Store Heartrate] Storing entry - more than 1 minute since last');
+        }
+      } else {
+        // Only store if:
+        // 1. Enough time has passed (5s), OR
+        // 2. BPM changed significantly (3+ BPM change), OR
+        // 3. Timestamp is significantly different (might be from different source)
+        if (timeSinceLast < HEARTRATE_SAMPLE_INTERVAL && bpmChange < 3 && Math.abs(timeSinceLast) < 60000) {
+          // Skip this reading - too soon, not significant change, and timestamp is reasonable
+          // But allow if timestamp is very different (might be correcting a clock issue)
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[Store Heartrate] Skipping - too soon, small change');
+          }
+          return;
+        }
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Store Heartrate] Storing entry - condition met');
+        }
+      }
+    } else {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Store Heartrate] Storing first entry');
       }
     }
     // Always store if no history exists (first entry)
@@ -121,6 +145,10 @@ export async function storeHeartrate(bpm: number, timestamp?: number): Promise<v
     const cleaned = cleanOldEntries(history).slice(-MAX_ENTRIES);
     
     await kv.set(HEARTRATE_KEY, cleaned);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Store Heartrate] Stored successfully. Total entries:', cleaned.length);
+    }
   } catch (error) {
     console.error('Failed to store heartrate:', error);
   }
