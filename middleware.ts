@@ -3,6 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   
+  // Chat commands are public (no authentication required) - check FIRST before anything else
+  // This MUST be checked before any other authentication logic
+  if (pathname.startsWith('/api/chat/')) {
+    // Allow all chat command routes without authentication
+    return NextResponse.next();
+  }
+  
   // Add version parameter to overlay URL server-side to prevent OBS caching
   // This ensures the version parameter is present BEFORE OBS caches the page
   if (pathname === '/overlay') {
@@ -18,11 +25,6 @@ export function middleware(request: NextRequest) {
       url.searchParams.set('v', buildVersion);
       return NextResponse.rewrite(url);
     }
-  }
-  
-  // Chat commands are public (no authentication required) - check FIRST
-  if (pathname.startsWith('/api/chat/')) {
-    return NextResponse.next();
   }
 
   // Skip authentication for public routes
@@ -66,4 +68,4 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: ['/', '/api/:path*', '/login', '/overlay']
-}; 
+};
