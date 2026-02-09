@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cleanQuery, roundCoordinate, getMapLocationString, getCountryNameFromCode } from '@/utils/chat-utils';
 import { fetchLocationFromLocationIQ, fetchWeatherAndTimezoneFromOpenWeatherMap } from '@/utils/api-utils';
 import { getCityLocationForChat, pickN } from '@/utils/chat-utils';
-import { getTravelData } from '@/utils/travel-data';
+import { getTravelData, getAvailableCountries } from '@/utils/travel-data';
 import { handleSizeRanking, getSizeRouteConfig, isSizeRoute } from '@/utils/size-ranking';
 import { fetchRTIRLData } from '@/utils/rtirl-utils';
 import {
@@ -526,6 +526,15 @@ export async function GET(
       const queryCountryCode = q ? q.trim().toUpperCase() : null;
       const requestedCountryCode = queryCountryCode && queryCountryCode.length === 2 ? queryCountryCode : null;
       
+      // Validate country code if provided
+      if (requestedCountryCode) {
+        const availableCountries = getAvailableCountries();
+        const isValidCode = availableCountries.some(c => c.code === requestedCountryCode);
+        if (!isValidCode) {
+          return txtResponse(`Invalid country code: ${requestedCountryCode}. Use !countries to see available countries.`);
+        }
+      }
+      
       // Use requested country code if provided, otherwise use persistent location
       const countryCode = requestedCountryCode || persistentLocation?.location?.countryCode || null;
       const countryName = requestedCountryCode 
@@ -562,11 +571,11 @@ export async function GET(
         const note = !travelData.isCountrySpecific && countryName 
           ? ` (Global - no ${countryName} data yet)`
           : '';
-        // Add country indicator if a specific country was requested
-        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
-          ? ` [${countryName}]`
+        // Prepend country indicator if a specific country was requested
+        const countryPrefix = requestedCountryCode && travelData.isCountrySpecific
+          ? `[${countryName}] `
           : '';
-        return txtResponse(foods.join(' · ') + note + countryIndicator);
+        return txtResponse(countryPrefix + foods.join(' · ') + note);
       }
 
       if (route === 'phrase') {
@@ -587,12 +596,12 @@ export async function GET(
         const note = !travelData.isCountrySpecific && countryName 
           ? ` (Global - no ${countryName} phrases yet)`
           : '';
-        // Add country indicator if a specific country was requested
-        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
-          ? ` [${countryName}]`
+        // Prepend country indicator if a specific country was requested
+        const countryPrefix = requestedCountryCode && travelData.isCountrySpecific
+          ? `[${countryName}] `
           : '';
         
-        return txtResponse(formatted.join(' · ') + note + countryIndicator);
+        return txtResponse(countryPrefix + formatted.join(' · ') + note);
       }
 
       if (route === 'tips') {
@@ -601,32 +610,105 @@ export async function GET(
           return txtResponse(getNoDataMsg('tips'));
         }
         const selectedTips = pickN(tips, 3);
-        // Add country indicator if a specific country was requested
-        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
-          ? ` [${countryName}]`
+        // Prepend country indicator if a specific country was requested
+        const countryPrefix = requestedCountryCode && travelData.isCountrySpecific
+          ? `[${countryName}] `
           : '';
-        return txtResponse(selectedTips.join(' · ') + countryIndicator);
+        return txtResponse(countryPrefix + selectedTips.join(' · '));
       }
 
       if (route === 'emergency') {
-        const emergencyPhrases = travelData.emergencyPhrases || [];
-        if (emergencyPhrases.length === 0) {
+        const emergencyInfo = travelData.emergencyInfo;
+        
+        if (!emergencyInfo) {
           return txtResponse(getNoDataMsg('emergency'));
         }
-        const selected = pickN(emergencyPhrases, 3);
-        const lang = selected[0].lang;
-        const formatted = selected.map((phrase, index) => {
-          const phrasePart = phrase.roman
-            ? `"${phrase.text}" (${phrase.roman}) = ${phrase.meaning}`
-            : `"${phrase.text}" = ${phrase.meaning}`;
-          return index === 0 ? `${lang} → ${phrasePart}` : phrasePart;
-        });
-        // Add country indicator if a specific country was requested
-        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
-          ? ` [${countryName}]`
-          : '';
-        return txtResponse(formatted.join(' · ') + countryIndicator);
+        
+        const parts: string[] = [];
+        
+        // Prepend country indicator if a specific country was requested
+        if (requestedCountryCode && travelData.isCountrySpecific) {
+          parts.push(`[${countryName}]`);
+        }
+        
+        // Add emergency phone numbers
+        const phoneParts: string[] = [];
+        if (emergencyInfo.phone) {
+          phoneParts.push(`All: ${emergencyInfo.phone}`);
+        }
+        if (emergencyInfo.police) {
+          phoneParts.push(`Police: ${emergencyInfo.police}`);
+        }
+        if (emergencyInfo.ambulance) {
+          phoneParts.push(`Ambulance: ${emergencyInfo.ambulance}`);
+        }
+        if (emergencyInfo.fire) {
+          phoneParts.push(`Fire: ${emergencyInfo.fire}`);
+        }
+        if (phoneParts.length > 0) {
+          parts.push(phoneParts.join(' | '));
+        }
+        
+        // Add embassy information if available
+        if (emergencyInfo.embassy) {
+          parts.push(`Embassy: ${emergencyInfo.embassy}`);
+        }
+        
+        // Add emergency notes (injuries, theft, medical, etc.)
+        if (emergencyInfo.notes && emergencyInfo.notes.length > 0) {
+          parts.push(...emergencyInfo.notes);
+        }
+        
+        if (parts.length === 0) {
+          return txtResponse(getNoDataMsg('emergency'));
+        }
+        
+        return txtResponse(parts.join(' | '));
       }
+    }
+
+    // Countries route - list all available countries
+    if (route === 'countries') {
+      const countries = getAvailableCountries();
+      // Format as: JP (Japan), VN (Vietnam), ...
+      const formatted = countries.map(c => `${c.code} (${c.name})`).join(', ');
+      return txtResponse(`Available countries: ${formatted}`);
+    }
+
+    // Currency route - shows currency for current or specified country
+    if (route === 'currency') {
+      // Check if a country code was provided in the query
+      const queryCountryCode = q ? q.trim().toUpperCase() : null;
+      const requestedCountryCode = queryCountryCode && queryCountryCode.length === 2 ? queryCountryCode : null;
+      
+      // Validate country code if provided
+      if (requestedCountryCode) {
+        const availableCountries = getAvailableCountries();
+        const isValidCode = availableCountries.some(c => c.code === requestedCountryCode);
+        if (!isValidCode) {
+          return txtResponse(`Invalid country code: ${requestedCountryCode}. Use !countries to see available countries.`);
+        }
+      }
+      
+      // Use requested country code if provided, otherwise use persistent location
+      const countryCode = requestedCountryCode || persistentLocation?.location?.countryCode || null;
+      const countryName = requestedCountryCode 
+        ? getCountryNameFromCode(requestedCountryCode)
+        : (persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null));
+      const travelData = getTravelData(countryCode);
+      
+      if (!travelData.currency) {
+        const noCurrencyMsg = countryName 
+          ? `No currency data available for ${countryName} yet.`
+          : 'No currency data available. Specify a country code (e.g., !currency JP)';
+        return txtResponse(noCurrencyMsg);
+      }
+      
+      const { name, symbol, code } = travelData.currency;
+      const countryPrefix = requestedCountryCode && travelData.isCountrySpecific
+        ? `[${countryName}] `
+        : '';
+      return txtResponse(`${countryPrefix}${name} (${code}) ${symbol}`);
     }
 
     // Status/Homepage route - returns JSON for homepage display (uses cached data)

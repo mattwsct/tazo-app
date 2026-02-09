@@ -3,9 +3,8 @@
 // Limits to keep data manageable (enforced when adding new entries)
 // Prioritizing phrases over food - phrases are more important for travelers
 const MAX_FOODS = 35;
-const MAX_PHRASES = 75;
+const MAX_PHRASES = 50; // Quality over quantity - only useful/unique phrases
 const MAX_CULTURAL_TIPS = 20;
-const MAX_EMERGENCY_PHRASES = 15;
 
 export interface TravelPhrase {
   lang: string;
@@ -14,11 +13,25 @@ export interface TravelPhrase {
   meaning: string;
 }
 
+export interface EmergencyInfo {
+  phone: string; // Emergency phone number (e.g., "112", "911", "000")
+  police?: string; // Police-specific number if different
+  ambulance?: string; // Ambulance-specific number if different
+  fire?: string; // Fire-specific number if different
+  embassy?: string; // How to contact embassy/consulate
+  notes?: string[]; // Additional emergency information (injuries, theft, medical, etc.)
+}
+
 export interface TravelData {
   foods: string[];
   phrases: TravelPhrase[];
   culturalTips?: string[];
-  emergencyPhrases?: TravelPhrase[];
+  emergencyInfo?: EmergencyInfo;
+  currency?: {
+    name: string; // Currency name (e.g., "Yen", "Euro")
+    symbol: string; // Currency symbol (e.g., "¥", "€", "$")
+    code: string; // ISO currency code (e.g., "JPY", "EUR", "USD")
+  };
 }
 
 export const GLOBAL: TravelData = {
@@ -150,23 +163,27 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Don't pour your own drink - wait for others to pour",
       "Be punctual - being late is considered disrespectful"
     ],
-    emergencyPhrases: [
-      { lang: "Japanese", text: "助けて", roman: "Tasukete", meaning: "help" },
-      { lang: "Japanese", text: "救急車を呼んでください", roman: "Kyuukyusha o yonde kudasai", meaning: "call an ambulance" },
-      { lang: "Japanese", text: "警察を呼んでください", roman: "Keisatsu o yonde kudasai", meaning: "call the police" },
-      { lang: "Japanese", text: "病院に連れて行ってください", roman: "Byouin ni tsurete itte kudasai", meaning: "take me to a hospital" },
-      { lang: "Japanese", text: "痛い", roman: "Itai", meaning: "it hurts" },
-      { lang: "Japanese", text: "気分が悪い", roman: "Kibun ga warui", meaning: "I feel sick" },
-      { lang: "Japanese", text: "迷子です", roman: "Maigo desu", meaning: "I'm lost" },
-      { lang: "Japanese", text: "道に迷いました", roman: "Michi ni mayoimashita", meaning: "I'm lost" },
-      { lang: "Japanese", text: "財布をなくしました", roman: "Saifu o nakushimashita", meaning: "I lost my wallet" },
-      { lang: "Japanese", text: "パスポートをなくしました", roman: "Pasupooto o nakushimashita", meaning: "I lost my passport" },
-      { lang: "Japanese", text: "盗まれました", roman: "Nusumaremashita", meaning: "I was robbed" },
-      { lang: "Japanese", text: "火事です", roman: "Kaji desu", meaning: "fire" },
-      { lang: "Japanese", text: "救急", roman: "Kyuukyuu", meaning: "emergency" },
-      { lang: "Japanese", text: "緊急", roman: "Kinkyuu", meaning: "urgent" },
-      { lang: "Japanese", text: "大使館はどこですか", roman: "Taishikan wa doko desu ka", meaning: "where is the embassy?" }
-    ]
+    emergencyInfo: {
+      phone: "110 (police), 119 (ambulance/fire)",
+      police: "110",
+      ambulance: "119",
+      fire: "119",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +81-3-3224-5000, UK: +81-3-5211-1100",
+      notes: [
+        "110 for police, 119 for ambulance/fire - English operators available in major cities",
+        "Free calls from any phone including payphones",
+        "If injured: Call 119, stay calm, describe location clearly",
+        "If robbed/theft: Call 110, file report at nearest koban (police box) for insurance",
+        "Lost passport: Report to police (koban), then contact embassy immediately",
+        "Medical: Most hospitals have English-speaking staff in Tokyo/Osaka, bring insurance card",
+        "Tourist hotline: 050-3816-2787 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Yen",
+      symbol: "¥",
+      code: "JPY"
+    }
   },
   VN: {
     foods: [
@@ -272,23 +289,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Respect local customs and traditions",
       "Try street food - it's safe and delicious"
     ],
-    emergencyPhrases: [
-      { lang: "Vietnamese", text: "Cứu tôi", roman: "Cứu tôi", meaning: "help me" },
-      { lang: "Vietnamese", text: "Gọi xe cấp cứu", roman: "Gọi xe cấp cứu", meaning: "call an ambulance" },
-      { lang: "Vietnamese", text: "Gọi cảnh sát", roman: "Gọi cảnh sát", meaning: "call the police" },
-      { lang: "Vietnamese", text: "Đưa tôi đến bệnh viện", roman: "Đưa tôi đến bệnh viện", meaning: "take me to a hospital" },
-      { lang: "Vietnamese", text: "Đau", roman: "Đau", meaning: "pain/hurt" },
-      { lang: "Vietnamese", text: "Tôi bị ốm", roman: "Tôi bị ốm", meaning: "I'm sick" },
-      { lang: "Vietnamese", text: "Tôi bị lạc", roman: "Tôi bị lạc", meaning: "I'm lost" },
-      { lang: "Vietnamese", text: "Tôi mất ví", roman: "Tôi mất ví", meaning: "I lost my wallet" },
-      { lang: "Vietnamese", text: "Tôi mất hộ chiếu", roman: "Tôi mất hộ chiếu", meaning: "I lost my passport" },
-      { lang: "Vietnamese", text: "Tôi bị cướp", roman: "Tôi bị cướp", meaning: "I was robbed" },
-      { lang: "Vietnamese", text: "Cháy", roman: "Cháy", meaning: "fire" },
-      { lang: "Vietnamese", text: "Khẩn cấp", roman: "Khẩn cấp", meaning: "emergency" },
-      { lang: "Vietnamese", text: "Đại sứ quán ở đâu?", roman: "Đại sứ quán ở đâu?", meaning: "where is the embassy?" },
-      { lang: "Vietnamese", text: "Tôi cần giúp đỡ", roman: "Tôi cần giúp đỡ", meaning: "I need help" },
-      { lang: "Vietnamese", text: "Có ai nói tiếng Anh không?", roman: "Có ai nói tiếng Anh không?", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "113 (police), 115 (ambulance), 114 (fire)",
+      police: "113",
+      ambulance: "115",
+      fire: "114",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +84-24-3850-5000, UK: +84-24-3934-3290",
+      notes: [
+        "113 for police, 115 for ambulance, 114 for fire - English operators in major cities",
+        "If injured: Call 115, describe location clearly, stay calm",
+        "If robbed/theft: Call 113, file police report for insurance claims",
+        "Lost passport: Report to police station, then contact embassy immediately",
+        "Medical: Private hospitals in Hanoi/HCMC have English-speaking staff, bring insurance",
+        "Tourist hotline: 1800-8150 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Dong",
+      symbol: "₫",
+      code: "VND"
+    }
   },
   ID: {
     foods: [
@@ -395,23 +415,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Try local food - it's diverse and delicious",
       "Be friendly and smile - Indonesians are very welcoming"
     ],
-    emergencyPhrases: [
-      { lang: "Indonesian", text: "Tolong", roman: "Tolong", meaning: "help" },
-      { lang: "Indonesian", text: "Panggil ambulans", roman: "Panggil ambulans", meaning: "call an ambulance" },
-      { lang: "Indonesian", text: "Panggil polisi", roman: "Panggil polisi", meaning: "call the police" },
-      { lang: "Indonesian", text: "Bawa saya ke rumah sakit", roman: "Bawa saya ke rumah sakit", meaning: "take me to a hospital" },
-      { lang: "Indonesian", text: "Sakit", roman: "Sakit", meaning: "pain/hurt" },
-      { lang: "Indonesian", text: "Saya sakit", roman: "Saya sakit", meaning: "I'm sick" },
-      { lang: "Indonesian", text: "Saya tersesat", roman: "Saya tersesat", meaning: "I'm lost" },
-      { lang: "Indonesian", text: "Dompet saya hilang", roman: "Dompet saya hilang", meaning: "I lost my wallet" },
-      { lang: "Indonesian", text: "Paspor saya hilang", roman: "Paspor saya hilang", meaning: "I lost my passport" },
-      { lang: "Indonesian", text: "Saya dirampok", roman: "Saya dirampok", meaning: "I was robbed" },
-      { lang: "Indonesian", text: "Kebakaran", roman: "Kebakaran", meaning: "fire" },
-      { lang: "Indonesian", text: "Darurat", roman: "Darurat", meaning: "emergency" },
-      { lang: "Indonesian", text: "Di mana kedutaan?", roman: "Di mana kedutaan?", meaning: "where is the embassy?" },
-      { lang: "Indonesian", text: "Saya butuh bantuan", roman: "Saya butuh bantuan", meaning: "I need help" },
-      { lang: "Indonesian", text: "Ada yang bisa bahasa Inggris?", roman: "Ada yang bisa bahasa Inggris?", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "110 (police), 118/119 (ambulance), 113 (fire)",
+      police: "110",
+      ambulance: "118 or 119",
+      fire: "113",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +62-21-5083-1000, UK: +62-21-2356-5200",
+      notes: [
+        "110 for police, 118/119 for ambulance, 113 for fire - English operators in major cities",
+        "If injured: Call 118/119, private hospitals in Jakarta/Bali have English-speaking staff",
+        "If robbed/theft: Call 110, file police report (polres) for insurance, keep copy",
+        "Lost passport: Report to police, then contact embassy immediately - replacement takes days",
+        "Medical: Private hospitals (RS) are better than public, bring travel insurance",
+        "Tourist police: 110 (English available) - helpful for tourists"
+      ]
+    },
+    currency: {
+      name: "Rupiah",
+      symbol: "Rp",
+      code: "IDR"
+    }
   },
   AU: {
     foods: [
@@ -428,11 +451,8 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
     phrases: [
       { lang: "English (Aussie)", text: "G'day", meaning: "hello" },
       { lang: "English (Aussie)", text: "Thanks mate", meaning: "thank you" },
-      { lang: "English (Aussie)", text: "Sorry", meaning: "apology" },
-      { lang: "English (Aussie)", text: "Please", meaning: "polite request" },
-      { lang: "English (Aussie)", text: "How much?", meaning: "asking price" },
       { lang: "English (Aussie)", text: "Beauty", meaning: "great/excellent" },
-      { lang: "English (Aussie)", text: "No worries", meaning: "it's okay" },
+      { lang: "English (Aussie)", text: "No worries", meaning: "it's okay/you're welcome" },
       { lang: "English (Aussie)", text: "Fair dinkum", meaning: "genuine/true" },
       { lang: "English (Aussie)", text: "Arvo", meaning: "afternoon" },
       { lang: "English (Aussie)", text: "Brekkie", meaning: "breakfast" },
@@ -453,50 +473,11 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       { lang: "English (Aussie)", text: "Reckon", meaning: "think/believe" },
       { lang: "English (Aussie)", text: "Dunno", meaning: "don't know" },
       { lang: "English (Aussie)", text: "Ta", meaning: "thanks" },
-      { lang: "English (Aussie)", text: "Cheers", meaning: "thanks/goodbye" },
-      { lang: "English (Aussie)", text: "See ya", meaning: "goodbye" },
       { lang: "English (Aussie)", text: "Hooroo", meaning: "goodbye" },
       { lang: "English (Aussie)", text: "How ya going?", meaning: "how are you?" },
-      { lang: "English (Aussie)", text: "What's your name?", meaning: "asking name" },
-      { lang: "English (Aussie)", text: "I'm", meaning: "introducing self" },
-      { lang: "English (Aussie)", text: "This is", meaning: "introducing something" },
-      { lang: "English (Aussie)", text: "That's", meaning: "pointing out something" },
-      { lang: "English (Aussie)", text: "When?", meaning: "asking time" },
-      { lang: "English (Aussie)", text: "Why?", meaning: "asking reason" },
-      { lang: "English (Aussie)", text: "How?", meaning: "asking method" },
-      { lang: "English (Aussie)", text: "How many?", meaning: "asking quantity" },
-      { lang: "English (Aussie)", text: "Arvo", meaning: "afternoon" },
-      { lang: "English (Aussie)", text: "Night", meaning: "evening/goodnight" },
-      { lang: "English (Aussie)", text: "Catch ya later", meaning: "see you later" },
-      { lang: "English (Aussie)", text: "Congrats", meaning: "congratulations" },
-      { lang: "English (Aussie)", text: "Take care", meaning: "be careful/goodbye" },
-      { lang: "English (Aussie)", text: "Good luck", meaning: "wishing success" },
-      { lang: "English (Aussie)", text: "Sorry I'm late", meaning: "apology for delay" },
-      { lang: "English (Aussie)", text: "No worries", meaning: "you're welcome/it's fine" },
-      { lang: "English (Aussie)", text: "Nice to meet ya", meaning: "greeting" },
-      { lang: "English (Aussie)", text: "Where ya headed?", meaning: "where are you going?" },
-      { lang: "English (Aussie)", text: "Where's the station?", meaning: "where is the station?" },
       { lang: "English (Aussie)", text: "Where's the dunny?", meaning: "where is the bathroom?" },
-      { lang: "English (Aussie)", text: "I'll have this", meaning: "I want this" },
-      { lang: "English (Aussie)", text: "Can I get the bill?", meaning: "check please" },
-      { lang: "English (Aussie)", text: "Do you take card?", meaning: "do you accept credit cards?" },
-      { lang: "English (Aussie)", text: "Cash", meaning: "cash" },
-      { lang: "English (Aussie)", text: "Left", meaning: "left" },
-      { lang: "English (Aussie)", text: "Right", meaning: "right" },
-      { lang: "English (Aussie)", text: "Straight ahead", meaning: "straight" },
-      { lang: "English (Aussie)", text: "Close by", meaning: "near" },
-      { lang: "English (Aussie)", text: "A fair way", meaning: "far" },
-      { lang: "English (Aussie)", text: "Station", meaning: "station" },
-      { lang: "English (Aussie)", text: "Bus stop", meaning: "bus stop" },
-      { lang: "English (Aussie)", text: "Airport", meaning: "airport" },
-      { lang: "English (Aussie)", text: "Hotel", meaning: "hotel" },
-      { lang: "English (Aussie)", text: "Hospital", meaning: "hospital" },
-      { lang: "English (Aussie)", text: "Chemist", meaning: "pharmacy" },
-      { lang: "English (Aussie)", text: "Bank", meaning: "bank" },
-      { lang: "English (Aussie)", text: "Servo", meaning: "convenience store" },
-      { lang: "English (Aussie)", text: "Restaurant", meaning: "restaurant" },
-      { lang: "English (Aussie)", text: "Shop", meaning: "shop" },
-      { lang: "English (Aussie)", text: "Ticket", meaning: "ticket" }
+      { lang: "English (Aussie)", text: "Catch ya later", meaning: "see you later" },
+      { lang: "English (Aussie)", text: "Where ya headed?", meaning: "where are you going?" }
     ],
     culturalTips: [
       "Tipping is optional but appreciated (10% is standard)",
@@ -520,23 +501,27 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Don't underestimate distances - Australia is huge",
       "Enjoy the outdoor lifestyle - beaches, parks, BBQs"
     ],
-    emergencyPhrases: [
-      { lang: "English (Aussie)", text: "Help", meaning: "help" },
-      { lang: "English (Aussie)", text: "Call an ambulance", meaning: "call an ambulance" },
-      { lang: "English (Aussie)", text: "Call the cops", meaning: "call the police" },
-      { lang: "English (Aussie)", text: "Take me to hospital", meaning: "take me to a hospital" },
-      { lang: "English (Aussie)", text: "It hurts", meaning: "it hurts" },
-      { lang: "English (Aussie)", text: "I'm sick", meaning: "I'm sick" },
-      { lang: "English (Aussie)", text: "I'm lost", meaning: "I'm lost" },
-      { lang: "English (Aussie)", text: "I lost my wallet", meaning: "I lost my wallet" },
-      { lang: "English (Aussie)", text: "I lost my passport", meaning: "I lost my passport" },
-      { lang: "English (Aussie)", text: "I was robbed", meaning: "I was robbed" },
-      { lang: "English (Aussie)", text: "Fire", meaning: "fire" },
-      { lang: "English (Aussie)", text: "Emergency", meaning: "emergency" },
-      { lang: "English (Aussie)", text: "Where's the embassy?", meaning: "where is the embassy?" },
-      { lang: "English (Aussie)", text: "I need help", meaning: "I need help" },
-      { lang: "English (Aussie)", text: "Call 000", meaning: "call emergency services (000)" }
-    ]
+    emergencyInfo: {
+      phone: "000 (all emergencies)",
+      police: "000",
+      ambulance: "000",
+      fire: "000",
+      embassy: "Contact your embassy if passport is lost/stolen. US: +61-2-6214-5600, UK: +61-2-9247-7521",
+      notes: [
+        "000 for all emergencies (police, fire, ambulance) - free from any phone",
+        "112 also works from mobile phones",
+        "If injured: Call 000, describe location clearly, stay on line for instructions",
+        "If robbed/theft: Call 000, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Public hospitals are free for emergencies, private hospitals require insurance",
+        "Tourist info: 131-008 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Australian Dollar",
+      symbol: "A$",
+      code: "AUD"
+    }
   },
   TH: {
     foods: [
@@ -642,23 +627,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Try street food - it's safe and delicious",
       "Be friendly and smile - Thais are very welcoming"
     ],
-    emergencyPhrases: [
-      { lang: "Thai", text: "ช่วยด้วย", roman: "Chuay duay", meaning: "help" },
-      { lang: "Thai", text: "โทรเรียกรถพยาบาล", roman: "Tor riak rot pha ya ban", meaning: "call an ambulance" },
-      { lang: "Thai", text: "โทรเรียกตำรวจ", roman: "Tor riak tam ruat", meaning: "call the police" },
-      { lang: "Thai", text: "พาฉันไปโรงพยาบาล", roman: "Pa chan pai rong pha ya ban", meaning: "take me to a hospital" },
-      { lang: "Thai", text: "เจ็บ", roman: "Jep", meaning: "pain/hurt" },
-      { lang: "Thai", text: "ฉันป่วย", roman: "Chan puay", meaning: "I'm sick" },
-      { lang: "Thai", text: "ฉันหลงทาง", roman: "Chan long tang", meaning: "I'm lost" },
-      { lang: "Thai", text: "ฉันทำกระเป๋าสตางค์หาย", roman: "Chan tam gra pao sa tang kai", meaning: "I lost my wallet" },
-      { lang: "Thai", text: "ฉันทำพาสปอร์ตหาย", roman: "Chan tam pas port kai", meaning: "I lost my passport" },
-      { lang: "Thai", text: "ฉันถูกปล้น", roman: "Chan took plon", meaning: "I was robbed" },
-      { lang: "Thai", text: "ไฟไหม้", roman: "Fai mai", meaning: "fire" },
-      { lang: "Thai", text: "ฉุกเฉิน", roman: "Chook chen", meaning: "emergency" },
-      { lang: "Thai", text: "สถานทูตอยู่ที่ไหน", roman: "Sathan tut yoo tee nai", meaning: "where is the embassy?" },
-      { lang: "Thai", text: "ฉันต้องการความช่วยเหลือ", roman: "Chan tong gaan kwam chuay luea", meaning: "I need help" },
-      { lang: "Thai", text: "มีใครพูดภาษาอังกฤษได้ไหม", roman: "Mee krai pood pasa angrit dai mai", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "191 (police), 1669 (ambulance), 199 (fire)",
+      police: "191",
+      ambulance: "1669",
+      fire: "199",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +66-2-205-4000, UK: +66-2-305-8333",
+      notes: [
+        "191 for police, 1669 for ambulance, 199 for fire - Tourist police: 1155 (English)",
+        "If injured: Call 1669, private hospitals in Bangkok have English-speaking staff",
+        "If robbed/theft: Call 191 or tourist police 1155, file report for insurance",
+        "Lost passport: Report to tourist police 1155, then contact embassy immediately",
+        "Medical: Private hospitals (Bumrungrad, Bangkok Hospital) have English staff, bring insurance",
+        "Tourist hotline: 1155 (24/7 English support) - very helpful for tourists"
+      ]
+    },
+    currency: {
+      name: "Baht",
+      symbol: "฿",
+      code: "THB"
+    }
   },
   KR: {
     foods: [
@@ -761,23 +749,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Learn basic honorifics - they're important",
       "Respect personal space - avoid physical contact"
     ],
-    emergencyPhrases: [
-      { lang: "Korean", text: "도와주세요", roman: "Dowajuseyo", meaning: "help" },
-      { lang: "Korean", text: "구급차 불러주세요", roman: "Gugeupcha bulleojuseyo", meaning: "call an ambulance" },
-      { lang: "Korean", text: "경찰 불러주세요", roman: "Gyeongchal bulleojuseyo", meaning: "call the police" },
-      { lang: "Korean", text: "병원에 데려가 주세요", roman: "Byeongwone deryeoga juseyo", meaning: "take me to a hospital" },
-      { lang: "Korean", text: "아파요", roman: "Apayo", meaning: "it hurts" },
-      { lang: "Korean", text: "아픈데요", roman: "Apeundeyo", meaning: "I'm sick" },
-      { lang: "Korean", text: "길을 잃었어요", roman: "Gireul ireosseoyo", meaning: "I'm lost" },
-      { lang: "Korean", text: "지갑을 잃어버렸어요", roman: "Jigabeul ireobeoryeosseoyo", meaning: "I lost my wallet" },
-      { lang: "Korean", text: "여권을 잃어버렸어요", roman: "Yeogwoneul ireobeoryeosseoyo", meaning: "I lost my passport" },
-      { lang: "Korean", text: "도둑맞았어요", roman: "Dodukmajasseoyo", meaning: "I was robbed" },
-      { lang: "Korean", text: "불이야", roman: "Buriya", meaning: "fire" },
-      { lang: "Korean", text: "응급 상황", roman: "Eungeup sanghwang", meaning: "emergency" },
-      { lang: "Korean", text: "대사관은 어디예요", roman: "Daesagwaneun eodiyeyo", meaning: "where is the embassy?" },
-      { lang: "Korean", text: "도움이 필요해요", roman: "Doumi piryohaeyo", meaning: "I need help" },
-      { lang: "Korean", text: "영어 할 수 있는 사람 있어요", roman: "Yeongeo hal su inneun saram isseoyo", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "112 (all emergencies)",
+      police: "112",
+      ambulance: "112",
+      fire: "112",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +82-2-397-4114, UK: +82-2-3210-5500",
+      notes: [
+        "112 for all emergencies (police, fire, ambulance) - English operators available",
+        "If injured: Call 112, major hospitals in Seoul have English-speaking staff",
+        "If robbed/theft: Call 112, file police report (gyeongchalseo) for insurance",
+        "Lost passport: Report to police, then contact embassy immediately - replacement takes days",
+        "Medical: Major hospitals (Samsung, Asan) have international clinics with English staff",
+        "Tourist hotline: 1330 (24/7 multilingual support) - very helpful"
+      ]
+    },
+    currency: {
+      name: "Won",
+      symbol: "₩",
+      code: "KRW"
+    }
   },
   PH: {
     foods: [
@@ -881,23 +872,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Respect personal space but expect friendliness",
       "Enjoy the fiesta culture - there's always a celebration"
     ],
-    emergencyPhrases: [
-      { lang: "Filipino", text: "Tulong", roman: "Tulong", meaning: "help" },
-      { lang: "Filipino", text: "Tawagan ang ambulansya", roman: "Tawagan ang ambulansya", meaning: "call an ambulance" },
-      { lang: "Filipino", text: "Tawagan ang pulis", roman: "Tawagan ang pulis", meaning: "call the police" },
-      { lang: "Filipino", text: "Dalhin ako sa ospital", roman: "Dalhin ako sa ospital", meaning: "take me to a hospital" },
-      { lang: "Filipino", text: "Masakit", roman: "Masakit", meaning: "it hurts" },
-      { lang: "Filipino", text: "May sakit ako", roman: "May sakit ako", meaning: "I'm sick" },
-      { lang: "Filipino", text: "Nawawala ako", roman: "Nawawala ako", meaning: "I'm lost" },
-      { lang: "Filipino", text: "Nawala ang wallet ko", roman: "Nawala ang wallet ko", meaning: "I lost my wallet" },
-      { lang: "Filipino", text: "Nawala ang passport ko", roman: "Nawala ang passport ko", meaning: "I lost my passport" },
-      { lang: "Filipino", text: "Ninakaw ako", roman: "Ninakaw ako", meaning: "I was robbed" },
-      { lang: "Filipino", text: "Sunog", roman: "Sunog", meaning: "fire" },
-      { lang: "Filipino", text: "Emergency", roman: "Emergency", meaning: "emergency" },
-      { lang: "Filipino", text: "Nasaan ang embahada", roman: "Nasaan ang embahada", meaning: "where is the embassy?" },
-      { lang: "Filipino", text: "Kailangan ko ng tulong", roman: "Kailangan ko ng tulong", meaning: "I need help" },
-      { lang: "Filipino", text: "May marunong mag-English", roman: "May marunong mag-English", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "117 (police), 911 (ambulance/fire)",
+      police: "117",
+      ambulance: "911",
+      fire: "911",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +63-2-5301-2000, UK: +63-2-8588-2200",
+      notes: [
+        "117 for police, 911 for ambulance/fire - English widely spoken",
+        "If injured: Call 911, private hospitals in Manila/Cebu have English-speaking staff",
+        "If robbed/theft: Call 117, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Private hospitals (Makati Medical, St. Luke's) have English staff, bring insurance",
+        "Tourist hotline: 1-800-8-839-4726 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Philippine Peso",
+      symbol: "₱",
+      code: "PHP"
+    }
   },
   SG: {
     foods: [
@@ -909,18 +903,12 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "🍧 ice cream", "🍰 pandan cake"
     ],
     phrases: [
-      { lang: "English (Singapore)", text: "Hello", meaning: "hello" },
-      { lang: "English (Singapore)", text: "Thank you", meaning: "thank you" },
-      { lang: "English (Singapore)", text: "Sorry", meaning: "sorry" },
-      { lang: "English (Singapore)", text: "Please", meaning: "please" },
-      { lang: "English (Singapore)", text: "How much?", meaning: "how much?" },
       { lang: "English (Singapore)", text: "Shiok", meaning: "delicious/awesome" },
       { lang: "English (Singapore)", text: "Can", meaning: "yes/okay" },
       { lang: "English (Singapore)", text: "Cannot", meaning: "no/can't" },
       { lang: "English (Singapore)", text: "Lah", meaning: "particle (emphasis)" },
       { lang: "English (Singapore)", text: "Wah", meaning: "wow" },
       { lang: "English (Singapore)", text: "Alamak", meaning: "oh no" },
-      { lang: "English (Singapore)", text: "Shiok", meaning: "great/awesome" },
       { lang: "English (Singapore)", text: "Paiseh", meaning: "embarrassed/sorry" },
       { lang: "English (Singapore)", text: "Sian", meaning: "boring/tired" },
       { lang: "English (Singapore)", text: "Chope", meaning: "reserve (table)" },
@@ -928,49 +916,43 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       { lang: "English (Singapore)", text: "Kopi", meaning: "coffee" },
       { lang: "English (Singapore)", text: "Teh", meaning: "tea" },
       { lang: "English (Singapore)", text: "Uncle/Auntie", meaning: "respectful address" },
-      { lang: "English (Singapore)", text: "Where?", meaning: "where?" },
-      { lang: "English (Singapore)", text: "How?", meaning: "how?" },
-      { lang: "English (Singapore)", text: "When?", meaning: "when?" },
-      { lang: "English (Singapore)", text: "Why?", meaning: "why?" },
-      { lang: "English (Singapore)", text: "What?", meaning: "what?" },
-      { lang: "English (Singapore)", text: "Station", meaning: "station" },
       { lang: "English (Singapore)", text: "MRT", meaning: "metro" },
-      { lang: "English (Singapore)", text: "Bus", meaning: "bus" },
-      { lang: "English (Singapore)", text: "Taxi", meaning: "taxi" },
-      { lang: "English (Singapore)", text: "Airport", meaning: "airport" },
-      { lang: "English (Singapore)", text: "Hotel", meaning: "hotel" },
-      { lang: "English (Singapore)", text: "Hospital", meaning: "hospital" },
-      { lang: "English (Singapore)", text: "Pharmacy", meaning: "pharmacy" },
-      { lang: "English (Singapore)", text: "Bank", meaning: "bank" },
-      { lang: "English (Singapore)", text: "Restaurant", meaning: "restaurant" },
-      { lang: "English (Singapore)", text: "Shop", meaning: "shop" },
-      { lang: "English (Singapore)", text: "Ticket", meaning: "ticket" },
-      { lang: "English (Singapore)", text: "Left", meaning: "left" },
-      { lang: "English (Singapore)", text: "Right", meaning: "right" },
-      { lang: "English (Singapore)", text: "Straight", meaning: "straight" },
-      { lang: "English (Singapore)", text: "Near", meaning: "near" },
-      { lang: "English (Singapore)", text: "Far", meaning: "far" },
-      { lang: "English (Singapore)", text: "Cash", meaning: "cash" },
-      { lang: "English (Singapore)", text: "Card", meaning: "card" },
-      { lang: "English (Singapore)", text: "Check please", meaning: "check please" },
-      { lang: "English (Singapore)", text: "I want this", meaning: "I want this" },
-      { lang: "English (Singapore)", text: "Where is the bathroom?", meaning: "where is the bathroom?" },
-      { lang: "English (Singapore)", text: "Where is the station?", meaning: "where is the station?" },
-      { lang: "English (Singapore)", text: "Where are you going?", meaning: "where are you going?" },
-      { lang: "English (Singapore)", text: "How are you?", meaning: "how are you?" },
-      { lang: "English (Singapore)", text: "What's your name?", meaning: "what's your name?" },
-      { lang: "English (Singapore)", text: "I'm", meaning: "I am" },
-      { lang: "English (Singapore)", text: "This is", meaning: "this is" },
-      { lang: "English (Singapore)", text: "That's", meaning: "that is" },
-      { lang: "English (Singapore)", text: "How many?", meaning: "how many?" },
-      { lang: "English (Singapore)", text: "See you again", meaning: "see you again" },
-      { lang: "English (Singapore)", text: "Good night", meaning: "good night" },
-      { lang: "English (Singapore)", text: "Congratulations", meaning: "congratulations" },
-      { lang: "English (Singapore)", text: "Be careful", meaning: "be careful" },
-      { lang: "English (Singapore)", text: "Good luck", meaning: "good luck" },
-      { lang: "English (Singapore)", text: "Sorry for being late", meaning: "sorry for being late" },
-      { lang: "English (Singapore)", text: "You're welcome", meaning: "you're welcome" },
-      { lang: "English (Singapore)", text: "Nice to meet you", meaning: "nice to meet you" }
+      { lang: "English (Singapore)", text: "Kiasu", meaning: "afraid to lose out" },
+      { lang: "English (Singapore)", text: "Kaypoh", meaning: "nosy/busybody" },
+      { lang: "English (Singapore)", text: "Sotong", meaning: "confused/clueless" },
+      { lang: "English (Singapore)", text: "Blur", meaning: "confused" },
+      { lang: "English (Singapore)", text: "Shack", meaning: "tired" },
+      { lang: "English (Singapore)", text: "Bo jio", meaning: "didn't invite" },
+      { lang: "English (Singapore)", text: "Jialat", meaning: "terrible/very bad" },
+      { lang: "English (Singapore)", text: "Sabo", meaning: "sabotage" },
+      { lang: "English (Singapore)", text: "Steady", meaning: "cool/reliable" },
+      { lang: "English (Singapore)", text: "Sibei", meaning: "very" },
+      { lang: "English (Singapore)", text: "Wah lau", meaning: "expression of surprise" },
+      { lang: "English (Singapore)", text: "Orh", meaning: "oh/I see" },
+      { lang: "English (Singapore)", text: "Lor", meaning: "particle (obvious)" },
+      { lang: "English (Singapore)", text: "Leh", meaning: "particle (question)" },
+      { lang: "English (Singapore)", text: "Meh", meaning: "really/is it" },
+      { lang: "English (Singapore)", text: "Hor", meaning: "right/isn't it" },
+      { lang: "English (Singapore)", text: "Mah", meaning: "particle (emphasis)" },
+      { lang: "English (Singapore)", text: "Wat", meaning: "what" },
+      { lang: "English (Singapore)", text: "Got", meaning: "have/has" },
+      { lang: "English (Singapore)", text: "No got", meaning: "don't have" },
+      { lang: "English (Singapore)", text: "Can or not", meaning: "can you or not" },
+      { lang: "English (Singapore)", text: "How come", meaning: "why" },
+      { lang: "English (Singapore)", text: "Don't play play", meaning: "don't mess around" },
+      { lang: "English (Singapore)", text: "Catch no ball", meaning: "don't understand" },
+      { lang: "English (Singapore)", text: "Eat already", meaning: "have you eaten" },
+      { lang: "English (Singapore)", text: "Go where", meaning: "where are you going" },
+      { lang: "English (Singapore)", text: "Do what", meaning: "what are you doing" },
+      { lang: "English (Singapore)", text: "Why like that", meaning: "why is it like that" },
+      { lang: "English (Singapore)", text: "So how", meaning: "so what/how about it" },
+      { lang: "English (Singapore)", text: "Die die must", meaning: "absolutely must" },
+      { lang: "English (Singapore)", text: "See first", meaning: "wait and see" },
+      { lang: "English (Singapore)", text: "Anyhow", meaning: "randomly/carelessly" },
+      { lang: "English (Singapore)", text: "Boleh", meaning: "can/okay" },
+      { lang: "English (Singapore)", text: "Tahan", meaning: "endure/stand" },
+      { lang: "English (Singapore)", text: "Suka", meaning: "like" },
+      { lang: "English (Singapore)", text: "Makan", meaning: "eat" }
     ],
     culturalTips: [
       "English is the main language - you'll be fine",
@@ -994,23 +976,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Try different cuisines - Singapore is a food paradise",
       "Be friendly and respectful - Singaporeans are welcoming"
     ],
-    emergencyPhrases: [
-      { lang: "English (Singapore)", text: "Help", meaning: "help" },
-      { lang: "English (Singapore)", text: "Call ambulance", meaning: "call an ambulance" },
-      { lang: "English (Singapore)", text: "Call police", meaning: "call the police" },
-      { lang: "English (Singapore)", text: "Take me to hospital", meaning: "take me to a hospital" },
-      { lang: "English (Singapore)", text: "It hurts", meaning: "it hurts" },
-      { lang: "English (Singapore)", text: "I'm sick", meaning: "I'm sick" },
-      { lang: "English (Singapore)", text: "I'm lost", meaning: "I'm lost" },
-      { lang: "English (Singapore)", text: "I lost my wallet", meaning: "I lost my wallet" },
-      { lang: "English (Singapore)", text: "I lost my passport", meaning: "I lost my passport" },
-      { lang: "English (Singapore)", text: "I was robbed", meaning: "I was robbed" },
-      { lang: "English (Singapore)", text: "Fire", meaning: "fire" },
-      { lang: "English (Singapore)", text: "Emergency", meaning: "emergency" },
-      { lang: "English (Singapore)", text: "Where is the embassy?", meaning: "where is the embassy?" },
-      { lang: "English (Singapore)", text: "I need help", meaning: "I need help" },
-      { lang: "English (Singapore)", text: "Call 995", meaning: "call emergency services (995)" }
-    ]
+    emergencyInfo: {
+      phone: "999 (police), 995 (ambulance/fire)",
+      police: "999",
+      ambulance: "995",
+      fire: "995",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +65-6476-9100, UK: +65-6424-4200",
+      notes: [
+        "999 for police, 995 for ambulance/fire - English widely spoken",
+        "If injured: Call 995, excellent medical facilities with English-speaking staff",
+        "If robbed/theft: Call 999, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Excellent hospitals (Mount Elizabeth, Gleneagles) with English staff, bring insurance",
+        "Tourist hotline: +65-6736-2000 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Singapore Dollar",
+      symbol: "S$",
+      code: "SGD"
+    }
   },
   MY: {
     foods: [
@@ -1114,23 +1099,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Learn basic phrases - locals appreciate it",
       "Try local food - it's diverse and delicious"
     ],
-    emergencyPhrases: [
-      { lang: "Malay", text: "Tolong", roman: "Tolong", meaning: "help" },
-      { lang: "Malay", text: "Panggil ambulans", roman: "Panggil ambulans", meaning: "call an ambulance" },
-      { lang: "Malay", text: "Panggil polis", roman: "Panggil polis", meaning: "call the police" },
-      { lang: "Malay", text: "Bawa saya ke hospital", roman: "Bawa saya ke hospital", meaning: "take me to a hospital" },
-      { lang: "Malay", text: "Sakit", roman: "Sakit", meaning: "pain/hurt" },
-      { lang: "Malay", text: "Saya sakit", roman: "Saya sakit", meaning: "I'm sick" },
-      { lang: "Malay", text: "Saya sesat", roman: "Saya sesat", meaning: "I'm lost" },
-      { lang: "Malay", text: "Dompet saya hilang", roman: "Dompet saya hilang", meaning: "I lost my wallet" },
-      { lang: "Malay", text: "Pasport saya hilang", roman: "Pasport saya hilang", meaning: "I lost my passport" },
-      { lang: "Malay", text: "Saya dirompak", roman: "Saya dirompak", meaning: "I was robbed" },
-      { lang: "Malay", text: "Kebakaran", roman: "Kebakaran", meaning: "fire" },
-      { lang: "Malay", text: "Kecemasan", roman: "Kecemasan", meaning: "emergency" },
-      { lang: "Malay", text: "Di mana kedutaan", roman: "Di mana kedutaan", meaning: "where is the embassy?" },
-      { lang: "Malay", text: "Saya perlukan bantuan", roman: "Saya perlukan bantuan", meaning: "I need help" },
-      { lang: "Malay", text: "Ada yang boleh cakap bahasa Inggeris", roman: "Ada yang boleh cakap bahasa Inggeris", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "999 (police), 994 (ambulance), 994 (fire)",
+      police: "999",
+      ambulance: "994",
+      fire: "994",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +60-3-2168-5000, UK: +60-3-2170-2200",
+      notes: [
+        "999 for police, 994 for ambulance/fire - English widely spoken",
+        "If injured: Call 994, private hospitals in KL/Penang have English-speaking staff",
+        "If robbed/theft: Call 999, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Private hospitals (Gleneagles, Pantai) have English staff, bring insurance",
+        "Tourist hotline: 1-300-88-5050 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Ringgit",
+      symbol: "RM",
+      code: "MYR"
+    }
   },
   TW: {
     foods: [
@@ -1235,23 +1223,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Learn about local customs and traditions",
       "Enjoy the food culture - it's incredible"
     ],
-    emergencyPhrases: [
-      { lang: "Mandarin (Taiwan)", text: "救命", roman: "Jiu ming", meaning: "help" },
-      { lang: "Mandarin (Taiwan)", text: "叫救護車", roman: "Jiao jiu hu che", meaning: "call an ambulance" },
-      { lang: "Mandarin (Taiwan)", text: "叫警察", roman: "Jiao jing cha", meaning: "call the police" },
-      { lang: "Mandarin (Taiwan)", text: "帶我去醫院", roman: "Dai wo qu yi yuan", meaning: "take me to a hospital" },
-      { lang: "Mandarin (Taiwan)", text: "痛", roman: "Tong", meaning: "pain/hurt" },
-      { lang: "Mandarin (Taiwan)", text: "我生病了", roman: "Wo sheng bing le", meaning: "I'm sick" },
-      { lang: "Mandarin (Taiwan)", text: "我迷路了", roman: "Wo mi lu le", meaning: "I'm lost" },
-      { lang: "Mandarin (Taiwan)", text: "我的錢包丟了", roman: "Wo de qian bao diu le", meaning: "I lost my wallet" },
-      { lang: "Mandarin (Taiwan)", text: "我的護照丟了", roman: "Wo de hu zhao diu le", meaning: "I lost my passport" },
-      { lang: "Mandarin (Taiwan)", text: "我被搶了", roman: "Wo bei qiang le", meaning: "I was robbed" },
-      { lang: "Mandarin (Taiwan)", text: "火災", roman: "Huo zai", meaning: "fire" },
-      { lang: "Mandarin (Taiwan)", text: "緊急", roman: "Jin ji", meaning: "emergency" },
-      { lang: "Mandarin (Taiwan)", text: "大使館在哪裡", roman: "Da shi guan zai na li", meaning: "where is the embassy?" },
-      { lang: "Mandarin (Taiwan)", text: "我需要幫助", roman: "Wo xu yao bang zhu", meaning: "I need help" },
-      { lang: "Mandarin (Taiwan)", text: "有人會說英文嗎", roman: "You ren hui shuo ying wen ma", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "110 (police), 119 (ambulance/fire)",
+      police: "110",
+      ambulance: "119",
+      fire: "119",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +886-2-2162-2000, UK: +886-2-8758-2088",
+      notes: [
+        "110 for police, 119 for ambulance/fire - English operators in major cities",
+        "If injured: Call 119, major hospitals in Taipei have English-speaking staff",
+        "If robbed/theft: Call 110, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes days",
+        "Medical: Major hospitals (NTU Hospital, Chang Gung) have English staff, bring insurance",
+        "Tourist hotline: 0800-011-765 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "New Taiwan Dollar",
+      symbol: "NT$",
+      code: "TWD"
+    }
   },
   IN: {
     foods: [
@@ -1355,23 +1346,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Be friendly and smile - Indians are welcoming",
       "Respect different religions and cultures"
     ],
-    emergencyPhrases: [
-      { lang: "Hindi", text: "मदद", roman: "Madad", meaning: "help" },
-      { lang: "Hindi", text: "एम्बुलेंस बुलाओ", roman: "Ambulance bulao", meaning: "call an ambulance" },
-      { lang: "Hindi", text: "पुलिस बुलाओ", roman: "Police bulao", meaning: "call the police" },
-      { lang: "Hindi", text: "मुझे अस्पताल ले चलो", roman: "Mujhe aspatal le chalo", meaning: "take me to a hospital" },
-      { lang: "Hindi", text: "दर्द", roman: "Dard", meaning: "pain/hurt" },
-      { lang: "Hindi", text: "मैं बीमार हूं", roman: "Main bimar hoon", meaning: "I'm sick" },
-      { lang: "Hindi", text: "मैं खो गया हूं", roman: "Main kho gaya hoon", meaning: "I'm lost" },
-      { lang: "Hindi", text: "मेरा बटुआ खो गया", roman: "Mera batua kho gaya", meaning: "I lost my wallet" },
-      { lang: "Hindi", text: "मेरा पासपोर्ट खो गया", roman: "Mera passport kho gaya", meaning: "I lost my passport" },
-      { lang: "Hindi", text: "मुझे लूट लिया गया", roman: "Mujhe loot liya gaya", meaning: "I was robbed" },
-      { lang: "Hindi", text: "आग", roman: "Aag", meaning: "fire" },
-      { lang: "Hindi", text: "आपातकाल", roman: "Aapatkal", meaning: "emergency" },
-      { lang: "Hindi", text: "दूतावास कहाँ है", roman: "Dutavas kahan hai", meaning: "where is the embassy?" },
-      { lang: "Hindi", text: "मुझे मदद चाहिए", roman: "Mujhe madad chahiye", meaning: "I need help" },
-      { lang: "Hindi", text: "कोई अंग्रेजी बोल सकता है", roman: "Koi angrezi bol sakta hai", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "100 (police), 102 (traffic), 101 (fire), 108 (ambulance)",
+      police: "100",
+      ambulance: "108",
+      fire: "101",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +91-11-2419-8000, UK: +91-11-2419-2100",
+      notes: [
+        "100 for police, 108 for ambulance, 101 for fire, 102 for traffic - English operators in major cities",
+        "If injured: Call 108, private hospitals in Delhi/Mumbai have English-speaking staff",
+        "If robbed/theft: Call 100, file FIR (First Information Report) at police station for insurance",
+        "Lost passport: Report to police station, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Private hospitals (Apollo, Fortis) have English staff, bring insurance",
+        "Tourist helpline: 1800-11-1363 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Rupee",
+      symbol: "₹",
+      code: "INR"
+    }
   },
   CN: {
     foods: [
@@ -1476,23 +1470,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Don't discuss sensitive political topics",
       "Enjoy the rich history and culture"
     ],
-    emergencyPhrases: [
-      { lang: "Mandarin", text: "救命", roman: "Jiu ming", meaning: "help" },
-      { lang: "Mandarin", text: "叫救护车", roman: "Jiao jiu hu che", meaning: "call an ambulance" },
-      { lang: "Mandarin", text: "叫警察", roman: "Jiao jing cha", meaning: "call the police" },
-      { lang: "Mandarin", text: "带我去医院", roman: "Dai wo qu yi yuan", meaning: "take me to a hospital" },
-      { lang: "Mandarin", text: "痛", roman: "Tong", meaning: "pain/hurt" },
-      { lang: "Mandarin", text: "我生病了", roman: "Wo sheng bing le", meaning: "I'm sick" },
-      { lang: "Mandarin", text: "我迷路了", roman: "Wo mi lu le", meaning: "I'm lost" },
-      { lang: "Mandarin", text: "我的钱包丢了", roman: "Wo de qian bao diu le", meaning: "I lost my wallet" },
-      { lang: "Mandarin", text: "我的护照丢了", roman: "Wo de hu zhao diu le", meaning: "I lost my passport" },
-      { lang: "Mandarin", text: "我被抢了", roman: "Wo bei qiang le", meaning: "I was robbed" },
-      { lang: "Mandarin", text: "火灾", roman: "Huo zai", meaning: "fire" },
-      { lang: "Mandarin", text: "紧急", roman: "Jin ji", meaning: "emergency" },
-      { lang: "Mandarin", text: "大使馆在哪里", roman: "Da shi guan zai na li", meaning: "where is the embassy?" },
-      { lang: "Mandarin", text: "我需要帮助", roman: "Wo xu yao bang zhu", meaning: "I need help" },
-      { lang: "Mandarin", text: "有人会说英文吗", roman: "You ren hui shuo ying wen ma", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "110 (police), 119 (fire), 120 (ambulance)",
+      police: "110",
+      ambulance: "120",
+      fire: "119",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +86-10-8531-4000, UK: +86-10-5192-4000",
+      notes: [
+        "110 for police, 120 for ambulance, 119 for fire - English operators in major cities",
+        "If injured: Call 120, international hospitals in Beijing/Shanghai have English-speaking staff",
+        "If robbed/theft: Call 110, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: International hospitals (United Family, Parkway) have English staff, bring insurance",
+        "Tourist hotline: 12301 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Yuan",
+      symbol: "¥",
+      code: "CNY"
+    }
   },
   FR: {
     foods: [
@@ -1597,23 +1594,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Respect personal space",
       "Enjoy the café culture - it's part of life"
     ],
-    emergencyPhrases: [
-      { lang: "French", text: "Au secours", roman: "Au secours", meaning: "help" },
-      { lang: "French", text: "Appelez une ambulance", roman: "Appelez une ambulance", meaning: "call an ambulance" },
-      { lang: "French", text: "Appelez la police", roman: "Appelez la police", meaning: "call the police" },
-      { lang: "French", text: "Emmenez-moi à l'hôpital", roman: "Emmenez-moi a l'hopital", meaning: "take me to a hospital" },
-      { lang: "French", text: "J'ai mal", roman: "J'ai mal", meaning: "it hurts" },
-      { lang: "French", text: "Je suis malade", roman: "Je suis malade", meaning: "I'm sick" },
-      { lang: "French", text: "Je suis perdu", roman: "Je suis perdu", meaning: "I'm lost" },
-      { lang: "French", text: "J'ai perdu mon portefeuille", roman: "J'ai perdu mon portefeuille", meaning: "I lost my wallet" },
-      { lang: "French", text: "J'ai perdu mon passeport", roman: "J'ai perdu mon passeport", meaning: "I lost my passport" },
-      { lang: "French", text: "J'ai été volé", roman: "J'ai ete vole", meaning: "I was robbed" },
-      { lang: "French", text: "Feu", roman: "Feu", meaning: "fire" },
-      { lang: "French", text: "Urgence", roman: "Urgence", meaning: "emergency" },
-      { lang: "French", text: "Où est l'ambassade", roman: "Ou est l'ambassade", meaning: "where is the embassy?" },
-      { lang: "French", text: "J'ai besoin d'aide", roman: "J'ai besoin d'aide", meaning: "I need help" },
-      { lang: "French", text: "Quelqu'un parle-t-il anglais", roman: "Quelqu'un parle-t-il anglais", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "112 (all emergencies) or 17 (police), 18 (fire), 15 (ambulance)",
+      police: "17",
+      ambulance: "15",
+      fire: "18",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +33-1-43-12-22-22, UK: +33-1-44-51-31-00",
+      notes: [
+        "112 for all emergencies, or 17 (police), 18 (fire), 15 (ambulance) - English operators available",
+        "If injured: Call 15 (SAMU), excellent medical facilities with English-speaking staff",
+        "If robbed/theft: Call 17, file police report (déclaration) for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Public hospitals (SAMU) are excellent, private hospitals require insurance",
+        "Tourist hotline: +33-1-49-52-53-54 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Euro",
+      symbol: "€",
+      code: "EUR"
+    }
   },
   ES: {
     foods: [
@@ -1718,23 +1718,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Enjoy the café culture - it's part of life",
       "Learn about regional differences"
     ],
-    emergencyPhrases: [
-      { lang: "Spanish", text: "Ayuda", roman: "Ayuda", meaning: "help" },
-      { lang: "Spanish", text: "Llame a una ambulancia", roman: "Llame a una ambulancia", meaning: "call an ambulance" },
-      { lang: "Spanish", text: "Llame a la policía", roman: "Llame a la policia", meaning: "call the police" },
-      { lang: "Spanish", text: "Lléveme al hospital", roman: "Lleveme al hospital", meaning: "take me to a hospital" },
-      { lang: "Spanish", text: "Me duele", roman: "Me duele", meaning: "it hurts" },
-      { lang: "Spanish", text: "Estoy enfermo", roman: "Estoy enfermo", meaning: "I'm sick" },
-      { lang: "Spanish", text: "Estoy perdido", roman: "Estoy perdido", meaning: "I'm lost" },
-      { lang: "Spanish", text: "Perdí mi cartera", roman: "Perdi mi cartera", meaning: "I lost my wallet" },
-      { lang: "Spanish", text: "Perdí mi pasaporte", roman: "Perdi mi pasaporte", meaning: "I lost my passport" },
-      { lang: "Spanish", text: "Me robaron", roman: "Me robaron", meaning: "I was robbed" },
-      { lang: "Spanish", text: "Fuego", roman: "Fuego", meaning: "fire" },
-      { lang: "Spanish", text: "Emergencia", roman: "Emergencia", meaning: "emergency" },
-      { lang: "Spanish", text: "¿Dónde está la embajada", roman: "Donde esta la embajada", meaning: "where is the embassy?" },
-      { lang: "Spanish", text: "Necesito ayuda", roman: "Necesito ayuda", meaning: "I need help" },
-      { lang: "Spanish", text: "¿Alguien habla inglés", roman: "Alguien habla ingles", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "112 (all emergencies) or 091 (police), 080 (fire), 061 (ambulance)",
+      police: "091",
+      ambulance: "061",
+      fire: "080",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +34-91-587-2200, UK: +34-91-714-6300",
+      notes: [
+        "112 for all emergencies, or 091 (police), 080 (fire), 061 (ambulance) - English operators in tourist areas",
+        "If injured: Call 061, excellent medical facilities with English-speaking staff",
+        "If robbed/theft: Call 091, file police report (denuncia) for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Public hospitals are excellent, private hospitals require insurance",
+        "Tourist hotline: 901-11-2424 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Euro",
+      symbol: "€",
+      code: "EUR"
+    }
   },
   IT: {
     foods: [
@@ -1839,23 +1842,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Learn about regional differences",
       "Don't eat on the go - sit down for meals"
     ],
-    emergencyPhrases: [
-      { lang: "Italian", text: "Aiuto", roman: "Aiuto", meaning: "help" },
-      { lang: "Italian", text: "Chiamate un'ambulanza", roman: "Chiamate un'ambulanza", meaning: "call an ambulance" },
-      { lang: "Italian", text: "Chiamate la polizia", roman: "Chiamate la polizia", meaning: "call the police" },
-      { lang: "Italian", text: "Portatemi all'ospedale", roman: "Portatemi all'ospedale", meaning: "take me to a hospital" },
-      { lang: "Italian", text: "Fa male", roman: "Fa male", meaning: "it hurts" },
-      { lang: "Italian", text: "Sono malato", roman: "Sono malato", meaning: "I'm sick" },
-      { lang: "Italian", text: "Mi sono perso", roman: "Mi sono perso", meaning: "I'm lost" },
-      { lang: "Italian", text: "Ho perso il portafoglio", roman: "Ho perso il portafoglio", meaning: "I lost my wallet" },
-      { lang: "Italian", text: "Ho perso il passaporto", roman: "Ho perso il passaporto", meaning: "I lost my passport" },
-      { lang: "Italian", text: "Sono stato derubato", roman: "Sono stato derubato", meaning: "I was robbed" },
-      { lang: "Italian", text: "Fuoco", roman: "Fuoco", meaning: "fire" },
-      { lang: "Italian", text: "Emergenza", roman: "Emergenza", meaning: "emergency" },
-      { lang: "Italian", text: "Dov'è l'ambasciata", roman: "Dove l'ambasciata", meaning: "where is the embassy?" },
-      { lang: "Italian", text: "Ho bisogno di aiuto", roman: "Ho bisogno di aiuto", meaning: "I need help" },
-      { lang: "Italian", text: "Qualcuno parla inglese", roman: "Qualcuno parla inglese", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "112 (all emergencies) or 113 (police), 115 (fire), 118 (ambulance)",
+      police: "113",
+      ambulance: "118",
+      fire: "115",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +39-06-46741, UK: +39-06-4220-0001",
+      notes: [
+        "112 for all emergencies, or 113 (police), 115 (fire), 118 (ambulance) - English operators in tourist areas",
+        "If injured: Call 118, excellent medical facilities with English-speaking staff",
+        "If robbed/theft: Call 113, file police report (denuncia) for insurance, cancel cards immediately",
+        "Lost passport: Report to police (carabinieri), then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Public hospitals are good, private hospitals require insurance",
+        "Tourist hotline: 800-11-2000 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Euro",
+      symbol: "€",
+      code: "EUR"
+    }
   },
   DE: {
     foods: [
@@ -1960,23 +1966,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Enjoy the beer culture - it's part of life",
       "Be direct - Germans appreciate honesty"
     ],
-    emergencyPhrases: [
-      { lang: "German", text: "Hilfe", roman: "Hilfe", meaning: "help" },
-      { lang: "German", text: "Rufen Sie einen Krankenwagen", roman: "Rufen Sie einen Krankenwagen", meaning: "call an ambulance" },
-      { lang: "German", text: "Rufen Sie die Polizei", roman: "Rufen Sie die Polizei", meaning: "call the police" },
-      { lang: "German", text: "Bringen Sie mich ins Krankenhaus", roman: "Bringen Sie mich ins Krankenhaus", meaning: "take me to a hospital" },
-      { lang: "German", text: "Es tut weh", roman: "Es tut weh", meaning: "it hurts" },
-      { lang: "German", text: "Ich bin krank", roman: "Ich bin krank", meaning: "I'm sick" },
-      { lang: "German", text: "Ich habe mich verlaufen", roman: "Ich habe mich verlaufen", meaning: "I'm lost" },
-      { lang: "German", text: "Ich habe meine Brieftasche verloren", roman: "Ich habe meine Brieftasche verloren", meaning: "I lost my wallet" },
-      { lang: "German", text: "Ich habe meinen Pass verloren", roman: "Ich habe meinen Pass verloren", meaning: "I lost my passport" },
-      { lang: "German", text: "Ich wurde ausgeraubt", roman: "Ich wurde ausgeraubt", meaning: "I was robbed" },
-      { lang: "German", text: "Feuer", roman: "Feuer", meaning: "fire" },
-      { lang: "German", text: "Notfall", roman: "Notfall", meaning: "emergency" },
-      { lang: "German", text: "Wo ist die Botschaft", roman: "Wo ist die Botschaft", meaning: "where is the embassy?" },
-      { lang: "German", text: "Ich brauche Hilfe", roman: "Ich brauche Hilfe", meaning: "I need help" },
-      { lang: "German", text: "Spricht jemand Englisch", roman: "Spricht jemand Englisch", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "112 (all emergencies) or 110 (police), 112 (fire/ambulance)",
+      police: "110",
+      ambulance: "112",
+      fire: "112",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +49-30-8305-0, UK: +49-30-20457-0",
+      notes: [
+        "112 for all emergencies, or 110 for police, 112 for fire/ambulance - English operators available",
+        "If injured: Call 112, excellent medical facilities with English-speaking staff",
+        "If robbed/theft: Call 110, file police report (Anzeige) for insurance, cancel cards immediately",
+        "Lost passport: Report to police (Polizei), then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Excellent hospitals with English staff, bring insurance",
+        "Tourist hotline: +49-30-2500-2333 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Euro",
+      symbol: "€",
+      code: "EUR"
+    }
   },
   GB: {
     foods: [
@@ -1988,75 +1997,50 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "🥤 lemonade", "🍧 ice cream", "🍰 Victoria sponge"
     ],
     phrases: [
-      { lang: "English (UK)", text: "Hello", meaning: "hello" },
       { lang: "English (UK)", text: "Cheers", meaning: "thank you" },
-      { lang: "English (UK)", text: "Sorry", meaning: "sorry" },
-      { lang: "English (UK)", text: "Please", meaning: "please" },
-      { lang: "English (UK)", text: "How much?", meaning: "how much?" },
       { lang: "English (UK)", text: "Lovely", meaning: "delicious/nice" },
-      { lang: "English (UK)", text: "Good morning", meaning: "good morning" },
-      { lang: "English (UK)", text: "Good evening", meaning: "good evening" },
       { lang: "English (UK)", text: "Cheerio", meaning: "goodbye" },
-      { lang: "English (UK)", text: "Yes", meaning: "yes" },
-      { lang: "English (UK)", text: "No", meaning: "no" },
       { lang: "English (UK)", text: "That's alright", meaning: "it's okay" },
       { lang: "English (UK)", text: "I'm peckish", meaning: "I'm hungry" },
-      { lang: "English (UK)", text: "Water", meaning: "water" },
       { lang: "English (UK)", text: "Cuppa", meaning: "cup of tea" },
-      { lang: "English (UK)", text: "I don't understand", meaning: "I don't understand" },
-      { lang: "English (UK)", text: "Do you speak English?", meaning: "do you speak English?" },
-      { lang: "English (UK)", text: "Where?", meaning: "where?" },
-      { lang: "English (UK)", text: "Brilliant", meaning: "amazing" },
-      { lang: "English (UK)", text: "Cheap", meaning: "cheap" },
-      { lang: "English (UK)", text: "Expensive", meaning: "expensive" },
-      { lang: "English (UK)", text: "Quick", meaning: "fast" },
-      { lang: "English (UK)", text: "Slow", meaning: "slow" },
-      { lang: "English (UK)", text: "Hot", meaning: "hot" },
-      { lang: "English (UK)", text: "Cold", meaning: "cold" },
-      { lang: "English (UK)", text: "Cool", meaning: "cool" },
-      { lang: "English (UK)", text: "Brilliant", meaning: "fun/amazing" },
+      { lang: "English (UK)", text: "Brilliant", meaning: "amazing/great" },
       { lang: "English (UK)", text: "Knackered", meaning: "tired" },
-      { lang: "English (UK)", text: "Alright", meaning: "okay" },
-      { lang: "English (UK)", text: "How are you?", meaning: "how are you?" },
-      { lang: "English (UK)", text: "What's your name?", meaning: "what's your name?" },
-      { lang: "English (UK)", text: "I'm", meaning: "I am" },
-      { lang: "English (UK)", text: "This is", meaning: "this is" },
-      { lang: "English (UK)", text: "That's", meaning: "that is" },
-      { lang: "English (UK)", text: "When?", meaning: "when?" },
-      { lang: "English (UK)", text: "Why?", meaning: "why?" },
-      { lang: "English (UK)", text: "How?", meaning: "how?" },
-      { lang: "English (UK)", text: "How many?", meaning: "how many?" },
-      { lang: "English (UK)", text: "See you later", meaning: "see you later" },
-      { lang: "English (UK)", text: "Good night", meaning: "good night" },
-      { lang: "English (UK)", text: "Congratulations", meaning: "congratulations" },
       { lang: "English (UK)", text: "Mind yourself", meaning: "be careful" },
-      { lang: "English (UK)", text: "Good luck", meaning: "good luck" },
-      { lang: "English (UK)", text: "Sorry I'm late", meaning: "sorry for being late" },
-      { lang: "English (UK)", text: "You're welcome", meaning: "you're welcome" },
-      { lang: "English (UK)", text: "Pleased to meet you", meaning: "nice to meet you" },
-      { lang: "English (UK)", text: "Where are you going?", meaning: "where are you going?" },
-      { lang: "English (UK)", text: "Where's the station?", meaning: "where is the station?" },
       { lang: "English (UK)", text: "Where's the loo?", meaning: "where is the bathroom?" },
-      { lang: "English (UK)", text: "I'll have this", meaning: "I want this" },
-      { lang: "English (UK)", text: "Can I get the bill?", meaning: "check please" },
-      { lang: "English (UK)", text: "Do you take card?", meaning: "do you accept credit cards?" },
-      { lang: "English (UK)", text: "Cash", meaning: "cash" },
-      { lang: "English (UK)", text: "Left", meaning: "left" },
-      { lang: "English (UK)", text: "Right", meaning: "right" },
-      { lang: "English (UK)", text: "Straight ahead", meaning: "straight" },
-      { lang: "English (UK)", text: "Near", meaning: "near" },
-      { lang: "English (UK)", text: "Far", meaning: "far" },
-      { lang: "English (UK)", text: "Station", meaning: "station" },
-      { lang: "English (UK)", text: "Bus stop", meaning: "bus stop" },
-      { lang: "English (UK)", text: "Airport", meaning: "airport" },
-      { lang: "English (UK)", text: "Hotel", meaning: "hotel" },
-      { lang: "English (UK)", text: "Hospital", meaning: "hospital" },
-      { lang: "English (UK)", text: "Pharmacy", meaning: "pharmacy" },
-      { lang: "English (UK)", text: "Bank", meaning: "bank" },
-      { lang: "English (UK)", text: "Shop", meaning: "convenience store" },
-      { lang: "English (UK)", text: "Restaurant", meaning: "restaurant" },
-      { lang: "English (UK)", text: "Shop", meaning: "shop" },
-      { lang: "English (UK)", text: "Ticket", meaning: "ticket" }
+      { lang: "English (UK)", text: "Bob's your uncle", meaning: "there you go/it's done" },
+      { lang: "English (UK)", text: "Gutted", meaning: "very disappointed" },
+      { lang: "English (UK)", text: "Chuffed", meaning: "pleased" },
+      { lang: "English (UK)", text: "Blimey", meaning: "expression of surprise" },
+      { lang: "English (UK)", text: "Fancy", meaning: "would you like" },
+      { lang: "English (UK)", text: "Proper", meaning: "really/very" },
+      { lang: "English (UK)", text: "Sorted", meaning: "organized/fixed" },
+      { lang: "English (UK)", text: "Bollocks", meaning: "nonsense" },
+      { lang: "English (UK)", text: "Gobsmacked", meaning: "amazed" },
+      { lang: "English (UK)", text: "Naff", meaning: "uncool/tacky" },
+      { lang: "English (UK)", text: "Chinwag", meaning: "chat/conversation" },
+      { lang: "English (UK)", text: "Skive", meaning: "skip/avoid work" },
+      { lang: "English (UK)", text: "Dodgy", meaning: "suspicious/unreliable" },
+      { lang: "English (UK)", text: "Miffed", meaning: "annoyed" },
+      { lang: "English (UK)", text: "Gob", meaning: "mouth" },
+      { lang: "English (UK)", text: "Brolly", meaning: "umbrella" },
+      { lang: "English (UK)", text: "Biscuit", meaning: "cookie" },
+      { lang: "English (UK)", text: "Crisps", meaning: "potato chips" },
+      { lang: "English (UK)", text: "Lift", meaning: "elevator" },
+      { lang: "English (UK)", text: "Boot", meaning: "car trunk" },
+      { lang: "English (UK)", text: "Bonnet", meaning: "car hood" },
+      { lang: "English (UK)", text: "Lorry", meaning: "truck" },
+      { lang: "English (UK)", text: "Petrol", meaning: "gasoline" },
+      { lang: "English (UK)", text: "Queue", meaning: "line" },
+      { lang: "English (UK)", text: "Rubbish", meaning: "trash/nonsense" },
+      { lang: "English (UK)", text: "Telly", meaning: "television" },
+      { lang: "English (UK)", text: "Mobile", meaning: "cell phone" },
+      { lang: "English (UK)", text: "Trainers", meaning: "sneakers" },
+      { lang: "English (UK)", text: "Jumper", meaning: "sweater" },
+      { lang: "English (UK)", text: "Trousers", meaning: "pants" },
+      { lang: "English (UK)", text: "Pants", meaning: "underwear" },
+      { lang: "English (UK)", text: "Fag", meaning: "cigarette" },
+      { lang: "English (UK)", text: "Pissed", meaning: "drunk" },
+      { lang: "English (UK)", text: "Fancy a pint?", meaning: "want a beer?" }
     ],
     culturalTips: [
       "Queue properly - don't cut in line",
@@ -2080,23 +2064,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Enjoy the pub culture - it's part of life",
       "Be polite - manners are important"
     ],
-    emergencyPhrases: [
-      { lang: "English (UK)", text: "Help", meaning: "help" },
-      { lang: "English (UK)", text: "Call an ambulance", meaning: "call an ambulance" },
-      { lang: "English (UK)", text: "Call the police", meaning: "call the police" },
-      { lang: "English (UK)", text: "Take me to hospital", meaning: "take me to a hospital" },
-      { lang: "English (UK)", text: "It hurts", meaning: "it hurts" },
-      { lang: "English (UK)", text: "I'm ill", meaning: "I'm sick" },
-      { lang: "English (UK)", text: "I'm lost", meaning: "I'm lost" },
-      { lang: "English (UK)", text: "I lost my wallet", meaning: "I lost my wallet" },
-      { lang: "English (UK)", text: "I lost my passport", meaning: "I lost my passport" },
-      { lang: "English (UK)", text: "I was robbed", meaning: "I was robbed" },
-      { lang: "English (UK)", text: "Fire", meaning: "fire" },
-      { lang: "English (UK)", text: "Emergency", meaning: "emergency" },
-      { lang: "English (UK)", text: "Where's the embassy?", meaning: "where is the embassy?" },
-      { lang: "English (UK)", text: "I need help", meaning: "I need help" },
-      { lang: "English (UK)", text: "Call 999", meaning: "call emergency services (999)" }
-    ]
+    emergencyInfo: {
+      phone: "999 (all emergencies) or 112 from mobile",
+      police: "999",
+      ambulance: "999",
+      fire: "999",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +44-20-7499-9000, UK: +44-20-7008-5000",
+      notes: [
+        "999 for all emergencies (police, fire, ambulance) - 112 also works from mobile phones",
+        "If injured: Call 999, excellent NHS hospitals (free for emergencies), private hospitals require insurance",
+        "If robbed/theft: Call 999, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: NHS hospitals are free for emergencies, private hospitals require insurance",
+        "Tourist hotline: +44-20-7008-1500 (24/7 support)"
+      ]
+    },
+    currency: {
+      name: "Pound Sterling",
+      symbol: "£",
+      code: "GBP"
+    }
   },
   CA: {
     foods: [
@@ -2108,76 +2095,35 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "🥤 fresh juice", "🍧 ice cream", "🍰 Nanaimo bars"
     ],
     phrases: [
-      { lang: "English (Canadian)", text: "Hello", meaning: "hello" },
-      { lang: "English (Canadian)", text: "Thanks", meaning: "thank you" },
-      { lang: "English (Canadian)", text: "Sorry", meaning: "sorry" },
-      { lang: "English (Canadian)", text: "Please", meaning: "please" },
-      { lang: "English (Canadian)", text: "How much?", meaning: "how much?" },
-      { lang: "English (Canadian)", text: "Delicious", meaning: "delicious" },
-      { lang: "English (Canadian)", text: "Good morning", meaning: "good morning" },
-      { lang: "English (Canadian)", text: "Good evening", meaning: "good evening" },
-      { lang: "English (Canadian)", text: "Goodbye", meaning: "goodbye" },
-      { lang: "English (Canadian)", text: "Yes", meaning: "yes" },
-      { lang: "English (Canadian)", text: "No", meaning: "no" },
-      { lang: "English (Canadian)", text: "That's okay", meaning: "it's okay" },
-      { lang: "English (Canadian)", text: "I'm hungry", meaning: "I'm hungry" },
-      { lang: "English (Canadian)", text: "Water", meaning: "water" },
-      { lang: "English (Canadian)", text: "Coffee", meaning: "coffee" },
-      { lang: "English (Canadian)", text: "I don't understand", meaning: "I don't understand" },
-      { lang: "English (Canadian)", text: "Do you speak English?", meaning: "do you speak English?" },
-      { lang: "English (Canadian)", text: "Where?", meaning: "where?" },
-      { lang: "English (Canadian)", text: "Beautiful", meaning: "beautiful" },
-      { lang: "English (Canadian)", text: "Amazing", meaning: "amazing" },
-      { lang: "English (Canadian)", text: "Cheap", meaning: "cheap" },
-      { lang: "English (Canadian)", text: "Expensive", meaning: "expensive" },
-      { lang: "English (Canadian)", text: "Fast", meaning: "fast" },
-      { lang: "English (Canadian)", text: "Slow", meaning: "slow" },
-      { lang: "English (Canadian)", text: "Hot", meaning: "hot" },
-      { lang: "English (Canadian)", text: "Cold", meaning: "cold" },
-      { lang: "English (Canadian)", text: "Cool", meaning: "cool" },
-      { lang: "English (Canadian)", text: "Fun", meaning: "fun" },
-      { lang: "English (Canadian)", text: "Tired", meaning: "tired" },
-      { lang: "English (Canadian)", text: "Okay", meaning: "okay" },
-      { lang: "English (Canadian)", text: "How are you?", meaning: "how are you?" },
-      { lang: "English (Canadian)", text: "What's your name?", meaning: "what's your name?" },
-      { lang: "English (Canadian)", text: "I'm", meaning: "I am" },
-      { lang: "English (Canadian)", text: "This is", meaning: "this is" },
-      { lang: "English (Canadian)", text: "That's", meaning: "that is" },
-      { lang: "English (Canadian)", text: "When?", meaning: "when?" },
-      { lang: "English (Canadian)", text: "Why?", meaning: "why?" },
-      { lang: "English (Canadian)", text: "How?", meaning: "how?" },
-      { lang: "English (Canadian)", text: "How many?", meaning: "how many?" },
-      { lang: "English (Canadian)", text: "See you later", meaning: "see you later" },
-      { lang: "English (Canadian)", text: "Good night", meaning: "good night" },
-      { lang: "English (Canadian)", text: "Congratulations", meaning: "congratulations" },
-      { lang: "English (Canadian)", text: "Be careful", meaning: "be careful" },
-      { lang: "English (Canadian)", text: "Good luck", meaning: "good luck" },
-      { lang: "English (Canadian)", text: "Sorry I'm late", meaning: "sorry for being late" },
-      { lang: "English (Canadian)", text: "You're welcome", meaning: "you're welcome" },
-      { lang: "English (Canadian)", text: "Nice to meet you", meaning: "nice to meet you" },
-      { lang: "English (Canadian)", text: "Where are you going?", meaning: "where are you going?" },
-      { lang: "English (Canadian)", text: "Where's the station?", meaning: "where is the station?" },
+      { lang: "English (Canadian)", text: "Eh", meaning: "right/isn't it" },
       { lang: "English (Canadian)", text: "Where's the washroom?", meaning: "where is the bathroom?" },
-      { lang: "English (Canadian)", text: "I'll have this", meaning: "I want this" },
-      { lang: "English (Canadian)", text: "Can I get the bill?", meaning: "check please" },
-      { lang: "English (Canadian)", text: "Do you take card?", meaning: "do you accept credit cards?" },
-      { lang: "English (Canadian)", text: "Cash", meaning: "cash" },
-      { lang: "English (Canadian)", text: "Left", meaning: "left" },
-      { lang: "English (Canadian)", text: "Right", meaning: "right" },
-      { lang: "English (Canadian)", text: "Straight ahead", meaning: "straight" },
-      { lang: "English (Canadian)", text: "Near", meaning: "near" },
-      { lang: "English (Canadian)", text: "Far", meaning: "far" },
-      { lang: "English (Canadian)", text: "Station", meaning: "station" },
-      { lang: "English (Canadian)", text: "Bus stop", meaning: "bus stop" },
-      { lang: "English (Canadian)", text: "Airport", meaning: "airport" },
-      { lang: "English (Canadian)", text: "Hotel", meaning: "hotel" },
-      { lang: "English (Canadian)", text: "Hospital", meaning: "hospital" },
-      { lang: "English (Canadian)", text: "Pharmacy", meaning: "pharmacy" },
-      { lang: "English (Canadian)", text: "Bank", meaning: "bank" },
-      { lang: "English (Canadian)", text: "Convenience store", meaning: "convenience store" },
-      { lang: "English (Canadian)", text: "Restaurant", meaning: "restaurant" },
-      { lang: "English (Canadian)", text: "Shop", meaning: "shop" },
-      { lang: "English (Canadian)", text: "Ticket", meaning: "ticket" }
+      { lang: "English (Canadian)", text: "Double-double", meaning: "coffee with 2 cream, 2 sugar" },
+      { lang: "English (Canadian)", text: "Timmies", meaning: "Tim Hortons" },
+      { lang: "English (Canadian)", text: "Loonie", meaning: "one dollar coin" },
+      { lang: "English (Canadian)", text: "Toonie", meaning: "two dollar coin" },
+      { lang: "English (Canadian)", text: "Hydro", meaning: "electricity" },
+      { lang: "English (Canadian)", text: "Parkade", meaning: "parking garage" },
+      { lang: "English (Canadian)", text: "Runners", meaning: "sneakers" },
+      { lang: "English (Canadian)", text: "Touque", meaning: "winter hat" },
+      { lang: "English (Canadian)", text: "Chesterfield", meaning: "sofa/couch" },
+      { lang: "English (Canadian)", text: "Keener", meaning: "eager/enthusiastic person" },
+      { lang: "English (Canadian)", text: "Mickey", meaning: "375ml bottle of alcohol" },
+      { lang: "English (Canadian)", text: "Two-four", meaning: "24-pack of beer" },
+      { lang: "English (Canadian)", text: "Give'r", meaning: "go for it/try hard" },
+      { lang: "English (Canadian)", text: "Hoser", meaning: "foolish person" },
+      { lang: "English (Canadian)", text: "Skookum", meaning: "strong/good" },
+      { lang: "English (Canadian)", text: "Chinook", meaning: "warm wind" },
+      { lang: "English (Canadian)", text: "Pogey", meaning: "unemployment benefits" },
+      { lang: "English (Canadian)", text: "Garburator", meaning: "garbage disposal" },
+      { lang: "English (Canadian)", text: "Serviette", meaning: "napkin" },
+      { lang: "English (Canadian)", text: "Pencil crayon", meaning: "colored pencil" },
+      { lang: "English (Canadian)", text: "Homo milk", meaning: "homogenized milk" },
+      { lang: "English (Canadian)", text: "Zed", meaning: "letter Z" },
+      { lang: "English (Canadian)", text: "ABM", meaning: "ATM" },
+      { lang: "English (Canadian)", text: "Bachelor", meaning: "bachelor apartment" },
+      { lang: "English (Canadian)", text: "Bunnyhug", meaning: "hooded sweatshirt" },
+      { lang: "English (Canadian)", text: "Dart", meaning: "cigarette" },
+      { lang: "English (Canadian)", text: "Mickey", meaning: "small bottle of alcohol" }
     ],
     culturalTips: [
       "Be polite - Canadians are known for politeness",
@@ -2201,23 +2147,26 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Enjoy the multicultural culture - it's part of life",
       "Be polite - manners are important"
     ],
-    emergencyPhrases: [
-      { lang: "English (Canadian)", text: "Help", meaning: "help" },
-      { lang: "English (Canadian)", text: "Call an ambulance", meaning: "call an ambulance" },
-      { lang: "English (Canadian)", text: "Call the police", meaning: "call the police" },
-      { lang: "English (Canadian)", text: "Take me to hospital", meaning: "take me to a hospital" },
-      { lang: "English (Canadian)", text: "It hurts", meaning: "it hurts" },
-      { lang: "English (Canadian)", text: "I'm sick", meaning: "I'm sick" },
-      { lang: "English (Canadian)", text: "I'm lost", meaning: "I'm lost" },
-      { lang: "English (Canadian)", text: "I lost my wallet", meaning: "I lost my wallet" },
-      { lang: "English (Canadian)", text: "I lost my passport", meaning: "I lost my passport" },
-      { lang: "English (Canadian)", text: "I was robbed", meaning: "I was robbed" },
-      { lang: "English (Canadian)", text: "Fire", meaning: "fire" },
-      { lang: "English (Canadian)", text: "Emergency", meaning: "emergency" },
-      { lang: "English (Canadian)", text: "Where's the embassy?", meaning: "where is the embassy?" },
-      { lang: "English (Canadian)", text: "I need help", meaning: "I need help" },
-      { lang: "English (Canadian)", text: "Call 911", meaning: "call emergency services (911)" }
-    ]
+    emergencyInfo: {
+      phone: "911 (all emergencies)",
+      police: "911",
+      ambulance: "911",
+      fire: "911",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +1-613-238-5335, UK: +1-613-237-1530",
+      notes: [
+        "911 for all emergencies (police, fire, ambulance) - English and French operators available",
+        "If injured: Call 911, excellent medical facilities, public healthcare covers emergencies",
+        "If robbed/theft: Call 911, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Public healthcare covers emergencies, private hospitals require insurance",
+        "Tourist hotline: 1-800-465-7735 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Canadian Dollar",
+      symbol: "C$",
+      code: "CAD"
+    }
   },
   MX: {
     foods: [
@@ -2322,26 +2271,753 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       "Be polite - manners are important",
       "Respect religious sites and customs"
     ],
-    emergencyPhrases: [
-      { lang: "Spanish (Mexico)", text: "Ayuda", roman: "Ayuda", meaning: "help" },
-      { lang: "Spanish (Mexico)", text: "Llame a una ambulancia", roman: "Llame a una ambulancia", meaning: "call an ambulance" },
-      { lang: "Spanish (Mexico)", text: "Llame a la policía", roman: "Llame a la policia", meaning: "call the police" },
-      { lang: "Spanish (Mexico)", text: "Lléveme al hospital", roman: "Lleveme al hospital", meaning: "take me to a hospital" },
-      { lang: "Spanish (Mexico)", text: "Me duele", roman: "Me duele", meaning: "it hurts" },
-      { lang: "Spanish (Mexico)", text: "Estoy enfermo", roman: "Estoy enfermo", meaning: "I'm sick" },
-      { lang: "Spanish (Mexico)", text: "Estoy perdido", roman: "Estoy perdido", meaning: "I'm lost" },
-      { lang: "Spanish (Mexico)", text: "Perdí mi cartera", roman: "Perdi mi cartera", meaning: "I lost my wallet" },
-      { lang: "Spanish (Mexico)", text: "Perdí mi pasaporte", roman: "Perdi mi pasaporte", meaning: "I lost my passport" },
-      { lang: "Spanish (Mexico)", text: "Me robaron", roman: "Me robaron", meaning: "I was robbed" },
-      { lang: "Spanish (Mexico)", text: "Fuego", roman: "Fuego", meaning: "fire" },
-      { lang: "Spanish (Mexico)", text: "Emergencia", roman: "Emergencia", meaning: "emergency" },
-      { lang: "Spanish (Mexico)", text: "¿Dónde está la embajada", roman: "Donde esta la embajada", meaning: "where is the embassy?" },
-      { lang: "Spanish (Mexico)", text: "Necesito ayuda", roman: "Necesito ayuda", meaning: "I need help" },
-      { lang: "Spanish (Mexico)", text: "¿Alguien habla inglés", roman: "Alguien habla ingles", meaning: "does anyone speak English?" }
-    ]
+    emergencyInfo: {
+      phone: "911 (all emergencies) or 066 (police), 068 (fire), 065 (ambulance)",
+      police: "066",
+      ambulance: "065",
+      fire: "068",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +52-55-5080-2000, UK: +52-55-1670-3200",
+      notes: [
+        "911 for all emergencies, or 066 (police), 068 (fire), 065 (ambulance) - English operators in tourist areas",
+        "If injured: Call 065, private hospitals in major cities have English-speaking staff",
+        "If robbed/theft: Call 066, file police report (denuncia) for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Private hospitals (Hospital Angeles) have English staff, bring insurance",
+        "Tourist hotline: 078 (24/7 English support)"
+      ]
+    },
+    currency: {
+      name: "Peso",
+      symbol: "$",
+      code: "MXN"
+    }
+  },
+  BR: {
+    foods: [
+      "🍖 feijoada", "🥩 picanha", "🍗 coxinha", "🍤 camarão", "🐟 moqueca", "🍜 acarajé", "🥟 pastel",
+      "🍲 caldo verde", "🥢 pão de açúcar", "🍛 bobó de camarão", "🍜 vatapá", "🥟 empada", "🍤 casquinha de siri",
+      "🐟 peixe frito", "🍜 tutu de feijão", "🍲 canjica", "🥢 brigadeiro", "🍛 galinhada", "🍜 farofa",
+      "🥟 coxinha de frango", "🍤 bolinho de bacalhau", "🐟 bacalhau", "🍜 quibe", "🍲 escondidinho", "🥢 açaí",
+      "🍛 feijão tropeiro", "☕ café", "🍵 chá", "🥤 guaraná", "🍺 cerveja", "🍷 cachaça",
+      "🥤 água de coco", "🍧 sorvete", "🍰 pudim"
+    ],
+    phrases: [
+      { lang: "Portuguese (Brazil)", text: "Oi", roman: "Oi", meaning: "hi" },
+      { lang: "Portuguese (Brazil)", text: "Tudo bem?", roman: "Tudo bem?", meaning: "how are you?" },
+      { lang: "Portuguese (Brazil)", text: "Valeu", roman: "Valeu", meaning: "thanks" },
+      { lang: "Portuguese (Brazil)", text: "Beleza", roman: "Beleza", meaning: "cool/okay" },
+      { lang: "Portuguese (Brazil)", text: "Legal", roman: "Legal", meaning: "cool/nice" },
+      { lang: "Portuguese (Brazil)", text: "Cara", roman: "Cara", meaning: "dude/guy" },
+      { lang: "Portuguese (Brazil)", text: "Mano", roman: "Mano", meaning: "bro" },
+      { lang: "Portuguese (Brazil)", text: "Fala aí", roman: "Fala ai", meaning: "what's up" },
+      { lang: "Portuguese (Brazil)", text: "E aí", roman: "E ai", meaning: "what's up" },
+      { lang: "Portuguese (Brazil)", text: "Tchau", roman: "Tchau", meaning: "bye" },
+      { lang: "Portuguese (Brazil)", text: "Valeu, falou", roman: "Valeu, falou", meaning: "thanks, see ya" },
+      { lang: "Portuguese (Brazil)", text: "Tá bom", roman: "Ta bom", meaning: "okay/alright" },
+      { lang: "Portuguese (Brazil)", text: "Pode crer", roman: "Pode crer", meaning: "for sure" },
+      { lang: "Portuguese (Brazil)", text: "Sério", roman: "Serio", meaning: "seriously" },
+      { lang: "Portuguese (Brazil)", text: "Que isso", roman: "Que isso", meaning: "what/come on" },
+      { lang: "Portuguese (Brazil)", text: "Nossa", roman: "Nossa", meaning: "wow" },
+      { lang: "Portuguese (Brazil)", text: "Que legal", roman: "Que legal", meaning: "how cool" },
+      { lang: "Portuguese (Brazil)", text: "Demais", roman: "Demais", meaning: "awesome/too much" },
+      { lang: "Portuguese (Brazil)", text: "Massa", roman: "Massa", meaning: "cool/awesome" },
+      { lang: "Portuguese (Brazil)", text: "Show", roman: "Show", meaning: "great/awesome" },
+      { lang: "Portuguese (Brazil)", text: "Top", roman: "Top", meaning: "top/awesome" },
+      { lang: "Portuguese (Brazil)", text: "Foda", roman: "Foda", meaning: "awesome/cool" },
+      { lang: "Portuguese (Brazil)", text: "Bacana", roman: "Bacana", meaning: "cool/nice" },
+      { lang: "Portuguese (Brazil)", text: "Da hora", roman: "Da hora", meaning: "cool/awesome" },
+      { lang: "Portuguese (Brazil)", text: "Muito bom", roman: "Muito bom", meaning: "very good" },
+      { lang: "Portuguese (Brazil)", text: "Delícia", roman: "Delicia", meaning: "delicious" },
+      { lang: "Portuguese (Brazil)", text: "Gostoso", roman: "Gostoso", meaning: "tasty/delicious" },
+      { lang: "Portuguese (Brazil)", text: "Barato", roman: "Barato", meaning: "cheap" },
+      { lang: "Portuguese (Brazil)", text: "Caro", roman: "Caro", meaning: "expensive" },
+      { lang: "Portuguese (Brazil)", text: "Quanto custa", roman: "Quanto custa", meaning: "how much" },
+      { lang: "Portuguese (Brazil)", text: "Onde fica", roman: "Onde fica", meaning: "where is" },
+      { lang: "Portuguese (Brazil)", text: "Como chego", roman: "Como chego", meaning: "how do I get there" },
+      { lang: "Portuguese (Brazil)", text: "Pode me ajudar", roman: "Pode me ajudar", meaning: "can you help me" },
+      { lang: "Portuguese (Brazil)", text: "Não entendi", roman: "Nao entendi", meaning: "I didn't understand" },
+      { lang: "Portuguese (Brazil)", text: "Fala inglês", roman: "Fala ingles", meaning: "do you speak English" },
+      { lang: "Portuguese (Brazil)", text: "Desculpa", roman: "Desculpa", meaning: "sorry" },
+      { lang: "Portuguese (Brazil)", text: "Por favor", roman: "Por favor", meaning: "please" },
+      { lang: "Portuguese (Brazil)", text: "Obrigado", roman: "Obrigado", meaning: "thank you (male)" },
+      { lang: "Portuguese (Brazil)", text: "Obrigada", roman: "Obrigada", meaning: "thank you (female)" },
+      { lang: "Portuguese (Brazil)", text: "De nada", roman: "De nada", meaning: "you're welcome" },
+      { lang: "Portuguese (Brazil)", text: "Tudo certo", roman: "Tudo certo", meaning: "all good" },
+      { lang: "Portuguese (Brazil)", text: "Sem problema", roman: "Sem problema", meaning: "no problem" },
+      { lang: "Portuguese (Brazil)", text: "Com certeza", roman: "Com certeza", meaning: "for sure" },
+      { lang: "Portuguese (Brazil)", text: "Claro", roman: "Claro", meaning: "of course" },
+      { lang: "Portuguese (Brazil)", text: "É isso aí", roman: "E isso ai", meaning: "that's it/exactly" },
+      { lang: "Portuguese (Brazil)", text: "Valeu mesmo", roman: "Valeu mesmo", meaning: "thanks a lot" },
+      { lang: "Portuguese (Brazil)", text: "Foi mal", roman: "Foi mal", meaning: "my bad/sorry" },
+      { lang: "Portuguese (Brazil)", text: "Tranquilo", roman: "Tranquilo", meaning: "chill/relaxed" },
+      { lang: "Portuguese (Brazil)", text: "Suave", roman: "Suave", meaning: "smooth/easy" }
+    ],
+    culturalTips: [
+      "Brazilians are very friendly and warm - expect hugs and kisses",
+      "Portuguese is the language - not Spanish",
+      "Say 'oi' and 'tudo bem' when greeting",
+      "Don't be offended by casual questions - it's normal",
+      "Be patient - things move at 'Brazilian time'",
+      "Try to learn basic Portuguese - locals appreciate it",
+      "Don't refuse food when offered - it's polite to accept",
+      "Be aware of safety - use common sense",
+      "Carry small bills - change can be hard to find",
+      "Don't drink tap water - stick to bottled water",
+      "Be aware of traffic - it can be chaotic",
+      "Respect local customs and traditions",
+      "Try street food - it's safe and delicious",
+      "Be friendly and smile - Brazilians are welcoming",
+      "Don't take photos of military or government buildings",
+      "Respect personal space but expect friendliness",
+      "Enjoy the music and dance culture",
+      "Learn about regional differences",
+      "Be aware of local safety advice",
+      "Enjoy the vibrant culture - it's incredible"
+    ],
+    emergencyInfo: {
+      phone: "190 (police), 192 (ambulance), 193 (fire)",
+      police: "190",
+      ambulance: "192",
+      fire: "193",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +55-61-3312-7000, UK: +55-61-3329-2300",
+      notes: [
+        "190 for police, 192 for ambulance, 193 for fire - English operators in major cities",
+        "If injured: Call 192, private hospitals in São Paulo/Rio have English-speaking staff",
+        "If robbed/theft: Call 190, file police report (BO) for insurance, cancel cards immediately",
+        "Lost passport: Report to police (delegacia), then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Private hospitals (Albert Einstein, Sírio-Libanês) have English staff, bring insurance",
+        "Tourist hotline: +55-61-3429-0405 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Real",
+      symbol: "R$",
+      code: "BRL"
+    }
+  },
+  TR: {
+    foods: [
+      "🍖 döner kebab", "🥩 adana kebab", "🍗 shish kebab", "🍤 karides", "🐟 balık", "🍜 lahmacun", "🥟 börek",
+      "🍲 çorba", "🥢 baklava", "🍛 manti", "🍜 pide", "🥟 gözleme", "🍤 midye dolma",
+      "🐟 hamsi", "🍜 iskender", "🍲 menemen", "🥢 simit", "🍛 karnıyarık", "🍜 imam bayıldı",
+      "🥟 sarma", "🍤 çiğ köfte", "🐟 levrek", "🍜 pilav", "🍲 mercimek çorbası", "🥢 lokum",
+      "🍛 kuru fasulye", "☕ Türk kahvesi", "🍵 çay", "🥤 ayran", "🍺 bira", "🍷 şarap",
+      "🥤 şalgam", "🍧 dondurma", "🍰 künefe"
+    ],
+    phrases: [
+      { lang: "Turkish", text: "Merhaba", roman: "Merhaba", meaning: "hello" },
+      { lang: "Turkish", text: "Teşekkür ederim", roman: "Tesekkur ederim", meaning: "thank you" },
+      { lang: "Turkish", text: "Rica ederim", roman: "Rica ederim", meaning: "you're welcome" },
+      { lang: "Turkish", text: "Lütfen", roman: "Lutfen", meaning: "please" },
+      { lang: "Turkish", text: "Özür dilerim", roman: "Ozur dilerim", meaning: "sorry" },
+      { lang: "Turkish", text: "Ne kadar", roman: "Ne kadar", meaning: "how much?" },
+      { lang: "Turkish", text: "Afiyet olsun", roman: "Afiyet olsun", meaning: "enjoy your meal" },
+      { lang: "Turkish", text: "Günaydın", roman: "Gunaydin", meaning: "good morning" },
+      { lang: "Turkish", text: "İyi akşamlar", roman: "Iyi aksamlar", meaning: "good evening" },
+      { lang: "Turkish", text: "Hoşça kal", roman: "Hosca kal", meaning: "goodbye" },
+      { lang: "Turkish", text: "Evet", roman: "Evet", meaning: "yes" },
+      { lang: "Turkish", text: "Hayır", roman: "Hayir", meaning: "no" },
+      { lang: "Turkish", text: "Tamam", roman: "Tamam", meaning: "okay" },
+      { lang: "Turkish", text: "Çok güzel", roman: "Cok guzel", meaning: "very beautiful" },
+      { lang: "Turkish", text: "Harika", roman: "Harika", meaning: "amazing" },
+      { lang: "Turkish", text: "Ucuz", roman: "Ucuz", meaning: "cheap" },
+      { lang: "Turkish", text: "Pahalı", roman: "Pahali", meaning: "expensive" },
+      { lang: "Turkish", text: "Nerede", roman: "Nerede", meaning: "where?" },
+      { lang: "Turkish", text: "Nasıl", roman: "Nasil", meaning: "how?" },
+      { lang: "Turkish", text: "Ne zaman", roman: "Ne zaman", meaning: "when?" },
+      { lang: "Turkish", text: "Neden", roman: "Neden", meaning: "why?" },
+      { lang: "Turkish", text: "Anlamadım", roman: "Anlamadim", meaning: "I don't understand" },
+      { lang: "Turkish", text: "İngilizce biliyor musunuz", roman: "Ingilizce biliyor musunuz", meaning: "do you speak English?" },
+      { lang: "Turkish", text: "Yardım edebilir misiniz", roman: "Yardim edebilir misiniz", meaning: "can you help me?" },
+      { lang: "Turkish", text: "Su", roman: "Su", meaning: "water" },
+      { lang: "Turkish", text: "Kahve", roman: "Kahve", meaning: "coffee" },
+      { lang: "Turkish", text: "Çay", roman: "Cay", meaning: "tea" },
+      { lang: "Turkish", text: "Açım", roman: "Acim", meaning: "I'm hungry" },
+      { lang: "Turkish", text: "Susadım", roman: "Susadim", meaning: "I'm thirsty" },
+      { lang: "Turkish", text: "Yorgunum", roman: "Yorgunum", meaning: "I'm tired" },
+      { lang: "Turkish", text: "İyi", roman: "Iyi", meaning: "good" },
+      { lang: "Turkish", text: "Kötü", roman: "Kotu", meaning: "bad" },
+      { lang: "Turkish", text: "Büyük", roman: "Buyuk", meaning: "big" },
+      { lang: "Turkish", text: "Küçük", roman: "Kucuk", meaning: "small" },
+      { lang: "Turkish", text: "Sıcak", roman: "Sicak", meaning: "hot" },
+      { lang: "Turkish", text: "Soğuk", roman: "Soguk", meaning: "cold" },
+      { lang: "Turkish", text: "Hızlı", roman: "Hizli", meaning: "fast" },
+      { lang: "Turkish", text: "Yavaş", roman: "Yavas", meaning: "slow" },
+      { lang: "Turkish", text: "Sol", roman: "Sol", meaning: "left" },
+      { lang: "Turkish", text: "Sağ", roman: "Sag", meaning: "right" },
+      { lang: "Turkish", text: "Düz", roman: "Duz", meaning: "straight" },
+      { lang: "Turkish", text: "Yakın", roman: "Yakin", meaning: "near" },
+      { lang: "Turkish", text: "Uzak", roman: "Uzak", meaning: "far" },
+      { lang: "Turkish", text: "İstasyon", roman: "Istasyon", meaning: "station" },
+      { lang: "Turkish", text: "Hastane", roman: "Hastane", meaning: "hospital" },
+      { lang: "Turkish", text: "Otel", roman: "Otel", meaning: "hotel" },
+      { lang: "Turkish", text: "Havalimanı", roman: "Havalimani", meaning: "airport" },
+      { lang: "Turkish", text: "Banka", roman: "Banka", meaning: "bank" },
+      { lang: "Turkish", text: "Eczane", roman: "Eczane", meaning: "pharmacy" },
+      { lang: "Turkish", text: "Restoran", roman: "Restoran", meaning: "restaurant" },
+      { lang: "Turkish", text: "Bilet", roman: "Bilet", meaning: "ticket" }
+    ],
+    culturalTips: [
+      "Remove shoes when entering homes and mosques",
+      "Use your right hand for eating and giving/receiving",
+      "Don't point with your index finger",
+      "Don't show soles of feet when sitting",
+      "Say 'afiyet olsun' before/after meals",
+      "Don't refuse tea when offered - it's very important",
+      "Be patient - things move slower",
+      "Carry small bills - change can be hard to find",
+      "Don't drink tap water - stick to bottled water",
+      "Be aware of traffic - it can be chaotic",
+      "Respect prayer times - be quiet near mosques",
+      "Don't take photos of military or government buildings",
+      "Learn basic phrases - locals appreciate it",
+      "Try local food - it's diverse and delicious",
+      "Be friendly and smile - Turks are welcoming",
+      "Bargaining is expected at markets",
+      "Don't be loud in public - maintain quiet",
+      "Respect religious sites and customs",
+      "Learn about local customs and traditions",
+      "Enjoy the rich history and culture"
+    ],
+    emergencyInfo: {
+      phone: "112 (all emergencies)",
+      police: "112",
+      ambulance: "112",
+      fire: "112",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +90-312-455-5555, UK: +90-312-455-3344",
+      notes: [
+        "112 for all emergencies (police, fire, ambulance) - English operators in tourist areas",
+        "If injured: Call 112, private hospitals in Istanbul/Ankara have English-speaking staff",
+        "If robbed/theft: Call 112, file police report (tutanak) for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes days",
+        "Medical: Private hospitals (Acıbadem, Memorial) have English staff, bring insurance",
+        "Tourist hotline: +90-312-212-5777 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Lira",
+      symbol: "₺",
+      code: "TRY"
+    }
+  },
+  NZ: {
+    foods: [
+      "🍖 lamb", "🥩 steak", "🍗 fish and chips", "🍤 green-lipped mussels", "🐟 snapper", "🍜 hangi", "🥟 meat pie",
+      "🍲 pavlova", "🥢 kumara", "🍛 whitebait fritters", "🍜 paua", "🥟 sausage roll", "🍤 crayfish",
+      "🐟 blue cod", "🍜 rewena bread", "🍲 boil-up", "🥢 feijoa", "🍛 muttonbird", "🍜 kiwifruit",
+      "🥟 lamington", "🍤 scallops", "🐟 tarakihi", "🍜 kumara chips", "🍲 kai moana", "🥢 manuka honey",
+      "🍛 venison", "☕ flat white", "🍵 tea", "🥤 L&P", "🍺 beer", "🍷 wine",
+      "🥤 fresh juice", "🍧 ice cream", "🍰 afghan biscuit"
+    ],
+    phrases: [
+      { lang: "English (Kiwi)", text: "G'day", meaning: "hello" },
+      { lang: "English (Kiwi)", text: "Cheers", meaning: "thank you" },
+      { lang: "English (Kiwi)", text: "Sweet as", meaning: "great/okay" },
+      { lang: "English (Kiwi)", text: "Chur", meaning: "thanks/cool" },
+      { lang: "English (Kiwi)", text: "Yeah nah", meaning: "no" },
+      { lang: "English (Kiwi)", text: "Nah yeah", meaning: "yes" },
+      { lang: "English (Kiwi)", text: "Hard out", meaning: "very/really" },
+      { lang: "English (Kiwi)", text: "Choice", meaning: "excellent" },
+      { lang: "English (Kiwi)", text: "Mean", meaning: "great/awesome" },
+      { lang: "English (Kiwi)", text: "Bro", meaning: "friend/brother" },
+      { lang: "English (Kiwi)", text: "Cuz", meaning: "cousin/friend" },
+      { lang: "English (Kiwi)", text: "Jandals", meaning: "flip-flops" },
+      { lang: "English (Kiwi)", text: "Dairy", meaning: "convenience store" },
+      { lang: "English (Kiwi)", text: "Bach", meaning: "holiday home" },
+      { lang: "English (Kiwi)", text: "Tramping", meaning: "hiking" },
+      { lang: "English (Kiwi)", text: "Togs", meaning: "swimsuit" },
+      { lang: "English (Kiwi)", text: "Jumper", meaning: "sweater" },
+      { lang: "English (Kiwi)", text: "Chilly bin", meaning: "cooler" },
+      { lang: "English (Kiwi)", text: "Tucker", meaning: "food" },
+      { lang: "English (Kiwi)", text: "Scroggin", meaning: "trail mix" },
+      { lang: "English (Kiwi)", text: "Lollies", meaning: "candy" },
+      { lang: "English (Kiwi)", text: "Bikkie", meaning: "biscuit" },
+      { lang: "English (Kiwi)", text: "Sanga", meaning: "sandwich" },
+      { lang: "English (Kiwi)", text: "Chippies", meaning: "potato chips" },
+      { lang: "English (Kiwi)", text: "Bubbler", meaning: "water fountain" },
+      { lang: "English (Kiwi)", text: "Dunny", meaning: "toilet" },
+      { lang: "English (Kiwi)", text: "Loo", meaning: "bathroom" },
+      { lang: "English (Kiwi)", text: "Servo", meaning: "gas station" },
+      { lang: "English (Kiwi)", text: "Ute", meaning: "pickup truck" },
+      { lang: "English (Kiwi)", text: "Bach", meaning: "holiday home" },
+      { lang: "English (Kiwi)", text: "Whanau", meaning: "family" },
+      { lang: "English (Kiwi)", text: "Kia ora", meaning: "hello (Maori)" },
+      { lang: "English (Kiwi)", text: "Aroha", meaning: "love" },
+      { lang: "English (Kiwi)", text: "Kai", meaning: "food" },
+      { lang: "English (Kiwi)", text: "Aotearoa", meaning: "New Zealand" },
+      { lang: "English (Kiwi)", text: "Pakeha", meaning: "New Zealander of European descent" },
+      { lang: "English (Kiwi)", text: "Marae", meaning: "Maori meeting ground" },
+      { lang: "English (Kiwi)", text: "Haka", meaning: "Maori war dance" },
+      { lang: "English (Kiwi)", text: "Taonga", meaning: "treasure" },
+      { lang: "English (Kiwi)", text: "Waka", meaning: "canoe" },
+      { lang: "English (Kiwi)", text: "Mana", meaning: "prestige/power" },
+      { lang: "English (Kiwi)", text: "Tangi", meaning: "funeral" },
+      { lang: "English (Kiwi)", text: "Hui", meaning: "meeting" },
+      { lang: "English (Kiwi)", text: "Ka pai", meaning: "good/well done" },
+      { lang: "English (Kiwi)", text: "Haere mai", meaning: "welcome" },
+      { lang: "English (Kiwi)", text: "Haere ra", meaning: "goodbye" },
+      { lang: "English (Kiwi)", text: "Tena koe", meaning: "hello (to one person)" },
+      { lang: "English (Kiwi)", text: "Tena koutou", meaning: "hello (to many)" },
+      { lang: "English (Kiwi)", text: "Kei te pehea koe", meaning: "how are you?" },
+      { lang: "English (Kiwi)", text: "Kei te pai", meaning: "I'm good" },
+      { lang: "English (Kiwi)", text: "Aroha mai", meaning: "sorry" },
+      { lang: "English (Kiwi)", text: "Kia ora", meaning: "hello/thank you" }
+    ],
+    culturalTips: [
+      "Kiwis are friendly and laid-back",
+      "Learn some Maori phrases - they're appreciated",
+      "Say 'kia ora' for hello",
+      "Don't be too formal - Kiwis prefer casual",
+      "Respect Maori culture and customs",
+      "Don't tip - it's not customary",
+      "Be sun-smart - UV is very strong",
+      "Respect the environment - Kiwis are very eco-conscious",
+      "Don't be loud in public - Kiwis value peace",
+      "Learn about local customs and traditions",
+      "Try local food - it's fresh and delicious",
+      "Be friendly and respectful",
+      "Don't take photos of military or government buildings",
+      "Respect personal space",
+      "Learn about regional differences",
+      "Don't be late - punctuality is appreciated",
+      "Follow rules - Kiwis value order",
+      "Enjoy the outdoor lifestyle",
+      "Be aware of weather changes",
+      "Respect Indigenous culture and sites"
+    ],
+    emergencyInfo: {
+      phone: "111 (all emergencies)",
+      police: "111",
+      ambulance: "111",
+      fire: "111",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +64-4-462-6000, UK: +64-4-924-2888",
+      notes: [
+        "111 for all emergencies (police, fire, ambulance) - 112 also works from mobile phones",
+        "If injured: Call 111, excellent medical facilities, public healthcare covers emergencies",
+        "If robbed/theft: Call 111, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Public healthcare covers emergencies, private hospitals require insurance",
+        "Tourist hotline: 0800-733-276 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "New Zealand Dollar",
+      symbol: "NZ$",
+      code: "NZD"
+    }
+  },
+  PT: {
+    foods: [
+      "🍖 bacalhau", "🥩 francesinha", "🍗 frango assado", "🍤 camarão", "🐟 sardinhas", "🍜 caldo verde", "🥟 pastéis de nata",
+      "🍲 cozido à portuguesa", "🥢 bifana", "🍛 arroz de pato", "🍜 açorda", "🥟 rissóis", "🍤 amêijoas à bulhão pato",
+      "🐟 peixe grelhado", "🍜 cataplana", "🍲 feijoada", "🥢 queijo da serra", "🍛 leitão", "🍜 tripas à moda do Porto",
+      "🥟 bolinhos de bacalhau", "🍤 polvo", "🐟 atum", "🍜 sopa de pedra", "🍲 açorda de marisco", "🥢 pão de ló",
+      "🍛 arroz de marisco", "☕ bica", "🍵 chá", "🥤 sumo", "🍺 cerveja", "🍷 vinho",
+      "🥤 água", "🍧 gelado", "🍰 pastel de nata"
+    ],
+    phrases: [
+      { lang: "Portuguese", text: "Olá", roman: "Ola", meaning: "hello" },
+      { lang: "Portuguese", text: "Bom dia", roman: "Bom dia", meaning: "good morning" },
+      { lang: "Portuguese", text: "Boa tarde", roman: "Boa tarde", meaning: "good afternoon" },
+      { lang: "Portuguese", text: "Boa noite", roman: "Boa noite", meaning: "good evening/night" },
+      { lang: "Portuguese", text: "Obrigado", roman: "Obrigado", meaning: "thank you (male)" },
+      { lang: "Portuguese", text: "Obrigada", roman: "Obrigada", meaning: "thank you (female)" },
+      { lang: "Portuguese", text: "De nada", roman: "De nada", meaning: "you're welcome" },
+      { lang: "Portuguese", text: "Por favor", roman: "Por favor", meaning: "please" },
+      { lang: "Portuguese", text: "Desculpe", roman: "Desculpe", meaning: "sorry" },
+      { lang: "Portuguese", text: "Com licença", roman: "Com licenca", meaning: "excuse me" },
+      { lang: "Portuguese", text: "Quanto custa", roman: "Quanto custa", meaning: "how much?" },
+      { lang: "Portuguese", text: "Sim", roman: "Sim", meaning: "yes" },
+      { lang: "Portuguese", text: "Não", roman: "Nao", meaning: "no" },
+      { lang: "Portuguese", text: "Está bem", roman: "Esta bem", meaning: "it's okay" },
+      { lang: "Portuguese", text: "Tudo bem", roman: "Tudo bem", meaning: "everything okay" },
+      { lang: "Portuguese", text: "Como está", roman: "Como esta", meaning: "how are you?" },
+      { lang: "Portuguese", text: "Bem, obrigado", roman: "Bem, obrigado", meaning: "well, thanks" },
+      { lang: "Portuguese", text: "Adeus", roman: "Adeus", meaning: "goodbye" },
+      { lang: "Portuguese", text: "Até logo", roman: "Ate logo", meaning: "see you later" },
+      { lang: "Portuguese", text: "Até breve", roman: "Ate breve", meaning: "see you soon" },
+      { lang: "Portuguese", text: "Prazer", roman: "Prazer", meaning: "nice to meet you" },
+      { lang: "Portuguese", text: "Muito prazer", roman: "Muito prazer", meaning: "very nice to meet you" },
+      { lang: "Portuguese", text: "Desculpe, não entendo", roman: "Desculpe, nao entendo", meaning: "sorry, I don't understand" },
+      { lang: "Portuguese", text: "Fala inglês", roman: "Fala ingles", meaning: "do you speak English?" },
+      { lang: "Portuguese", text: "Pode ajudar-me", roman: "Pode ajudar-me", meaning: "can you help me?" },
+      { lang: "Portuguese", text: "Onde fica", roman: "Onde fica", meaning: "where is" },
+      { lang: "Portuguese", text: "Como chego", roman: "Como chego", meaning: "how do I get there" },
+      { lang: "Portuguese", text: "Esquerda", roman: "Esquerda", meaning: "left" },
+      { lang: "Portuguese", text: "Direita", roman: "Direita", meaning: "right" },
+      { lang: "Portuguese", text: "Em frente", roman: "Em frente", meaning: "straight ahead" },
+      { lang: "Portuguese", text: "Perto", roman: "Perto", meaning: "near" },
+      { lang: "Portuguese", text: "Longe", roman: "Longe", meaning: "far" },
+      { lang: "Portuguese", text: "Estação", roman: "Estacao", meaning: "station" },
+      { lang: "Portuguese", text: "Hospital", roman: "Hospital", meaning: "hospital" },
+      { lang: "Portuguese", text: "Hotel", roman: "Hotel", meaning: "hotel" },
+      { lang: "Portuguese", text: "Aeroporto", roman: "Aeroporto", meaning: "airport" },
+      { lang: "Portuguese", text: "Banco", roman: "Banco", meaning: "bank" },
+      { lang: "Portuguese", text: "Farmácia", roman: "Farmacia", meaning: "pharmacy" },
+      { lang: "Portuguese", text: "Restaurante", roman: "Restaurante", meaning: "restaurant" },
+      { lang: "Portuguese", text: "Água", roman: "Agua", meaning: "water" },
+      { lang: "Portuguese", text: "Café", roman: "Cafe", meaning: "coffee" },
+      { lang: "Portuguese", text: "Tenho fome", roman: "Tenho fome", meaning: "I'm hungry" },
+      { lang: "Portuguese", text: "Tenho sede", roman: "Tenho sede", meaning: "I'm thirsty" },
+      { lang: "Portuguese", text: "Estou cansado", roman: "Estou cansado", meaning: "I'm tired" },
+      { lang: "Portuguese", text: "Bom", roman: "Bom", meaning: "good" },
+      { lang: "Portuguese", text: "Mau", roman: "Mau", meaning: "bad" },
+      { lang: "Portuguese", text: "Grande", roman: "Grande", meaning: "big" },
+      { lang: "Portuguese", text: "Pequeno", roman: "Pequeno", meaning: "small" },
+      { lang: "Portuguese", text: "Quente", roman: "Quente", meaning: "hot" },
+      { lang: "Portuguese", text: "Frio", roman: "Frio", meaning: "cold" },
+      { lang: "Portuguese", text: "Rápido", roman: "Rapido", meaning: "fast" },
+      { lang: "Portuguese", text: "Lento", roman: "Lento", meaning: "slow" },
+      { lang: "Portuguese", text: "Barato", roman: "Barato", meaning: "cheap" },
+      { lang: "Portuguese", text: "Caro", roman: "Caro", meaning: "expensive" },
+      { lang: "Portuguese", text: "Bonito", roman: "Bonito", meaning: "beautiful" },
+      { lang: "Portuguese", text: "Delicioso", roman: "Delicioso", meaning: "delicious" },
+      { lang: "Portuguese", text: "Bilhete", roman: "Bilhete", meaning: "ticket" }
+    ],
+    culturalTips: [
+      "Portuguese is the language - different from Brazilian Portuguese",
+      "Meals are later - lunch at 1-2pm, dinner at 8-9pm",
+      "Don't tip excessively - 5-10% is standard",
+      "Say 'bom dia/boa tarde/boa noite' when entering shops",
+      "Don't rush - Portuguese value taking time",
+      "Learn basic Portuguese - locals appreciate it",
+      "Don't be loud in public - maintain quiet",
+      "Dress appropriately - casual is fine",
+      "Try local food - it's world-renowned",
+      "Don't drink tap water - stick to bottled water",
+      "Be aware of local customs and traditions",
+      "Be friendly and respectful",
+      "Don't take photos of military or government buildings",
+      "Respect personal space",
+      "Learn about regional differences",
+      "Don't be late - punctuality is appreciated",
+      "Follow rules - Portuguese value order",
+      "Enjoy the café culture",
+      "Be polite - manners are important",
+      "Respect religious sites and customs"
+    ],
+    emergencyInfo: {
+      phone: "112 (all emergencies)",
+      police: "112",
+      ambulance: "112",
+      fire: "112",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +351-21-727-3300, UK: +351-21-392-4000",
+      notes: [
+        "112 for all emergencies (police, fire, ambulance) - English operators available",
+        "If injured: Call 112, excellent medical facilities with English-speaking staff",
+        "If robbed/theft: Call 112, file police report (queixa) for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Public hospitals are good, private hospitals require insurance",
+        "Tourist hotline: +351-808-781-212 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Euro",
+      symbol: "€",
+      code: "EUR"
+    }
+  },
+  NL: {
+    foods: [
+      "🍖 stamppot", "🥩 bitterballen", "🍗 kip", "🍤 garnalen", "🐟 haring", "🍜 erwtensoep", "🥟 oliebollen",
+      "🍲 hutspot", "🥢 kaas", "🍛 boerenkool", "🍜 poffertjes", "🥟 stroopwafel", "🍤 kibbeling",
+      "🐟 paling", "🍜 kroket", "🍲 zuurkool", "🥢 appeltaart", "🍛 rookworst", "🍜 pannenkoeken",
+      "🥟 speculaas", "🍤 mosselen", "🐟 makreel", "🍜 andijviestamppot", "🍲 snert", "🥢 drop",
+      "🍛 frikandel", "☕ koffie", "🍵 thee", "🥤 appelsap", "🍺 bier", "🍷 wijn",
+      "🥤 limonade", "🍧 ijs", "🍰 vlaai"
+    ],
+    phrases: [
+      { lang: "Dutch", text: "Hallo", roman: "Hallo", meaning: "hello" },
+      { lang: "Dutch", text: "Goedemorgen", roman: "Goedemorgen", meaning: "good morning" },
+      { lang: "Dutch", text: "Goedemiddag", roman: "Goedemiddag", meaning: "good afternoon" },
+      { lang: "Dutch", text: "Goedenavond", roman: "Goedenavond", meaning: "good evening" },
+      { lang: "Dutch", text: "Dank je", roman: "Dank je", meaning: "thank you" },
+      { lang: "Dutch", text: "Alsjeblieft", roman: "Alsjeblieft", meaning: "please/you're welcome" },
+      { lang: "Dutch", text: "Sorry", roman: "Sorry", meaning: "sorry" },
+      { lang: "Dutch", text: "Pardon", roman: "Pardon", meaning: "excuse me" },
+      { lang: "Dutch", text: "Hoeveel kost dit", roman: "Hoeveel kost dit", meaning: "how much does this cost?" },
+      { lang: "Dutch", text: "Ja", roman: "Ja", meaning: "yes" },
+      { lang: "Dutch", text: "Nee", roman: "Nee", meaning: "no" },
+      { lang: "Dutch", text: "Oké", roman: "Oke", meaning: "okay" },
+      { lang: "Dutch", text: "Hoe gaat het", roman: "Hoe gaat het", meaning: "how are you?" },
+      { lang: "Dutch", text: "Goed", roman: "Goed", meaning: "good" },
+      { lang: "Dutch", text: "Dag", roman: "Dag", meaning: "goodbye" },
+      { lang: "Dutch", text: "Tot ziens", roman: "Tot ziens", meaning: "see you" },
+      { lang: "Dutch", text: "Ik begrijp het niet", roman: "Ik begrijp het niet", meaning: "I don't understand" },
+      { lang: "Dutch", text: "Spreekt u Engels", roman: "Spreekt u Engels", meaning: "do you speak English?" },
+      { lang: "Dutch", text: "Kunt u me helpen", roman: "Kunt u me helpen", meaning: "can you help me?" },
+      { lang: "Dutch", text: "Waar is", roman: "Waar is", meaning: "where is" },
+      { lang: "Dutch", text: "Links", roman: "Links", meaning: "left" },
+      { lang: "Dutch", text: "Rechts", roman: "Rechts", meaning: "right" },
+      { lang: "Dutch", text: "Rechtdoor", roman: "Rechtdoor", meaning: "straight" },
+      { lang: "Dutch", text: "Dichtbij", roman: "Dichtbij", meaning: "near" },
+      { lang: "Dutch", text: "Ver", roman: "Ver", meaning: "far" },
+      { lang: "Dutch", text: "Station", roman: "Station", meaning: "station" },
+      { lang: "Dutch", text: "Luchthaven", roman: "Luchthaven", meaning: "airport" },
+      { lang: "Dutch", text: "Hotel", roman: "Hotel", meaning: "hotel" },
+      { lang: "Dutch", text: "Ziekenhuis", roman: "Ziekenhuis", meaning: "hospital" },
+      { lang: "Dutch", text: "Apotheek", roman: "Apotheek", meaning: "pharmacy" },
+      { lang: "Dutch", text: "Bank", roman: "Bank", meaning: "bank" },
+      { lang: "Dutch", text: "Restaurant", roman: "Restaurant", meaning: "restaurant" },
+      { lang: "Dutch", text: "Water", roman: "Water", meaning: "water" },
+      { lang: "Dutch", text: "Koffie", roman: "Koffie", meaning: "coffee" },
+      { lang: "Dutch", text: "Ik heb honger", roman: "Ik heb honger", meaning: "I'm hungry" },
+      { lang: "Dutch", text: "Ik heb dorst", roman: "Ik heb dorst", meaning: "I'm thirsty" },
+      { lang: "Dutch", text: "Ik ben moe", roman: "Ik ben moe", meaning: "I'm tired" },
+      { lang: "Dutch", text: "Mooi", roman: "Mooi", meaning: "beautiful" },
+      { lang: "Dutch", text: "Lekker", roman: "Lekker", meaning: "delicious/nice" },
+      { lang: "Dutch", text: "Goedkoop", roman: "Goedkoop", meaning: "cheap" },
+      { lang: "Dutch", text: "Duur", roman: "Duur", meaning: "expensive" },
+      { lang: "Dutch", text: "Snel", roman: "Snel", meaning: "fast" },
+      { lang: "Dutch", text: "Langzaam", roman: "Langzaam", meaning: "slow" },
+      { lang: "Dutch", text: "Warm", roman: "Warm", meaning: "hot" },
+      { lang: "Dutch", text: "Koud", roman: "Koud", meaning: "cold" },
+      { lang: "Dutch", text: "Kaartje", roman: "Kaartje", meaning: "ticket" }
+    ],
+    culturalTips: [
+      "Dutch are direct and honest - don't be offended",
+      "English is widely spoken - you'll be fine",
+      "Don't tip excessively - rounding up is fine",
+      "Say 'hallo' when entering shops",
+      "Don't rush - Dutch value efficiency",
+      "Learn basic Dutch - locals appreciate it",
+      "Don't be loud in public - maintain quiet",
+      "Dress appropriately - casual is fine",
+      "Carry cash - some places don't accept cards",
+      "Don't drink tap water - it's safe but order bottled in restaurants",
+      "Be aware of local customs and traditions",
+      "Try local food - it's hearty and delicious",
+      "Be friendly but direct",
+      "Don't take photos of military or government buildings",
+      "Respect personal space",
+      "Learn about regional differences",
+      "Don't be late - punctuality is important",
+      "Follow rules - Dutch value order",
+      "Enjoy the cycling culture",
+      "Be polite - manners are important"
+    ],
+    emergencyInfo: {
+      phone: "112 (all emergencies)",
+      police: "112",
+      ambulance: "112",
+      fire: "112",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +31-70-310-2209, UK: +31-70-427-0427",
+      notes: [
+        "112 for all emergencies (police, fire, ambulance) - English operators available",
+        "If injured: Call 112, excellent medical facilities with English-speaking staff",
+        "If robbed/theft: Call 112, file police report (aangifte) for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Excellent hospitals with English staff, bring insurance",
+        "Tourist hotline: +31-70-371-5555 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Euro",
+      symbol: "€",
+      code: "EUR"
+    }
+  },
+  GR: {
+    foods: [
+      "🍖 souvlaki", "🥩 moussaka", "🍗 kotopoulo", "🍤 garides", "🐟 psari", "🍜 pastitsio", "🥟 spanakopita",
+      "🍲 avgolemono", "🥢 feta", "🍛 dolmades", "🍜 giouvetsi", "🥟 tiropita", "🍤 kalamarakia",
+      "🐟 bakaliaros", "🍜 horiatiki", "🍲 fasolada", "🥢 tzatziki", "🍛 gemista", "🍜 keftedes",
+      "🥟 bougatsa", "🍤 garides saganaki", "🐟 barbounia", "🍜 stifado", "🍲 revithia", "🥢 loukoumades",
+      "🍛 kokkinisto", "☕ ελληνικός καφές", "🍵 τσάι", "🥤 φρέσκο χυμό", "🍺 μπύρα", "🍷 κρασί",
+      "🥤 ούζο", "🍧 παγωτό", "🍰 μπακλαβάς"
+    ],
+    phrases: [
+      { lang: "Greek", text: "Γεια σας", roman: "Yia sas", meaning: "hello (formal)" },
+      { lang: "Greek", text: "Γεια", roman: "Yia", meaning: "hi" },
+      { lang: "Greek", text: "Καλημέρα", roman: "Kalimera", meaning: "good morning" },
+      { lang: "Greek", text: "Καλησπέρα", roman: "Kalispera", meaning: "good evening" },
+      { lang: "Greek", text: "Καληνύχτα", roman: "Kalinychta", meaning: "good night" },
+      { lang: "Greek", text: "Ευχαριστώ", roman: "Efcharisto", meaning: "thank you" },
+      { lang: "Greek", text: "Παρακαλώ", roman: "Parakalo", meaning: "please/you're welcome" },
+      { lang: "Greek", text: "Συγγνώμη", roman: "Sygnomi", meaning: "sorry" },
+      { lang: "Greek", text: "Πόσο κοστίζει", roman: "Poso kostizei", meaning: "how much does it cost?" },
+      { lang: "Greek", text: "Ναι", roman: "Nai", meaning: "yes" },
+      { lang: "Greek", text: "Όχι", roman: "Ochi", meaning: "no" },
+      { lang: "Greek", text: "Εντάξει", roman: "Entaxi", meaning: "okay" },
+      { lang: "Greek", text: "Τι κάνεις", roman: "Ti kaneis", meaning: "how are you?" },
+      { lang: "Greek", text: "Καλά", roman: "Kala", meaning: "good" },
+      { lang: "Greek", text: "Αντίο", roman: "Antio", meaning: "goodbye" },
+      { lang: "Greek", text: "Τα λέμε", roman: "Ta leme", meaning: "see you" },
+      { lang: "Greek", text: "Δεν καταλαβαίνω", roman: "Den katalaveno", meaning: "I don't understand" },
+      { lang: "Greek", text: "Μιλάτε αγγλικά", roman: "Milate anglika", meaning: "do you speak English?" },
+      { lang: "Greek", text: "Μπορείτε να με βοηθήσετε", roman: "Boreite na me voithisete", meaning: "can you help me?" },
+      { lang: "Greek", text: "Πού είναι", roman: "Pou einai", meaning: "where is" },
+      { lang: "Greek", text: "Αριστερά", roman: "Aristera", meaning: "left" },
+      { lang: "Greek", text: "Δεξιά", roman: "Dexia", meaning: "right" },
+      { lang: "Greek", text: "Ευθεία", roman: "Eftheia", meaning: "straight" },
+      { lang: "Greek", text: "Κοντά", roman: "Konta", meaning: "near" },
+      { lang: "Greek", text: "Μακριά", roman: "Makria", meaning: "far" },
+      { lang: "Greek", text: "Σταθμός", roman: "Stathmos", meaning: "station" },
+      { lang: "Greek", text: "Αεροδρόμιο", roman: "Aerodromio", meaning: "airport" },
+      { lang: "Greek", text: "Ξενοδοχείο", roman: "Xenodocheio", meaning: "hotel" },
+      { lang: "Greek", text: "Νοσοκομείο", roman: "Nosokomeio", meaning: "hospital" },
+      { lang: "Greek", text: "Φαρμακείο", roman: "Farmakeio", meaning: "pharmacy" },
+      { lang: "Greek", text: "Τράπεζα", roman: "Trapeza", meaning: "bank" },
+      { lang: "Greek", text: "Εστιατόριο", roman: "Estiatorio", meaning: "restaurant" },
+      { lang: "Greek", text: "Νερό", roman: "Nero", meaning: "water" },
+      { lang: "Greek", text: "Καφές", roman: "Kafes", meaning: "coffee" },
+      { lang: "Greek", text: "Πεινάω", roman: "Peinao", meaning: "I'm hungry" },
+      { lang: "Greek", text: "Διψάω", roman: "Dipsao", meaning: "I'm thirsty" },
+      { lang: "Greek", text: "Κουρασμένος", roman: "Kourasmenos", meaning: "tired" },
+      { lang: "Greek", text: "Ωραίος", roman: "Oraios", meaning: "beautiful" },
+      { lang: "Greek", text: "Νόστιμος", roman: "Nostimos", meaning: "delicious" },
+      { lang: "Greek", text: "Φθηνό", roman: "Fthino", meaning: "cheap" },
+      { lang: "Greek", text: "Ακριβό", roman: "Akribo", meaning: "expensive" },
+      { lang: "Greek", text: "Γρήγορο", roman: "Grigoro", meaning: "fast" },
+      { lang: "Greek", text: "Αργό", roman: "Argo", meaning: "slow" },
+      { lang: "Greek", text: "Ζεστό", roman: "Zesto", meaning: "hot" },
+      { lang: "Greek", text: "Κρύο", roman: "Kryo", meaning: "cold" },
+      { lang: "Greek", text: "Εισιτήριο", roman: "Eisitirio", meaning: "ticket" }
+    ],
+    culturalTips: [
+      "Greeks are very friendly and expressive",
+      "Say 'yia sas' when entering shops",
+      "Don't tip excessively - rounding up is fine",
+      "Meals are later - lunch at 2-3pm, dinner at 9-10pm",
+      "Don't rush - Greeks value taking time",
+      "Learn basic Greek - locals appreciate it",
+      "Don't be loud in public - maintain quiet",
+      "Dress appropriately - casual is fine",
+      "Carry cash - many places don't accept cards",
+      "Don't drink tap water - stick to bottled water",
+      "Be aware of local customs and traditions",
+      "Try local food - it's world-renowned",
+      "Be friendly and expressive - Greeks are welcoming",
+      "Don't take photos of military or government buildings",
+      "Respect religious sites and customs",
+      "Learn about regional differences",
+      "Don't be late - punctuality is appreciated",
+      "Follow rules - Greeks value order",
+      "Enjoy the café culture",
+      "Be polite - manners are important"
+    ],
+    emergencyInfo: {
+      phone: "112 (all emergencies) or 100 (police), 199 (fire), 166 (ambulance)",
+      police: "100",
+      ambulance: "166",
+      fire: "199",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +30-210-721-2951, UK: +30-210-727-2600",
+      notes: [
+        "112 for all emergencies, or 100 (police), 199 (fire), 166 (ambulance) - English operators in tourist areas",
+        "If injured: Call 166, private hospitals in Athens/Thessaloniki have English-speaking staff",
+        "If robbed/theft: Call 100, file police report (αναφορά) for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes days",
+        "Medical: Private hospitals (Hygeia, Metropolitan) have English staff, bring insurance",
+        "Tourist hotline: +30-210-331-0716 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Euro",
+      symbol: "€",
+      code: "EUR"
+    }
+  },
+  ZA: {
+    foods: [
+      "🍖 braai", "🥩 biltong", "🍗 boerewors", "🍤 prawns", "🐟 snoek", "🍜 bobotie", "🥟 samoosas",
+      "🍲 potjiekos", "🥢 koeksisters", "🍛 bunny chow", "🍜 pap", "🥟 vetkoek", "🍤 calamari",
+      "🐟 yellowtail", "🍜 chakalaka", "🍲 bredie", "🥢 melktert", "🍛 sosaties", "🍜 mieliepap",
+      "🥟 boerewors roll", "🍤 rock lobster", "🐟 kingklip", "🍜 umngqusho", "🍲 samp", "🥢 rooibos tea",
+      "🍛 curry", "☕ coffee", "🍵 rooibos", "🥤 appletiser", "🍺 beer", "🍷 wine",
+      "🥤 fresh juice", "🍧 ice cream", "🍰 malva pudding"
+    ],
+    phrases: [
+      { lang: "English (South African)", text: "Howzit", meaning: "how are you/hello" },
+      { lang: "English (South African)", text: "Lekker", meaning: "nice/good" },
+      { lang: "English (South African)", text: "Ja", meaning: "yes" },
+      { lang: "English (South African)", text: "Nee", meaning: "no" },
+      { lang: "English (South African)", text: "Is it", meaning: "really/is that so" },
+      { lang: "English (South African)", text: "Ag shame", meaning: "expression of sympathy" },
+      { lang: "English (South African)", text: "Eish", meaning: "expression of surprise" },
+      { lang: "English (South African)", text: "Yebo", meaning: "yes (Zulu)" },
+      { lang: "English (South African)", text: "Sharp", meaning: "cool/okay" },
+      { lang: "English (South African)", text: "Shame", meaning: "cute/pity" },
+      { lang: "English (South African)", text: "Braai", meaning: "barbecue" },
+      { lang: "English (South African)", text: "Robot", meaning: "traffic light" },
+      { lang: "English (South African)", text: "Bakkie", meaning: "pickup truck" },
+      { lang: "English (South African)", text: "Dop", meaning: "drink" },
+      { lang: "English (South African)", text: "Jol", meaning: "party/fun" },
+      { lang: "English (South African)", text: "Kiff", meaning: "cool/awesome" },
+      { lang: "English (South African)", text: "Now now", meaning: "soon" },
+      { lang: "English (South African)", text: "Just now", meaning: "later" },
+      { lang: "English (South African)", text: "Ag", meaning: "oh/expression" },
+      { lang: "English (South African)", text: "Aweh", meaning: "hello/yes" },
+      { lang: "English (South African)", text: "Boet", meaning: "brother/friend" },
+      { lang: "English (South African)", text: "Bru", meaning: "bro" },
+      { lang: "English (South African)", text: "China", meaning: "friend" },
+      { lang: "English (South African)", text: "Dankie", meaning: "thanks (Afrikaans)" },
+      { lang: "English (South African)", text: "Sawubona", meaning: "hello (Zulu)" },
+      { lang: "English (South African)", text: "Hamba kahle", meaning: "goodbye (Zulu)" },
+      { lang: "English (South African)", text: "Molo", meaning: "hello (Xhosa)" },
+      { lang: "English (South African)", text: "Sala kahle", meaning: "goodbye (Xhosa)" },
+      { lang: "English (South African)", text: "Dumela", meaning: "hello (Tswana)" },
+      { lang: "English (South African)", text: "Tsamaya", meaning: "goodbye (Tswana)" },
+      { lang: "English (South African)", text: "Lekker bru", meaning: "cool bro" },
+      { lang: "English (South African)", text: "Shot", meaning: "thanks" },
+      { lang: "English (South African)", text: "Cheers", meaning: "thanks/goodbye" },
+      { lang: "English (South African)", text: "Ta", meaning: "thanks" },
+      { lang: "English (South African)", text: "Lekker man", meaning: "cool man" },
+      { lang: "English (South African)", text: "Is jy reg", meaning: "are you okay (Afrikaans)" },
+      { lang: "English (South African)", text: "Wat maak jy", meaning: "what are you doing (Afrikaans)" },
+      { lang: "English (South African)", text: "Waar is", meaning: "where is (Afrikaans)" },
+      { lang: "English (South African)", text: "Hoeveel", meaning: "how much (Afrikaans)" },
+      { lang: "English (South African)", text: "Asseblief", meaning: "please (Afrikaans)" },
+      { lang: "English (South African)", text: "Verskoon my", meaning: "excuse me (Afrikaans)" },
+      { lang: "English (South African)", text: "Ek verstaan nie", meaning: "I don't understand (Afrikaans)" },
+      { lang: "English (South African)", text: "Praat jy Engels", meaning: "do you speak English (Afrikaans)" },
+      { lang: "English (South African)", text: "Kan jy my help", meaning: "can you help me (Afrikaans)" }
+    ],
+    culturalTips: [
+      "South Africans are very friendly and diverse",
+      "English is widely spoken - you'll be fine",
+      "Learn some local phrases - they're appreciated",
+      "Say 'howzit' for hello",
+      "Don't tip excessively - 10-15% is standard",
+      "Be aware of safety - use common sense",
+      "Carry small bills - change can be hard to find",
+      "Don't drink tap water - stick to bottled water",
+      "Be aware of traffic - it can be chaotic",
+      "Respect local customs and traditions",
+      "Try local food - it's diverse and delicious",
+      "Be friendly and respectful",
+      "Don't take photos of military or government buildings",
+      "Respect personal space",
+      "Learn about regional differences",
+      "Don't be late - punctuality is appreciated",
+      "Follow rules - South Africans value order",
+      "Enjoy the multicultural culture",
+      "Be aware of local safety advice",
+      "Respect all cultures and languages"
+    ],
+    emergencyInfo: {
+      phone: "10111 (police), 10177 (ambulance), 10111 (fire)",
+      police: "10111",
+      ambulance: "10177",
+      fire: "10111",
+      embassy: "Contact your embassy immediately if passport is lost/stolen. US: +27-12-431-4000, UK: +27-12-421-7500",
+      notes: [
+        "10111 for police/fire, 10177 for ambulance - English widely spoken",
+        "If injured: Call 10177, private hospitals in Cape Town/Johannesburg have English-speaking staff",
+        "If robbed/theft: Call 10111, file police report for insurance, cancel cards immediately",
+        "Lost passport: Report to police, then contact embassy - replacement takes 1-2 weeks",
+        "Medical: Private hospitals (Netcare, Mediclinic) have English staff, bring insurance",
+        "Tourist hotline: +27-12-423-6000 (24/7 multilingual support)"
+      ]
+    },
+    currency: {
+      name: "Rand",
+      symbol: "R",
+      code: "ZAR"
+    }
   },
   // Add more countries as needed - keeping file size manageable
-  // Limits: MAX_FOODS=35, MAX_PHRASES=75, MAX_CULTURAL_TIPS=20, MAX_EMERGENCY_PHRASES=15 per country
+  // Limits: MAX_FOODS=35, MAX_PHRASES=50, MAX_CULTURAL_TIPS=20 per country
+  // Note: For English-speaking countries, only include unique local phrases (not obvious/common English)
 };
 
 /**
@@ -2356,4 +3032,25 @@ export function getTravelData(countryCode: string | null | undefined): TravelDat
     return { ...data, isCountrySpecific: true };
   }
   return { ...GLOBAL, isCountrySpecific: false };
+}
+
+// Country code to name mapping (subset for available countries)
+const COUNTRY_NAMES: Record<string, string> = {
+  JP: "Japan", VN: "Vietnam", ID: "Indonesia", AU: "Australia", TH: "Thailand",
+  KR: "South Korea", PH: "Philippines", SG: "Singapore", MY: "Malaysia", TW: "Taiwan",
+  IN: "India", CN: "China", FR: "France", ES: "Spain", IT: "Italy", DE: "Germany",
+  GB: "United Kingdom", CA: "Canada", MX: "Mexico", BR: "Brazil", TR: "Turkey",
+  NZ: "New Zealand", PT: "Portugal", NL: "Netherlands", GR: "Greece", ZA: "South Africa"
+};
+
+/**
+ * Gets all available country codes and names
+ */
+export function getAvailableCountries(): Array<{ code: string; name: string }> {
+  return Object.keys(TRAVEL_DATA)
+    .map(code => ({
+      code,
+      name: COUNTRY_NAMES[code] || code
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

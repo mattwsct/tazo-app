@@ -101,7 +101,9 @@ Or using individual parameters:
 
 These commands use your RTIRL GPS location to provide country-specific travel information. You can also specify a country code to check other countries' data.
 
-**Available countries:** JP (Japan), VN (Vietnam), ID (Indonesia), AU (Australia), TH (Thailand), KR (South Korea), PH (Philippines), SG (Singapore), MY (Malaysia), TW (Taiwan), IN (India), CN (China), FR (France), ES (Spain), IT (Italy), DE (Germany), GB (UK), CA (Canada), MX (Mexico)
+**Available countries:** AU (Australia), BR (Brazil), CA (Canada), CN (China), DE (Germany), ES (Spain), FR (France), GB (United Kingdom), GR (Greece), ID (Indonesia), IN (India), JP (Japan), KR (South Korea), MX (Mexico), MY (Malaysia), NL (Netherlands), NZ (New Zealand), PH (Philippines), PT (Portugal), SG (Singapore), TH (Thailand), TR (Turkey), TW (Taiwan), VN (Vietnam), ZA (South Africa)
+
+Use `!countries` to see the full list.
 
 ### Food
 
@@ -141,7 +143,29 @@ Returns 3 random cultural tips to help you navigate local customs and etiquette.
 !emergency DE → $(customapi https://app.tazo.wtf/api/chat/emergency?q=DE)
 ```
 
-Returns 3 random emergency phrases with translations. Uses your current country by default, or specify a country code to check other countries. Useful for IRL emergencies when you need help from locals.
+Returns emergency phone numbers, embassy contact information, and practical emergency guidance for injuries, theft, lost passports, and medical situations. Uses your current country by default, or specify a country code to check other countries. Essential for IRL emergencies when traveling.
+
+Example output: `[Mexico] All: 911 | Police: 066 | Ambulance: 065 | Fire: 068 | Embassy: Contact your embassy... | If injured: Call 065... | If robbed/theft: Call 066...`
+
+### Currency
+
+```
+!currency → $(customapi https://app.tazo.wtf/api/chat/currency)
+!currency JP → $(customapi https://app.tazo.wtf/api/chat/currency?q=JP)
+!currency BR → $(customapi https://app.tazo.wtf/api/chat/currency?q=BR)
+```
+
+Returns the local currency name, symbol, and ISO code. Uses your current country by default, or specify a country code to check other countries.
+
+Example output: `[Japan] Yen (JPY) ¥` or `Euro (EUR) €`
+
+### Countries List
+
+```
+!countries → $(customapi https://app.tazo.wtf/api/chat/countries)
+```
+
+Returns a list of all available country codes and names for use with other travel commands.
 
 ## Stats Commands
 
