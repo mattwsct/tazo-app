@@ -44,6 +44,26 @@ import {
   extractAltitude,
   createSettingsHash
 } from '@/utils/overlay-helpers';
+import {
+  mergeSettingsWithDefaults,
+  hasCompleteLocationData,
+  formatCountryCode,
+  shouldShowDisplayMode
+} from '@/utils/overlay-utils';
+import {
+  processGpsData,
+  calculateSpeedFromPayload,
+  processAltitude
+} from '@/utils/rtirl-processor';
+import {
+  shouldFetchWeather,
+  shouldFetchLocation,
+  calculateMovedMeters
+} from '@/utils/fetch-decision';
+import {
+  isSpeedStale,
+  isAltitudeStale
+} from '@/utils/staleness-utils';
 
 // Extract constants for cleaner code
 const {
@@ -274,18 +294,10 @@ function OverlayPage() {
     // This ensures location display updates immediately when settings change
     // IMPORTANT: Only re-format if we have complete location data (not just country)
     // This prevents trying to format incomplete fallback data
-    const hasCompleteLocationData = lastRawLocation.current && (
-      lastRawLocation.current.city || 
-      lastRawLocation.current.town || 
-      lastRawLocation.current.village || 
-      lastRawLocation.current.municipality ||
-      lastRawLocation.current.neighbourhood || 
-      lastRawLocation.current.suburb || 
-      lastRawLocation.current.district
-    );
+    const hasCompleteData = hasCompleteLocationData(lastRawLocation.current);
     
     // Re-format location when locationDisplay changes if we have complete location data
-    if (hasCompleteLocationData && settings.locationDisplay !== 'hidden') {
+    if (hasCompleteData && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current!, settings.locationDisplay);
         // Log only when locationDisplay actually changes (reduced verbosity)
@@ -300,7 +312,7 @@ function OverlayPage() {
         OverlayLogger.warn('Location re-formatting failed on settings change', { error });
         // Ignore formatting errors; UI will update on next normal cycle
       }
-    } else if (locationDisplayChanged && !hasCompleteLocationData && settingsLoadedRef.current) {
+    } else if (locationDisplayChanged && !hasCompleteData && settingsLoadedRef.current) {
       // Only log if settings have been loaded (not initial default state)
       // Log when locationDisplay changes but we don't have complete location data yet
       if (lastRawLocation.current) {
@@ -454,29 +466,7 @@ function OverlayPage() {
     // Location/weather visibility is controlled separately by hasReceivedFreshGps
   }, []);
 
-  // Extract GPS coordinates from RTIRL payload
-  const extractCoordinates = useCallback((payload: RTIRLPayload): [number, number] | null => {
-    if (!payload.location) return null;
-    
-    let lat: number | null = null;
-    let lon: number | null = null;
-    
-    if ('lat' in payload.location && 'lon' in payload.location) {
-      lat = payload.location.lat;
-      lon = payload.location.lon;
-    } else if ('latitude' in payload.location && 'longitude' in payload.location) {
-      lat = (payload.location as { latitude: number }).latitude;
-      lon = (payload.location as { longitude: number }).longitude;
-    }
-    
-    if (lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-      return [lat, lon];
-    }
-    
-    return null;
-  }, []);
-
-  // Extract GPS timestamp from RTIRL payload
+  // Extract GPS timestamp from RTIRL payload (still needed for some edge cases)
   const extractGpsTimestamp = useCallback((payload: RTIRLPayload): number => {
     const payloadWithTimestamp = payload as RTIRLPayload & { 
       timestamp?: number; 
@@ -493,66 +483,6 @@ function OverlayPage() {
     return payloadTimestamp && typeof payloadTimestamp === 'number' 
       ? payloadTimestamp 
       : Date.now();
-  }, []);
-
-  // Calculate speed from RTIRL payload and coordinates
-  const calculateSpeed = useCallback((
-    payload: RTIRLPayload,
-    lat: number,
-    lon: number,
-    prevCoords: [number, number] | null,
-    prevGpsTimestamp: number,
-    gpsUpdateTime: number,
-    wasGpsDataStale: boolean
-  ): number => {
-    if (wasGpsDataStale) return 0;
-    
-    // Try RTIRL speed first (preferred source)
-    // RTIRL provides speed in m/s (meters per second), convert to km/h
-    if (typeof payload === 'object' && payload !== null && 'speed' in payload) {
-      const rawSpeedValue = (payload as RTIRLPayload).speed;
-      if (typeof rawSpeedValue === 'number' && rawSpeedValue >= 0) {
-        const rtirlSpeedKmh = rawSpeedValue * 3.6;
-        
-        // If RTIRL explicitly says speed = 0, trust it (you're stationary)
-        if (rtirlSpeedKmh === 0) {
-          return 0;
-        }
-        
-        // Check if coordinates contradict RTIRL speed (detect stale RTIRL speed)
-        // If moved <50m over >10 seconds but RTIRL says moving, RTIRL is likely stale
-        if (prevCoords && prevGpsTimestamp > 0) {
-          const movedMeters = distanceInMeters(lat, lon, prevCoords[0], prevCoords[1]);
-          const timeDiffSeconds = (gpsUpdateTime - prevGpsTimestamp) / 1000;
-          
-          // If moved very little over reasonable time but RTIRL says moving, it's stale
-          // Accounts for different RTIRL accuracy settings (1m, 10m, 100m) and GPS drift
-          if (movedMeters < TIMERS.SPEED_STALE_DISTANCE_THRESHOLD && 
-              timeDiffSeconds > TIMERS.SPEED_STALE_TIME_THRESHOLD && 
-              rtirlSpeedKmh > 5) {
-            return 0; // RTIRL speed is stale, coordinates show stationary
-          }
-        }
-        
-        // Otherwise, trust RTIRL speed (it's usually more accurate when moving)
-        return rtirlSpeedKmh;
-      }
-    }
-    
-    // Calculate from coordinates as fallback (when RTIRL speed not available)
-    if (!prevCoords || prevGpsTimestamp <= 0) return 0;
-    
-    const movedMeters = distanceInMeters(lat, lon, prevCoords[0], prevCoords[1]);
-    const timeDiffSeconds = (gpsUpdateTime - prevGpsTimestamp) / 1000;
-    const timeDiffHours = timeDiffSeconds / 3600;
-    
-    if (timeDiffHours > 0 && timeDiffSeconds >= TIMERS.MIN_TIME_SECONDS && movedMeters > 0) {
-      return (movedMeters / 1000) / timeDiffHours;
-    } else if (movedMeters === 0 && timeDiffSeconds > 0) {
-      return 0;
-    }
-    
-    return 0;
   }, []);
   
   // Time and date updates - simplified single useEffect
@@ -617,14 +547,7 @@ function OverlayPage() {
         const data = await res.json();
         if (data) {
           // Merge with defaults to ensure new fields are initialized
-          const mergedSettings = {
-            ...DEFAULT_OVERLAY_SETTINGS,
-            ...data,
-            weatherConditionDisplay: data.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
-            altitudeDisplay: data.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
-            speedDisplay: data.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
-            minimapTheme: data.minimapTheme || DEFAULT_OVERLAY_SETTINGS.minimapTheme,
-          };
+          const mergedSettings = mergeSettingsWithDefaults(data);
           setSettings(mergedSettings);
           // Set initial hash to prevent false positives on first poll
           lastSettingsHash.current = createSettingsHash(mergedSettings);
@@ -658,14 +581,7 @@ function OverlayPage() {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { type: _type, timestamp: _timestamp, ...settingsData } = data;
             // Merge with defaults to ensure new fields are initialized
-            const mergedSettings = {
-              ...DEFAULT_OVERLAY_SETTINGS,
-              ...settingsData,
-              weatherConditionDisplay: settingsData.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
-              altitudeDisplay: settingsData.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
-              speedDisplay: settingsData.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
-              minimapTheme: settingsData.minimapTheme || DEFAULT_OVERLAY_SETTINGS.minimapTheme,
-            } as OverlaySettings;
+            const mergedSettings = mergeSettingsWithDefaults(settingsData);
             OverlayLogger.settings('Settings updated via SSE', { 
               locationDisplay: mergedSettings.locationDisplay,
               showWeather: mergedSettings.showWeather,
@@ -788,18 +704,20 @@ function OverlayPage() {
               }
               const payload = p as RTIRLPayload;
               
-              // Extract GPS coordinates first (needed for logging and processing)
-              const coords = extractCoordinates(payload);
-              if (!coords) return;
+              // Process GPS data using utility function
+              const gpsData = processGpsData(
+                payload,
+                lastGpsUpdateTime.current,
+                lastGpsTimestamp.current,
+                lastCoords.current
+              );
               
+              if (!gpsData) return;
+              
+              const { coords, payloadTimestamp, now, isPayloadFresh, wasGpsDataStale, isFirstGpsUpdate, prevCoords, prevGpsTimestamp } = gpsData;
               const [lat, lon] = coords;
-              setMapCoords([lat, lon]);
               
-              // Get GPS update timestamp from payload
-              const payloadTimestamp = extractGpsTimestamp(payload);
-              const now = Date.now();
-              const timeSincePayload = now - payloadTimestamp;
-              const isPayloadFresh = timeSincePayload <= GPS_FRESHNESS_TIMEOUT;
+              setMapCoords(coords);
               
               // Log RTIRL payload for debugging (essential info only)
               OverlayLogger.overlay('RTIRL update received', {
@@ -807,70 +725,45 @@ function OverlayPage() {
                 speed: payload.speed || 0,
                 altitude: payload.altitude !== undefined ? payload.altitude : 'not provided',
                 timestamp: payloadTimestamp,
-                timestampAge: Math.round(timeSincePayload / 1000),
-                timestampAgeMinutes: Math.round(timeSincePayload / 60000),
+                timestampAge: Math.round((now - payloadTimestamp) / 1000),
+                timestampAgeMinutes: Math.round((now - payloadTimestamp) / 60000),
                 isFresh: isPayloadFresh,
                 reportedAt: (payload as { reportedAt?: number }).reportedAt,
                 updatedAt: (payload as { updatedAt?: number }).updatedAt
               });
               
               // Handle timezone from RTIRL (lowest priority - will be overridden by LocationIQ/OpenWeatherMap)
-              // Always update timezone from RTIRL when available, even when GPS is stale
-              // This ensures time/date display works even when location/weather are hidden
               if (payload.location?.timezone) {
-                // Update timezone even if we already have one - RTIRL provides current location timezone
-                // This is important when GPS is stale but we still need accurate time display
                 updateTimezoneRef.current(payload.location.timezone);
               }
               
-              // Check if GPS data was stale BEFORE this update (for speed calculation)
-              // Use GPS timestamp, not reception time, to handle network delays and RTIRL throttling
-              const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
-              const wasGpsDataStale = timeSinceLastGps > GPS_STALE_TIMEOUT;
-              
               // Update GPS timestamps AFTER checking for staleness
-              const isFirstGpsUpdate = lastGpsUpdateTime.current === 0;
-              lastGpsUpdateTime.current = now; // Track last GPS reception time for staleness detection
-              lastGpsTimestamp.current = payloadTimestamp; // Track actual GPS timestamp from payload
+              lastGpsUpdateTime.current = now;
+              lastGpsTimestamp.current = payloadTimestamp;
               
-              // Always use payload timestamp for freshness checks - GPS data age is what matters
-              // Even if RTIRL is actively streaming, if the GPS reading itself is >15 minutes old, it's stale
-              const isReceivingUpdates = !wasGpsDataStale || isFirstGpsUpdate; // Track if RTIRL is actively sending updates
-              
-              // Check if GPS update is fresh (for logging purposes only - no longer controls visibility)
-              const isFresh = isGpsUpdateFresh(payloadTimestamp, now);
-              
-              // Get previous coordinates and GPS timestamp for speed calculation
-              const prevCoords = lastCoords.current;
-              const prevGpsTimestamp = lastGpsTimestamp.current;
-              
-              // Calculate speed from RTIRL payload and coordinates
-              // Use payload timestamp for speed calculation (when GPS reading was taken)
-              const speedKmh = calculateSpeed(
+              // Calculate speed using utility function
+              const speedKmh = calculateSpeedFromPayload(
                 payload,
                 lat,
                 lon,
                 prevCoords,
                 prevGpsTimestamp,
-                payloadTimestamp, // Use payload timestamp for speed calculation
+                payloadTimestamp,
                 wasGpsDataStale
               );
               const roundedSpeed = Math.round(speedKmh);
               
               setCurrentSpeed(roundedSpeed);
-              currentSpeedRef.current = roundedSpeed; // Update ref for minimap visibility
-              lastSpeedGpsTimestamp.current = payloadTimestamp; // Track GPS timestamp, not reception time
-              setSpeedUpdateTimestamp(now); // Trigger re-render
+              currentSpeedRef.current = roundedSpeed;
+              lastSpeedGpsTimestamp.current = payloadTimestamp;
+              setSpeedUpdateTimestamp(now);
               
-              // Extract altitude from RTIRL payload
-              const altitudeValue = extractAltitude(payload);
-              let roundedAltitude: number | null = null;
-              
-              if (altitudeValue !== null) {
-                roundedAltitude = Math.round(altitudeValue);
+              // Process altitude using utility function
+              const roundedAltitude = processAltitude(payload);
+              if (roundedAltitude !== null) {
                 setCurrentAltitude(roundedAltitude);
-                lastAltitudeGpsTimestamp.current = payloadTimestamp; // Track GPS timestamp, not reception time
-                setAltitudeUpdateTimestamp(now); // Trigger re-render
+                lastAltitudeGpsTimestamp.current = payloadTimestamp;
+                setAltitudeUpdateTimestamp(now);
               }
 
               // Send stats updates (throttled)
@@ -938,88 +831,50 @@ function OverlayPage() {
               
               // Kick off location + weather fetches on coordinate updates with gating
               (async () => {
-                const movedMeters = prevCoords ? distanceInMeters(lat, lon, prevCoords[0], prevCoords[1]) : Infinity;
-
-              // Detect dramatic coordinate changes (e.g., jumping continents, long-distance travel)
-              // Force immediate fetch to update timezone/location/weather quickly
-              const isDramaticChange = movedMeters > TIMERS.DRAMATIC_CHANGE_THRESHOLD;
-
-              // Adaptive location update threshold based on speed
-              // Use the newly calculated speed (roundedSpeed) instead of currentSpeed state
-              // This avoids race condition where currentSpeed hasn't updated yet
-              const speedForThreshold = roundedSpeed;
-              const adaptiveLocationThreshold = speedForThreshold > 200 
-                ? 1000  // 1km threshold for flights (>200 km/h)
-                : speedForThreshold > 50 
-                  ? 100  // 100m threshold for driving (50-200 km/h)
-                  : 10; // 10m threshold for walking (<50 km/h)
-
-              // Determine what needs to be fetched
-              const weatherElapsed = now - lastWeatherTime.current;
-              const locationElapsed = now - lastLocationTime.current;
-              const meetsDistance = movedMeters >= adaptiveLocationThreshold;
+                // Calculate distance moved
+                const movedMeters = calculateMovedMeters(prevCoords, coords);
               
-              // Weather updates every 5 minutes regardless of movement
-              // Also fetch if we don't have weather data yet or weather is getting stale
-              // OR if dramatic change detected (force immediate update for timezone)
-              const hasWeatherData = lastSuccessfulWeatherFetch.current > 0;
-              const weatherDataAge = hasWeatherData 
-                ? now - lastSuccessfulWeatherFetch.current 
-                : Infinity;
-              const shouldFetchWeather = isDramaticChange || // Force fetch on dramatic changes
-                lastWeatherTime.current === 0 || 
-                weatherElapsed >= TIMERS.WEATHER_UPDATE_INTERVAL ||
-                !hasWeatherData || // Fetch if no weather data
-                weatherDataAge >= WEATHER_DATA_VALIDITY_TIMEOUT; // Fetch if weather is stale
+              // Determine fetch decisions using utility functions
+              const needsTimezone = !isValidTimezone(timezoneRef.current);
+              const weatherDecision = shouldFetchWeather({
+                now,
+                lastFetchTime: lastWeatherTime.current,
+                lastSuccessfulFetch: lastSuccessfulWeatherFetch.current,
+                movedMeters,
+                prevCoords,
+                currentCoords: coords,
+                currentSpeed: roundedSpeed,
+                needsTimezone,
+              });
               
-              // Location updates: respect API limits (1/sec + 5,000/day)
-              // 
-              // Rate limiting strategy uses TWO layers of protection:
-              // 1. Time gate: Minimum 18 seconds between calls (ensures ~4,800 calls/day max, safely under 5,000/day limit)
-              //    - Calculation: 5,000/day = ~208/hour = ~3.5/min = 1 call every ~17.3 seconds
-              //    - Using 18 seconds provides safety margin
-              // 2. Rate limiter: checkRateLimit('locationiq') enforces 1 call/second + daily counter
-              //    - Prevents burst traffic if multiple GPS updates arrive quickly
-              //    - Tracks daily usage and blocks if daily limit (4,500/day) is reached
-              //
-              // Why both? The time gate prevents excessive calls during normal operation, while the rate limiter
-              // handles edge cases (rapid GPS updates, app restarts, etc.) and provides daily limit protection.
-              // Also requires distance threshold to avoid unnecessary calls when stationary.
-              // We need country name/flag even in custom location mode
-              // EXCEPTION: Dramatic changes (>50km) bypass gates to update timezone/location immediately
-              const LOCATION_MIN_INTERVAL = 18000; // 18 seconds minimum (safely under 5,000/day limit)
-              const shouldFetchLocation = isDramaticChange || // Force fetch on dramatic changes
-                lastLocationTime.current === 0 || 
-                (locationElapsed >= LOCATION_MIN_INTERVAL && meetsDistance);
+              const locationDecision = shouldFetchLocation({
+                now,
+                lastFetchTime: lastLocationTime.current,
+                lastSuccessfulFetch: lastSuccessfulLocationFetch.current,
+                movedMeters,
+                prevCoords,
+                currentCoords: coords,
+                currentSpeed: roundedSpeed,
+                needsTimezone: false,
+              });
               
-              // If settings just updated (hash changed), allow UI update but do not force API refetch here
-              // API fetching remains purely based on the time/distance gates above
-
               // Fetch weather and location in parallel for faster loading
-              // Only fetch if GPS is fresh - don't fetch location/weather when GPS is stale
-              // Timezone will still be updated from RTIRL even when GPS is stale
               const promises: Promise<void>[] = [];
               
-              // Fetch weather when needed (no GPS staleness check - always fetch when conditions are met)
-              // Weather updates periodically (every 5 min) or when data is stale
-              // Check rate limits: 50 per minute (well under 60/min free tier limit)
-              const needsTimezone = !isValidTimezone(timezoneRef.current);
-              const shouldFetchWeatherNow = shouldFetchWeather && API_KEYS.OPENWEATHER && 
-                !weatherFetchInProgress.current && // Prevent concurrent weather fetches
-                checkRateLimit('openweathermap') && // Check rate limits before fetching
-                (shouldFetchWeather || needsTimezone); // Fetch if conditions met OR if we need timezone
+              // Check if weather should actually be fetched (with rate limiting and concurrency checks)
+              const shouldFetchWeatherNow = weatherDecision.shouldFetch && 
+                API_KEYS.OPENWEATHER && 
+                !weatherFetchInProgress.current &&
+                checkRateLimit('openweathermap');
               
-              // Log weather fetch decision for debugging (only when actually fetching)
-              if (shouldFetchWeather && API_KEYS.OPENWEATHER && shouldFetchWeatherNow) {
+              // Log weather fetch decision for debugging
+              if (weatherDecision.shouldFetch && API_KEYS.OPENWEATHER) {
                 OverlayLogger.weather('Weather fetch check', {
-                  willFetch: true,
+                  willFetch: shouldFetchWeatherNow,
                   reason: !checkRateLimit('openweathermap') ? 'rate limited' :
                           weatherFetchInProgress.current ? 'fetch in progress' :
-                          needsTimezone ? 'timezone needed' :
-                          shouldFetchWeather ? 'conditions met' : 'not needed',
+                          weatherDecision.reason,
                   needsTimezone,
-                  weatherElapsed: Math.round(weatherElapsed / 1000),
-                  weatherDataAge: hasWeatherData ? Math.round(weatherDataAge / 60000) : 'none'
                 });
               }
               
@@ -1087,8 +942,10 @@ function OverlayPage() {
                 );
               }
               
-              // Only fetch location if GPS is fresh - don't fetch when stale
-              const shouldFetchLocationNow = shouldFetchLocation && !locationFetchInProgress.current; // Prevent concurrent location fetches
+              // Check if location should actually be fetched (with concurrency check)
+              const shouldFetchLocationNow = locationDecision.shouldFetch && 
+                !locationFetchInProgress.current &&
+                checkRateLimit('locationiq');
               
               if (shouldFetchLocationNow) {
                 locationFetchInProgress.current = true; // Mark as in progress
@@ -1130,10 +987,7 @@ function OverlayPage() {
                       lastLocationTime.current = requestTimestamp;
                     
                     // Check if LocationIQ returned useful data (more than just country)
-                    const hasUsefulData = loc && (
-                      loc.city || loc.town || loc.village || loc.municipality ||
-                      loc.neighbourhood || loc.suburb || loc.district
-                    );
+                    const hasUsefulData = hasCompleteLocationData(loc);
                     
                     const hasCountryData = loc && loc.country;
                     
@@ -1323,30 +1177,20 @@ function OverlayPage() {
       return {
         primary: settings.customLocation?.trim() || '',
         secondary: location?.secondary, // Secondary line (city/state/country) - in custom mode this shows the actual country name
-        countryCode: location?.countryCode?.toUpperCase()
+        countryCode: formatCountryCode(location?.countryCode)
       };
     }
     
     // If we have raw location data, re-format it with current settings to ensure display mode changes are reflected immediately
     // This handles the case where settings change but location state hasn't updated yet
-    const hasCompleteLocationData = lastRawLocation.current && (
-      lastRawLocation.current.city || 
-      lastRawLocation.current.town || 
-      lastRawLocation.current.village || 
-      lastRawLocation.current.municipality ||
-      lastRawLocation.current.neighbourhood || 
-      lastRawLocation.current.suburb || 
-      lastRawLocation.current.district
-    );
-    
-    if (hasCompleteLocationData) {
+    if (hasCompleteLocationData(lastRawLocation.current)) {
       try {
         const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
         // Return formatted location with current settings
         return {
           primary: formatted.primary || '',
           secondary: formatted.secondary,
-          countryCode: formatted.countryCode?.toUpperCase()
+          countryCode: formatCountryCode(formatted.countryCode)
         };
       } catch (error) {
         // If formatting fails, fall back to location state
@@ -1360,7 +1204,7 @@ function OverlayPage() {
     if (location && (location.primary || location.secondary)) {
       return {
         ...location,
-        countryCode: location.countryCode?.toUpperCase()
+        countryCode: formatCountryCode(location.countryCode)
       };
     }
     
@@ -1554,22 +1398,11 @@ function OverlayPage() {
     
     // "Auto" mode: show only when above notable elevation threshold (e.g., mountains/hills)
     if (settings.altitudeDisplay === 'auto') {
-      const now = Date.now();
-      
-      // Check GPS staleness - hide if GPS data is older than 1 minute
-      const timeSinceAltitudeUpdate = lastAltitudeGpsTimestamp.current > 0 ? (now - lastAltitudeGpsTimestamp.current) : Infinity;
-      const ALTITUDE_STALE_TIMEOUT = TIMERS.ONE_MINUTE;
-      const isAltitudeStale = timeSinceAltitudeUpdate > ALTITUDE_STALE_TIMEOUT;
-      
-      // Hide if stale
-      if (isAltitudeStale) {
-        return null;
-      }
-      
-      // Show only if elevation is above threshold (notable elevation like mountains/hills)
-      // 500m threshold filters out almost all major cities, only shows notable mountains/hills
+      const altitudeIsStale = isAltitudeStale(lastAltitudeGpsTimestamp.current);
       const ELEVATION_THRESHOLD = 500; // meters
-      if (currentAltitude < ELEVATION_THRESHOLD) {
+      const meetsElevationThreshold = currentAltitude >= ELEVATION_THRESHOLD;
+      
+      if (!shouldShowDisplayMode('auto', altitudeIsStale, meetsElevationThreshold)) {
         return null;
       }
     }
@@ -1589,18 +1422,10 @@ function OverlayPage() {
     
     // Check staleness only for "auto" mode - "always" mode shows even if stale
     if (settings.speedDisplay === 'auto') {
-      const now = Date.now();
-      // Use GPS timestamp for staleness check (not reception time) - works correctly when stationary
-      const timeSinceSpeedUpdate = lastSpeedGpsTimestamp.current > 0 ? (now - lastSpeedGpsTimestamp.current) : Infinity;
-      const isSpeedStale = timeSinceSpeedUpdate > GPS_STALE_TIMEOUT; // 10 seconds
+      const speedIsStale = isSpeedStale(lastSpeedGpsTimestamp.current);
+      const meetsSpeedThreshold = currentSpeed >= 10;
       
-      // Hide if stale (regardless of speed value)
-      if (isSpeedStale) {
-        return null;
-      }
-      
-      // Auto mode: show if >= 10 km/h (above walking pace)
-      if (currentSpeed < 10) {
+      if (!shouldShowDisplayMode('auto', speedIsStale, meetsSpeedThreshold)) {
         return null;
       }
     }

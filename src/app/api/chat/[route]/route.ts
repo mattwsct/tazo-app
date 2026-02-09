@@ -520,8 +520,8 @@ export async function GET(
       return txtResponse('Map is hidden');
     }
 
-    // Travel routes (food, phrase, tips, emergency) - uses persistent location country code or optional country code from query
-    if (route === 'food' || route === 'phrase' || route === 'tips' || route === 'emergency') {
+    // Travel routes (food, phrase, tips, emergency, flirt, sex, insults) - uses persistent location country code or optional country code from query
+    if (route === 'food' || route === 'phrase' || route === 'tips' || route === 'emergency' || route === 'flirt' || route === 'sex' || route === 'insults') {
       // Check if a country code was provided in the query (e.g., !food AU or !phrase JP)
       const queryCountryCode = q ? q.trim().toUpperCase() : null;
       const requestedCountryCode = queryCountryCode && queryCountryCode.length === 2 ? queryCountryCode : null;
@@ -543,13 +543,16 @@ export async function GET(
       const travelData = getTravelData(countryCode);
       
       // Create a helpful message for countries without specific data
-      const getNoDataMsg = (type: 'food' | 'phrase' | 'tips' | 'emergency') => {
+      const getNoDataMsg = (type: 'food' | 'phrase' | 'tips' | 'emergency' | 'flirt' | 'sex' | 'insults') => {
         if (countryName && !travelData.isCountrySpecific) {
           const typeNames: Record<string, string> = {
             food: 'local food',
             phrase: 'local phrase',
             tips: 'cultural tips',
-            emergency: 'emergency information'
+            emergency: 'emergency information',
+            flirt: 'flirting phrases',
+            sex: 'sexual phrases',
+            insults: 'local insults'
           };
           return `No ${typeNames[type]} data available for ${countryName} yet. Use !countries to see available countries.`;
         }
@@ -557,7 +560,10 @@ export async function GET(
           food: 'food',
           phrase: 'phrase',
           tips: 'cultural tips',
-          emergency: 'emergency information'
+          emergency: 'emergency information',
+          flirt: 'flirting phrases',
+          sex: 'sexual phrases',
+          insults: 'local insults'
         };
         return `No ${typeNames[type]} data available. Specify a country code (e.g., !${route} JP) or use !countries to see available countries.`;
       };
@@ -631,32 +637,28 @@ export async function GET(
           parts.push(`[${countryName}]`);
         }
         
-        // Add emergency phone numbers
+        // Add emergency phone numbers only (simplified - just the essential numbers)
         const phoneParts: string[] = [];
-        if (emergencyInfo.phone) {
-          phoneParts.push(`All: ${emergencyInfo.phone}`);
-        }
         if (emergencyInfo.police) {
           phoneParts.push(`Police: ${emergencyInfo.police}`);
         }
         if (emergencyInfo.ambulance) {
           phoneParts.push(`Ambulance: ${emergencyInfo.ambulance}`);
         }
-        if (emergencyInfo.fire) {
+        if (emergencyInfo.fire && emergencyInfo.fire !== emergencyInfo.ambulance) {
           phoneParts.push(`Fire: ${emergencyInfo.fire}`);
+        }
+        // Only add "All" if it's different from individual numbers
+        if (emergencyInfo.phone && !phoneParts.some(p => p.includes(emergencyInfo.phone!))) {
+          phoneParts.unshift(`All: ${emergencyInfo.phone}`);
         }
         if (phoneParts.length > 0) {
           parts.push(phoneParts.join(' | '));
         }
         
-        // Add embassy information if available
-        if (emergencyInfo.embassy) {
-          parts.push(`Embassy: ${emergencyInfo.embassy}`);
-        }
-        
-        // Add emergency notes (injuries, theft, medical, etc.)
-        if (emergencyInfo.notes && Array.isArray(emergencyInfo.notes) && emergencyInfo.notes.length > 0) {
-          parts.push(...emergencyInfo.notes.filter(note => note && note.trim().length > 0));
+        // Add Australian embassy contact (for all countries except Australia)
+        if (emergencyInfo.australianEmbassy && countryCode !== 'AU') {
+          parts.push(`AU Embassy: ${emergencyInfo.australianEmbassy}`);
         }
         
         if (parts.length === 0) {
@@ -665,6 +667,45 @@ export async function GET(
         
         const response = parts.join(' | ');
         return txtResponse(response || getNoDataMsg('emergency'));
+      }
+
+      if (route === 'flirt') {
+        const flirtPhrases = travelData.flirt || [];
+        if (flirtPhrases.length === 0) {
+          return txtResponse(getNoDataMsg('flirt'));
+        }
+        const selectedPhrases = pickN(flirtPhrases, 3);
+        // Prepend country indicator if country-specific data is available (same as other travel commands)
+        const countryPrefix = travelData.isCountrySpecific && countryName
+          ? `[${countryName}] `
+          : '';
+        return txtResponse(countryPrefix + selectedPhrases.join(' · '));
+      }
+
+      if (route === 'sex') {
+        const sexPhrases = travelData.sex || [];
+        if (sexPhrases.length === 0) {
+          return txtResponse(getNoDataMsg('sex'));
+        }
+        const selectedPhrases = pickN(sexPhrases, 3);
+        // Prepend country indicator if country-specific data is available (same as other travel commands)
+        const countryPrefix = travelData.isCountrySpecific && countryName
+          ? `[${countryName}] `
+          : '';
+        return txtResponse(countryPrefix + selectedPhrases.join(' · '));
+      }
+
+      if (route === 'insults') {
+        const insults = travelData.insults || [];
+        if (insults.length === 0) {
+          return txtResponse(getNoDataMsg('insults'));
+        }
+        const selectedInsults = pickN(insults, 3);
+        // Prepend country indicator if country-specific data is available (same as other travel commands)
+        const countryPrefix = travelData.isCountrySpecific && countryName
+          ? `[${countryName}] `
+          : '';
+        return txtResponse(countryPrefix + selectedInsults.join(' · '));
       }
     }
 

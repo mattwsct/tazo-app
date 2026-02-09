@@ -24,23 +24,24 @@ npm install
 Create `.env.local` in project root:
 
 ```env
+# Required - Admin Panel Authentication
+ADMIN_PASSWORD=your_admin_password
+
 # Required - GPS Tracking
 NEXT_PUBLIC_RTIRL_PULL_KEY=your_rtirl_pull_key
 
-# Required - Location & Weather
+# Required - Location & Weather Services
 NEXT_PUBLIC_LOCATIONIQ_KEY=your_locationiq_key
 NEXT_PUBLIC_OPENWEATHERMAP_KEY=your_openweathermap_key
 
-# Optional - Additional Features
-NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token
-NEXT_PUBLIC_MAPTILER_KEY=your_maptiler_key  # Optional - Get free key from https://cloud.maptiler.com/account/keys/
-# Note: Map tiles use MapTiler Basic-v2 (recommended) or fallback to OpenFreeMap if no key provided
-
-# Optional - Admin Panel & Settings Sync
-ADMIN_PASSWORD=your_admin_password
+# Required - Settings Storage (Vercel KV)
 KV_REST_API_URL=your_vercel_kv_url
 KV_REST_API_TOKEN=your_vercel_kv_token
-KV_REST_API_READ_ONLY_TOKEN=your_vercel_kv_readonly_token
+
+# Optional - Additional Features
+NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token  # Heart rate monitoring (optional)
+NEXT_PUBLIC_MAPTILER_KEY=your_maptiler_key    # Map tiles (optional - falls back to OpenFreeMap if not provided)
+# Get free MapTiler key from https://cloud.maptiler.com/account/keys/
 ```
 
 ### 3. Run
@@ -677,7 +678,7 @@ The overlay app also provides chat command APIs for Fossabot integration. All co
 - **Social Media**: `/api/chat/instagram`, `/api/chat/twitter`, `/api/chat/kick`, etc.
 - **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
 - **Weather**: `/api/chat/forecast`, `/api/chat/sun`
-- **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/tips`, `/api/chat/emergency` (optionally specify country code: `?q=JP`, `?q=AU`, etc.)
+- **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/tips`, `/api/chat/emergency`, `/api/chat/flirt`, `/api/chat/sex`, `/api/chat/insults` (optionally specify country code: `?q=JP`, `?q=AU`, etc.)
 - **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`
 - **Utility**: `/api/chat/status`
 

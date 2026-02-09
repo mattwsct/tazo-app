@@ -159,6 +159,40 @@ Returns the local currency name, symbol, and ISO code. Uses your current country
 
 Example output: `[Japan] Yen (JPY) ¥` or `Euro (EUR) €`
 
+### Flirt
+
+```
+!flirt → $(customapi https://app.tazo.wtf/api/chat/flirt)
+!flirt JP → $(customapi https://app.tazo.wtf/api/chat/flirt?q=JP)
+!flirt FR → $(customapi https://app.tazo.wtf/api/chat/flirt?q=FR)
+```
+
+Returns 3 random flirting phrases and suggestions in the local language (with translations). Uses your current country by default, or specify a country code to check other countries. If the country is not in the list, returns general English flirting phrases.
+
+Example output: `[Japan] きれいですね (Kirei desu ne) - You're beautiful · 一緒に飲みませんか？ (Issho ni nomimasen ka?) - Would you like to drink together? · また会えますか？ (Mata aemasu ka?) - Can we meet again?`
+
+### Sex
+```
+!sex → $(customapi https://app.tazo.wtf/api/chat/sex)
+!sex JP → $(customapi https://app.tazo.wtf/api/chat/sex?q=JP)
+!sex FR → $(customapi https://app.tazo.wtf/api/chat/sex?q=FR)
+```
+
+Returns 3 random sexually suggestive phrases in the local language (with translations). Uses your current country by default, or specify a country code to check other countries. Phrases are designed to be humorous in drinking environments and include proper context (e.g., "I want to...", "Can you...", "Let's...").
+
+Example output: `[Japan] I want to cum on your face (顔に射精したい - Kao ni shasei shitai) · I'd like to fuck your asshole (アナルを犯したい - Anaru o okashitai) · Can you suck my cock? (フェラしてくれる？ - Fera shite kureru?)`
+
+### Insults
+```
+!insults → $(customapi https://app.tazo.wtf/api/chat/insults)
+!insults JP → $(customapi https://app.tazo.wtf/api/chat/insults?q=JP)
+!insults FR → $(customapi https://app.tazo.wtf/api/chat/insults?q=FR)
+```
+
+Returns 3 random local insults and vulgar language in the local language (with translations). Uses your current country by default, or specify a country code to check other countries.
+
+Example output: `[Japan] バカ (Baka) - Idiot · クソ野郎 (Kuso yarou) - Asshole · 死ね (Shine) - Die`
+
 ### Countries List
 
 ```
