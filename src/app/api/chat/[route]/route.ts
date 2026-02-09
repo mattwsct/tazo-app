@@ -441,7 +441,8 @@ export async function GET(
       }
     }
 
-    // Status/JSON routes
+    // Status/Homepage route - returns JSON for homepage display
+    // Matches format expected by tazo-web homepage (includes emoji, forecast, etc.)
     if (route === 'status' || route === 'homepage') {
       const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
       const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
@@ -454,28 +455,110 @@ export async function GET(
 
       let weatherData = null;
       let timezone = null;
+      let forecastData = null;
+      
       if (openweatherKey) {
-        const weatherResult = await fetchWeatherAndTimezoneFromOpenWeatherMap(lat, lon, openweatherKey);
-        if (weatherResult?.weather) {
-          weatherData = {
-            tempC: weatherResult.weather.temp,
-            tempF: Math.round(weatherResult.weather.temp * 9 / 5 + 32),
-            desc: weatherResult.weather.desc,
-          };
+        // Fetch current weather
+        const weatherRes = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${openweatherKey}&units=metric`
+        );
+        
+        if (weatherRes.ok) {
+          const ow = await weatherRes.json();
+          if (ow?.main?.temp != null) {
+            const condition = (ow.weather?.[0]?.main || '').toLowerCase();
+            const desc = (ow.weather?.[0]?.description || '').toLowerCase();
+            const now = new Date();
+            const hour = now.getHours();
+            const isNight = hour >= 20 || hour < 6;
+            const emojiMap: Record<string, string> = {
+              clear: isNight ? '🌙' : '☀️',
+              clouds: '☁️',
+              rain: '🌧️',
+              drizzle: '🌦️',
+              thunderstorm: '⛈️',
+              snow: '❄️',
+              mist: '🌫️',
+              fog: '🌫️',
+              haze: '🌫️',
+            };
+            const emoji = emojiMap[condition] || (isNight ? '🌙' : '🌤️');
+            
+            weatherData = {
+              emoji,
+              condition: desc,
+              tempC: Math.round(ow.main.temp),
+              tempF: Math.round(ow.main.temp * 9 / 5 + 32),
+              feelsC: Math.round(ow.main.feels_like || ow.main.temp),
+              feelsF: Math.round((ow.main.feels_like || ow.main.temp) * 9 / 5 + 32),
+              wind: Math.round((ow.wind?.speed || 0) * 3.6), // km/h
+              humidity: ow.main.humidity || 0,
+            };
+          }
         }
+
+        // Fetch forecast for precipitation chance
+        const forecastRes = await fetch(
+          `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${openweatherKey}&units=metric`
+        );
+        
+        if (forecastRes.ok) {
+          const fc = await forecastRes.json();
+          if (fc?.list && Array.isArray(fc.list)) {
+            const now = new Date();
+            const currentTimestamp = now.getTime();
+            let maxPop = 0;
+            let precipType: string | null = null;
+            
+            for (const item of fc.list) {
+              const forecastTime = new Date(item.dt * 1000);
+              if (forecastTime.getTime() > currentTimestamp - 30 * 60 * 1000 &&
+                  forecastTime.getTime() <= currentTimestamp + 12 * 60 * 60 * 1000) {
+                const pop = Math.round((item.pop || 0) * 100);
+                if (pop > maxPop && pop >= 30) {
+                  maxPop = pop;
+                  const fcCondition = (item.weather?.[0]?.main || '').toLowerCase();
+                  if (fcCondition === 'rain' || fcCondition === 'drizzle') precipType = 'rain';
+                  else if (fcCondition === 'snow') precipType = 'snow';
+                  else if (fcCondition === 'thunderstorm') precipType = 'storms';
+                  else if (pop > 0) precipType = 'precip';
+                }
+                if (forecastTime.getTime() > currentTimestamp + 12 * 60 * 60 * 1000) break;
+              }
+            }
+            
+            if (maxPop > 0) {
+              forecastData = { chance: maxPop, type: precipType };
+            }
+          }
+        }
+
+        // Get timezone from weather data
+        const weatherResult = await fetchWeatherAndTimezoneFromOpenWeatherMap(lat, lon, openweatherKey);
         timezone = weatherResult?.timezone || null;
+      }
+
+      // Format time with timezone
+      let timeStr = null;
+      if (timezone) {
+        try {
+          timeStr = new Date().toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: timezone,
+          });
+        } catch (error) {
+          // Invalid timezone, skip
+        }
       }
 
       return jsonResponse({
         location: locationName || null,
-        time: timezone ? new Date().toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: timezone,
-        }) : null,
+        time: timeStr,
         timezone,
         weather: weatherData,
+        forecast: forecastData,
       });
     }
 

@@ -20,11 +20,15 @@ export function middleware(request: NextRequest) {
     }
   }
   
+  // Chat commands are public (no authentication required) - check FIRST
+  if (pathname.startsWith('/api/chat/')) {
+    return NextResponse.next();
+  }
+
   // Skip authentication for public routes
   // - Login page and login API
   // - Overlay page (public, used by OBS)
   // - Public API endpoints needed by overlay (get-settings, settings-stream, health)
-  // - Chat command API routes (public, used by Fossabot)
   const publicRoutes = [
     '/login',
     '/api/login',
@@ -33,18 +37,14 @@ export function middleware(request: NextRequest) {
     '/api/settings-stream',
     '/api/health'
   ];
-
-  // Chat commands are public (no authentication required)
-  if (pathname.startsWith('/api/chat/')) {
-    return NextResponse.next();
-  }
   
   if (publicRoutes.includes(pathname)) {
     return NextResponse.next();
   }
   
   // Check if user is trying to access protected routes
-  if (pathname === '/' || pathname.startsWith('/api/')) {
+  // Exclude chat routes (already handled above)
+  if (pathname === '/' || (pathname.startsWith('/api/') && !pathname.startsWith('/api/chat/'))) {
     // Check for auth cookie
     const authToken = request.cookies.get('auth-token');
     
