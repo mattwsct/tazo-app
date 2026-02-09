@@ -224,13 +224,21 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
               });
 
               // Send to stats API (fire and forget - don't block UI)
+              // Pulsoid sends measured_at as Unix timestamp in seconds, convert to milliseconds
+              // Use current time if Pulsoid timestamp seems invalid (too old or future)
+              const pulsoidTimestamp = data.measured_at * 1000;
+              const now = Date.now();
+              const timestamp = (pulsoidTimestamp > 0 && pulsoidTimestamp <= now + 60000) 
+                ? pulsoidTimestamp 
+                : now; // Use current time if Pulsoid timestamp is invalid
+              
               fetch('/api/stats/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   heartrate: {
                     bpm: newBpm,
-                    timestamp: data.measured_at * 1000, // Convert to milliseconds
+                    timestamp: timestamp,
                   },
                 }),
               }).catch(() => {

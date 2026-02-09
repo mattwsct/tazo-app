@@ -42,7 +42,7 @@ function getCountryFlagEmoji(countryCode: string | null | undefined): string {
 /**
  * Converts ISO country code to country name (fallback when country name not available)
  */
-function getCountryNameFromCode(countryCode: string | null | undefined): string {
+export function getCountryNameFromCode(countryCode: string | null | undefined): string {
   if (!countryCode || countryCode.length !== 2) return '';
   
   const code = countryCode.toUpperCase();
@@ -187,4 +187,53 @@ export function roundCoordinate(coord: number | null | undefined): number | null
 export function getDisplayLabel(hasQuery: boolean, label: string): string {
   const cleanLabel = label ? label.replace(/(: |→ )$/, '') : '';
   return cleanLabel ? `${cleanLabel} → ` : '';
+}
+
+/**
+ * Builds a privacy-conscious location string for map URLs
+ * Avoids neighbourhood-level precision for privacy
+ * Prioritizes: city + country, city + state, or city alone
+ * Always includes country when city alone might be ambiguous
+ */
+export function getMapLocationString(
+  location: {
+    city?: string | null;
+    state?: string | null;
+    county?: string | null;
+    country?: string | null;
+    countryCode?: string | null;
+  } | null,
+  getCountryName?: (code: string) => string
+): string | null {
+  if (!location) return null;
+  
+  const city = location.city;
+  const state = location.state;
+  const country = location.country || (location.countryCode && getCountryName ? getCountryName(location.countryCode) : null);
+  
+  // Best: City + Country (avoids ambiguity, less specific than neighbourhood)
+  if (city && country) {
+    return `${city}, ${country}`;
+  }
+  
+  // Good: City + State (if no country available)
+  if (city && state) {
+    return `${city}, ${state}`;
+  }
+  
+  // Acceptable: City + County (if no state/country)
+  if (city && location.county) {
+    return `${city}, ${location.county}`;
+  }
+  
+  // Fallback: City alone (less ideal, but better than coordinates)
+  if (city) {
+    return city;
+  }
+  
+  // Last resort: State or County alone
+  if (state) return state;
+  if (location.county) return location.county;
+  
+  return null;
 }

@@ -8,12 +8,20 @@ import { fetchLocationFromLocationIQ } from './api-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap } from './api-utils';
 import { fetchCurrentWeather, fetchForecast, parseWeatherData, extractPrecipitationForecast } from './weather-chat';
 import { getCityLocationForChat } from './chat-utils';
+import type { LocationData } from './location-utils';
 
 export interface CachedLocationData {
   rtirl: RTIRLData;
   location: {
     name: string;
     countryCode: string | null;
+    country?: string | null;
+    // Additional fields for map location string (privacy-conscious: avoid neighbourhood)
+    city?: string | null;
+    state?: string | null;
+    county?: string | null;
+    // Full LocationData for formatting (matches overlay display)
+    rawLocationData?: LocationData | null;
   } | null;
   weather: {
     condition: string;
@@ -101,10 +109,18 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
     // 3. Parse location
     let location: CachedLocationData['location'] = null;
     if (locationResult.status === 'fulfilled' && locationResult.value.location) {
-      const cityLocation = getCityLocationForChat(locationResult.value.location);
+      const locData = locationResult.value.location;
+      const cityLocation = getCityLocationForChat(locData);
       location = {
         name: cityLocation || '',
-        countryCode: locationResult.value.location.countryCode || null,
+        countryCode: locData.countryCode || null,
+        country: locData.country || null,
+        // Store additional fields for map location string (privacy-conscious: avoid neighbourhood)
+        city: locData.city || locData.municipality || locData.town || null,
+        state: locData.state || locData.province || locData.region || null,
+        county: locData.county || null,
+        // Store full LocationData for formatting (matches overlay display)
+        rawLocationData: locData,
       };
     }
 

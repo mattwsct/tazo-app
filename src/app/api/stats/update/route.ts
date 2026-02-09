@@ -17,6 +17,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Heartrate update
     if (heartrate && typeof heartrate.bpm === 'number') {
       const ts = heartrate.timestamp || Date.now();
+      // Debug logging (can be removed later)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Stats Update] Received heartrate:', heartrate.bpm, 'BPM, timestamp:', ts, 'age:', Math.round((Date.now() - ts) / 1000), 'seconds');
+      }
       promises.push(storeHeartrate(heartrate.bpm, ts));
     }
 

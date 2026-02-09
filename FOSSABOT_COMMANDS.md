@@ -82,11 +82,6 @@ These commands work with or without a query. If no query is provided, they use y
 !status → $(customapi https://app.tazo.wtf/api/chat/status)
 ```
 
-### JSON (Full RTIRL Data)
-
-```
-!json → $(customapi https://app.tazo.wtf/api/chat/json)
-```
 
 ## Size Ranking Commands
 

@@ -20,7 +20,7 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const STALE_THRESHOLD_MS = 30 * 1000; // 30 seconds - matches overlay timeout
 
 // Sampling intervals to prevent excessive storage
-const HEARTRATE_SAMPLE_INTERVAL = 15 * 1000; // Store heartrate every 15 seconds max
+const HEARTRATE_SAMPLE_INTERVAL = 10 * 1000; // Store heartrate every 10 seconds max (reduced from 15s for better data availability)
 const SPEED_SAMPLE_INTERVAL = 10 * 1000; // Store speed every 10 seconds max
 const ALTITUDE_SAMPLE_INTERVAL = 30 * 1000; // Store altitude every 30 seconds max
 const LOCATION_SAMPLE_INTERVAL = 60 * 1000; // Store location every 60 seconds max
@@ -103,12 +103,16 @@ export async function storeHeartrate(bpm: number, timestamp?: number): Promise<v
       const bpmChange = Math.abs(bpm - lastEntry.bpm);
       
       // Only store if:
-      // 1. Enough time has passed (15s), OR
-      // 2. BPM changed significantly (5+ BPM change)
-      if (timeSinceLast < HEARTRATE_SAMPLE_INTERVAL && bpmChange < 5) {
-        return; // Skip this reading - too soon and not significant change
+      // 1. Enough time has passed (10s), OR
+      // 2. BPM changed significantly (5+ BPM change), OR
+      // 3. Timestamp is significantly different (might be from different source)
+      if (timeSinceLast < HEARTRATE_SAMPLE_INTERVAL && bpmChange < 5 && Math.abs(timeSinceLast) < 60000) {
+        // Skip this reading - too soon, not significant change, and timestamp is reasonable
+        // But allow if timestamp is very different (might be correcting a clock issue)
+        return;
       }
     }
+    // Always store if no history exists (first entry)
 
     const entry: HeartrateEntry = { bpm, timestamp: ts };
     history.push(entry);
@@ -118,7 +122,7 @@ export async function storeHeartrate(bpm: number, timestamp?: number): Promise<v
     
     await kv.set(HEARTRATE_KEY, cleaned);
   } catch (error) {
-    console.warn('Failed to store heartrate:', error);
+    console.error('Failed to store heartrate:', error);
   }
 }
 
@@ -135,6 +139,18 @@ export async function getHeartrateStats(): Promise<{
   try {
     const history = await kv.get<HeartrateEntry[]>(HEARTRATE_KEY) || [];
     const recent24h = filter24h(history);
+
+    // Debug logging (can be removed later)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Heartrate Stats] Total entries:', history.length, 'Recent 24h:', recent24h.length);
+      if (history.length > 0) {
+        const oldest = history[0];
+        const newest = history[history.length - 1];
+        const now = Date.now();
+        console.log('[Heartrate Stats] Oldest entry age:', Math.round((now - oldest.timestamp) / 1000 / 60), 'minutes');
+        console.log('[Heartrate Stats] Newest entry age:', Math.round((now - newest.timestamp) / 1000), 'seconds');
+      }
+    }
 
     if (recent24h.length === 0) {
       return {

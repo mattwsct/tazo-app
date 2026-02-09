@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cleanQuery, roundCoordinate } from '@/utils/chat-utils';
+import { cleanQuery, roundCoordinate, getMapLocationString, getCountryNameFromCode } from '@/utils/chat-utils';
 import { fetchLocationFromLocationIQ, fetchWeatherAndTimezoneFromOpenWeatherMap } from '@/utils/api-utils';
 import { getCityLocationForChat, pickN } from '@/utils/chat-utils';
 import { getTravelData } from '@/utils/travel-data';
@@ -16,6 +16,10 @@ import {
   extractPrecipitationForecast,
 } from '@/utils/weather-chat';
 import { getLocationData } from '@/utils/location-cache';
+import { formatLocation } from '@/utils/location-utils';
+import { kv } from '@vercel/kv';
+import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import type { OverlaySettings } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats, getDistanceTraveled, getCountriesVisited, getCitiesVisited } from '@/utils/stats-storage';
 
 export const dynamic = 'force-dynamic';
@@ -249,11 +253,42 @@ export async function GET(
 
     const { lat, lon } = locationData.rtirl;
 
-    // Location route - uses cached data
+    // Location route - uses overlay settings to match overlay display
     if (route === 'location') {
-      if (locationData.location?.name) {
-        return txtResponse(locationData.location.name);
+      // Get settings from KV (same as overlay)
+      const settings = (await kv.get<OverlaySettings>('overlay_settings')) || DEFAULT_OVERLAY_SETTINGS;
+      const displayMode = settings.locationDisplay;
+      
+      // If hidden, return hidden message
+      if (displayMode === 'hidden') {
+        return txtResponse('Location is hidden');
       }
+      
+      // If custom mode, don't use customLocation - just use country if visible
+      if (displayMode === 'custom') {
+        const rawLocation = locationData.location?.rawLocationData;
+        if (rawLocation && rawLocation.countryCode) {
+          const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+          return txtResponse(countryName || 'Location unavailable');
+        }
+        return txtResponse('Location is hidden');
+      }
+      
+      // Use formatLocation with same displayMode as overlay
+      const rawLocation = locationData.location?.rawLocationData;
+      if (!rawLocation) {
+        return txtResponse('Location unavailable');
+      }
+      
+      const formatted = formatLocation(rawLocation, displayMode);
+      const parts: string[] = [];
+      if (formatted.primary) parts.push(formatted.primary);
+      if (formatted.secondary) parts.push(formatted.secondary);
+      
+      if (parts.length > 0) {
+        return txtResponse(parts.join(', '));
+      }
+      
       return txtResponse('Location unavailable');
     }
 
@@ -421,8 +456,52 @@ export async function GET(
       return txtResponse(`${timeStr} on ${dateStr} (${locationData.timezone})`);
     }
 
-    // Map route - uses cached coordinates
+    // Map route - uses overlay settings to match overlay display
     if (route === 'map') {
+      // Get settings from KV (same as overlay)
+      const settings = (await kv.get<OverlaySettings>('overlay_settings')) || DEFAULT_OVERLAY_SETTINGS;
+      const displayMode = settings.locationDisplay;
+      
+      // If hidden, return hidden message
+      if (displayMode === 'hidden') {
+        return txtResponse('Map is hidden');
+      }
+      
+      // If custom mode, don't use customLocation - just use country if visible
+      if (displayMode === 'custom') {
+        const rawLocation = locationData.location?.rawLocationData;
+        if (rawLocation && rawLocation.countryCode) {
+          const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+          if (countryName) {
+            const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(countryName)}`;
+            return txtResponse(mapUrl);
+          }
+        }
+        return txtResponse('Map is hidden');
+      }
+      
+      // Use formatLocation with same displayMode as overlay
+      const rawLocation = locationData.location?.rawLocationData;
+      if (!rawLocation) {
+        // Fallback to coordinates if no location data
+        const roundedLat = roundCoordinate(lat);
+        const roundedLon = roundCoordinate(lon);
+        const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${roundedLat},${roundedLon}`)}`;
+        return txtResponse(mapUrl);
+      }
+      
+      const formatted = formatLocation(rawLocation, displayMode);
+      const parts: string[] = [];
+      if (formatted.primary) parts.push(formatted.primary);
+      if (formatted.secondary) parts.push(formatted.secondary);
+      
+      if (parts.length > 0) {
+        const mapLocation = parts.join(', ');
+        const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(mapLocation)}`;
+        return txtResponse(mapUrl);
+      }
+      
+      // Fallback to coordinates if formatting returns nothing
       const roundedLat = roundCoordinate(lat);
       const roundedLon = roundCoordinate(lon);
       const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${roundedLat},${roundedLon}`)}`;
@@ -502,14 +581,7 @@ export async function GET(
       });
     }
 
-    if (route === 'json') {
-      return jsonResponse({
-        rtirl: locationData.rtirl.raw,
-        lat: roundCoordinate(lat),
-        lon: roundCoordinate(lon),
-        updatedAt: locationData.rtirl.updatedAt,
-      });
-    }
+    // JSON route removed for privacy
 
     // Combined stats route (needs location data)
     if (route === 'stats') {
@@ -569,7 +641,6 @@ export async function GET(
         cacheAge: Date.now() - locationData.cachedAt,
         availableRoutes: [
           'status - Raw GPS data',
-          'json - Full RTIRL JSON',
           'debug - This debug info',
           'weather - Current weather',
           'forecast - Weather forecast',
