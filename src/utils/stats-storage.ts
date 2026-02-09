@@ -12,7 +12,7 @@
 // This ensures:
 // - Stable values: ~1 entry per 15-60 seconds (manageable storage)
 // - Rapid changes: Captured immediately (no data loss during spikes)
-// - KV efficiency: Max ~500 entries = ~20KB per metric (well under KV limits)
+// - KV efficiency: Max ~1000 entries = ~40KB per metric (well under KV limits)
 
 import { kv } from '@vercel/kv';
 
@@ -26,7 +26,7 @@ const ALTITUDE_SAMPLE_INTERVAL = 30 * 1000; // Store altitude every 30 seconds m
 const LOCATION_SAMPLE_INTERVAL = 60 * 1000; // Store location every 60 seconds max
 
 // Maximum entries to keep (prevents KV size issues)
-const MAX_ENTRIES = 500; // Reduced from 1000 - 500 entries over 24h = ~1 entry per 3 minutes average
+const MAX_ENTRIES = 1000; // 1000 entries over 24h = ~1 entry per 1.4 minutes average
 
 export interface HeartrateEntry {
   bpm: number;
