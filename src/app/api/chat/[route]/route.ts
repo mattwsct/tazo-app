@@ -521,11 +521,7 @@ export async function GET(
     }
 
     // Travel routes (food, phrase) - uses persistent location country code
-    if (route === 'food' || route === 'phrase' || route === 'sidequest') {
-      // Sidequest route removed - no longer supported
-      if (route === 'sidequest') {
-        return txtResponse('Sidequest command has been removed. Use !food or !phrase instead.');
-      }
+    if (route === 'food' || route === 'phrase') {
       const countryCode = persistentLocation?.location?.countryCode || null;
       const countryName = persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null);
       const travelData = getTravelData(countryCode);
@@ -643,99 +639,8 @@ export async function GET(
     }
 
     // JSON route removed for privacy
-
-    // Combined stats route (needs location data)
-    if (route === 'stats') {
-      const [speedStats, altStats] = await Promise.all([
-        getSpeedStats(),
-        getAltitudeStats(),
-      ]);
-
-      const parts: string[] = [];
-
-      // Location (formatted with settings)
-      if (persistentLocation && persistentLocation.location && displayMode !== 'hidden') {
-        const rawLocation = persistentLocation.location;
-        if (displayMode === 'custom') {
-          // Custom mode - just use country
-          if (rawLocation.countryCode) {
-            const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
-            if (countryName) {
-              parts.push(`Location: ${countryName}`);
-            }
-          }
-        } else {
-          // Format location based on display mode
-          const formatted = formatLocation(rawLocation, displayMode);
-          const locationParts: string[] = [];
-          if (formatted.primary) locationParts.push(formatted.primary);
-          if (formatted.secondary) locationParts.push(formatted.secondary);
-          if (locationParts.length > 0) {
-            parts.push(`Location: ${locationParts.join(', ')}`);
-          }
-        }
-      }
-
-      // Speed
-      if (speedStats.current && speedStats.current.age === 'current') {
-        parts.push(`Speed: ${Math.round(speedStats.current.speed)} km/h`);
-      }
-
-      // Altitude
-      if (altStats.current && altStats.current.age === 'current') {
-        parts.push(`Altitude: ${altStats.current.altitude} m`);
-      }
-
-      return txtResponse(parts.length > 0 ? parts.join(' | ') : 'No stats available');
-    }
-
-    // Debug route
-    if (route === 'debug') {
-      const debugData: Record<string, unknown> = {
-        query: q || null,
-        timestamp: new Date().toISOString(),
-      };
-      
-      if (persistentLocation) {
-        debugData.persistentLocation = {
-          location: persistentLocation.location,
-          rtirl: { 
-            lat: roundCoordinate(persistentLocation.rtirl.lat), 
-            lon: roundCoordinate(persistentLocation.rtirl.lon), 
-            updatedAt: persistentLocation.rtirl.updatedAt 
-          },
-          updatedAt: persistentLocation.updatedAt,
-        };
-      }
-      
-      if (locationData) {
-        debugData.cachedLocation = {
-          rtirl: { 
-            raw: locationData.rtirl.raw, 
-            lat: roundCoordinate(lat), 
-            lon: roundCoordinate(lon), 
-            updatedAt: locationData.rtirl.updatedAt 
-          },
-          cacheAge: Date.now() - locationData.cachedAt,
-        };
-      }
-      
-      debugData.availableRoutes = [
-        'status - Raw GPS data',
-        'debug - This debug info',
-        'weather - Current weather',
-        'forecast - Weather forecast',
-        'sun - Sunrise/sunset times',
-        'time - Local time',
-        'map - Google Maps link',
-        'location - City-level location name',
-        'speed - Speed stats',
-        'altitude - Altitude stats',
-        'stats - Combined stats',
-      ];
-      
-      return jsonResponse(debugData);
-    }
+    // Stats route removed
+    // Debug route removed
 
     return txtResponse('Unknown route', 404);
   } catch (error) {

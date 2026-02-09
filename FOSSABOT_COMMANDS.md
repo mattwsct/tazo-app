@@ -140,23 +140,6 @@ Returns current altitude, highest, and lowest over last 24h.
 
 Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago)`
 
-### Combined Stats
-
-```
-!stats → $(customapi https://app.tazo.wtf/api/chat/stats)
-```
-
-Returns combined summary: location, speed, and altitude.
-
-Example output: `Location: Tokyo, Japan 🇯🇵 | Speed: 25 km/h | Altitude: 150 m`
-
-## Debug
-
-```
-!debug → $(customapi https://app.tazo.wtf/api/chat/debug)
-```
-
-Returns debug information about available routes and current RTIRL data.
 
 ---
 
@@ -165,4 +148,4 @@ Returns debug information about available routes and current RTIRL data.
 **Migration Note:** If you're updating from the old `tazo.wtf/api/*` endpoints, simply replace:
 - `https://tazo.wtf/api/` → `https://app.tazo.wtf/api/chat/`
 
-**Note:** Stats commands require the overlay to be sending data updates. The overlay automatically sends heartrate, speed, and altitude data when available.
+**Note:** Stats commands require the overlay to be sending data updates. The overlay automatically sends speed and altitude data when available.

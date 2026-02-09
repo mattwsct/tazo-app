@@ -678,8 +678,8 @@ The overlay app also provides chat command APIs for Fossabot integration. All co
 - **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
 - **Weather**: `/api/chat/forecast`, `/api/chat/sun`
 - **Travel**: `/api/chat/food`, `/api/chat/phrase`
-- **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`, `/api/chat/finch`, `/api/chat/fcm`
-- **Utility**: `/api/chat/status`, `/api/chat/json`, `/api/chat/debug`
+- **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`
+- **Utility**: `/api/chat/status`
 
 See [FOSSABOT_COMMANDS.md](./FOSSABOT_COMMANDS.md) for complete Fossabot command URLs and usage examples.
 
