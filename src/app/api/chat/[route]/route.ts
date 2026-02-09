@@ -15,7 +15,7 @@ import {
   parseWeatherData,
   extractPrecipitationForecast,
 } from '@/utils/weather-chat';
-import { getLocationData } from '@/utils/location-cache';
+import { getLocationData, getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import { kv } from '@vercel/kv';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
@@ -242,63 +242,77 @@ export async function GET(
     return txtResponse(parts.join(' | '));
   }
 
-  // Routes that require RTIRL
+  // Routes that require location data
   try {
-    // Use cached location data if available (5min TTL), otherwise fetch fresh
-    const locationData = await getLocationData();
+    // Get settings from KV (same as overlay) - needed for location/map commands
+    const settings = (await kv.get<OverlaySettings>('overlay_settings')) || DEFAULT_OVERLAY_SETTINGS;
+    const displayMode = settings.locationDisplay;
     
-    if (!locationData || !locationData.rtirl.lat || !locationData.rtirl.lon) {
-      return txtResponse('No RTIRL location available', 200);
+    // Use persistent location storage (always available, even if stale)
+    // This ensures chat commands work even if LocationIQ is temporarily unavailable
+    const persistentLocation = await getPersistentLocation();
+    
+    // Fallback: try to get fresh location data if persistent storage is empty
+    let locationData = null;
+    let lat: number | null = null;
+    let lon: number | null = null;
+    
+    if (persistentLocation) {
+      lat = persistentLocation.rtirl.lat;
+      lon = persistentLocation.rtirl.lon;
+    } else {
+      // No persistent location - try to fetch fresh (for weather/forecast/time routes)
+      const freshData = await getLocationData();
+      if (freshData && freshData.rtirl.lat && freshData.rtirl.lon) {
+        lat = freshData.rtirl.lat;
+        lon = freshData.rtirl.lon;
+        locationData = freshData;
+      }
     }
-
-    const { lat, lon } = locationData.rtirl;
-
+    
     // Location route - uses overlay settings to match overlay display
     if (route === 'location') {
-      // Get settings from KV (same as overlay)
-      const settings = (await kv.get<OverlaySettings>('overlay_settings')) || DEFAULT_OVERLAY_SETTINGS;
-      const displayMode = settings.locationDisplay;
-      
       // If hidden, return hidden message
       if (displayMode === 'hidden') {
         return txtResponse('Location is hidden');
       }
       
-      // If custom mode, don't use customLocation - just use country if visible
-      if (displayMode === 'custom') {
-        const rawLocation = locationData.location?.rawLocationData;
-        if (rawLocation && rawLocation.countryCode) {
-          const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
-          return txtResponse(countryName || 'Location unavailable');
+      // Use persistent location if available
+      if (persistentLocation && persistentLocation.location) {
+        const rawLocation = persistentLocation.location;
+        
+        // If custom mode, don't use customLocation - just use country if visible
+        if (displayMode === 'custom') {
+          if (rawLocation.countryCode) {
+            const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+            return txtResponse(countryName || 'Location unavailable');
+          }
+          return txtResponse('Location is hidden');
         }
-        return txtResponse('Location is hidden');
-      }
-      
-      // Use formatLocation with same displayMode as overlay
-      const rawLocation = locationData.location?.rawLocationData;
-      if (!rawLocation) {
-        return txtResponse('Location unavailable');
-      }
-      
-      const formatted = formatLocation(rawLocation, displayMode);
-      const parts: string[] = [];
-      if (formatted.primary) parts.push(formatted.primary);
-      if (formatted.secondary) parts.push(formatted.secondary);
-      
-      if (parts.length > 0) {
-        return txtResponse(parts.join(', '));
+        
+        // Use formatLocation with same displayMode as overlay
+        const formatted = formatLocation(rawLocation, displayMode);
+        const parts: string[] = [];
+        if (formatted.primary) parts.push(formatted.primary);
+        if (formatted.secondary) parts.push(formatted.secondary);
+        
+        if (parts.length > 0) {
+          return txtResponse(parts.join(', '));
+        }
       }
       
       return txtResponse('Location unavailable');
     }
 
-    // Weather route - uses cached data
+    // Weather route - uses cached data (needs fresh weather, not just location)
     if (route === 'weather') {
-      if (!locationData.weather) {
+      // Try to get fresh location data for weather (weather changes frequently)
+      const freshData = locationData || await getLocationData();
+      if (!freshData || !freshData.weather) {
         return txtResponse('Weather data unavailable');
       }
 
-      const { condition, desc, tempC, feelsLikeC, windKmh, humidity, visibility } = locationData.weather;
+      const { condition, desc, tempC, feelsLikeC, windKmh, humidity, visibility } = freshData.weather;
       const emoji = getWeatherEmoji(condition, isNightTime());
       const notableConditions = getNotableConditions({
         tempC,
@@ -322,14 +336,23 @@ export async function GET(
       const keyError = requireApiKey(openweatherKey, 'Forecast');
       if (keyError) return txtResponse(keyError.error);
 
-      // Get timezone from cached location data
-      const timezone = locationData.timezone;
+      // Get timezone from cached location data (try fresh first)
+      const freshData = locationData || await getLocationData();
+      const timezone = freshData?.timezone || persistentLocation?.location?.timezone || null;
       if (!timezone) {
         return txtResponse('Timezone unavailable for forecast');
       }
 
       // Forecast needs full data, fetch fresh
-      const fc = await fetchForecast(lat, lon, openweatherKey!);
+      // Use coordinates from persistent location or fresh data
+      const forecastLat = lat !== null ? lat : (persistentLocation?.rtirl.lat || null);
+      const forecastLon = lon !== null ? lon : (persistentLocation?.rtirl.lon || null);
+      
+      if (forecastLat === null || forecastLon === null) {
+        return txtResponse('No location available for forecast');
+      }
+      
+      const fc = await fetchForecast(forecastLat, forecastLon, openweatherKey!);
       if (!fc?.list || !Array.isArray(fc.list) || fc.list.length === 0) {
         return txtResponse('No forecast data available');
       }
@@ -411,17 +434,19 @@ export async function GET(
 
     // Sun route (sunrise/sunset) - uses cached data
     if (route === 'sun') {
-      if (!locationData.timezone || !locationData.sunriseSunset) {
+      // Try to get fresh data for sunrise/sunset (needs weather API)
+      const freshData = locationData || await getLocationData();
+      if (!freshData || !freshData.timezone || !freshData.sunriseSunset) {
         return txtResponse('Sunrise/sunset data unavailable');
       }
 
-      const sunriseUtc = new Date(locationData.sunriseSunset.sunrise * 1000);
-      const sunsetUtc = new Date(locationData.sunriseSunset.sunset * 1000);
+      const sunriseUtc = new Date(freshData.sunriseSunset.sunrise * 1000);
+      const sunsetUtc = new Date(freshData.sunriseSunset.sunset * 1000);
       const timeOptions = {
         hour: 'numeric' as const,
         minute: '2-digit' as const,
         hour12: true,
-        timeZone: locationData.timezone,
+        timeZone: freshData.timezone,
       };
       const sunriseStr = sunriseUtc.toLocaleTimeString('en-US', timeOptions);
       const sunsetStr = sunsetUtc.toLocaleTimeString('en-US', timeOptions);
@@ -434,9 +459,12 @@ export async function GET(
       );
     }
 
-    // Time route - uses cached timezone
+    // Time route - uses cached timezone (can use persistent location)
     if (route === 'time') {
-      if (!locationData.timezone) {
+      // Try fresh data first, fallback to persistent location
+      const freshData = locationData || await getLocationData();
+      const timezone = freshData?.timezone || persistentLocation?.location?.timezone || null;
+      if (!timezone) {
         return txtResponse('Time unavailable');
       }
 
@@ -445,72 +473,67 @@ export async function GET(
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
-        timeZone: locationData.timezone,
+        timeZone: timezone,
       });
       const dateStr = now.toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
-        timeZone: locationData.timezone,
+        timeZone: timezone,
       });
-      return txtResponse(`${timeStr} on ${dateStr} (${locationData.timezone})`);
+      return txtResponse(`${timeStr} on ${dateStr} (${timezone})`);
     }
 
     // Map route - uses overlay settings to match overlay display
     if (route === 'map') {
-      // Get settings from KV (same as overlay)
-      const settings = (await kv.get<OverlaySettings>('overlay_settings')) || DEFAULT_OVERLAY_SETTINGS;
-      const displayMode = settings.locationDisplay;
-      
       // If hidden, return hidden message
       if (displayMode === 'hidden') {
         return txtResponse('Map is hidden');
       }
       
-      // If custom mode, don't use customLocation - just use country if visible
-      if (displayMode === 'custom') {
-        const rawLocation = locationData.location?.rawLocationData;
-        if (rawLocation && rawLocation.countryCode) {
-          const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
-          if (countryName) {
-            const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(countryName)}`;
-            return txtResponse(mapUrl);
+      // Use persistent location if available
+      if (persistentLocation && persistentLocation.location) {
+        const rawLocation = persistentLocation.location;
+        
+        // If custom mode, don't use customLocation - just use country if visible
+        if (displayMode === 'custom') {
+          if (rawLocation.countryCode) {
+            const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+            if (countryName) {
+              const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(countryName)}`;
+              return txtResponse(mapUrl);
+            }
           }
+          return txtResponse('Map is hidden');
         }
-        return txtResponse('Map is hidden');
+        
+        // Use formatLocation with same displayMode as overlay
+        const formatted = formatLocation(rawLocation, displayMode);
+        const parts: string[] = [];
+        if (formatted.primary) parts.push(formatted.primary);
+        if (formatted.secondary) parts.push(formatted.secondary);
+        
+        if (parts.length > 0) {
+          const mapLocation = parts.join(', ');
+          const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(mapLocation)}`;
+          return txtResponse(mapUrl);
+        }
       }
       
-      // Use formatLocation with same displayMode as overlay
-      const rawLocation = locationData.location?.rawLocationData;
-      if (!rawLocation) {
-        // Fallback to coordinates if no location data
+      // Fallback to coordinates if no location data
+      if (lat !== null && lon !== null) {
         const roundedLat = roundCoordinate(lat);
         const roundedLon = roundCoordinate(lon);
         const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${roundedLat},${roundedLon}`)}`;
         return txtResponse(mapUrl);
       }
       
-      const formatted = formatLocation(rawLocation, displayMode);
-      const parts: string[] = [];
-      if (formatted.primary) parts.push(formatted.primary);
-      if (formatted.secondary) parts.push(formatted.secondary);
-      
-      if (parts.length > 0) {
-        const mapLocation = parts.join(', ');
-        const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(mapLocation)}`;
-        return txtResponse(mapUrl);
-      }
-      
-      // Fallback to coordinates if formatting returns nothing
-      const roundedLat = roundCoordinate(lat);
-      const roundedLon = roundCoordinate(lon);
-      const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${roundedLat},${roundedLon}`)}`;
-      return txtResponse(mapUrl);
+      return txtResponse('Map is hidden');
     }
 
-    // Travel routes (food, phrase, sidequest) - uses cached country code
+    // Travel routes (food, phrase, sidequest) - uses persistent location country code
     if (route === 'food' || route === 'phrase' || route === 'sidequest') {
-      const countryCode = locationData.location?.countryCode || null;
+      const countryCode = persistentLocation?.location?.countryCode || null;
       const travelData = getTravelData(countryCode);
       const noDataMsg = 'No local data for this country yet';
 
@@ -542,9 +565,12 @@ export async function GET(
     // Status/Homepage route - returns JSON for homepage display (uses cached data)
     // Matches format expected by tazo-web homepage (includes emoji, forecast, etc.)
     if (route === 'status' || route === 'homepage') {
+      // Try to get fresh data for weather/forecast (they change frequently)
+      const freshData = locationData || await getLocationData();
+      
       let weatherData = null;
-      if (locationData.weather) {
-        const { condition, desc, tempC, feelsLikeC, windKmh, humidity } = locationData.weather;
+      if (freshData?.weather) {
+        const { condition, desc, tempC, feelsLikeC, windKmh, humidity } = freshData.weather;
         weatherData = {
           emoji: getWeatherEmoji(condition, isNightTime()),
           condition: desc,
@@ -557,27 +583,51 @@ export async function GET(
         };
       }
 
-      // Format time with timezone
+      // Format time with timezone (can use persistent location)
+      const timezone = freshData?.timezone || persistentLocation?.location?.timezone || null;
       let timeStr = null;
-      if (locationData.timezone) {
+      if (timezone) {
         try {
           timeStr = new Date().toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,
-            timeZone: locationData.timezone,
+            timeZone: timezone,
           });
         } catch (error) {
           // Invalid timezone, skip
         }
       }
 
+      // Get location name from persistent location (formatted with settings)
+      let locationName: string | null = null;
+      if (persistentLocation && persistentLocation.location) {
+        const rawLocation = persistentLocation.location;
+        if (displayMode !== 'hidden') {
+          if (displayMode === 'custom') {
+            // Custom mode - just use country
+            if (rawLocation.countryCode) {
+              locationName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+            }
+          } else {
+            // Format location based on display mode
+            const formatted = formatLocation(rawLocation, displayMode);
+            const parts: string[] = [];
+            if (formatted.primary) parts.push(formatted.primary);
+            if (formatted.secondary) parts.push(formatted.secondary);
+            if (parts.length > 0) {
+              locationName = parts.join(', ');
+            }
+          }
+        }
+      }
+
       return jsonResponse({
-        location: locationData.location?.name || null,
+        location: locationName,
         time: timeStr,
-        timezone: locationData.timezone,
+        timezone: timezone,
         weather: weatherData,
-        forecast: locationData.forecast,
+        forecast: freshData?.forecast || null,
       });
     }
 
@@ -596,9 +646,27 @@ export async function GET(
 
       const parts: string[] = [];
 
-      // Location
-      if (locationData.location?.name) {
-        parts.push(`Location: ${locationData.location.name}`);
+      // Location (formatted with settings)
+      if (persistentLocation && persistentLocation.location && displayMode !== 'hidden') {
+        const rawLocation = persistentLocation.location;
+        if (displayMode === 'custom') {
+          // Custom mode - just use country
+          if (rawLocation.countryCode) {
+            const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+            if (countryName) {
+              parts.push(`Location: ${countryName}`);
+            }
+          }
+        } else {
+          // Format location based on display mode
+          const formatted = formatLocation(rawLocation, displayMode);
+          const locationParts: string[] = [];
+          if (formatted.primary) locationParts.push(formatted.primary);
+          if (formatted.secondary) locationParts.push(formatted.secondary);
+          if (locationParts.length > 0) {
+            parts.push(`Location: ${locationParts.join(', ')}`);
+          }
+        }
       }
 
       // Speed
@@ -634,26 +702,66 @@ export async function GET(
 
     // Debug route
     if (route === 'debug') {
-      return jsonResponse({
-        rtirl: { raw: locationData.rtirl.raw, lat: roundCoordinate(lat), lon: roundCoordinate(lon), updatedAt: locationData.rtirl.updatedAt },
+      const debugData: Record<string, unknown> = {
         query: q || null,
         timestamp: new Date().toISOString(),
-        cacheAge: Date.now() - locationData.cachedAt,
-        availableRoutes: [
-          'status - Raw GPS data',
-          'debug - This debug info',
-          'weather - Current weather',
-          'forecast - Weather forecast',
-          'sun - Sunrise/sunset times',
-          'time - Local time',
-          'map - Google Maps link',
-          'location - City-level location name',
-          'hr - Heart rate stats',
-          'speed - Speed stats',
-          'altitude - Altitude stats',
-          'stats - Combined stats',
-        ],
-      });
+      };
+      
+      if (persistentLocation) {
+        debugData.persistentLocation = {
+          location: persistentLocation.location,
+          rtirl: { 
+            lat: roundCoordinate(persistentLocation.rtirl.lat), 
+            lon: roundCoordinate(persistentLocation.rtirl.lon), 
+            updatedAt: persistentLocation.rtirl.updatedAt 
+          },
+          updatedAt: persistentLocation.updatedAt,
+        };
+      }
+      
+      if (locationData) {
+        debugData.cachedLocation = {
+          rtirl: { 
+            raw: locationData.rtirl.raw, 
+            lat: roundCoordinate(lat), 
+            lon: roundCoordinate(lon), 
+            updatedAt: locationData.rtirl.updatedAt 
+          },
+          cacheAge: Date.now() - locationData.cachedAt,
+        };
+      }
+      
+      debugData.availableRoutes = [
+        'status - Raw GPS data',
+        'debug - This debug info',
+        'weather - Current weather',
+        'forecast - Weather forecast',
+        'sun - Sunrise/sunset times',
+        'time - Local time',
+        'map - Google Maps link',
+        'location - City-level location name',
+        'hr - Heart rate stats',
+        'speed - Speed stats',
+        'altitude - Altitude stats',
+        'stats - Combined stats',
+      ];
+      
+      debugData.availableRoutes = [
+        'status - Raw GPS data',
+        'debug - This debug info',
+        'weather - Current weather',
+        'forecast - Weather forecast',
+        'sun - Sunrise/sunset times',
+        'time - Local time',
+        'map - Google Maps link',
+        'location - City-level location name',
+        'hr - Heart rate stats',
+        'speed - Speed stats',
+        'altitude - Altitude stats',
+        'stats - Combined stats',
+      ];
+      
+      return jsonResponse(debugData);
     }
 
     return txtResponse('Unknown route', 404);

@@ -46,6 +46,7 @@ export interface CachedLocationData {
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes - weather/location can change
 const CACHE_KEY = 'location_data_cache';
+const PERSISTENT_LOCATION_KEY = 'last_known_location'; // Persistent storage (no TTL)
 
 /**
  * Get cached location data if fresh, otherwise return null
@@ -170,12 +171,54 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
       cachedAt: Date.now(),
     };
 
-    // Update cache
+    // Update cache (5min TTL for performance)
     await updateLocationCache(cachedData);
+    
+    // Also update persistent storage (no TTL - always available for chat commands)
+    if (location && location.rawLocationData) {
+      await updatePersistentLocation({
+        location: location.rawLocationData,
+        rtirl: rtirlData,
+        updatedAt: Date.now(),
+      });
+    }
 
     return cachedData;
   } catch (error) {
     console.error('Failed to fetch location data:', error);
+    return null;
+  }
+}
+
+/**
+ * Persistent location storage (no TTL - always available)
+ */
+export interface PersistentLocationData {
+  location: LocationData;
+  rtirl: RTIRLData;
+  updatedAt: number; // Timestamp when last updated
+}
+
+/**
+ * Update persistent location storage (no TTL)
+ */
+export async function updatePersistentLocation(data: PersistentLocationData): Promise<void> {
+  try {
+    await kv.set(PERSISTENT_LOCATION_KEY, data); // No TTL - persistent storage
+  } catch (error) {
+    console.warn('Failed to update persistent location:', error);
+  }
+}
+
+/**
+ * Get persistent location data (always available, even if stale)
+ */
+export async function getPersistentLocation(): Promise<PersistentLocationData | null> {
+  try {
+    const data = await kv.get<PersistentLocationData>(PERSISTENT_LOCATION_KEY);
+    return data;
+  } catch (error) {
+    console.warn('Failed to get persistent location:', error);
     return null;
   }
 }

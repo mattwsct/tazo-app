@@ -25,6 +25,7 @@ import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
 import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
 import { distanceInMeters, formatLocation, formatCountryName } from '@/utils/location-utils';
+import { updatePersistentLocation } from '@/utils/location-cache';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit } from '@/utils/rate-limiting';
 import { 
@@ -1148,6 +1149,22 @@ function OverlayPage() {
                       const currentDisplayMode = settingsRef.current.locationDisplay;
                       const formatted = formatLocation(loc, currentDisplayMode);
                       lastRawLocation.current = loc;
+                      
+                      // Update persistent location storage (for chat commands)
+                      // Fire and forget - don't block UI
+                      const payloadTimestamp = extractGpsTimestamp(payload);
+                      updatePersistentLocation({
+                        location: loc,
+                        rtirl: { 
+                          lat: lat!, 
+                          lon: lon!, 
+                          raw: payload, 
+                          updatedAt: payloadTimestamp || Date.now() 
+                        },
+                        updatedAt: Date.now(),
+                      }).catch(() => {
+                        // Silently fail - persistent storage is optional
+                      });
                         
                         // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
