@@ -23,12 +23,18 @@ const nextConfig: NextConfig = {
   
   // Performance optimizations
   experimental: {
-    // Temporarily disabled due to build hanging
-    // optimizePackageImports: ['@vercel/kv', 'maplibre-gl'],
+    // Optimize package imports to reduce bundle size
+    optimizePackageImports: ['@vercel/kv'],
+    // Note: maplibre-gl excluded - already dynamically imported
   },
   
   // Compression
   compress: true,
+  
+  // Output file tracing for better optimization (reduces deployment size)
+  outputFileTracingIncludes: {
+    '/api/**/*': ['./node_modules/@vercel/kv/**/*'],
+  },
   
   // Security headers
   async headers() {

@@ -1,0 +1,34 @@
+# Vercel ignore file - exclude unnecessary files from deployment
+
+# Development files
+*.log
+*.map
+.DS_Store
+*.icloud
+*.icloud-sync-*
+
+# Documentation (not needed in production)
+README.md
+FOSSABOT_COMMANDS.md
+*.md
+
+# Scripts (not needed in production)
+scripts/
+
+# Git files
+.git/
+.gitignore
+
+# IDE files
+.cursorignore
+.vscode/
+.idea/
+
+# Test files (if any)
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Example files
+.env.example

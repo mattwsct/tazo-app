@@ -17,6 +17,7 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "skipLibCheck": true, // Already set, but ensures faster type checking
     "paths": {
       "@/*": [
         "./src/*"
@@ -36,6 +37,9 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next",
+    "out",
+    "dist"
   ]
 }
