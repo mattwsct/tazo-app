@@ -198,28 +198,61 @@ export async function GET(
       const keyError = requireApiKey(openweatherKey, 'Forecast');
       if (keyError) return txtResponse(keyError.error);
 
+      // Get timezone from cached location data
+      const timezone = locationData.timezone;
+      if (!timezone) {
+        return txtResponse('Timezone unavailable for forecast');
+      }
+
       // Forecast needs full data, fetch fresh
       const fc = await fetchForecast(lat, lon, openweatherKey!);
       if (!fc?.list || !Array.isArray(fc.list) || fc.list.length === 0) {
         return txtResponse('No forecast data available');
       }
 
-      // Group by day and get today/tomorrow
+      // Get current date in location's timezone (YYYY-MM-DD format)
+      const now = new Date();
+      const todayStr = now.toLocaleDateString('en-CA', { timeZone: timezone });
+      
+      // Group forecasts by date in location's timezone
       const dailyForecasts = new Map<string, typeof fc.list>();
       for (const item of fc.list) {
         if (!item?.dt || !item?.main?.temp) continue;
         const forecastTime = new Date(item.dt * 1000);
-        const dateStr = forecastTime.toLocaleDateString('en-US', { weekday: 'short' });
+        // Convert to location's timezone and get date string (YYYY-MM-DD)
+        const dateStr = forecastTime.toLocaleDateString('en-CA', { timeZone: timezone });
+        
         if (!dailyForecasts.has(dateStr)) {
           dailyForecasts.set(dateStr, []);
         }
         dailyForecasts.get(dateStr)!.push(item);
       }
 
+      // Sort dates to ensure correct order (YYYY-MM-DD format sorts correctly)
+      const sortedDates = Array.from(dailyForecasts.keys()).sort();
+      
+      // Find today's date in the forecast
+      let todayIndex = sortedDates.findIndex(date => date === todayStr);
+      if (todayIndex === -1) {
+        // Today not in forecast (might be late at night and forecast starts tomorrow)
+        // Check if first date is tomorrow
+        if (sortedDates.length > 0) {
+          const firstDate = sortedDates[0];
+          // If first date is after today, we'll treat it as "today" (next available day)
+          todayIndex = 0;
+        } else {
+          return txtResponse('No forecast data available');
+        }
+      }
+
       const out: string[] = [];
       let count = 0;
-      for (const [dateStr, items] of dailyForecasts) {
-        if (count >= 2) break;
+      
+      // Process today and tomorrow
+      for (let i = todayIndex; i < sortedDates.length && count < 2; i++) {
+        const dateStr = sortedDates[i];
+        const items = dailyForecasts.get(dateStr)!;
+        
         const dateLabel = count === 0 ? 'Today' : 'Tomorrow';
 
         let minTempC = Infinity;
@@ -234,12 +267,18 @@ export async function GET(
 
         if (minTempC === Infinity || maxTempC === -Infinity) continue;
 
+        // Use most common condition or first item's condition
         const condition = items[0]?.weather?.[0]?.main?.toLowerCase() || '';
         const emoji = getWeatherEmoji(condition);
         const minTempF = Math.round(minTempC * 9 / 5 + 32);
         const maxTempF = Math.round(maxTempC * 9 / 5 + 32);
 
-        out.push(`${emoji} ${dateLabel} ${minTempC}-${maxTempC}°C/${minTempF}-${maxTempF}°F`);
+        // Format: show single temp if min === max, otherwise range
+        const tempRange = minTempC === maxTempC 
+          ? `${minTempC}°C/${minTempF}°F`
+          : `${minTempC}-${maxTempC}°C/${minTempF}-${maxTempF}°F`;
+
+        out.push(`${emoji} ${dateLabel} ${tempRange}`);
         count++;
       }
 
