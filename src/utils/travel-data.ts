@@ -59,7 +59,18 @@ export const GLOBAL: TravelData = {
     { lang: "Russian", text: "Привет", roman: "Privet", meaning: "hi" },
     { lang: "Arabic", text: "مرحبا", roman: "Marhaba", meaning: "hello" },
     { lang: "Hindi", text: "नमस्ते", roman: "Namaste", meaning: "hello" }
-  ]
+  ],
+  emergencyInfo: {
+    phone: "112 (EU) or 911 (US/CA/MX) - varies by country",
+    notes: [
+      "Emergency numbers vary by country - specify a country code (e.g., !emergency JP) for specific information",
+      "112 works in EU countries, 911 in US/Canada/Mexico",
+      "If injured: Call local emergency number, describe location clearly",
+      "If robbed/theft: File police report for insurance, cancel cards immediately",
+      "Lost passport: Report to police, then contact your embassy immediately",
+      "Use !countries to see available countries with detailed emergency info"
+    ]
+  }
 };
 
 export const TRAVEL_DATA: Record<string, TravelData> = {

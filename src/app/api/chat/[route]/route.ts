@@ -549,17 +549,17 @@ export async function GET(
             food: 'local food',
             phrase: 'local phrase',
             tips: 'cultural tips',
-            emergency: 'emergency phrases'
+            emergency: 'emergency information'
           };
-          return `No ${typeNames[type]} data available for ${countryName} yet.`;
+          return `No ${typeNames[type]} data available for ${countryName} yet. Use !countries to see available countries.`;
         }
         const typeNames: Record<string, string> = {
           food: 'food',
           phrase: 'phrase',
           tips: 'cultural tips',
-          emergency: 'emergency phrases'
+          emergency: 'emergency information'
         };
-        return `No ${typeNames[type]} data available yet.`;
+        return `No ${typeNames[type]} data available. Specify a country code (e.g., !${route} JP) or use !countries to see available countries.`;
       };
 
       if (route === 'food') {
@@ -626,8 +626,8 @@ export async function GET(
         
         const parts: string[] = [];
         
-        // Prepend country indicator if a specific country was requested
-        if (requestedCountryCode && travelData.isCountrySpecific) {
+        // Prepend country indicator if country-specific data is available (same as other travel commands)
+        if (travelData.isCountrySpecific && countryName) {
           parts.push(`[${countryName}]`);
         }
         
@@ -655,15 +655,16 @@ export async function GET(
         }
         
         // Add emergency notes (injuries, theft, medical, etc.)
-        if (emergencyInfo.notes && emergencyInfo.notes.length > 0) {
-          parts.push(...emergencyInfo.notes);
+        if (emergencyInfo.notes && Array.isArray(emergencyInfo.notes) && emergencyInfo.notes.length > 0) {
+          parts.push(...emergencyInfo.notes.filter(note => note && note.trim().length > 0));
         }
         
         if (parts.length === 0) {
           return txtResponse(getNoDataMsg('emergency'));
         }
         
-        return txtResponse(parts.join(' | '));
+        const response = parts.join(' | ');
+        return txtResponse(response || getNoDataMsg('emergency'));
       }
     }
 
