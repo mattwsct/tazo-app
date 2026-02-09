@@ -668,6 +668,23 @@ All API limits are enforced client-side to prevent quota exhaustion:
 - Compass indicator for orientation
 - Travel direction/heading display
 
+## 💬 Chat Commands API
+
+The overlay app also provides chat command APIs for Fossabot integration. All commands are available at `/api/chat/*` endpoints.
+
+### Available Commands
+
+- **Social Media**: `/api/chat/instagram`, `/api/chat/twitter`, `/api/chat/kick`, etc.
+- **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
+- **Weather**: `/api/chat/forecast`, `/api/chat/sun`
+- **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/sidequest`
+- **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`, `/api/chat/finch`, `/api/chat/fcm`
+- **Utility**: `/api/chat/status`, `/api/chat/json`, `/api/chat/debug`
+
+See [FOSSABOT_COMMANDS.md](./FOSSABOT_COMMANDS.md) for complete Fossabot command URLs and usage examples.
+
+**Note:** Chat commands use the same shared utilities as the overlay, ensuring consistent location/weather data across both systems.
+
 ## 📄 License
 
 MIT License - feel free to use and modify!

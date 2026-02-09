@@ -24,6 +24,7 @@ export function middleware(request: NextRequest) {
   // - Login page and login API
   // - Overlay page (public, used by OBS)
   // - Public API endpoints needed by overlay (get-settings, settings-stream, health)
+  // - Chat command API routes (public, used by Fossabot)
   const publicRoutes = [
     '/login',
     '/api/login',
@@ -32,6 +33,11 @@ export function middleware(request: NextRequest) {
     '/api/settings-stream',
     '/api/health'
   ];
+
+  // Chat commands are public (no authentication required)
+  if (pathname.startsWith('/api/chat/')) {
+    return NextResponse.next();
+  }
   
   if (publicRoutes.includes(pathname)) {
     return NextResponse.next();
