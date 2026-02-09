@@ -223,36 +223,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 isConnected: true,
               });
 
-              // Send to stats API (fire and forget - don't block UI)
-              // Pulsoid sends measured_at as Unix timestamp in seconds, convert to milliseconds
-              // Use current time if Pulsoid timestamp seems invalid (too old or future)
-              const pulsoidTimestamp = data.measured_at * 1000;
-              const now = Date.now();
-              const timestamp = (pulsoidTimestamp > 0 && pulsoidTimestamp <= now + 60000) 
-                ? pulsoidTimestamp 
-                : now; // Use current time if Pulsoid timestamp is invalid
-              
-              fetch('/api/stats/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  heartrate: {
-                    bpm: newBpm,
-                    timestamp: timestamp,
-                  },
-                }),
-              })
-                .then((res) => {
-                  if (!res.ok && process.env.NODE_ENV === 'development') {
-                    console.warn('[HeartRateMonitor] Stats API error:', res.status, res.statusText);
-                  }
-                })
-                .catch((err) => {
-                  // Log errors in development
-                  if (process.env.NODE_ENV === 'development') {
-                    console.warn('[HeartRateMonitor] Failed to send heartrate to stats API:', err);
-                  }
-                });
+              // Heartrate is no longer sent to stats API - only displayed on overlay
             }
           } catch (error) {
             HeartRateLogger.error('Failed to parse Pulsoid data:', error);

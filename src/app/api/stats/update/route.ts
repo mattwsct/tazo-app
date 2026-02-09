@@ -1,33 +1,18 @@
 // === 📊 STATS UPDATE API ===
 // Combined endpoint to receive stats updates from overlay/client
-// Accepts heartrate, speed, altitude, and location updates
+// Accepts speed and altitude updates
 
 import { NextRequest, NextResponse } from 'next/server';
-import { storeHeartrate, storeSpeed, storeAltitude, storeLocation, addCountry, addCity } from '@/utils/stats-storage';
+import { storeSpeed, storeAltitude } from '@/utils/stats-storage';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { heartrate, speed, altitude, location, country, city } = body;
+    const { speed, altitude } = body;
 
     const promises: Promise<void>[] = [];
-
-    // Heartrate update
-    if (heartrate && typeof heartrate.bpm === 'number') {
-      const ts = heartrate.timestamp || Date.now();
-      // Debug logging (can be removed later)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Stats Update] Received heartrate:', heartrate.bpm, 'BPM, timestamp:', ts, 'age:', Math.round((Date.now() - ts) / 1000), 'seconds', 'raw timestamp:', heartrate.timestamp);
-      }
-      promises.push(storeHeartrate(heartrate.bpm, ts));
-    } else if (heartrate) {
-      // Log if heartrate is present but invalid
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Stats Update] Invalid heartrate data:', heartrate);
-      }
-    }
 
     // Speed update (can be number or object with speed and timestamp)
     if (speed !== undefined) {
@@ -47,22 +32,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const ts = (altitude as { altitude: number; timestamp?: number }).timestamp || Date.now();
         promises.push(storeAltitude((altitude as { altitude: number }).altitude, ts));
       }
-    }
-
-    // Location update
-    if (location && typeof location.lat === 'number' && typeof location.lon === 'number') {
-      const ts = location.timestamp || Date.now();
-      promises.push(storeLocation(location.lat, location.lon, ts));
-    }
-
-    // Country update
-    if (country && typeof country === 'string') {
-      promises.push(addCountry(country));
-    }
-
-    // City update
-    if (city && typeof city === 'string') {
-      promises.push(addCity(city));
     }
 
     await Promise.all(promises);

@@ -117,26 +117,7 @@ Returns 3 random local food recommendations based on your current country.
 
 Returns 3 random local phrases with translations based on your current country.
 
-### Sidequests
-
-```
-!sidequest → $(customapi https://app.tazo.wtf/api/chat/sidequest)
-```
-
-Returns 3 random local activity suggestions based on your current country.
-
 ## Stats Commands
-
-### Heart Rate
-
-```
-!hr → $(customapi https://app.tazo.wtf/api/chat/hr)
-!heartrate → $(customapi https://app.tazo.wtf/api/chat/heartrate)
-```
-
-Returns current heart rate, min/max over last 24h, and average.
-
-Example output: `Current: 75 BPM | Min: 65 (2h ago) | Max: 95 (30m ago) | Avg: 78`
 
 ### Speed
 
@@ -165,9 +146,9 @@ Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago
 !stats → $(customapi https://app.tazo.wtf/api/chat/stats)
 ```
 
-Returns combined summary: location, speed, altitude, heart rate, distance traveled, countries/cities visited.
+Returns combined summary: location, speed, and altitude.
 
-Example output: `Location: Tokyo, Japan 🇯🇵 | Speed: 25 km/h | Altitude: 150 m | HR: 75 BPM | Distance: 12.5 km | Countries: 2`
+Example output: `Location: Tokyo, Japan 🇯🇵 | Speed: 25 km/h | Altitude: 150 m`
 
 ## Debug
 

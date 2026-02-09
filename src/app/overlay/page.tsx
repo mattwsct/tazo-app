@@ -893,12 +893,6 @@ function OverlayPage() {
                   statsPayload.altitude = { altitude: roundedAltitude, timestamp: payloadTimestamp };
                   lastSentAltitude.current = roundedAltitude;
                 }
-                
-                statsPayload.location = {
-                  lat,
-                  lon,
-                  timestamp: payloadTimestamp,
-                };
 
                 // Send stats update (fire and forget)
                 fetch('/api/stats/update', {

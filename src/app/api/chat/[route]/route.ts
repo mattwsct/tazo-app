@@ -20,7 +20,7 @@ import { formatLocation } from '@/utils/location-utils';
 import { kv } from '@vercel/kv';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { OverlaySettings } from '@/types/settings';
-import { getHeartrateStats, getSpeedStats, getAltitudeStats, getDistanceTraveled, getCountriesVisited, getCitiesVisited } from '@/utils/stats-storage';
+import { getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -155,43 +155,7 @@ export async function GET(
   }
 
   // Stats routes (no RTIRL required - use KV storage)
-  if (route === 'hr' || route === 'heartrate') {
-    const stats = await getHeartrateStats();
-    
-    // Debug logging (can be removed later)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Chat HR] Stats result:', JSON.stringify(stats, null, 2));
-    }
-    
-    if (!stats.hasData) {
-      return txtResponse('Heart rate data not available');
-    }
-
-    const parts: string[] = [];
-    
-    if (stats.current) {
-      const currentText = stats.current.age === 'current'
-        ? `${stats.current.bpm} BPM`
-        : `${stats.current.bpm} BPM (${stats.current.age} ago)`;
-      parts.push(`Current: ${currentText}`);
-    } else {
-      parts.push('Current: Not available');
-    }
-
-    if (stats.min) {
-      parts.push(`Min: ${stats.min.bpm} (${stats.min.age} ago)`);
-    }
-
-    if (stats.max) {
-      parts.push(`Max: ${stats.max.bpm} (${stats.max.age} ago)`);
-    }
-
-    if (stats.avg !== null) {
-      parts.push(`Avg: ${stats.avg}`);
-    }
-
-    return txtResponse(parts.join(' | '));
-  }
+  // Heart rate command removed - not working reliably
 
   if (route === 'speed') {
     const stats = await getSpeedStats();
@@ -556,20 +520,41 @@ export async function GET(
       return txtResponse('Map is hidden');
     }
 
-    // Travel routes (food, phrase, sidequest) - uses persistent location country code
+    // Travel routes (food, phrase) - uses persistent location country code
     if (route === 'food' || route === 'phrase' || route === 'sidequest') {
+      // Sidequest route removed - no longer supported
+      if (route === 'sidequest') {
+        return txtResponse('Sidequest command has been removed. Use !food or !phrase instead.');
+      }
       const countryCode = persistentLocation?.location?.countryCode || null;
+      const countryName = persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null);
       const travelData = getTravelData(countryCode);
-      const noDataMsg = 'No local data for this country yet';
+      
+      // Create a helpful message for countries without specific data
+      const getNoDataMsg = (type: 'food' | 'phrase') => {
+        if (countryName && !travelData.isCountrySpecific) {
+          return `No ${type === 'food' ? 'local food' : 'local phrase'} data available for ${countryName} yet. Using global data.`;
+        }
+        return `No ${type === 'food' ? 'food' : 'phrase'} data available yet.`;
+      };
 
       if (route === 'food') {
         const foods = pickN(travelData.foods, 3);
-        return txtResponse(foods.length > 0 ? foods.join(' · ') : noDataMsg);
+        if (foods.length === 0) {
+          return txtResponse(getNoDataMsg('food'));
+        }
+        // Add note if using global data
+        const note = !travelData.isCountrySpecific && countryName 
+          ? ` (Global - no ${countryName} data yet)`
+          : '';
+        return txtResponse(foods.join(' · ') + note);
       }
 
       if (route === 'phrase') {
         const phrases = pickN(travelData.phrases, 3);
-        if (phrases.length === 0) return txtResponse(noDataMsg);
+        if (phrases.length === 0) {
+          return txtResponse(getNoDataMsg('phrase'));
+        }
         
         const lang = phrases[0].lang;
         const formatted = phrases.map((phrase, index) => {
@@ -578,12 +563,13 @@ export async function GET(
             : `"${phrase.text}" = ${phrase.meaning}`;
           return index === 0 ? `${lang} → ${phrasePart}` : phrasePart;
         });
-        return txtResponse(formatted.join(' · '));
-      }
-
-      if (route === 'sidequest') {
-        const sidequests = pickN(travelData.sidequests, 3);
-        return txtResponse(sidequests.length > 0 ? sidequests.join(' · ') : noDataMsg);
+        
+        // Add note if using global data
+        const note = !travelData.isCountrySpecific && countryName 
+          ? ` (Global - no ${countryName} phrases yet)`
+          : '';
+        
+        return txtResponse(formatted.join(' · ') + note);
       }
     }
 
@@ -660,13 +646,9 @@ export async function GET(
 
     // Combined stats route (needs location data)
     if (route === 'stats') {
-      const [hrStats, speedStats, altStats, distance, countries, cities] = await Promise.all([
-        getHeartrateStats(),
+      const [speedStats, altStats] = await Promise.all([
         getSpeedStats(),
         getAltitudeStats(),
-        getDistanceTraveled(),
-        getCountriesVisited(),
-        getCitiesVisited(),
       ]);
 
       const parts: string[] = [];
@@ -702,24 +684,6 @@ export async function GET(
       // Altitude
       if (altStats.current && altStats.current.age === 'current') {
         parts.push(`Altitude: ${altStats.current.altitude} m`);
-      }
-
-      // Heartrate
-      if (hrStats.current && hrStats.current.age === 'current') {
-        parts.push(`HR: ${hrStats.current.bpm} BPM`);
-      }
-
-      // Distance
-      if (distance !== null) {
-        parts.push(`Distance: ${distance} km`);
-      }
-
-      // Countries/Cities
-      if (countries.length > 0) {
-        parts.push(`Countries: ${countries.length}`);
-      }
-      if (cities.length > 0) {
-        parts.push(`Cities: ${cities.length}`);
       }
 
       return txtResponse(parts.length > 0 ? parts.join(' | ') : 'No stats available');
@@ -765,22 +729,6 @@ export async function GET(
         'time - Local time',
         'map - Google Maps link',
         'location - City-level location name',
-        'hr - Heart rate stats',
-        'speed - Speed stats',
-        'altitude - Altitude stats',
-        'stats - Combined stats',
-      ];
-      
-      debugData.availableRoutes = [
-        'status - Raw GPS data',
-        'debug - This debug info',
-        'weather - Current weather',
-        'forecast - Weather forecast',
-        'sun - Sunrise/sunset times',
-        'time - Local time',
-        'map - Google Maps link',
-        'location - City-level location name',
-        'hr - Heart rate stats',
         'speed - Speed stats',
         'altitude - Altitude stats',
         'stats - Combined stats',

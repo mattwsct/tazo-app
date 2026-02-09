@@ -677,7 +677,7 @@ The overlay app also provides chat command APIs for Fossabot integration. All co
 - **Social Media**: `/api/chat/instagram`, `/api/chat/twitter`, `/api/chat/kick`, etc.
 - **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
 - **Weather**: `/api/chat/forecast`, `/api/chat/sun`
-- **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/sidequest`
+- **Travel**: `/api/chat/food`, `/api/chat/phrase`
 - **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`, `/api/chat/finch`, `/api/chat/fcm`
 - **Utility**: `/api/chat/status`, `/api/chat/json`, `/api/chat/debug`
 
