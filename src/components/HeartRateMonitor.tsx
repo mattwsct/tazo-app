@@ -19,11 +19,11 @@ interface HeartRateState {
 }
 
 const HEART_RATE_CONFIG = {
-  TIMEOUT: 30000, // 30 seconds - hide if no data (more forgiving for IRL streaming)
+  TIMEOUT: 30000, // 30 seconds - hide if no data
   CHANGE_THRESHOLD: 5, // 5 BPM - minimum change to update animation
   ANIMATION_DELAY: 1000, // 1 second delay before updating animation speed
   MAX_RECONNECT_ATTEMPTS: 10,
-  CONNECTION_DEBOUNCE: 30000, // 30 seconds - optimal for IRL streams with brief connection drops (tunnels, rural areas)
+  CONNECTION_DEBOUNCE: 30000, // 30 seconds - keep showing last BPM during brief socket drops before hiding
   COLOR_DEBOUNCE: 5000, // 5 seconds - debounce color changes to prevent rapid flashing
 } as const;
 
@@ -73,9 +73,11 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
       return;
     }
 
-    // If disconnecting, debounce to prevent rapid flashing
+    // If disconnecting, debounce to prevent rapid flashing; clear BPM when we actually hide
     connectionTimer.current = setTimeout(() => {
-      setHeartRate(prev => ({ ...prev, isConnected: false }));
+      setHeartRate(prev => ({ ...prev, isConnected: false, bpm: 0 }));
+      setStableAnimationBpm(0);
+      setDebouncedBpm(0);
       connectionTimer.current = null;
     }, HEART_RATE_CONFIG.CONNECTION_DEBOUNCE);
   }, []);
@@ -235,11 +237,8 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
           
           HeartRateLogger.info('Pulsoid WebSocket connection closed');
           
-          // Immediately clear heart rate data when connection is lost
-          setHeartRate(prev => ({ ...prev, bpm: 0, isConnected: false }));
-          setStableAnimationBpm(0);
-          
-          // Clear any existing timeouts
+          // Don't clear BPM immediately - keep showing last value while reconnecting (avoids flicker)
+          // CONNECTION_DEBOUNCE will hide after 30s if we don't reconnect
           if (heartRateTimer.current) {
             clearTimeout(heartRateTimer.current);
             heartRateTimer.current = null;

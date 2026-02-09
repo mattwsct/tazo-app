@@ -1007,9 +1007,9 @@ function OverlayPage() {
                     // Prevents race conditions where older requests complete after newer ones
                     if (requestTimestamp >= lastLocationTime.current) {
                       lastLocationTime.current = requestTimestamp;
-                    
-                    // Check if LocationIQ returned useful data (more than just country)
-                    const hasUsefulData = hasCompleteLocationData(loc);
+
+                      // Check if LocationIQ returned useful data (more than just country)
+                      const hasUsefulData = hasCompleteLocationData(loc);
                     
                     const hasCountryData = loc && loc.country;
                     

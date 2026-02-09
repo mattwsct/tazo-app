@@ -637,20 +637,18 @@ export async function GET(
           parts.push(`[${countryName}]`);
         }
         
-        // Add emergency phone numbers only (simplified - just the essential numbers)
+        // Add emergency phone numbers only (no duplication; works for all countries)
+        // If country has police/ambulance/fire breakdown we show those; otherwise single phone line
         const phoneParts: string[] = [];
-        if (emergencyInfo.police) {
-          phoneParts.push(`Police: ${emergencyInfo.police}`);
-        }
-        if (emergencyInfo.ambulance) {
-          phoneParts.push(`Ambulance: ${emergencyInfo.ambulance}`);
-        }
-        if (emergencyInfo.fire && emergencyInfo.fire !== emergencyInfo.ambulance) {
-          phoneParts.push(`Fire: ${emergencyInfo.fire}`);
-        }
-        // Only add "All" if it's different from individual numbers
-        if (emergencyInfo.phone && !phoneParts.some(p => p.includes(emergencyInfo.phone!))) {
-          phoneParts.unshift(`All: ${emergencyInfo.phone}`);
+        const hasIndividual = emergencyInfo.police || emergencyInfo.ambulance || emergencyInfo.fire;
+        if (hasIndividual) {
+          if (emergencyInfo.police) phoneParts.push(`Police: ${emergencyInfo.police}`);
+          if (emergencyInfo.ambulance) phoneParts.push(`Ambulance: ${emergencyInfo.ambulance}`);
+          if (emergencyInfo.fire && emergencyInfo.fire !== emergencyInfo.ambulance) {
+            phoneParts.push(`Fire: ${emergencyInfo.fire}`);
+          }
+        } else if (emergencyInfo.phone) {
+          phoneParts.push(emergencyInfo.phone);
         }
         if (phoneParts.length > 0) {
           parts.push(phoneParts.join(' | '));
