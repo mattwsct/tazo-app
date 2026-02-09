@@ -520,18 +520,37 @@ export async function GET(
       return txtResponse('Map is hidden');
     }
 
-    // Travel routes (food, phrase) - uses persistent location country code
-    if (route === 'food' || route === 'phrase') {
-      const countryCode = persistentLocation?.location?.countryCode || null;
-      const countryName = persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null);
+    // Travel routes (food, phrase, tips, emergency) - uses persistent location country code or optional country code from query
+    if (route === 'food' || route === 'phrase' || route === 'tips' || route === 'emergency') {
+      // Check if a country code was provided in the query (e.g., !food AU or !phrase JP)
+      const queryCountryCode = q ? q.trim().toUpperCase() : null;
+      const requestedCountryCode = queryCountryCode && queryCountryCode.length === 2 ? queryCountryCode : null;
+      
+      // Use requested country code if provided, otherwise use persistent location
+      const countryCode = requestedCountryCode || persistentLocation?.location?.countryCode || null;
+      const countryName = requestedCountryCode 
+        ? getCountryNameFromCode(requestedCountryCode)
+        : (persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null));
       const travelData = getTravelData(countryCode);
       
       // Create a helpful message for countries without specific data
-      const getNoDataMsg = (type: 'food' | 'phrase') => {
+      const getNoDataMsg = (type: 'food' | 'phrase' | 'tips' | 'emergency') => {
         if (countryName && !travelData.isCountrySpecific) {
-          return `No ${type === 'food' ? 'local food' : 'local phrase'} data available for ${countryName} yet. Using global data.`;
+          const typeNames: Record<string, string> = {
+            food: 'local food',
+            phrase: 'local phrase',
+            tips: 'cultural tips',
+            emergency: 'emergency phrases'
+          };
+          return `No ${typeNames[type]} data available for ${countryName} yet.`;
         }
-        return `No ${type === 'food' ? 'food' : 'phrase'} data available yet.`;
+        const typeNames: Record<string, string> = {
+          food: 'food',
+          phrase: 'phrase',
+          tips: 'cultural tips',
+          emergency: 'emergency phrases'
+        };
+        return `No ${typeNames[type]} data available yet.`;
       };
 
       if (route === 'food') {
@@ -543,7 +562,11 @@ export async function GET(
         const note = !travelData.isCountrySpecific && countryName 
           ? ` (Global - no ${countryName} data yet)`
           : '';
-        return txtResponse(foods.join(' · ') + note);
+        // Add country indicator if a specific country was requested
+        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
+          ? ` [${countryName}]`
+          : '';
+        return txtResponse(foods.join(' · ') + note + countryIndicator);
       }
 
       if (route === 'phrase') {
@@ -564,8 +587,45 @@ export async function GET(
         const note = !travelData.isCountrySpecific && countryName 
           ? ` (Global - no ${countryName} phrases yet)`
           : '';
+        // Add country indicator if a specific country was requested
+        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
+          ? ` [${countryName}]`
+          : '';
         
-        return txtResponse(formatted.join(' · ') + note);
+        return txtResponse(formatted.join(' · ') + note + countryIndicator);
+      }
+
+      if (route === 'tips') {
+        const tips = travelData.culturalTips || [];
+        if (tips.length === 0) {
+          return txtResponse(getNoDataMsg('tips'));
+        }
+        const selectedTips = pickN(tips, 3);
+        // Add country indicator if a specific country was requested
+        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
+          ? ` [${countryName}]`
+          : '';
+        return txtResponse(selectedTips.join(' · ') + countryIndicator);
+      }
+
+      if (route === 'emergency') {
+        const emergencyPhrases = travelData.emergencyPhrases || [];
+        if (emergencyPhrases.length === 0) {
+          return txtResponse(getNoDataMsg('emergency'));
+        }
+        const selected = pickN(emergencyPhrases, 3);
+        const lang = selected[0].lang;
+        const formatted = selected.map((phrase, index) => {
+          const phrasePart = phrase.roman
+            ? `"${phrase.text}" (${phrase.roman}) = ${phrase.meaning}`
+            : `"${phrase.text}" = ${phrase.meaning}`;
+          return index === 0 ? `${lang} → ${phrasePart}` : phrasePart;
+        });
+        // Add country indicator if a specific country was requested
+        const countryIndicator = requestedCountryCode && travelData.isCountrySpecific
+          ? ` [${countryName}]`
+          : '';
+        return txtResponse(formatted.join(' · ') + countryIndicator);
       }
     }
 

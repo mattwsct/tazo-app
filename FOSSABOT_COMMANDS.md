@@ -99,23 +99,49 @@ Or using individual parameters:
 
 ## Travel Commands
 
-These commands use your RTIRL GPS location to provide country-specific travel information.
+These commands use your RTIRL GPS location to provide country-specific travel information. You can also specify a country code to check other countries' data.
+
+**Available countries:** JP (Japan), VN (Vietnam), ID (Indonesia), AU (Australia), TH (Thailand), KR (South Korea), PH (Philippines), SG (Singapore), MY (Malaysia), TW (Taiwan), IN (India), CN (China), FR (France), ES (Spain), IT (Italy), DE (Germany), GB (UK), CA (Canada), MX (Mexico)
 
 ### Food
 
 ```
 !food → $(customapi https://app.tazo.wtf/api/chat/food)
+!food AU → $(customapi https://app.tazo.wtf/api/chat/food?q=AU)
+!food JP → $(customapi https://app.tazo.wtf/api/chat/food?q=JP)
 ```
 
-Returns 3 random local food recommendations based on your current country.
+Returns 3 random local food recommendations. Uses your current country by default, or specify a country code (e.g., `AU`, `JP`) to check other countries.
 
 ### Phrases
 
 ```
 !phrase → $(customapi https://app.tazo.wtf/api/chat/phrase)
+!phrase JP → $(customapi https://app.tazo.wtf/api/chat/phrase?q=JP)
+!phrase TH → $(customapi https://app.tazo.wtf/api/chat/phrase?q=TH)
 ```
 
-Returns 3 random local phrases with translations based on your current country.
+Returns 3 random local phrases with translations. Uses your current country by default, or specify a country code to check other countries.
+
+### Cultural Tips
+
+```
+!tips → $(customapi https://app.tazo.wtf/api/chat/tips)
+!tips FR → $(customapi https://app.tazo.wtf/api/chat/tips?q=FR)
+!tips IT → $(customapi https://app.tazo.wtf/api/chat/tips?q=IT)
+```
+
+Returns 3 random cultural tips to help you navigate local customs and etiquette. Uses your current country by default, or specify a country code to check other countries.
+
+### Emergency Phrases
+
+```
+!emergency → $(customapi https://app.tazo.wtf/api/chat/emergency)
+!emergency MX → $(customapi https://app.tazo.wtf/api/chat/emergency?q=MX)
+!emergency DE → $(customapi https://app.tazo.wtf/api/chat/emergency?q=DE)
+```
+
+Returns 3 random emergency phrases with translations. Uses your current country by default, or specify a country code to check other countries. Useful for IRL emergencies when you need help from locals.
 
 ## Stats Commands
 
