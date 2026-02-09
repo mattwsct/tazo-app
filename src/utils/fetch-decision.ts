@@ -21,12 +21,14 @@ export interface FetchDecisionParams {
 export interface WeatherFetchDecision {
   shouldFetch: boolean;
   reason: string;
+  isDramaticChange: boolean;
 }
 
 export interface LocationFetchDecision {
   shouldFetch: boolean;
   reason: string;
   adaptiveThreshold: number;
+  isDramaticChange: boolean;
 }
 
 /**
@@ -67,7 +69,7 @@ export function shouldFetchWeather(params: FetchDecisionParams): WeatherFetchDec
   else if (weatherDataAge >= TIMERS.WEATHER_DATA_VALIDITY_TIMEOUT) reason = 'data stale';
   else if (needsTimezone) reason = 'timezone needed';
   
-  return { shouldFetch, reason };
+  return { shouldFetch, reason, isDramaticChange };
 }
 
 /**
@@ -107,7 +109,7 @@ export function shouldFetchLocation(params: FetchDecisionParams): LocationFetchD
   else if (lastFetchTime === 0) reason = 'first fetch';
   else if (locationElapsed >= LOCATION_MIN_INTERVAL && meetsDistance) reason = 'interval and distance met';
   
-  return { shouldFetch, reason, adaptiveThreshold };
+  return { shouldFetch, reason, adaptiveThreshold, isDramaticChange };
 }
 
 /**

@@ -528,6 +528,21 @@ All API limits are enforced client-side to prevent quota exhaustion:
 - **Cooldown periods**: Minimum time between calls (1s for LocationIQ, 2s for OpenWeatherMap)
 - **Adaptive thresholds**: Distance-based thresholds (10m/100m/1000m) reduce API calls when moving slowly
 - **Time gates**: Minimum intervals between calls (18s for location, 5min for weather) ensure limits aren't exceeded
+- **Dramatic change bypass**: Movement >50km bypasses rate limiting (e.g., airplane GPS reconnects after landing)
+- **Concurrency protection**: In-progress flags prevent duplicate concurrent fetches
+- **Non-consuming checks**: `canMakeApiCall()` function for logging/debugging without consuming quota
+
+#### Protection Mechanisms Summary
+✅ **Per-second limits** enforced immediately  
+✅ **Daily limits** tracked and enforced for LocationIQ  
+✅ **Cooldown periods** prevent rapid successive calls  
+✅ **Time gates** ensure minimum intervals between calls  
+✅ **Distance thresholds** reduce calls when stationary  
+✅ **Concurrency protection** prevents duplicate fetches  
+✅ **Health monitoring** tracks failures and implements backoff  
+✅ **Non-consuming checks** for logging (prevents double consumption)
+
+**Critical Fix**: Removed duplicate `checkRateLimit()` calls that were consuming 2x API quota. Rate limit is now checked only once per actual API call.
 
 ### Important Code Patterns
 - **Data Caching**: Always cache data for smooth transitions (30-minute validity windows)

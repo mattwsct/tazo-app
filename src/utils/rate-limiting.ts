@@ -79,3 +79,41 @@ export function checkRateLimit(api: keyof typeof RATE_LIMITS): boolean {
   return true;
 }
 
+/**
+ * Checks rate limit status WITHOUT consuming a call (for logging/debugging)
+ * Returns true if a call would be allowed, false if rate limited
+ */
+export function canMakeApiCall(api: keyof typeof RATE_LIMITS): boolean {
+  const limit = RATE_LIMITS[api];
+  const now = Date.now();
+  
+  // Reset per-second limits when interval expires
+  if (now - limit.lastReset > limit.resetInterval) {
+    // Don't modify the actual limit object, just check
+  }
+  
+  // Check if per-second limit reached
+  const currentCalls = (now - limit.lastReset > limit.resetInterval) ? 0 : limit.calls;
+  if (currentCalls >= limit.max) {
+    return false;
+  }
+  
+  // Enforce cooldown period
+  const cooldownPeriod = api === 'locationiq' ? 1000 : (api === 'openweathermap' ? 2000 : 500);
+  if (limit.lastCallTime > 0 && now - limit.lastCallTime < cooldownPeriod) {
+    return false;
+  }
+  
+  // Check daily limit for LocationIQ
+  if (api === 'locationiq' && limit.dailyMax && limit.dailyReset) {
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const dailyCalls = (now - limit.dailyReset >= oneDayMs) ? 0 : (limit.dailyCalls || 0);
+    
+    if (dailyCalls >= limit.dailyMax) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+

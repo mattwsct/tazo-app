@@ -27,7 +27,7 @@ import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/
 import { distanceInMeters, formatLocation, formatCountryName } from '@/utils/location-utils';
 import { updatePersistentLocation } from '@/utils/location-cache';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
-import { checkRateLimit } from '@/utils/rate-limiting';
+import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
 import { 
   createLocationWithCountryFallback, 
   createWeatherFallback, 
@@ -622,6 +622,30 @@ function OverlayPage() {
     // Load initial settings
     loadSettings();
     
+    // Load initial location from persistent storage (fallback if LocationIQ is rate-limited)
+    const loadInitialLocation = async () => {
+      try {
+        const res = await fetch('/api/get-location', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.location && data.rawLocation) {
+            // Update location state and cache raw location data
+            setLocation(data.location);
+            lastRawLocation.current = data.rawLocation;
+            setHasIncompleteLocationData(false);
+            OverlayLogger.location('Location initialized from persistent storage', {
+              primary: data.location.primary || 'none',
+              secondary: data.location.secondary || 'none'
+            });
+          }
+        }
+      } catch (error) {
+        // Silently fail - location will be fetched when LocationIQ is available
+        OverlayLogger.warn('Failed to load initial location from persistent storage', { error });
+      }
+    };
+    loadInitialLocation();
+    
     // Set up real-time updates
     const eventSource = setupSSE();
     
@@ -862,16 +886,18 @@ function OverlayPage() {
               const promises: Promise<void>[] = [];
               
               // Check if weather should actually be fetched (with rate limiting and concurrency checks)
+              // Dramatic changes (>50km) bypass rate limiting (e.g., airplane GPS reconnects)
               const shouldFetchWeatherNow = weatherDecision.shouldFetch && 
                 API_KEYS.OPENWEATHER && 
                 !weatherFetchInProgress.current &&
-                checkRateLimit('openweathermap');
+                (weatherDecision.isDramaticChange || checkRateLimit('openweathermap'));
               
-              // Log weather fetch decision for debugging
+              // Log weather fetch decision for debugging (use non-consuming check)
               if (weatherDecision.shouldFetch && API_KEYS.OPENWEATHER) {
                 OverlayLogger.weather('Weather fetch check', {
                   willFetch: shouldFetchWeatherNow,
-                  reason: !checkRateLimit('openweathermap') ? 'rate limited' :
+                  reason: weatherDecision.isDramaticChange ? 'dramatic change (bypassing rate limit)' :
+                          !canMakeApiCall('openweathermap') ? 'rate limited' :
                           weatherFetchInProgress.current ? 'fetch in progress' :
                           weatherDecision.reason,
                   needsTimezone,
@@ -943,9 +969,10 @@ function OverlayPage() {
               }
               
               // Check if location should actually be fetched (with concurrency check)
+              // Dramatic changes (>50km) bypass rate limiting (e.g., airplane GPS reconnects)
               const shouldFetchLocationNow = locationDecision.shouldFetch && 
                 !locationFetchInProgress.current &&
-                checkRateLimit('locationiq');
+                (locationDecision.isDramaticChange || checkRateLimit('locationiq'));
               
               if (shouldFetchLocationNow) {
                 locationFetchInProgress.current = true; // Mark as in progress
@@ -963,21 +990,16 @@ function OverlayPage() {
                     let locationIQRateLimited = false;
                     
                     if (API_KEYS.LOCATIONIQ) {
-                      // Check rate limits: 1 per second + 5,000 per day
-                      if (checkRateLimit('locationiq')) {
+                      // Rate limit already checked above (line 972) - don't check again to avoid double consumption
+                      // The checkRateLimit call above already consumed a quota slot
                       const locationResult = await safeApiCall(
                         () => fetchLocationFromLocationIQ(lat!, lon!, API_KEYS.LOCATIONIQ!),
                         'LocationIQ fetch'
                       );
-                        if (locationResult && typeof locationResult === 'object' && 'location' in locationResult) {
-                          const result = locationResult as { location: LocationData | null; was404: boolean };
-                          loc = result.location;
-                          locationIQWas404 = result.was404;
-                      }
-                      } else {
-                        // Rate limited - don't use fallback yet, wait for next update
-                        locationIQRateLimited = true;
-                        OverlayLogger.location('LocationIQ rate limited, skipping fetch - will retry on next GPS update');
+                      if (locationResult && typeof locationResult === 'object' && 'location' in locationResult) {
+                        const result = locationResult as { location: LocationData | null; was404: boolean };
+                        loc = result.location;
+                        locationIQWas404 = result.was404;
                       }
                     }
                     
