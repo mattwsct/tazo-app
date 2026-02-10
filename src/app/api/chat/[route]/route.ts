@@ -1045,45 +1045,87 @@ export async function GET(
         return txtResponse(`${symbol}${formatted} ${fromCurrency}`);
       }
 
-      // Fetch exchange rate from free API (Frankfurter - no API key required)
-      // Fallback to exchangerate.host if Frankfurter fails
+      // Fetch exchange rate with multiple fallback APIs
+      // Priority: ExchangeRate-API (if key provided) -> Frankfurter -> exchangerate.host
       try {
+        const exchangeRateApiKey = process.env.EXCHANGERATE_API_KEY;
         let rate: number | null = null;
+        let lastError: Error | null = null;
         
-        // Try Frankfurter API first (free, no limits)
-        try {
-          const frankfurterUrl = `https://api.frankfurter.dev/latest?from=${fromCurrency}&to=${toCurrency}`;
-          const frankfurterResponse = await fetch(frankfurterUrl, {
-            next: { revalidate: 3600 } // Cache for 1 hour
-          });
-          
-          if (frankfurterResponse.ok) {
-            const frankfurterData = await frankfurterResponse.json();
-            rate = frankfurterData.rates?.[toCurrency];
+        // Try ExchangeRate-API first if API key is available (most reliable)
+        if (exchangeRateApiKey) {
+          try {
+            const exchangeRateUrl = `https://v6.exchangerate-api.com/v6/${exchangeRateApiKey}/latest/${fromCurrency}`;
+            const exchangeRateResponse = await fetch(exchangeRateUrl, {
+              next: { revalidate: 3600 } // Cache for 1 hour
+            });
+            
+            if (exchangeRateResponse.ok) {
+              const exchangeRateData = await exchangeRateResponse.json();
+              if (exchangeRateData.result === 'success' && exchangeRateData.conversion_rates?.[toCurrency]) {
+                rate = exchangeRateData.conversion_rates[toCurrency];
+              } else {
+                throw new Error('ExchangeRate-API returned invalid data');
+              }
+            } else {
+              throw new Error(`ExchangeRate-API returned ${exchangeRateResponse.status}`);
+            }
+          } catch (exchangeRateError) {
+            lastError = exchangeRateError instanceof Error ? exchangeRateError : new Error('ExchangeRate-API failed');
+            console.warn('ExchangeRate-API failed, trying fallback:', lastError.message);
+          }
+        }
+        
+        // Try Frankfurter API (free, no API key required)
+        if (!rate) {
+          try {
+            const frankfurterUrl = `https://api.frankfurter.dev/latest?from=${fromCurrency}&to=${toCurrency}`;
+            const frankfurterResponse = await fetch(frankfurterUrl, {
+              next: { revalidate: 3600 } // Cache for 1 hour
+            });
+            
+            if (frankfurterResponse.ok) {
+              const frankfurterData = await frankfurterResponse.json();
+              rate = frankfurterData.rates?.[toCurrency];
+              
+              if (!rate || typeof rate !== 'number') {
+                throw new Error('Invalid rate data from Frankfurter');
+              }
+            } else {
+              throw new Error(`Frankfurter API returned ${frankfurterResponse.status}`);
+            }
+          } catch (frankfurterError) {
+            lastError = frankfurterError instanceof Error ? frankfurterError : new Error('Frankfurter API failed');
+            console.warn('Frankfurter API failed, trying fallback:', lastError.message);
+          }
+        }
+        
+        // Fallback to exchangerate.host
+        if (!rate) {
+          try {
+            const exchangeUrl = `https://api.exchangerate.host/latest?base=${fromCurrency}&symbols=${toCurrency}`;
+            const exchangeResponse = await fetch(exchangeUrl, {
+              next: { revalidate: 3600 } // Cache for 1 hour
+            });
+            
+            if (!exchangeResponse.ok) {
+              throw new Error(`exchangerate.host returned ${exchangeResponse.status}`);
+            }
+            
+            const exchangeData = await exchangeResponse.json();
+            rate = exchangeData.rates?.[toCurrency];
             
             if (!rate || typeof rate !== 'number') {
-              throw new Error('Invalid rate data from Frankfurter');
+              throw new Error('Invalid exchange rate data from exchangerate.host');
             }
-          } else {
-            throw new Error('Frankfurter API failed');
+          } catch (exchangeError) {
+            lastError = exchangeError instanceof Error ? exchangeError : new Error('exchangerate.host failed');
+            console.error('All exchange rate APIs failed:', lastError.message);
           }
-        } catch (frankfurterError) {
-          // Fallback to exchangerate.host
-          const exchangeUrl = `https://api.exchangerate.host/latest?base=${fromCurrency}&symbols=${toCurrency}`;
-          const exchangeResponse = await fetch(exchangeUrl, {
-            next: { revalidate: 3600 } // Cache for 1 hour
-          });
-          
-          if (!exchangeResponse.ok) {
-            throw new Error('Exchange rate API failed');
-          }
-          
-          const exchangeData = await exchangeResponse.json();
-          rate = exchangeData.rates?.[toCurrency];
-          
-          if (!rate || typeof rate !== 'number') {
-            throw new Error('Invalid exchange rate data');
-          }
+        }
+        
+        if (!rate) {
+          throw lastError || new Error('All exchange rate APIs failed');
         }
         
         // Calculate conversion and format response

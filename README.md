@@ -42,6 +42,7 @@ KV_REST_API_TOKEN=your_vercel_kv_token
 NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token  # Heart rate monitoring (optional)
 NEXT_PUBLIC_MAPTILER_KEY=your_maptiler_key    # Map tiles (optional - falls back to OpenFreeMap if not provided)
 # Get free MapTiler key from https://cloud.maptiler.com/account/keys/
+EXCHANGERATE_API_KEY=your_exchangerate_api_key  # Exchange rate API (optional - free tier: 1,500 requests/month at https://www.exchangerate-api.com/)
 ```
 
 ### 3. Run
