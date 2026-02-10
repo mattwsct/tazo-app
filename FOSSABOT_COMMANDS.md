@@ -101,7 +101,7 @@ Or using individual parameters:
 
 These commands use your RTIRL GPS location to provide country-specific travel information. You can also specify a country code to check other countries' data.
 
-**Available countries:** AU (Australia), BR (Brazil), CA (Canada), CN (China), DE (Germany), ES (Spain), FR (France), GB (United Kingdom), GR (Greece), ID (Indonesia), IN (India), JP (Japan), KR (South Korea), MX (Mexico), MY (Malaysia), NL (Netherlands), NZ (New Zealand), PH (Philippines), PT (Portugal), SG (Singapore), TH (Thailand), TR (Turkey), TW (Taiwan), VN (Vietnam), ZA (South Africa)
+**Available countries:** AU (Australia), BR (Brazil), CA (Canada), CN (China), DE (Germany), ES (Spain), FR (France), GB (United Kingdom), GR (Greece), ID (Indonesia), IN (India), JP (Japan), KR (South Korea), MX (Mexico), MY (Malaysia), NL (Netherlands), NZ (New Zealand), PH (Philippines), PT (Portugal), SG (Singapore), TH (Thailand), TR (Turkey), TW (Taiwan), US (United States), VN (Vietnam), ZA (South Africa)
 
 Use `!countries` to see the full list.
 
