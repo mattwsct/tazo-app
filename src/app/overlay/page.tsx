@@ -1259,7 +1259,6 @@ function OverlayPage() {
     );
   }, []);
 
-
   const weatherDisplay = useMemo(() => {
     if (!weather) {
     // No weather data - return null (no logging to reduce console spam)

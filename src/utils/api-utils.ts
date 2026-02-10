@@ -64,6 +64,9 @@ async function fetchWithRetry(
 export interface WeatherData {
   temp: number; // "feels like" temperature (more accurate for IRL streaming)
   desc: string;
+  windKmh?: number;
+  humidity?: number;
+  visibility?: number | null;
 }
 
 export interface WeatherTimezoneResponse {
@@ -312,10 +315,17 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     
     // Extract weather data
     // Use "feels like" temperature as it's more accurate for IRL streaming (accounts for wind, humidity, etc.)
+    // Extract wind data - use sustained wind speed (wind.speed), not gusts (wind.gust)
+    // wind.speed is in m/s, convert to km/h
+    const windKmh = data.wind?.speed ? Math.round(data.wind.speed * 3.6) : undefined;
+    
     if (data.main && typeof data.main.feels_like === 'number' && data.weather && data.weather[0]) {
       weather = {
         temp: Math.round(data.main.feels_like), // Use "feels like" temperature
         desc: data.weather[0].description || 'unknown',
+        windKmh: windKmh,
+        humidity: data.main.humidity || undefined,
+        visibility: data.visibility ? (data.visibility / 1000) : null,
       };
       
       ApiLogger.info('openweathermap', 'Weather data received', weather);
@@ -324,6 +334,9 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
       weather = {
         temp: Math.round(data.main.temp),
         desc: data.weather[0].description || 'unknown',
+        windKmh: windKmh,
+        humidity: data.main.humidity || undefined,
+        visibility: data.visibility ? (data.visibility / 1000) : null,
       };
       
       ApiLogger.info('openweathermap', 'Weather data received (using regular temp as feels_like unavailable)', weather);
