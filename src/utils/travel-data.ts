@@ -94,6 +94,30 @@ export const GLOBAL: TravelData = {
     "You have a beautiful personality",
     "Want to hang out sometime?",
     "You're absolutely gorgeous"
+  ],
+  insults: [
+    "Idiot",
+    "Dumbass",
+    "Moron",
+    "Jackass",
+    "Dickhead",
+    "Asshole",
+    "Bastard",
+    "Shut up",
+    "Get lost",
+    "Piss off",
+    "Bugger off",
+    "Sod off",
+    "Bloody hell",
+    "You're useless",
+    "Waste of space",
+    "Prat",
+    "Plonker",
+    "Muppet",
+    "Numpty",
+    "Donkey",
+    "Pillock",
+    "Knobhead"
   ]
 };
 
