@@ -514,8 +514,8 @@ export async function GET(
       return txtResponse('Map is hidden');
     }
 
-    // Travel routes (food, phrase, tips, emergency, flirt, sex, insults) - uses persistent location country code or optional country code from query
-    if (route === 'food' || route === 'phrase' || route === 'tips' || route === 'emergency' || route === 'flirt' || route === 'sex' || route === 'insults') {
+    // Travel routes (food, phrase, tips, emergency, flirt, sex, insults/insult) - uses persistent location country code or optional country code from query
+    if (route === 'food' || route === 'phrase' || route === 'tips' || route === 'emergency' || route === 'flirt' || route === 'sex' || route === 'insults' || route === 'insult') {
       // Check if a country code was provided in the query (e.g., !food AU or !phrase JP)
       const queryCountryCode = q ? q.trim().toUpperCase() : null;
       const requestedCountryCode = queryCountryCode && queryCountryCode.length === 2 ? queryCountryCode : null;
@@ -687,7 +687,7 @@ export async function GET(
         return txtResponse(countryPrefix + selectedPhrases.join(' · '));
       }
 
-      if (route === 'insults') {
+      if (route === 'insults' || route === 'insult') {
         const insults = travelData.insults || [];
         if (insults.length === 0) {
           return txtResponse(getNoDataMsg('insults'));
