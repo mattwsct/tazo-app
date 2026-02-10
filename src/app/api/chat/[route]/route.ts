@@ -1045,24 +1045,48 @@ export async function GET(
         return txtResponse(`${symbol}${formatted} ${fromCurrency}`);
       }
 
-      // Fetch exchange rate from free API (exchangerate.host - no API key required)
+      // Fetch exchange rate from free API (Frankfurter - no API key required)
+      // Fallback to exchangerate.host if Frankfurter fails
       try {
-        const exchangeUrl = `https://api.exchangerate.host/latest?base=${fromCurrency}&symbols=${toCurrency}`;
-        const exchangeResponse = await fetch(exchangeUrl, {
-          next: { revalidate: 3600 } // Cache for 1 hour
-        });
+        let rate: number | null = null;
         
-        if (!exchangeResponse.ok) {
-          throw new Error('Exchange rate API failed');
+        // Try Frankfurter API first (free, no limits)
+        try {
+          const frankfurterUrl = `https://api.frankfurter.dev/latest?from=${fromCurrency}&to=${toCurrency}`;
+          const frankfurterResponse = await fetch(frankfurterUrl, {
+            next: { revalidate: 3600 } // Cache for 1 hour
+          });
+          
+          if (frankfurterResponse.ok) {
+            const frankfurterData = await frankfurterResponse.json();
+            rate = frankfurterData.rates?.[toCurrency];
+            
+            if (!rate || typeof rate !== 'number') {
+              throw new Error('Invalid rate data from Frankfurter');
+            }
+          } else {
+            throw new Error('Frankfurter API failed');
+          }
+        } catch (frankfurterError) {
+          // Fallback to exchangerate.host
+          const exchangeUrl = `https://api.exchangerate.host/latest?base=${fromCurrency}&symbols=${toCurrency}`;
+          const exchangeResponse = await fetch(exchangeUrl, {
+            next: { revalidate: 3600 } // Cache for 1 hour
+          });
+          
+          if (!exchangeResponse.ok) {
+            throw new Error('Exchange rate API failed');
+          }
+          
+          const exchangeData = await exchangeResponse.json();
+          rate = exchangeData.rates?.[toCurrency];
+          
+          if (!rate || typeof rate !== 'number') {
+            throw new Error('Invalid exchange rate data');
+          }
         }
         
-        const exchangeData = await exchangeResponse.json();
-        const rate = exchangeData.rates?.[toCurrency];
-        
-        if (!rate || typeof rate !== 'number') {
-          throw new Error('Invalid exchange rate data');
-        }
-        
+        // Calculate conversion and format response
         const convertedAmount = amount * rate;
         const formattedAmount = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const formattedConverted = convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
