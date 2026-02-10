@@ -1039,7 +1039,10 @@ export async function GET(
       }
 
       // Validate currency codes (3-letter ISO codes)
-      if (fromCurrency && (fromCurrency.length !== 3 || !/^[A-Z]{3}$/.test(fromCurrency))) {
+      if (!fromCurrency) {
+        return txtResponse('Usage: !convert <amount> [FROM] [TO] (e.g., !convert 1000, !convert 1,000.50 AUD, !convert 1000 AUD JPY)');
+      }
+      if (fromCurrency.length !== 3 || !/^[A-Z]{3}$/.test(fromCurrency)) {
         return txtResponse(`Invalid currency code: ${fromCurrency}. Use 3-letter ISO codes (e.g., USD, EUR, JPY, AUD)`);
       }
       if (toCurrency.length !== 3 || !/^[A-Z]{3}$/.test(toCurrency)) {
@@ -1149,12 +1152,12 @@ export async function GET(
       // Handle multi-currency conversion chain
       try {
         let currentAmount = amount;
-        let currentCurrency = fromCurrency;
         
         // Build conversion chain: [FROM, ...intermediates, TO]
-        const conversionChain = currencyCodes.length >= 2 
-          ? [fromCurrency, ...currencyCodes.slice(1)] 
-          : [fromCurrency, toCurrency];
+        // fromCurrency is guaranteed to be non-null at this point due to validation above
+        const conversionChain: string[] = currencyCodes.length >= 2 
+          ? [fromCurrency!, ...currencyCodes.slice(1)] 
+          : [fromCurrency!, toCurrency];
         
         // Convert through each step in the chain
         for (let i = 0; i < conversionChain.length - 1; i++) {
@@ -1165,7 +1168,6 @@ export async function GET(
           
           const rate = await fetchExchangeRate(from, to);
           currentAmount = currentAmount * rate;
-          currentCurrency = to;
         }
         
         // Format final result
