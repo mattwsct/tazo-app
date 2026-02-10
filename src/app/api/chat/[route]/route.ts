@@ -970,6 +970,25 @@ export async function GET(
     // Usage: !convert <amount> [FROM] [TO]
     // Examples: !convert 1000 (local to USD/AUD), !convert 1000 AUD (AUD to USD), !convert 1000 AUD JPY (AUD to JPY)
     if (route === 'convert') {
+      // Helper function to check if currency uses decimal places (ISO 4217 standard)
+      const usesDecimals = (currencyCode: string): boolean => {
+        const zeroDecimalCurrencies = [
+          'JPY', // Japanese Yen
+          'KRW', // South Korean Won
+          'VND', // Vietnamese Dong
+          'CLP', // Chilean Peso
+          'IDR', // Indonesian Rupiah
+          'IQD', // Iraqi Dinar
+          'IRR', // Iranian Rial
+          'ISK', // Icelandic Króna
+          'KMF', // Comoro Franc
+          'KPW', // North Korean Won
+          'LAK', // Lao Kip
+          'LBP', // Lebanese Pound
+        ];
+        return !zeroDecimalCurrencies.includes(currencyCode);
+      };
+      
       const parts = q.trim().split(/\s+/).filter(p => p);
       
       if (parts.length === 0) {
@@ -1041,7 +1060,9 @@ export async function GET(
             break;
           }
         }
-        const formatted = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const formatted = usesDecimals(fromCurrency)
+          ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : Math.round(amount).toLocaleString('en-US');
         return txtResponse(`${symbol}${formatted} ${fromCurrency}`);
       }
 
@@ -1130,8 +1151,16 @@ export async function GET(
         
         // Calculate conversion and format response
         const convertedAmount = amount * rate;
-        const formattedAmount = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const formattedConverted = convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fromUsesDecimals = usesDecimals(fromCurrency);
+        const toUsesDecimals = usesDecimals(toCurrency);
+        
+        const formattedAmount = fromUsesDecimals
+          ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : Math.round(amount).toLocaleString('en-US');
+        
+        const formattedConverted = toUsesDecimals
+          ? convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : Math.round(convertedAmount).toLocaleString('en-US');
         
         // Get currency symbols
         let fromSymbol = fromCurrency;
