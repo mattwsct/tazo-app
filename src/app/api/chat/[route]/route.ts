@@ -361,15 +361,14 @@ export async function GET(
         visibility,
       });
 
-      const tempF = Math.round(tempC * 9 / 5 + 32);
       const feelsF = Math.round(feelsLikeC * 9 / 5 + 32);
       
       // Enhanced weather response with feels like and more details
       const parts: string[] = [];
-      parts.push(`${emoji} ${formatTemperature(tempC)}/${tempF}°F ${desc}`);
+      parts.push(`${emoji} ${formatTemperature(tempC)} ${desc}`);
       
       if (Math.abs(feelsLikeC - tempC) > 1) {
-        parts.push(`Feels like ${Math.round(feelsLikeC)}°C/${feelsF}°F`);
+        parts.push(`feels like ${formatTemperature(feelsLikeC)}`);
       }
       
       // Weather alerts/warnings for severe conditions
@@ -436,6 +435,11 @@ export async function GET(
       const now = new Date();
       const todayStr = now.toLocaleDateString('en-CA', { timeZone: timezone });
       
+      // Calculate tomorrow's date in location's timezone
+      const tomorrowDate = new Date(now);
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrowStr = tomorrowDate.toLocaleDateString('en-CA', { timeZone: timezone });
+      
       // Group forecasts by date in location's timezone
       const dailyForecasts = new Map<string, typeof fc.list>();
       for (const item of fc.list) {
@@ -455,11 +459,11 @@ export async function GET(
       
       // Find today's date in the forecast
       let todayIndex = sortedDates.findIndex(date => date === todayStr);
+      
       if (todayIndex === -1) {
         // Today not in forecast (might be late at night and forecast starts tomorrow)
-        // Check if first date is tomorrow
         if (sortedDates.length > 0) {
-          // First date is after today, we'll treat it as "today" (next available day)
+          // Start from first available date
           todayIndex = 0;
         } else {
           return txtResponse('No forecast data available');
@@ -475,14 +479,23 @@ export async function GET(
         const items = dailyForecasts.get(dateStr)!;
         
         let dateLabel: string;
-        if (count === 0) {
+        // Compare dateStr directly with todayStr and tomorrowStr to determine label
+        if (dateStr === todayStr) {
           dateLabel = 'Today';
-        } else if (count === 1) {
+        } else if (dateStr === tomorrowStr) {
           dateLabel = 'Tomorrow';
         } else {
-          // Format date as "Mon 15" or "Mon Jan 15"
-          const date = new Date(dateStr + 'T12:00:00');
-          dateLabel = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
+          // Format date as "Mon Jan 15" - use first forecast item's timestamp to get correct date in timezone
+          const firstItem = items[0];
+          if (firstItem?.dt) {
+            const date = new Date(firstItem.dt * 1000);
+            dateLabel = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
+          } else {
+            // Fallback: parse dateStr (YYYY-MM-DD) and format
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+            dateLabel = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
+          }
         }
 
         let minTempC = Infinity;
@@ -859,7 +872,7 @@ export async function GET(
       return txtResponse(`Available countries: ${formatted}`);
     }
 
-    // Fact route - returns random fact about current or specified country
+    // Fact route - returns random fact about current or specified country, or random country if none specified
     if (route === 'fact' || route === 'facts') {
       // Check if a country code was provided in the query
       const queryCountryCode = q ? q.trim().toUpperCase() : null;
@@ -874,14 +887,35 @@ export async function GET(
         }
       }
       
-      // Use requested country code if provided, otherwise use persistent location
-      const countryCode = requestedCountryCode || persistentLocation?.location?.countryCode || null;
-      const countryName = requestedCountryCode 
-        ? getCountryNameFromCode(requestedCountryCode)
-        : (persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null));
-      const travelData = getTravelData(countryCode);
+      // Determine country code: requested > persistent location > random country with facts
+      let countryCode: string | null = requestedCountryCode || persistentLocation?.location?.countryCode || null;
+      let countryName: string | null = null;
       
+      // If no country code, pick a random country that has facts
+      if (!countryCode) {
+        const availableCountries = getAvailableCountries();
+        const countriesWithFacts = availableCountries.filter(c => {
+          const data = getTravelData(c.code);
+          return data.facts && data.facts.length > 0;
+        });
+        
+        if (countriesWithFacts.length > 0) {
+          const randomCountry = pickN(countriesWithFacts, 1)[0];
+          countryCode = randomCountry.code;
+          countryName = randomCountry.name;
+        } else {
+          return txtResponse('No facts available. Use !countries to see available countries.');
+        }
+      } else {
+        // Get country name for the selected country
+        countryName = requestedCountryCode 
+          ? getCountryNameFromCode(requestedCountryCode)
+          : (persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null));
+      }
+      
+      const travelData = getTravelData(countryCode);
       const facts = travelData.facts || [];
+      
       if (facts.length === 0) {
         const noFactMsg = countryName 
           ? `No facts available for ${countryName} yet. Use !countries to see available countries.`

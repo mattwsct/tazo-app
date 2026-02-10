@@ -54,11 +54,9 @@ export function getNotableConditions(data: {
 
   if (windKmh > 30) conditions.push(`wind ${windKmh}km/h`);
   if (tempC > 35) {
-    conditions.push(`very hot (feels like ${feelsLikeC}°C/${feelsLikeF}°F)`);
+    conditions.push(`very hot`);
   } else if (tempC < 0) {
-    conditions.push(`very cold (feels like ${feelsLikeC}°C/${feelsLikeF}°F)`);
-  } else if (Math.abs(tempC - feelsLikeC) >= 5) {
-    conditions.push(`feels like ${feelsLikeC}°C/${feelsLikeF}°F`);
+    conditions.push(`very cold`);
   }
   if (humidity > 80) conditions.push(`high humidity (${humidity}%)`);
   else if (humidity < 30) conditions.push(`low humidity (${humidity}%)`);
