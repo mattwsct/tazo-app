@@ -63,7 +63,7 @@ export async function getCachedLocationData(): Promise<CachedLocationData | null
     }
 
     return cached;
-  } catch (error) {
+  } catch {
     // KV not available or error - return null to trigger fresh fetch
     return null;
   }
@@ -201,13 +201,10 @@ export interface PersistentLocationData {
 
 /**
  * Update persistent location storage (no TTL)
+ * @throws on KV failure (caller should handle)
  */
 export async function updatePersistentLocation(data: PersistentLocationData): Promise<void> {
-  try {
-    await kv.set(PERSISTENT_LOCATION_KEY, data); // No TTL - persistent storage
-  } catch (error) {
-    console.warn('Failed to update persistent location:', error);
-  }
+  await kv.set(PERSISTENT_LOCATION_KEY, data); // No TTL - persistent storage
 }
 
 /**

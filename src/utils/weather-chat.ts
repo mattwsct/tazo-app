@@ -79,10 +79,15 @@ export function getPrecipType(condition: string): string | null {
   return 'precip';
 }
 
+/** OpenWeatherMap forecast API response shape */
+interface OpenWeatherForecastResponse {
+  list?: Array<{ dt?: number; pop?: number; weather?: Array<{ main?: string }> }>;
+}
+
 /**
  * Extracts precipitation forecast from forecast data
  */
-export function extractPrecipitationForecast(fc: any): { chance: number; type: string } | null {
+export function extractPrecipitationForecast(fc: OpenWeatherForecastResponse | null | undefined): { chance: number; type: string } | null {
   if (!fc?.list || !Array.isArray(fc.list)) return null;
 
   const now = new Date();
@@ -91,6 +96,7 @@ export function extractPrecipitationForecast(fc: any): { chance: number; type: s
   let precipType: string | null = null;
   
   for (const item of fc.list) {
+    if (item.dt == null) continue;
     const forecastTime = new Date(item.dt * 1000);
     if (forecastTime.getTime() > currentTimestamp - 30 * 60 * 1000 &&
         forecastTime.getTime() <= currentTimestamp + 12 * 60 * 60 * 1000) {
@@ -129,10 +135,18 @@ export async function fetchForecast(lat: number, lon: number, apiKey: string) {
   return await response.json();
 }
 
+/** OpenWeatherMap current weather API response shape */
+interface OpenWeatherCurrentResponse {
+  main?: { temp?: number; feels_like?: number; humidity?: number };
+  weather?: Array<{ main?: string; description?: string }>;
+  wind?: { speed?: number };
+  visibility?: number;
+}
+
 /**
  * Parses weather data for chat display
  */
-export function parseWeatherData(ow: any) {
+export function parseWeatherData(ow: OpenWeatherCurrentResponse | null | undefined) {
   if (!ow?.main?.temp) return null;
 
   const condition = (ow.weather?.[0]?.main || '').toLowerCase();

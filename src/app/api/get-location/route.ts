@@ -1,13 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { kv } from '@vercel/kv';
 import type { OverlaySettings } from '@/types/settings';
+import { checkApiRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { success } = await checkApiRateLimit(request, 'get-location');
+  if (!success) {
+    return NextResponse.json({ location: null }, { status: 429 });
+  }
   try {
     // Get persistent location (always available, even if stale)
     const persistentLocation = await getPersistentLocation();

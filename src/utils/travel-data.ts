@@ -1,14 +1,5 @@
 // === 🌍 TRAVEL DATA FOR CHAT COMMANDS ===
 
-// Limits to keep data manageable (enforced when adding new entries)
-// Prioritizing phrases over food - phrases are more important for travelers
-const MAX_FOODS = 35;
-const MAX_PHRASES = 50; // Quality over quantity - only useful/unique phrases
-const MAX_CULTURAL_TIPS = 20;
-const MAX_FLIRT = 25; // Flirting phrases and suggestions per country
-const MAX_SEX = 20; // Vulgar/sexually suggestive phrases per country
-const MAX_INSULTS = 15; // Local insults per country
-
 export interface TravelPhrase {
   lang: string;
   text: string;

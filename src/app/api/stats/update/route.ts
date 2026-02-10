@@ -4,10 +4,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { storeSpeed, storeAltitude } from '@/utils/stats-storage';
+import { checkApiRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const { success } = await checkApiRateLimit(request, 'stats-update');
+  if (!success) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   try {
     const body = await request.json();
     const { speed, altitude } = body;

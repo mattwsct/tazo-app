@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cleanQuery, roundCoordinate, getMapLocationString, getCountryNameFromCode } from '@/utils/chat-utils';
-import { fetchLocationFromLocationIQ, fetchWeatherAndTimezoneFromOpenWeatherMap } from '@/utils/api-utils';
-import { getCityLocationForChat, pickN } from '@/utils/chat-utils';
+import { cleanQuery, roundCoordinate, getCountryNameFromCode } from '@/utils/chat-utils';
+import { pickN } from '@/utils/chat-utils';
 import { getTravelData, getAvailableCountries } from '@/utils/travel-data';
 import { handleSizeRanking, getSizeRouteConfig, isSizeRoute } from '@/utils/size-ranking';
-import { fetchRTIRLData } from '@/utils/rtirl-utils';
 import {
   getWeatherEmoji,
   isNightTime,
   formatTemperature,
   getNotableConditions,
-  fetchCurrentWeather,
   fetchForecast,
-  parseWeatherData,
-  extractPrecipitationForecast,
 } from '@/utils/weather-chat';
 import { getLocationData, getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
@@ -373,8 +368,7 @@ export async function GET(
         // Today not in forecast (might be late at night and forecast starts tomorrow)
         // Check if first date is tomorrow
         if (sortedDates.length > 0) {
-          const firstDate = sortedDates[0];
-          // If first date is after today, we'll treat it as "today" (next available day)
+          // First date is after today, we'll treat it as "today" (next available day)
           todayIndex = 0;
         } else {
           return txtResponse('No forecast data available');
@@ -783,7 +777,7 @@ export async function GET(
             hour12: true,
             timeZone: timezone,
           });
-        } catch (error) {
+        } catch {
           // Invalid timezone, skip
         }
       }

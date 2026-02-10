@@ -18,6 +18,9 @@ export const TIMERS = {
   // GPS freshness and staleness timeouts
   GPS_FRESHNESS_TIMEOUT: 15 * 60 * 1000, // 15 minutes
   GPS_STALE_TIMEOUT: 10000, // 10 seconds
+  // Stale GPS → broader location display. Balance: cafe (stationary) vs train (moving)
+  STALE_NEIGHBOURHOOD_MS: 5 * 60 * 1000,  // 5 min: neighbourhood→city
+  STALE_CITY_MS: 10 * 60 * 1000,         // 10 min: city→state (stop there, not country)
   WEATHER_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
   LOCATION_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
   

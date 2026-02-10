@@ -39,6 +39,40 @@ export interface LocationDisplay {
   countryCode?: string; // ISO country code for flag display (always the actual country, regardless of what's in 'secondary' field)
 }
 
+const cleanName = (s: string | undefined): string | undefined =>
+  s ? stripTrailingNumbers(s) : s;
+
+/**
+ * Extracts display-relevant location fields for persistent storage.
+ * Includes neighbourhood, city, state, country and fallbacks so admin display mode
+ * (neighbourhood/city/state/country) can use any available precision.
+ * Excludes sensitive fields (house_number, road, postcode, coordinates).
+ * Applies stripTrailingNumbers so overlay and persistence use the same cleaned names.
+ */
+export function getLocationForPersistence(location: LocationData | null): LocationData | null {
+  if (!location) return null;
+  return {
+    country: cleanName(location.country),
+    countryCode: location.countryCode,
+    city: cleanName(location.city),
+    state: cleanName(location.state),
+    timezone: location.timezone,
+    town: cleanName(location.town),
+    municipality: cleanName(location.municipality),
+    suburb: cleanName(location.suburb),
+    neighbourhood: cleanName(location.neighbourhood),
+    quarter: cleanName(location.quarter),
+    province: cleanName(location.province),
+    region: cleanName(location.region),
+    county: cleanName(location.county),
+    village: cleanName(location.village),
+    hamlet: cleanName(location.hamlet),
+    district: cleanName(location.district),
+    ward: cleanName(location.ward),
+    borough: cleanName(location.borough),
+  };
+}
+
 // === 🎯 LOCATION PRECISION LEVELS ===
 
 type LocationPrecision = 'neighbourhood' | 'city' | 'state';
@@ -82,32 +116,33 @@ function isLatinScript(name: string): boolean {
 }
 
 /**
- * Simple validation for location names
- * Skips: empty names, names ending with numbers (technical addresses), names too long, non-Latin alphabets
+ * Strips trailing numbers from location names (e.g. "Honcho 6" -> "Honcho", "Honmachi 3" -> "Honmachi").
+ * Single source of truth for making location names clean and readable.
+ */
+export function stripTrailingNumbers(name: string): string {
+  if (!name || typeof name !== 'string') return name;
+  return name.replace(/\s+\d+$/, '').trim() || name;
+}
+
+/**
+ * Validates location names for display (length, script, not just a number).
  */
 function isValidLocationName(name: string): boolean {
-  if (!name || name.length > MAX_CHARACTER_LIMIT) {
-    return false;
-  }
-  
-  // Skip if it contains non-Latin alphabet characters (Japanese, Chinese, Arabic, Cyrillic, etc.)
-  // Keep accented Latin characters (é, ñ, ü, etc.)
-  if (!isLatinScript(name)) {
-    return false;
-  }
-  
-  // Skip if it's just a number (like "123", "5")
-  if (/^\d+$/.test(name.trim())) {
-    return false;
-  }
-  
-  // Skip if it ends with a space and number (like "Honmachi 3", "Block 12")
-  // But keep names with numbers in the middle (like "4th Avenue", "21st Street")
-  if (/\s+\d+$/.test(name.trim())) {
-    return false;
-  }
-  
+  if (!name || name.length > MAX_CHARACTER_LIMIT) return false;
+  if (!isLatinScript(name)) return false;
+  if (/^\d+$/.test(name.trim())) return false;
   return true;
+}
+
+/**
+ * Cleans a raw location name for display: strip numbers → validate → normalize.
+ * Use this whenever we pick a name from location data for overlay/chat.
+ */
+function cleanForDisplay(value: string | undefined): string | null {
+  if (!value) return null;
+  const cleaned = stripTrailingNumbers(value);
+  if (!cleaned || !isValidLocationName(cleaned)) return null;
+  return normalizeToEnglish(cleaned);
 }
 
 
@@ -200,11 +235,8 @@ function getLocationByPrecision(
   // Normalize names to English when possible
   const tryFields = (fields: (keyof LocationData)[]): string | null => {
     for (const field of fields) {
-      const value = location[field] as string | undefined;
-      if (value && isValidLocationName(value)) {
-        // Normalize to English before returning
-        return normalizeToEnglish(value);
-      }
+      const name = cleanForDisplay(location[field] as string | undefined);
+      if (name) return name;
     }
     return null;
   };
@@ -413,23 +445,6 @@ export function getBestCityName(location: LocationData): string {
          '';
 }
 
-/**
- * Shortens country name if too long, otherwise uses country code
- */
-export function shortenCountryName(countryName: string, countryCode = ''): string {
-  if (!countryName && !countryCode) return '';
-  
-  if (countryName && countryName.length <= MAX_CHARACTER_LIMIT) {
-    return countryName;
-  }
-  
-  if (countryName && countryName.length > MAX_CHARACTER_LIMIT) {
-    return countryCode ? countryCode.toUpperCase() : countryName;
-  }
-  
-  return countryCode ? countryCode.toUpperCase() : '';
-}
-
 // === 🎨 MAIN LOCATION FORMATTING ===
 
 /**
@@ -481,7 +496,6 @@ export function formatLocation(
   if (displayMode === 'state') {
     const primaryResult = getLocationByPrecision(location, 'state');
     const primary = primaryResult.name;
-    const primaryCategory = primaryResult.category;
     const countryInfo = getCountry(location);
     
     // If no state found, fallback to showing country only
@@ -590,85 +604,36 @@ function getNextBroadestCategory(
    * This ensures we maintain precision when possible (e.g., try all city fields before falling back to state)
    */
   const tryFields = (fields: (keyof LocationData)[], skipIfOverlaps: boolean = true): string | null => {
-    // Check each field in priority order
     for (const field of fields) {
-      const value = location[field] as string | undefined;
-      if (value && isValidLocationName(value)) {
-        // Skip if this value overlaps with the primary name, continue to next field in same category
-        if (skipIfOverlaps && hasOverlappingNames(primaryName, value)) {
-          continue; // Try next field in same category
-        }
-        // Found a non-overlapping value in this category
-        return value;
+      const name = cleanForDisplay(location[field] as string | undefined);
+      if (name) {
+        if (skipIfOverlaps && hasOverlappingNames(primaryName, name)) continue;
+        return name;
       }
     }
-    // All fields in this category either overlap or are invalid - move to next category
     return null;
   };
 
-  // Field definitions (same as above, for consistency - must match ordering above)
   const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
   const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
   const countryInfo = getCountry(location);
+  const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
+  const tryCountry = () => countryDisplay && !hasOverlappingNames(primaryName, countryDisplay) ? countryDisplay : undefined;
 
-  // Hierarchy: neighbourhood → city → state → country
-  switch (currentCategory) {
-    case 'neighbourhood':
-      // Next broadest: city
-      const cityName = tryFields(cityFields);
-      if (cityName) return cityName;
-      // Fallback to state if no city (or city overlaps)
-      const stateName = tryFields(stateFields);
-      if (stateName) return stateName;
-      // Fallback to country if no state (or state overlaps)
-      const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-      // Check if country overlaps (e.g., "Singapore, Singapore")
-      if (countryDisplay && !hasOverlappingNames(primaryName, countryDisplay)) {
-        return countryDisplay;
-      }
-      return undefined;
-    
-    case 'city':
-      // Next broadest: state category (includes state, province/prefecture, region)
-      const state = tryFields(stateFields);
-      if (state) return state;
-      // Fallback to country if no state category fields (or state overlaps)
-      const countryDisplay2 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-      if (countryDisplay2 && !hasOverlappingNames(primaryName, countryDisplay2)) {
-        return countryDisplay2;
-      }
-      return undefined;
-    
-    case 'county':
-      // County is now part of city category, so next broadest is state, then country
-      const stateForCounty = tryFields(stateFields);
-      if (stateForCounty) return stateForCounty;
-      const countryDisplay3 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-      if (countryDisplay3 && !hasOverlappingNames(primaryName, countryDisplay3)) {
-        return countryDisplay3;
-      }
-      return undefined;
-    
-    case 'state':
-      // Next broadest: country
-      const countryDisplay4 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-      if (countryDisplay4 && !hasOverlappingNames(primaryName, countryDisplay4)) {
-        return countryDisplay4;
-      }
-      return undefined;
-    
-    case 'country':
-      // No broader category, return undefined
-      return undefined;
-    
-    default:
-      // Unknown category, fallback to country
-      const countryDisplay5 = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
-      if (countryDisplay5 && !hasOverlappingNames(primaryName, countryDisplay5)) {
-        return countryDisplay5;
-      }
-      return undefined;
+  // Fallback chain per category: neighbourhood→[city,state,country], city/county→[state,country], state→[country]
+  const chains: Record<LocationCategory, (keyof LocationData)[][]> = {
+    neighbourhood: [cityFields, stateFields],
+    city: [stateFields],
+    county: [stateFields],
+    state: [],
+    country: [],
+  };
+  const chain = chains[currentCategory] ?? [stateFields];
+  for (const fields of chain) {
+    const found = tryFields(fields);
+    if (found) return found;
   }
+  return tryCountry();
 }
 
 

@@ -5,7 +5,6 @@
 
 import { TIMERS } from './overlay-constants';
 import { distanceInMeters } from './location-utils';
-import { isValidTimezone } from './overlay-helpers';
 
 export interface FetchDecisionParams {
   now: number;
@@ -40,7 +39,6 @@ export function shouldFetchWeather(params: FetchDecisionParams): WeatherFetchDec
     lastFetchTime,
     lastSuccessfulFetch,
     movedMeters,
-    currentCoords,
     prevCoords,
     needsTimezone,
   } = params;

@@ -43,19 +43,23 @@ export function useAnimatedValue(
   }, [displayedValue]);
 
   useEffect(() => {
-    // Handle null values
+    // Handle null values - defer setState to avoid synchronous setState in effect (react-hooks/set-state-in-effect)
     if (targetValue === null) {
       if (allowNull) {
-        setDisplayedValue(null);
-        currentValueRef.current = null;
+        queueMicrotask(() => {
+          setDisplayedValue(null);
+          currentValueRef.current = null;
+        });
       }
       return;
     }
 
-    // If no displayed value yet, set it immediately
+    // If no displayed value yet, set it immediately - defer to avoid synchronous setState in effect
     if (currentValueRef.current === null && allowNull) {
-      setDisplayedValue(targetValue);
-      currentValueRef.current = targetValue;
+      queueMicrotask(() => {
+        setDisplayedValue(targetValue);
+        currentValueRef.current = targetValue;
+      });
       return;
     }
 
@@ -69,9 +73,9 @@ export function useAnimatedValue(
     const startValue = currentValueRef.current ?? 0;
     const difference = targetValue - startValue;
 
-    // If difference is small, update immediately
+    // If difference is small, update immediately - defer to avoid synchronous setState in effect
     if (Math.abs(difference) <= immediateThreshold) {
-      setDisplayedValue(targetValue);
+      queueMicrotask(() => setDisplayedValue(targetValue));
       return;
     }
 

@@ -30,14 +30,18 @@ export function middleware(request: NextRequest) {
   // Skip authentication for public routes
   // - Login page and login API
   // - Overlay page (public, used by OBS)
-  // - Public API endpoints needed by overlay (get-settings, settings-stream, health)
+  // - Overlay APIs: get-settings, settings-stream, health, get-location, update-location, stats/update
+  //   (overlay runs in OBS browser source without auth cookies)
   const publicRoutes = [
     '/login',
     '/api/login',
     '/overlay',
     '/api/get-settings',
     '/api/settings-stream',
-    '/api/health'
+    '/api/health',
+    '/api/get-location',
+    '/api/update-location',
+    '/api/stats/update',
   ];
   
   if (publicRoutes.includes(pathname)) {

@@ -17,7 +17,6 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "skipLibCheck": true, // Already set, but ensures faster type checking
     "paths": {
       "@/*": [
         "./src/*"

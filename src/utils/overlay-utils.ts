@@ -4,6 +4,7 @@
 
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { LocationData } from '@/utils/location-utils';
+import { TIMERS } from '@/utils/overlay-constants';
 
 /**
  * Merges settings with defaults, ensuring all fields are initialized
@@ -23,6 +24,7 @@ export function mergeSettingsWithDefaults(settingsData: Partial<OverlaySettings>
 /**
  * Checks if location data has complete information (more than just country)
  * Used in multiple places: location formatting, settings change detection
+ * Includes state/province so state-only mode works (e.g. rural areas)
  */
 export function hasCompleteLocationData(location: LocationData | null): boolean {
   if (!location) return false;
@@ -34,7 +36,10 @@ export function hasCompleteLocationData(location: LocationData | null): boolean 
     location.municipality ||
     location.neighbourhood || 
     location.suburb || 
-    location.district
+    location.district ||
+    location.state ||
+    location.province ||
+    location.region
   );
 }
 
@@ -44,6 +49,27 @@ export function hasCompleteLocationData(location: LocationData | null): boolean 
  */
 export function formatCountryCode(countryCode?: string): string {
   return countryCode?.toUpperCase() || '';
+}
+
+/** Location display mode (same as settings, excluding custom/hidden) */
+type LocationPrecisionMode = 'neighbourhood' | 'city' | 'state' | 'country';
+
+/**
+ * Returns effective display mode when GPS data is stale.
+ * Broader modes are more accurate when travelling without fresh fixes (e.g. underground).
+ * Only applies to neighbourhood/city/state - country is already maximally broad.
+ */
+export function getEffectiveDisplayModeForStaleGps(
+  displayMode: LocationPrecisionMode | 'custom' | 'hidden',
+  gpsAgeMs: number
+): LocationPrecisionMode | 'custom' | 'hidden' {
+  if (displayMode === 'hidden' || displayMode === 'custom') return displayMode;
+  if (gpsAgeMs <= 0) return displayMode; // No GPS yet, use settings
+
+  const { STALE_NEIGHBOURHOOD_MS, STALE_CITY_MS } = TIMERS;
+  if (gpsAgeMs >= STALE_CITY_MS && (displayMode === 'neighbourhood' || displayMode === 'city')) return 'state';
+  if (gpsAgeMs >= STALE_NEIGHBOURHOOD_MS && displayMode === 'neighbourhood') return 'city';
+  return displayMode;
 }
 
 /**

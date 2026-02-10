@@ -1,6 +1,7 @@
 // Settings validation utility to prevent malicious entries
 
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, SETTINGS_CONFIG, TodoItem } from '@/types/settings';
+import { OverlaySettings, SETTINGS_CONFIG, TodoItem } from '@/types/settings';
+import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 
 
 
@@ -87,24 +88,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     }
   }
 
-              // Ensure all required settings are present with defaults
-            const completeSettings: OverlaySettings = {
-              locationDisplay: cleanSettings.locationDisplay ?? DEFAULT_OVERLAY_SETTINGS.locationDisplay,
-              customLocation: cleanSettings.customLocation ?? DEFAULT_OVERLAY_SETTINGS.customLocation,
-              showCountryName: cleanSettings.showCountryName ?? DEFAULT_OVERLAY_SETTINGS.showCountryName,
-              showWeather: cleanSettings.showWeather ?? DEFAULT_OVERLAY_SETTINGS.showWeather,
-              weatherConditionDisplay: cleanSettings.weatherConditionDisplay ?? DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
-              showMinimap: cleanSettings.showMinimap ?? DEFAULT_OVERLAY_SETTINGS.showMinimap,
-              minimapSpeedBased: cleanSettings.minimapSpeedBased ?? DEFAULT_OVERLAY_SETTINGS.minimapSpeedBased,
-              minimapTheme: cleanSettings.minimapTheme ?? DEFAULT_OVERLAY_SETTINGS.minimapTheme,
-              mapZoomLevel: cleanSettings.mapZoomLevel ?? DEFAULT_OVERLAY_SETTINGS.mapZoomLevel,
-              altitudeDisplay: cleanSettings.altitudeDisplay ?? DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
-              speedDisplay: cleanSettings.speedDisplay ?? DEFAULT_OVERLAY_SETTINGS.speedDisplay,
-              todos: cleanSettings.todos ?? DEFAULT_OVERLAY_SETTINGS.todos,
-              showTodoList: cleanSettings.showTodoList ?? DEFAULT_OVERLAY_SETTINGS.showTodoList,
-            };
-
-  return completeSettings;
+  return mergeSettingsWithDefaults(cleanSettings);
 }
 
 /**

@@ -1,7 +1,4 @@
-import { 
-  checkRateLimit
-} from './rate-limiting';
-import { type LocationData } from './location-utils';
+import { type LocationData, stripTrailingNumbers } from './location-utils';
 import { ApiLogger } from '@/lib/logger';
 import { 
   isValidApiKey
@@ -114,11 +111,12 @@ export async function fetchLocationFromLocationIQ(
   // Rate limiting is checked in overlay/page.tsx before calling this function
   // Don't check again here to avoid double-checking and race conditions
 
+  const isDev = process.env.NODE_ENV !== 'production';
+
   try {
-    ApiLogger.info('locationiq', 'Fetching location data', { 
-      lat, 
-      lon
-    });
+    if (isDev) {
+      ApiLogger.info('locationiq', 'Fetching location data', { lat, lon });
+    }
     
     // Add cache busting timestamp to prevent browser caching
     const timestamp = Date.now();
@@ -147,11 +145,9 @@ export async function fetchLocationFromLocationIQ(
         ApiLogger.warn('locationiq', 'Invalid API key');
       } else if (response.status === 404) {
         error = 'Location not found (likely at sea or remote area)';
-        ApiLogger.info('locationiq', 'No reverse geocode available - using coordinate fallback', { 
-          status: 404,
-          lat,
-          lon
-        });
+        if (isDev) {
+          ApiLogger.info('locationiq', 'No reverse geocode available - using coordinate fallback', { status: 404 });
+        }
         recordApiFailure('locationiq', error, isRateLimited);
         return { location: null, was404: true }; // 404 means likely on water
       } else {
@@ -185,43 +181,42 @@ export async function fetchLocationFromLocationIQ(
                    data.address.state || 
                    data.address.region;
       
-      // Normalize location names to English
-      // LocationIQ API uses accept-language=en, but we normalize as a fallback
+      // Normalize location names to English and strip trailing numbers (e.g. "Honcho 6" -> "Honcho")
       const normalizeToEnglish = (name: string | undefined): string | undefined => {
         if (!name) return name;
-        // Common non-English to English mappings for known cases
         const englishMappings: Record<string, string> = {
-          // Japanese prefectures (common romanizations)
-          'tokyo-to': 'Tokyo',
-          'osaka-fu': 'Osaka',
-          'kyoto-fu': 'Kyoto',
-          // Add more mappings as needed
+          'tokyo-to': 'Tokyo', 'osaka-fu': 'Osaka', 'kyoto-fu': 'Kyoto',
         };
         const lowerName = name.toLowerCase().trim();
         return englishMappings[lowerName] || name;
       };
+      const clean = (name: string | undefined): string | undefined => {
+        if (!name) return name;
+        return stripTrailingNumbers(normalizeToEnglish(name) || name) || name;
+      };
       
       const result: LocationData = {
-        city: normalizeToEnglish(city) || city,
-        state: normalizeToEnglish(state) || state,
-        country: normalizeToEnglish(data.address.country) || data.address.country,
+        city: clean(city) || city,
+        state: clean(state) || state,
+        country: clean(data.address.country) || data.address.country,
         countryCode: data.address.country_code ? data.address.country_code.toLowerCase() : '',
         timezone: data.address.timezone,
-        // Store the raw address components for better city detection (normalized)
-        town: normalizeToEnglish(data.address.town) || data.address.town,
-        municipality: normalizeToEnglish(data.address.municipality) || data.address.municipality,
-        suburb: normalizeToEnglish(data.address.suburb) || data.address.suburb,
-        neighbourhood: normalizeToEnglish(data.address.neighbourhood) || data.address.neighbourhood, // British spelling from LocationIQ
-        quarter: normalizeToEnglish(data.address.quarter) || data.address.quarter,
-        province: normalizeToEnglish(data.address.province) || data.address.province,
-        region: normalizeToEnglish(data.address.region) || data.address.region,
-        county: normalizeToEnglish(data.address.county) || data.address.county,
+        town: clean(data.address.town) || data.address.town,
+        municipality: clean(data.address.municipality) || data.address.municipality,
+        suburb: clean(data.address.suburb) || data.address.suburb,
+        neighbourhood: clean(data.address.neighbourhood) || data.address.neighbourhood,
+        quarter: clean(data.address.quarter) || data.address.quarter,
+        province: clean(data.address.province) || data.address.province,
+        region: clean(data.address.region) || data.address.region,
+        county: clean(data.address.county) || data.address.county,
         house_number: data.address.house_number,
         road: data.address.road,
         postcode: data.address.postcode,
       };
       
-      ApiLogger.info('locationiq', 'Location data received', result);
+      if (isDev) {
+        ApiLogger.info('locationiq', 'Location data received', result);
+      }
       
       // Record successful API call
       recordApiSuccess('locationiq');
@@ -229,34 +224,10 @@ export async function fetchLocationFromLocationIQ(
       // Validate the result before returning
       if (!result.city && !result.state && !result.country) {
         ApiLogger.warn('locationiq', 'LocationIQ returned incomplete result - missing city, state, and country', {
-          availableFields: {
-            neighbourhood: result.neighbourhood,
-            suburb: result.suburb,
-            town: result.town,
-            municipality: result.municipality
-          }
+          availableFields: isDev ? { neighbourhood: result.neighbourhood, suburb: result.suburb, town: result.town, municipality: result.municipality } : {},
         });
         return { location: null, was404: false };
       }
-      
-      // Debug: Log the raw API response to see what fields are actually available
-      ApiLogger.info('locationiq', 'Raw API response address fields', {
-        house_number: data.address.house_number,
-        road: data.address.road,
-        neighbourhood: data.address.neighbourhood,
-        suburb: data.address.suburb,
-        town: data.address.town,
-        municipality: data.address.municipality,
-        city: data.address.city,
-        county: data.address.county,
-        state: data.address.state,
-        province: data.address.province,
-        region: data.address.region,
-        postcode: data.address.postcode,
-        country: data.address.country,
-        timezone: data.address.timezone,
-        fullAddress: data.address
-      });
       
       return { location: result, was404: false };
     }
@@ -300,7 +271,9 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
   // Don't check again here to avoid double-checking and race conditions
   
   try {
-    ApiLogger.info('openweathermap', 'Fetching weather, timezone, and sunrise/sunset data', { lat, lon });
+    if (process.env.NODE_ENV !== 'production') {
+      ApiLogger.info('openweathermap', 'Fetching weather, timezone, and sunrise/sunset data', { lat, lon });
+    }
     
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
     
@@ -430,13 +403,15 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
         }
       }
       
-      ApiLogger.info('openweathermap', 'Timezone data received (fallback - LocationIQ preferred)', { 
-        timezone, 
-        offsetHours, 
-        rawOffsetSeconds: data.timezone,
-        coordinates: { lat, lon },
-        note: 'OpenWeatherMap provides offset only - LocationIQ provides accurate IANA timezone name'
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        ApiLogger.info('openweathermap', 'Timezone data received (fallback - LocationIQ preferred)', { 
+          timezone, 
+          offsetHours, 
+          rawOffsetSeconds: data.timezone,
+          coordinates: { lat, lon },
+          note: 'OpenWeatherMap provides offset only - LocationIQ provides accurate IANA timezone name'
+        });
+      }
     }
     
     // Extract sunrise/sunset data

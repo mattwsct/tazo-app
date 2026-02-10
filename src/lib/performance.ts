@@ -8,7 +8,7 @@ import React from 'react';
  */
 export function useRenderPerformance(componentName: string) {
   const renderCount = React.useRef(0);
-  const lastRenderTime = React.useRef(performance.now());
+  const lastRenderTime = React.useRef(0); // Initialized in effect to avoid calling performance.now() during render
 
   React.useEffect(() => {
     renderCount.current++;

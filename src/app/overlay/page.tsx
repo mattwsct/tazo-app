@@ -15,7 +15,6 @@ import { useTodoCompletion } from '@/hooks/useTodoCompletion';
 import { useRenderPerformance } from '@/lib/performance';
 
 // Type imports
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { RTIRLPayload } from '@/utils/overlay-constants';
 import type { SunriseSunsetData } from '@/utils/api-utils';
 import type { LocationData } from '@/utils/location-utils';
@@ -24,7 +23,7 @@ import type { LocationData } from '@/utils/location-utils';
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
 import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
-import { distanceInMeters, formatLocation, formatCountryName } from '@/utils/location-utils';
+import { formatLocation, formatCountryName, getLocationForPersistence } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
 import { 
@@ -34,20 +33,17 @@ import {
   isNightTimeFallback
 } from '@/utils/fallback-utils';
 import { 
-  isGpsUpdateFresh, 
-  isValidTimezone, 
-  clearTimer, 
+  clearTimer,
   safeApiCall,
   formatTimeUTC,
   formatTimeWithTimezone,
-  extractAltitude,
-  createSettingsHash
+  isValidTimezone,
 } from '@/utils/overlay-helpers';
 import {
-  mergeSettingsWithDefaults,
   hasCompleteLocationData,
   formatCountryCode,
-  shouldShowDisplayMode
+  shouldShowDisplayMode,
+  getEffectiveDisplayModeForStaleGps,
 } from '@/utils/overlay-utils';
 import {
   processGpsData,
@@ -63,19 +59,12 @@ import {
   isSpeedStale,
   isAltitudeStale
 } from '@/utils/staleness-utils';
+import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 
 // Extract constants for cleaner code
 const {
-  GPS_FRESHNESS_TIMEOUT,
-  GPS_STALE_TIMEOUT,
-  WEATHER_DATA_VALIDITY_TIMEOUT,
-  LOCATION_DATA_VALIDITY_TIMEOUT,
-  MINIMAP_FADE_DURATION,
   WALKING_PACE_THRESHOLD,
-  SETTINGS_POLLING_INTERVAL,
   MINIMAP_STALENESS_CHECK_INTERVAL,
-  MINIMAP_SPEED_GRACE_PERIOD,
-  MINIMAP_GPS_STALE_GRACE_PERIOD,
   MINIMAP_HIDE_DELAY,
 } = TIMERS;
 
@@ -129,12 +118,11 @@ function OverlayPage() {
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [currentAltitude, setCurrentAltitude] = useState<number | null>(null);
-  const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
+  const [settings, , settingsLoadedRef] = useOverlaySettings();
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(1.0); // Fully opaque for better readability
-  const [hasIncompleteLocationData, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
+  const [, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
   const [overlayVisible, setOverlayVisible] = useState(false); // Track if overlay should be visible (fade-in delay)
-  const settingsLoadedRef = useRef(false); // Track if settings have been loaded from API (prevents logging initial default state change)
   
   // Todo completion tracking with localStorage persistence
   const visibleTodos = useTodoCompletion(settings.todos);
@@ -156,7 +144,6 @@ function OverlayPage() {
   const ALTITUDE_CHANGE_THRESHOLD = 10; // Only send if altitude changed by 10+ meters // Track if location fetch is already in progress
   const lastCoords = useRef<[number, number] | null>(null);
   const lastCoordsTime = useRef(0);
-  const lastSettingsHash = useRef<string>('');
   const lastRawLocation = useRef<LocationData | null>(null);
   const locationReceivedFromRtirlRef = useRef(false); // Prevents persistent fallback from overwriting RTIRL data
   const persistentFallbackTimerRef = useRef<NodeJS.Timeout | null>(null); // Cleared when RTIRL provides data
@@ -178,6 +165,7 @@ function OverlayPage() {
   const lastAltitudeGpsTimestamp = useRef(0); // Track GPS timestamp when altitude was last updated
   const [speedUpdateTimestamp, setSpeedUpdateTimestamp] = useState(0); // State to trigger re-renders
   const [altitudeUpdateTimestamp, setAltitudeUpdateTimestamp] = useState(0); // State to trigger re-renders
+  const [gpsTimestampForDisplay, setGpsTimestampForDisplay] = useState(0); // Triggers locationDisplay recalc when GPS freshness changes (ref alone doesn't re-render)
 
   // Ref to track current speed for minimap visibility (prevents infinite loops)
   const currentSpeedRef = useRef(0);
@@ -277,12 +265,9 @@ function OverlayPage() {
   // Track the last locationDisplay value to detect actual changes
   const lastLocationDisplayRef = useRef<string | undefined>(undefined);
 
-  // Update settings hash and re-format location ONLY when locationDisplay changes
+  // Re-format location when locationDisplay changes
   useEffect(() => {
-    const newHash = JSON.stringify(settings);
-    const hashChanged = newHash !== lastSettingsHash.current;
     const locationDisplayChanged = settings.locationDisplay !== lastLocationDisplayRef.current;
-    lastSettingsHash.current = newHash;
     lastLocationDisplayRef.current = settings.locationDisplay;
 
     // Only re-format location when locationDisplay actually changes
@@ -326,7 +311,8 @@ function OverlayPage() {
         });
       }
     }
-  }, [settings.locationDisplay]); // Only depend on locationDisplay, not entire settings object
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- settingsLoadedRef is stable, only locationDisplay matters
+  }, [settings.locationDisplay]);
 
   // Combined minimap visibility updates - simpler than multiple separate effects
   useEffect(() => {
@@ -530,95 +516,9 @@ function OverlayPage() {
     };
   }, [timezone, formatTime]);
 
-  // Load settings and set up real-time updates
+  // Persistent storage fallback - load from KV if RTIRL doesn't provide data within 15s
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        // Add cache busting and force fresh data
-        const timestamp = Date.now();
-        const res = await fetch(`/api/get-settings?_t=${timestamp}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        
-        const data = await res.json();
-        if (data) {
-          // Merge with defaults to ensure new fields are initialized
-          const mergedSettings = mergeSettingsWithDefaults(data);
-          setSettings(mergedSettings);
-          // Set initial hash to prevent false positives on first poll
-          lastSettingsHash.current = createSettingsHash(mergedSettings);
-          settingsLoadedRef.current = true; // Mark settings as loaded
-        }
-        // If no data but request succeeded, keep existing settings (don't reset to defaults)
-      } catch (error) {
-        // Failed to load settings - keep existing settings instead of resetting
-        // This ensures elements stay visible even when API fails
-        OverlayLogger.warn('Settings load failed, keeping existing settings', { error });
-        // Don't reset to defaults - keep what we have
-      }
-    };
-    
-    // Set up Server-Sent Events for real-time settings updates (KV check is server-side only)
-    const setupSSE = () => {
-      const eventSource = new EventSource('/api/settings-stream');
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === 'settings_update') {
-            // Extract only settings properties, exclude SSE metadata (type, timestamp)
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { type: _type, timestamp: _timestamp, ...settingsData } = data;
-            // Merge with defaults to ensure new fields are initialized
-            const mergedSettings = mergeSettingsWithDefaults(settingsData);
-            OverlayLogger.settings('Settings updated via SSE', { 
-              locationDisplay: mergedSettings.locationDisplay,
-              showWeather: mergedSettings.showWeather,
-              showMinimap: mergedSettings.showMinimap 
-            });
-            setSettings(mergedSettings);
-            // Update hash to prevent polling from detecting this as a new change
-            lastSettingsHash.current = createSettingsHash(mergedSettings);
-            settingsLoadedRef.current = true; // Mark settings as loaded
-          }
-      } catch {
-          // Ignore malformed SSE messages
-        }
-      };
-      
-      eventSource.onerror = () => {
-        // Don't log SSE errors as they're common during development and not critical
-        // Close the current connection before reconnecting
-        try {
-          eventSource.close();
-        } catch {
-          // Ignore close errors
-        }
-        // Reconnect after 1 second delay
-        const reconnectDelay = 1000;
-        setTimeout(() => {
-          try {
-            setupSSE();
-          } catch {
-            // Ignore reconnection errors
-          }
-        }, reconnectDelay);
-      };
-      
-      return eventSource;
-    };
-    
-    // Load initial settings
-    loadSettings();
-    
-    // Persistent storage fallback - only use if RTIRL doesn't provide data within timeout
-    const PERSISTENT_FALLBACK_DELAY = 15000; // 15 seconds
+    const PERSISTENT_FALLBACK_DELAY = 15000;
     const loadFromPersistentFallback = async () => {
       if (locationReceivedFromRtirlRef.current) {
         OverlayLogger.location('Skipping persistent fallback - already have RTIRL data');
@@ -634,10 +534,12 @@ function OverlayPage() {
             setLocation(data.location);
             lastRawLocation.current = data.rawLocation;
             setHasIncompleteLocationData(false);
-            OverlayLogger.location('Location from persistent storage (RTIRL unavailable)', {
-              primary: data.location.primary || 'none',
-              secondary: data.location.secondary || 'none'
-            });
+            if (process.env.NODE_ENV !== 'production') {
+              OverlayLogger.location('Location from persistent storage (RTIRL unavailable)', {
+                primary: data.location.primary || 'none',
+                secondary: data.location.secondary || 'none'
+              });
+            }
           } else {
             OverlayLogger.location('Persistent storage empty - waiting for RTIRL');
           }
@@ -650,53 +552,13 @@ function OverlayPage() {
     };
     persistentFallbackTimerRef.current = setTimeout(loadFromPersistentFallback, PERSISTENT_FALLBACK_DELAY);
     OverlayLogger.location('Waiting for RTIRL data', { fallbackIn: `${PERSISTENT_FALLBACK_DELAY / 1000}s if no data` });
-    
-    // Set up real-time updates
-    const eventSource = setupSSE();
-    
-    // Fallback polling mechanism - check for settings changes every 2 seconds for faster updates
-    const pollingInterval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, { 
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data) {
-            const newHash = createSettingsHash(data);
-            if (newHash !== lastSettingsHash.current) {
-              lastSettingsHash.current = newHash;
-              OverlayLogger.settings('Settings updated via polling', { 
-                locationDisplay: data.locationDisplay,
-                showWeather: data.showWeather,
-                showMinimap: data.showMinimap 
-              });
-              setSettings(data); // UI updates immediately - this triggers location re-formatting
-            }
-          }
-        }
-      } catch (error) {
-        // Log polling errors for debugging
-        OverlayLogger.warn('Settings polling failed', { error });
-      }
-    }, SETTINGS_POLLING_INTERVAL);
-    
-    // Cleanup on unmount
     return () => {
       if (persistentFallbackTimerRef.current) {
         clearTimeout(persistentFallbackTimerRef.current);
         persistentFallbackTimerRef.current = null;
       }
-      if (eventSource) {
-        eventSource.close();
-      }
-      clearInterval(pollingInterval);
     };
-  }, []); // Empty dependency array - we want this to run once on mount
+  }, []);
 
   // RTIRL connection - use refs to avoid re-running on timezone/settings changes
   const timezoneRef = useRef(timezone);
@@ -747,23 +609,25 @@ function OverlayPage() {
               
               if (!gpsData) return;
               
-              const { coords, payloadTimestamp, now, isPayloadFresh, wasGpsDataStale, isFirstGpsUpdate, prevCoords, prevGpsTimestamp } = gpsData;
+              const { coords, payloadTimestamp, now, isPayloadFresh, wasGpsDataStale, prevCoords, prevGpsTimestamp } = gpsData;
               const [lat, lon] = coords;
               
               setMapCoords(coords);
               
               // Log RTIRL payload for debugging (essential info only)
-              OverlayLogger.overlay('RTIRL update received', {
-                coordinates: { lat, lon },
-                speed: payload.speed || 0,
-                altitude: payload.altitude !== undefined ? payload.altitude : 'not provided',
-                timestamp: payloadTimestamp,
-                timestampAge: Math.round((now - payloadTimestamp) / 1000),
-                timestampAgeMinutes: Math.round((now - payloadTimestamp) / 60000),
-                isFresh: isPayloadFresh,
-                reportedAt: (payload as { reportedAt?: number }).reportedAt,
-                updatedAt: (payload as { updatedAt?: number }).updatedAt
-              });
+              if (process.env.NODE_ENV !== 'production') {
+                OverlayLogger.overlay('RTIRL update received', {
+                  coordinates: { lat, lon },
+                  speed: payload.speed || 0,
+                  altitude: payload.altitude !== undefined ? payload.altitude : 'not provided',
+                  timestamp: payloadTimestamp,
+                  timestampAge: Math.round((now - payloadTimestamp) / 1000),
+                  timestampAgeMinutes: Math.round((now - payloadTimestamp) / 60000),
+                  isFresh: isPayloadFresh,
+                  reportedAt: (payload as { reportedAt?: number }).reportedAt,
+                  updatedAt: (payload as { updatedAt?: number }).updatedAt
+                });
+              }
               
               // Handle timezone from RTIRL (lowest priority - will be overridden by LocationIQ/OpenWeatherMap)
               if (payload.location?.timezone) {
@@ -773,6 +637,7 @@ function OverlayPage() {
               // Update GPS timestamps AFTER checking for staleness
               lastGpsUpdateTime.current = now;
               lastGpsTimestamp.current = payloadTimestamp;
+              setGpsTimestampForDisplay(payloadTimestamp); // Trigger locationDisplay recalc (fresh→show neighbourhood from saved data, no API call)
               
               // Calculate speed using utility function
               const speedKmh = calculateSpeedFromPayload(
@@ -901,14 +766,15 @@ function OverlayPage() {
                 !weatherFetchInProgress.current &&
                 (weatherDecision.isDramaticChange || checkRateLimit('openweathermap'));
               
-              // Log weather fetch decision for debugging (use non-consuming check)
+              // Log weather fetch decision for debugging
               if (weatherDecision.shouldFetch && API_KEYS.OPENWEATHER) {
+                const reason = shouldFetchWeatherNow
+                  ? (weatherDecision.isDramaticChange ? 'dramatic change' : weatherDecision.reason)
+                  : (!canMakeApiCall('openweathermap') ? 'rate limited' :
+                     weatherFetchInProgress.current ? 'fetch in progress' : weatherDecision.reason);
                 OverlayLogger.weather('Weather fetch check', {
                   willFetch: shouldFetchWeatherNow,
-                  reason: weatherDecision.isDramaticChange ? 'dramatic change (bypassing rate limit)' :
-                          !canMakeApiCall('openweathermap') ? 'rate limited' :
-                          weatherFetchInProgress.current ? 'fetch in progress' :
-                          weatherDecision.reason,
+                  reason,
                   needsTimezone,
                 });
               }
@@ -996,7 +862,7 @@ function OverlayPage() {
                     
                     // Fetch location from LocationIQ
                     let locationIQWas404 = false;
-                    let locationIQRateLimited = false;
+                    const locationIQRateLimited = false;
                     
                     if (API_KEYS.LOCATIONIQ) {
                       // Rate limit already checked above (line 972) - don't check again to avoid double consumption
@@ -1035,40 +901,50 @@ function OverlayPage() {
                       }
                       
                       // Update persistent location storage (for chat commands) via API - KV vars are server-only
+                      // Store neighbourhood, city, state, country etc. so admin display mode (state/city/neighbourhood) works
                       const payloadTimestamp = extractGpsTimestamp(payload);
-                      const persistentPayload = {
-                        location: loc,
+                      const locationToStore = getLocationForPersistence(loc);
+                      const persistentPayload = locationToStore ? {
+                        location: locationToStore,
                         rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: payloadTimestamp || Date.now() },
                         updatedAt: Date.now(),
-                      };
-                      fetch('/api/update-location', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(persistentPayload),
-                      })
-                        .then(res => {
-                          if (res.ok) {
-                            OverlayLogger.location('Persistent location saved for chat commands', {
-                              primary: formatted.primary.trim() || 'none',
-                              secondary: formatted.secondary || 'none'
-                            });
-                          } else {
-                            OverlayLogger.warn('Persistent location save failed', { status: res.status });
-                          }
+                      } : null;
+                      if (persistentPayload) {
+                        fetch('/api/update-location', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(persistentPayload),
                         })
-                        .catch(() => {
-                          // Silently fail - persistent storage is optional
-                        });
-                        
-                        // Only update if we have something meaningful to display
+                          .then(res => {
+                            if (res.ok && process.env.NODE_ENV !== 'production' && persistentPayload) {
+                              const loc = persistentPayload.location;
+                              OverlayLogger.location('Persistent location saved for chat commands', {
+                                stored: {
+                                  neighbourhood: loc.neighbourhood || '–',
+                                  city: loc.city || '–',
+                                  state: loc.state || '–',
+                                  country: loc.country || '–'
+                                }
+                              });
+                            } else if (!res.ok) {
+                              OverlayLogger.warn('Persistent location save failed', { status: res.status });
+                            }
+                          })
+                          .catch(() => {
+                            // Silently fail - persistent storage is optional
+                          });
+                      }
+                      
+                      // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
                         if (formatted.primary.trim() || formatted.secondary) {
-                        // Log location updates (only when actually updating)
-                        OverlayLogger.location('Location from RTIRL+LocationIQ', {
-                          mode: currentDisplayMode,
-                          primary: formatted.primary.trim() || 'none',
-                          secondary: formatted.secondary || 'none'
-                        });
+                        if (process.env.NODE_ENV !== 'production') {
+                          OverlayLogger.location('Location from RTIRL+LocationIQ', {
+                            mode: currentDisplayMode,
+                            primary: formatted.primary.trim() || 'none',
+                            secondary: formatted.secondary || 'none'
+                          });
+                        }
                         updateLocation({
                           primary: formatted.primary.trim() || '',
                           secondary: formatted.secondary,
@@ -1081,10 +957,12 @@ function OverlayPage() {
                       // Always update timezone from LocationIQ when available, even if we already have one
                       // This ensures timezone updates correctly when moving between locations
                       if (loc.timezone) {
-                        OverlayLogger.location('Updating timezone from LocationIQ', { 
-                          timezone: loc.timezone,
-                          previousTimezone: timezoneRef.current 
-                        });
+                        if (process.env.NODE_ENV !== 'production') {
+                          OverlayLogger.location('Updating timezone from LocationIQ', { 
+                            timezone: loc.timezone,
+                            previousTimezone: timezoneRef.current 
+                          });
+                        }
                         updateTimezone(loc.timezone);
                       }
                       // Note: If LocationIQ doesn't provide timezone, OpenWeatherMap will set it as fallback
@@ -1117,6 +995,20 @@ function OverlayPage() {
                           secondary: undefined,
                           countryCode: countryCode
                         });
+                        // Persist country-only for chat commands when admin sets country display mode
+                        const countryOnlyLocation = getLocationForPersistence({ country: rawCountryName, countryCode, timezone: loc!.timezone });
+                        if (countryOnlyLocation) {
+                          const payloadTimestamp = extractGpsTimestamp(payload);
+                          fetch('/api/update-location', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              location: countryOnlyLocation,
+                              rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: payloadTimestamp || Date.now() },
+                              updatedAt: Date.now(),
+                            }),
+                          }).catch(() => {});
+                        }
                       }
                       
                       // Use timezone if available
@@ -1189,16 +1081,12 @@ function OverlayPage() {
     }
 
     // RTIRL script cleanup handled automatically
-    // Note: Functions (checkRateLimit, safeApiCall) are not in deps because:
-    // 1. They're used inside the listener callback, not during setup
-    // 2. The listener is set up once and doesn't need to be recreated when functions change
-    // 3. If functions need to access latest values, they should use refs (which they already do)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Note: Deps intentionally empty - listener set up once, uses refs for latest values
     return () => {
-      // Reset flag on unmount so listener can be set up again if component remounts
       rtirlListenerSetupRef.current = false;
     };
-  }, []); // Empty deps - RTIRL listener should only be set up once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- RTIRL listener set up once on mount
+  }, []);
 
   // Fade-in delay: Start overlay hidden, then fade in after 2 seconds to allow everything to load
   useEffect(() => {
@@ -1211,9 +1099,16 @@ function OverlayPage() {
     };
   }, []); // Run once on mount
 
+  // Force periodic recalculation of location display (staleness) and day/night - update every minute
+  const [staleCheckTime, setStaleCheckTime] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setStaleCheckTime(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Memoized display values
   // IMPORTANT: This memo re-formats location from raw data when settings change
-  // This ensures location display updates immediately when settings change, even if location state hasn't updated yet
+  // Broaden display when GPS is stale (e.g. underground - neighbourhood→city→state→country)
   const locationDisplay = useMemo(() => {
     if (settings.locationDisplay === 'hidden') {
       return null;
@@ -1228,11 +1123,12 @@ function OverlayPage() {
     }
     
     // If we have raw location data, re-format it with current settings to ensure display mode changes are reflected immediately
-    // This handles the case where settings change but location state hasn't updated yet
+    // Broaden display when GPS is stale (e.g. underground train through many neighbourhoods)
     if (hasCompleteLocationData(lastRawLocation.current)) {
       try {
-        const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
-        // Return formatted location with current settings
+        const gpsAgeMs = lastGpsTimestamp.current > 0 ? Date.now() - lastGpsTimestamp.current : 0;
+        const effectiveMode = getEffectiveDisplayModeForStaleGps(settings.locationDisplay, gpsAgeMs);
+        const formatted = formatLocation(lastRawLocation.current, effectiveMode);
         return {
           primary: formatted.primary || '',
           secondary: formatted.secondary,
@@ -1256,31 +1152,17 @@ function OverlayPage() {
     
     // No location data yet - return null so UI stays blank
     return null;
-  }, [location, settings.locationDisplay, settings.customLocation]);
-
-
-  // Force periodic recalculation of day/night by updating a timestamp every minute
-  const [dayNightCheckTime, setDayNightCheckTime] = useState(Date.now());
-  
-  useEffect(() => {
-    // Update every minute to recalculate day/night
-    const interval = setInterval(() => {
-      setDayNightCheckTime(Date.now());
-    }, 60000); // Check every minute
-    
-    return () => clearInterval(interval);
-  }, []);
+  }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
 
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
-  // Recalculates when sunriseSunset, timezone, or dayNightCheckTime changes
+  // Recalculates when sunriseSunset, timezone, or staleCheckTime changes
   const isNightTime = useMemo((): boolean => {
     if (!sunriseSunset) {
-      // Fallback to simple time-based check if no API data
-      // Only log warning at runtime, not during build (expected during static generation)
-      if (typeof window !== 'undefined') {
-        OverlayLogger.warn('No sunrise/sunset data available, using fallback detection');
-      }
-      return isNightTimeFallback(timezone || undefined);
+      // Wait for location data before computing day/night
+      // If no timezone either, we're still loading - assume day until data arrives
+      if (!timezone) return false;
+      // Have timezone but no sunrise/sunset (API edge case) - use timezone-based fallback
+      return isNightTimeFallback(timezone);
     }
     
     try {
@@ -1307,7 +1189,7 @@ function OverlayPage() {
       OverlayLogger.error('Day/night calculation error', error);
       return false;
     }
-  }, [sunriseSunset, timezone, dayNightCheckTime]);
+  }, [sunriseSunset, timezone, staleCheckTime]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime forces periodic re-check
 
   // Get weather icon based on description and time of day
   // Returns emoji string
@@ -1457,6 +1339,7 @@ function OverlayPage() {
     const altitudeM = displayedAltitude;
     const altitudeFt = metersToFeet(altitudeM);
     return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- altitudeUpdateTimestamp forces re-run when altitude changes
   }, [currentAltitude, displayedAltitude, settings.altitudeDisplay, altitudeUpdateTimestamp]);
 
   // Speed display logic
@@ -1481,6 +1364,7 @@ function OverlayPage() {
     const speedKmh = displayedSpeed;
     const speedMph = kmhToMph(speedKmh);
     return { value: speedKmh, formatted: `${Math.round(speedKmh)} km/h (${Math.round(speedMph)} mph)` };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- speedUpdateTimestamp forces re-run when speed changes
   }, [currentSpeed, displayedSpeed, settings.speedDisplay, speedUpdateTimestamp]);
 
   return (

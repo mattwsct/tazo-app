@@ -7,10 +7,12 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings 0",
     "clean": "rm -rf .next && rm -rf node_modules/.cache",
     "clean:win": "Remove-Item -Recurse -Force .next",
     "dev:debug": "npm run dev | tee dev.log",
@@ -18,6 +20,8 @@
     "fix-icloud": "bash scripts/fix-icloud-sync.sh"
   },
   "dependencies": {
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.2",
     "@vercel/kv": "^3.0.0",
     "maplibre-gl": "^5.7.1",
     "next": "^16.1.6",
@@ -25,13 +29,14 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@types/node": "^22",
+    "@types/node": "^25.2.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "cross-env": "^7.0.3",
-    "eslint": "^9",
+    "cross-env": "^10.1.0",
+    "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.1.0",
+    "vitest": "^4.0.18"
   }
 }

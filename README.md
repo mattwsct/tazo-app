@@ -267,12 +267,16 @@ Settings changes propagate to overlay in real-time via:
    - Ensures settings eventually sync even without SSE
 
 **Security Model**
-- **Read Access**: Public (overlay needs to read settings)
+- **Public (overlay runs in OBS without auth cookies)**
   - `/api/get-settings` - GET only, read-only
   - `/api/settings-stream` - GET only (SSE), read-only
-- **Write Access**: Authenticated only (admin panel)
-  - `/api/save-settings` - POST only, requires authentication
-  - All other `/api/` routes require authentication
+  - `/api/get-location` - GET only, persistent location fallback
+  - `/api/update-location` - POST only, overlay persists location for chat commands
+  - `/api/stats/update` - POST only, overlay sends speed/altitude for chat commands
+- **Authenticated only (admin panel)**
+  - `/api/save-settings` - POST only
+  - `/api/admin-login`, `/api/logout`, `/api/refresh-session`
+  - Admin page (`/`) requires authentication
 
 **Important**: SSE messages include metadata (`type`, `timestamp`) that must be stripped before setting state. Always extract only settings properties when handling SSE updates.
 
@@ -360,6 +364,8 @@ npm run dev      # Start development server
 npm run build    # Build for production
 npm run start    # Start production server
 npm run lint     # Run linter
+npm run test     # Run tests (Vitest)
+npm run test:watch  # Run tests in watch mode
 ```
 
 ## 🐛 Troubleshooting
