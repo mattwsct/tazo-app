@@ -27,13 +27,6 @@ export function validateEnvironment(): EnvValidationResult {
     'NEXT_PUBLIC_RTIRL_PULL_KEY',
     'NEXT_PUBLIC_LOCATIONIQ_KEY',
     'NEXT_PUBLIC_PULSOID_TOKEN',
-    'OBS_PASSWORD',
-  ];
-
-  // Sensitive variables (server-side only, never use NEXT_PUBLIC_)
-  const sensitive = [
-    'OBS_IP_ADDRESS',
-    'OBS_PORT',
   ];
   
   // Check required variables
@@ -50,12 +43,6 @@ export function validateEnvironment(): EnvValidationResult {
     }
   }
 
-  // Check sensitive variables (for security validation)
-  for (const key of sensitive) {
-    if (process.env[key] && process.env[key]!.startsWith('NEXT_PUBLIC_')) {
-      errors.push(`SECURITY ERROR: ${key} should NOT use NEXT_PUBLIC_ prefix`);
-    }
-  }
   
   // Validate KV URL format
   if (process.env.KV_REST_API_URL && !process.env.KV_REST_API_URL.startsWith('https://')) {

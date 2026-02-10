@@ -25,7 +25,6 @@ import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
 import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
 import { distanceInMeters, formatLocation, formatCountryName } from '@/utils/location-utils';
-import { updatePersistentLocation } from '@/utils/location-cache';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
 import { 
@@ -159,6 +158,8 @@ function OverlayPage() {
   const lastCoordsTime = useRef(0);
   const lastSettingsHash = useRef<string>('');
   const lastRawLocation = useRef<LocationData | null>(null);
+  const locationReceivedFromRtirlRef = useRef(false); // Prevents persistent fallback from overwriting RTIRL data
+  const persistentFallbackTimerRef = useRef<NodeJS.Timeout | null>(null); // Cleared when RTIRL provides data
   const lastSuccessfulWeatherFetch = useRef(0); // Track when weather was last successfully fetched
   const lastSuccessfulLocationFetch = useRef(0); // Track when location was last successfully fetched
   
@@ -562,14 +563,8 @@ function OverlayPage() {
       }
     };
     
-    // Set up Server-Sent Events for real-time updates (disabled if KV not available)
+    // Set up Server-Sent Events for real-time settings updates (KV check is server-side only)
     const setupSSE = () => {
-      // Check if KV is available before setting up SSE
-      if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-        OverlayLogger.overlay('SSE disabled: Vercel KV not configured');
-        return null;
-      }
-      
       const eventSource = new EventSource('/api/settings-stream');
       
       eventSource.onmessage = (event) => {
@@ -622,29 +617,39 @@ function OverlayPage() {
     // Load initial settings
     loadSettings();
     
-    // Load initial location from persistent storage (fallback if LocationIQ is rate-limited)
-    const loadInitialLocation = async () => {
+    // Persistent storage fallback - only use if RTIRL doesn't provide data within timeout
+    const PERSISTENT_FALLBACK_DELAY = 15000; // 15 seconds
+    const loadFromPersistentFallback = async () => {
+      if (locationReceivedFromRtirlRef.current) {
+        OverlayLogger.location('Skipping persistent fallback - already have RTIRL data');
+        return;
+      }
       try {
+        OverlayLogger.location('Loading from persistent storage (RTIRL fallback)', { reason: 'no RTIRL data received' });
         const res = await fetch('/api/get-location', { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (data.location && data.rawLocation) {
-            // Update location state and cache raw location data
+            if (locationReceivedFromRtirlRef.current) return;
             setLocation(data.location);
             lastRawLocation.current = data.rawLocation;
             setHasIncompleteLocationData(false);
-            OverlayLogger.location('Location initialized from persistent storage', {
+            OverlayLogger.location('Location from persistent storage (RTIRL unavailable)', {
               primary: data.location.primary || 'none',
               secondary: data.location.secondary || 'none'
             });
+          } else {
+            OverlayLogger.location('Persistent storage empty - waiting for RTIRL');
           }
+        } else {
+          OverlayLogger.warn('Persistent location fetch failed', { status: res.status });
         }
       } catch (error) {
-        // Silently fail - location will be fetched when LocationIQ is available
-        OverlayLogger.warn('Failed to load initial location from persistent storage', { error });
+        OverlayLogger.warn('Failed to load from persistent storage', { error });
       }
     };
-    loadInitialLocation();
+    persistentFallbackTimerRef.current = setTimeout(loadFromPersistentFallback, PERSISTENT_FALLBACK_DELAY);
+    OverlayLogger.location('Waiting for RTIRL data', { fallbackIn: `${PERSISTENT_FALLBACK_DELAY / 1000}s if no data` });
     
     // Set up real-time updates
     const eventSource = setupSSE();
@@ -682,6 +687,10 @@ function OverlayPage() {
     
     // Cleanup on unmount
     return () => {
+      if (persistentFallbackTimerRef.current) {
+        clearTimeout(persistentFallbackTimerRef.current);
+        persistentFallbackTimerRef.current = null;
+      }
       if (eventSource) {
         eventSource.close();
       }
@@ -1019,28 +1028,43 @@ function OverlayPage() {
                       const currentDisplayMode = settingsRef.current.locationDisplay;
                       const formatted = formatLocation(loc, currentDisplayMode);
                       lastRawLocation.current = loc;
+                      locationReceivedFromRtirlRef.current = true;
+                      if (persistentFallbackTimerRef.current) {
+                        clearTimeout(persistentFallbackTimerRef.current);
+                        persistentFallbackTimerRef.current = null;
+                      }
                       
-                      // Update persistent location storage (for chat commands)
-                      // Fire and forget - don't block UI
+                      // Update persistent location storage (for chat commands) via API - KV vars are server-only
                       const payloadTimestamp = extractGpsTimestamp(payload);
-                      updatePersistentLocation({
+                      const persistentPayload = {
                         location: loc,
-                        rtirl: { 
-                          lat: lat!, 
-                          lon: lon!, 
-                          raw: payload, 
-                          updatedAt: payloadTimestamp || Date.now() 
-                        },
+                        rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: payloadTimestamp || Date.now() },
                         updatedAt: Date.now(),
-                      }).catch(() => {
-                        // Silently fail - persistent storage is optional
-                      });
+                      };
+                      fetch('/api/update-location', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(persistentPayload),
+                      })
+                        .then(res => {
+                          if (res.ok) {
+                            OverlayLogger.location('Persistent location saved for chat commands', {
+                              primary: formatted.primary.trim() || 'none',
+                              secondary: formatted.secondary || 'none'
+                            });
+                          } else {
+                            OverlayLogger.warn('Persistent location save failed', { status: res.status });
+                          }
+                        })
+                        .catch(() => {
+                          // Silently fail - persistent storage is optional
+                        });
                         
                         // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
                         if (formatted.primary.trim() || formatted.secondary) {
                         // Log location updates (only when actually updating)
-                        OverlayLogger.location('Location updated from fresh RTIRL data', {
+                        OverlayLogger.location('Location from RTIRL+LocationIQ', {
                           mode: currentDisplayMode,
                           primary: formatted.primary.trim() || 'none',
                           secondary: formatted.secondary || 'none'

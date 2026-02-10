@@ -116,4 +116,3 @@ export function canMakeApiCall(api: keyof typeof RATE_LIMITS): boolean {
   
   return true;
 }
-
