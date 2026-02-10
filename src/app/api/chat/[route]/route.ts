@@ -1149,55 +1149,56 @@ export async function GET(
         return rate;
       };
 
-      // Handle multi-currency conversion chain
+      // Handle multi-currency conversion (convert same amount to multiple currencies)
       try {
-        let currentAmount = amount;
+        // Helper function to get currency symbol
+        const getCurrencySymbol = (currency: string): string => {
+          const allCountries = getAvailableCountries();
+          for (const country of allCountries) {
+            const data = getTravelData(country.code);
+            if (data.currency?.code === currency) {
+              return data.currency.symbol;
+            }
+          }
+          return currency;
+        };
         
-        // Build conversion chain: [FROM, ...intermediates, TO]
-        // fromCurrency is guaranteed to be non-null at this point due to validation above
-        const conversionChain: string[] = currencyCodes.length >= 2 
-          ? [fromCurrency!, ...currencyCodes.slice(1)] 
-          : [fromCurrency!, toCurrency];
+        // Helper function to format amount for a currency
+        const formatAmountForCurrency = (amt: number, currency: string): string => {
+          const usesDec = usesDecimals(currency);
+          return usesDec
+            ? amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : Math.round(amt).toLocaleString('en-US');
+        };
         
-        // Convert through each step in the chain
-        for (let i = 0; i < conversionChain.length - 1; i++) {
-          const from = conversionChain[i];
-          const to = conversionChain[i + 1];
-          
-          if (from === to) continue; // Skip if same currency
-          
-          const rate = await fetchExchangeRate(from, to);
-          currentAmount = currentAmount * rate;
-        }
+        // If multiple currencies specified, convert from base currency to all target currencies
+        const targetCurrencies: string[] = currencyCodes.length >= 2 
+          ? currencyCodes.slice(1) // All currencies after the first one
+          : [toCurrency]; // Just the single target currency
         
-        // Format final result
-        const finalCurrency = conversionChain[conversionChain.length - 1];
-        const finalUsesDecimals = usesDecimals(finalCurrency);
+        // Track all conversions
+        const conversions: string[] = [];
         const fromUsesDecimals = usesDecimals(fromCurrency);
-        
         const formattedAmount = fromUsesDecimals
           ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : Math.round(amount).toLocaleString('en-US');
+        const fromSymbol = getCurrencySymbol(fromCurrency);
         
-        const formattedConverted = finalUsesDecimals
-          ? currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          : Math.round(currentAmount).toLocaleString('en-US');
-        
-        // Get currency symbols
-        let fromSymbol = fromCurrency;
-        let toSymbol = finalCurrency;
-        const allCountries = getAvailableCountries();
-        for (const country of allCountries) {
-          const data = getTravelData(country.code);
-          if (data.currency?.code === fromCurrency) {
-            fromSymbol = data.currency.symbol;
-          }
-          if (data.currency?.code === finalCurrency) {
-            toSymbol = data.currency.symbol;
-          }
+        // Convert to each target currency
+        for (const targetCurrency of targetCurrencies) {
+          if (targetCurrency === fromCurrency) continue; // Skip if same currency
+          
+          const rate = await fetchExchangeRate(fromCurrency, targetCurrency);
+          const convertedAmount = amount * rate;
+          
+          const toSymbol = getCurrencySymbol(targetCurrency);
+          const formattedConverted = formatAmountForCurrency(convertedAmount, targetCurrency);
+          
+          conversions.push(`${fromSymbol}${formattedAmount} ${fromCurrency} = ${toSymbol}${formattedConverted} ${targetCurrency}`);
         }
         
-        return txtResponse(`${fromSymbol}${formattedAmount} ${fromCurrency} = ${toSymbol}${formattedConverted} ${finalCurrency}`);
+        // Return all conversions joined with " | "
+        return txtResponse(conversions.join(' | '));
       } catch (error) {
         console.error('Currency conversion error:', error);
         return txtResponse(`Unable to fetch exchange rate for ${fromCurrency} to ${toCurrency}. Please try again later.`);
