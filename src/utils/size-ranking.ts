@@ -303,13 +303,24 @@ function findSimilarPornStar(length: number, girth: number | null): string | nul
   // Randomly select one from all matches within range
   const selected = matches[Math.floor(Math.random() * matches.length)];
   
-  const matchPhrases = [
-    `Similar size to ${selected.name}`,
-    `Matches ${selected.name}'s size`,
-    `Same size as ${selected.name}`,
-    `Comparable to ${selected.name}`,
-  ];
-  const phrase = matchPhrases[Math.floor(Math.random() * matchPhrases.length)];
+  // Check if it's an exact match (same length and girth)
+  const isExactMatch = Math.abs(selected.length - length) < 0.01 && Math.abs(selected.girth - girth) < 0.01;
+  
+  let phrase: string;
+  if (isExactMatch) {
+    // Exact match - use "Same size"
+    phrase = `Same size as ${selected.name}`;
+  } else {
+    // Similar match - use similar phrases
+    const similarPhrases = [
+      `Similar size to ${selected.name}`,
+      `Matches ${selected.name}'s size`,
+      `Comparable to ${selected.name}`,
+      `Close to ${selected.name}'s size`,
+    ];
+    phrase = similarPhrases[Math.floor(Math.random() * similarPhrases.length)];
+  }
+  
   return ` ${phrase} (${selected.length}" x ${selected.girth}")`;
 }
 
