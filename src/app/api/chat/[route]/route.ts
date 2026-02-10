@@ -1032,12 +1032,10 @@ export async function GET(
         } else {
           toCurrency = 'USD';
         }
-      } else if (currencyCodes.length === 2) {
-        // Two currencies specified - FROM and TO
+      } else if (currencyCodes.length >= 2) {
+        // Two or more currencies specified - FROM and TO (or chain conversions)
         fromCurrency = currencyCodes[0];
-        toCurrency = currencyCodes[1];
-      } else {
-        return txtResponse('Usage: !convert <amount> [FROM] [TO] (e.g., !convert 1000, !convert 1,000.50 AUD, !convert 1000 AUD JPY)');
+        toCurrency = currencyCodes[currencyCodes.length - 1]; // Last currency is final destination
       }
 
       // Validate currency codes (3-letter ISO codes)
@@ -1066,9 +1064,8 @@ export async function GET(
         return txtResponse(`${symbol}${formatted} ${fromCurrency}`);
       }
 
-      // Fetch exchange rate with multiple fallback APIs
-      // Priority: ExchangeRate-API (if key provided) -> Frankfurter -> exchangerate.host
-      try {
+      // Helper function to fetch exchange rate between two currencies
+      const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
         const exchangeRateApiKey = process.env.EXCHANGERATE_API_KEY;
         let rate: number | null = null;
         let lastError: Error | null = null;
@@ -1076,15 +1073,15 @@ export async function GET(
         // Try ExchangeRate-API first if API key is available (most reliable)
         if (exchangeRateApiKey) {
           try {
-            const exchangeRateUrl = `https://v6.exchangerate-api.com/v6/${exchangeRateApiKey}/latest/${fromCurrency}`;
+            const exchangeRateUrl = `https://v6.exchangerate-api.com/v6/${exchangeRateApiKey}/latest/${from}`;
             const exchangeRateResponse = await fetch(exchangeRateUrl, {
               next: { revalidate: 3600 } // Cache for 1 hour
             });
             
             if (exchangeRateResponse.ok) {
               const exchangeRateData = await exchangeRateResponse.json();
-              if (exchangeRateData.result === 'success' && exchangeRateData.conversion_rates?.[toCurrency]) {
-                rate = exchangeRateData.conversion_rates[toCurrency];
+              if (exchangeRateData.result === 'success' && exchangeRateData.conversion_rates?.[to]) {
+                rate = exchangeRateData.conversion_rates[to];
               } else {
                 throw new Error('ExchangeRate-API returned invalid data');
               }
@@ -1093,21 +1090,20 @@ export async function GET(
             }
           } catch (exchangeRateError) {
             lastError = exchangeRateError instanceof Error ? exchangeRateError : new Error('ExchangeRate-API failed');
-            console.warn('ExchangeRate-API failed, trying fallback:', lastError.message);
           }
         }
         
         // Try Frankfurter API (free, no API key required)
         if (!rate) {
           try {
-            const frankfurterUrl = `https://api.frankfurter.dev/latest?from=${fromCurrency}&to=${toCurrency}`;
+            const frankfurterUrl = `https://api.frankfurter.dev/latest?from=${from}&to=${to}`;
             const frankfurterResponse = await fetch(frankfurterUrl, {
               next: { revalidate: 3600 } // Cache for 1 hour
             });
             
             if (frankfurterResponse.ok) {
               const frankfurterData = await frankfurterResponse.json();
-              rate = frankfurterData.rates?.[toCurrency];
+              rate = frankfurterData.rates?.[to];
               
               if (!rate || typeof rate !== 'number') {
                 throw new Error('Invalid rate data from Frankfurter');
@@ -1117,14 +1113,13 @@ export async function GET(
             }
           } catch (frankfurterError) {
             lastError = frankfurterError instanceof Error ? frankfurterError : new Error('Frankfurter API failed');
-            console.warn('Frankfurter API failed, trying fallback:', lastError.message);
           }
         }
         
         // Fallback to exchangerate.host
         if (!rate) {
           try {
-            const exchangeUrl = `https://api.exchangerate.host/latest?base=${fromCurrency}&symbols=${toCurrency}`;
+            const exchangeUrl = `https://api.exchangerate.host/latest?base=${from}&symbols=${to}`;
             const exchangeResponse = await fetch(exchangeUrl, {
               next: { revalidate: 3600 } // Cache for 1 hour
             });
@@ -1134,14 +1129,13 @@ export async function GET(
             }
             
             const exchangeData = await exchangeResponse.json();
-            rate = exchangeData.rates?.[toCurrency];
+            rate = exchangeData.rates?.[to];
             
             if (!rate || typeof rate !== 'number') {
               throw new Error('Invalid exchange rate data from exchangerate.host');
             }
           } catch (exchangeError) {
             lastError = exchangeError instanceof Error ? exchangeError : new Error('exchangerate.host failed');
-            console.error('All exchange rate APIs failed:', lastError.message);
           }
         }
         
@@ -1149,46 +1143,59 @@ export async function GET(
           throw lastError || new Error('All exchange rate APIs failed');
         }
         
-        // Calculate conversion and format response
-        const convertedAmount = amount * rate;
+        return rate;
+      };
+
+      // Handle multi-currency conversion chain
+      try {
+        let currentAmount = amount;
+        let currentCurrency = fromCurrency;
+        
+        // Build conversion chain: [FROM, ...intermediates, TO]
+        const conversionChain = currencyCodes.length >= 2 
+          ? [fromCurrency, ...currencyCodes.slice(1)] 
+          : [fromCurrency, toCurrency];
+        
+        // Convert through each step in the chain
+        for (let i = 0; i < conversionChain.length - 1; i++) {
+          const from = conversionChain[i];
+          const to = conversionChain[i + 1];
+          
+          if (from === to) continue; // Skip if same currency
+          
+          const rate = await fetchExchangeRate(from, to);
+          currentAmount = currentAmount * rate;
+          currentCurrency = to;
+        }
+        
+        // Format final result
+        const finalCurrency = conversionChain[conversionChain.length - 1];
+        const finalUsesDecimals = usesDecimals(finalCurrency);
         const fromUsesDecimals = usesDecimals(fromCurrency);
-        const toUsesDecimals = usesDecimals(toCurrency);
         
         const formattedAmount = fromUsesDecimals
           ? amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : Math.round(amount).toLocaleString('en-US');
         
-        const formattedConverted = toUsesDecimals
-          ? convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          : Math.round(convertedAmount).toLocaleString('en-US');
+        const formattedConverted = finalUsesDecimals
+          ? currentAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : Math.round(currentAmount).toLocaleString('en-US');
         
         // Get currency symbols
         let fromSymbol = fromCurrency;
-        let toSymbol = toCurrency;
+        let toSymbol = finalCurrency;
         const allCountries = getAvailableCountries();
         for (const country of allCountries) {
           const data = getTravelData(country.code);
           if (data.currency?.code === fromCurrency) {
             fromSymbol = data.currency.symbol;
           }
-          if (data.currency?.code === toCurrency) {
+          if (data.currency?.code === finalCurrency) {
             toSymbol = data.currency.symbol;
           }
         }
         
-        // Calculate reverse rate (1 TO = X FROM)
-        const reverseRate = 1 / rate;
-        
-        // Show reverse conversion if useful (for common conversions or if significantly different)
-        const showReverse = rate < 0.1 || rate > 10 || 
-                           (fromCurrency === 'USD' && ['EUR', 'GBP', 'JPY', 'AUD', 'CAD'].includes(toCurrency)) ||
-                           (toCurrency === 'USD' && ['EUR', 'GBP', 'JPY', 'AUD', 'CAD'].includes(fromCurrency));
-        
-        if (showReverse) {
-          return txtResponse(`${fromSymbol}${formattedAmount} ${fromCurrency} = ${toSymbol}${formattedConverted} ${toCurrency} | 1 ${fromCurrency} = ${rate.toFixed(4)} ${toCurrency}, 1 ${toCurrency} = ${reverseRate.toFixed(4)} ${fromCurrency}`);
-        }
-        
-        return txtResponse(`${fromSymbol}${formattedAmount} ${fromCurrency} = ${toSymbol}${formattedConverted} ${toCurrency} (rate: 1 ${fromCurrency} = ${rate.toFixed(4)} ${toCurrency})`);
+        return txtResponse(`${fromSymbol}${formattedAmount} ${fromCurrency} = ${toSymbol}${formattedConverted} ${finalCurrency}`);
       } catch (error) {
         console.error('Currency conversion error:', error);
         return txtResponse(`Unable to fetch exchange rate for ${fromCurrency} to ${toCurrency}. Please try again later.`);
