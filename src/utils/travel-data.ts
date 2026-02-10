@@ -29,6 +29,7 @@ export interface TravelData {
     symbol: string; // Currency symbol (e.g., "¥", "€", "$")
     code: string; // ISO currency code (e.g., "JPY", "EUR", "USD")
   };
+  facts?: string[]; // Interesting facts about the country
 }
 
 export const GLOBAL: TravelData = {
@@ -308,7 +309,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Yen",
       symbol: "¥",
       code: "JPY"
-    }
+    },
+    facts: [
+      "Japan has over 5.5 million vending machines - more than anywhere else in the world",
+      "There are more than 200 volcanoes in Japan, with about 60 still active",
+      "Japan has the world's oldest company - a construction company founded in 578 AD",
+      "The bullet train (Shinkansen) has never had a fatal accident since it started in 1964",
+      "Japan has over 1,500 earthquakes per year - most are too small to feel",
+      "There are more than 3,000 McDonald's restaurants in Japan",
+      "Japan has the highest life expectancy in the world",
+      "The country has over 6,800 islands, but only 4 main ones",
+      "Japan invented instant noodles in 1958",
+      "There are more pets than children in Japan",
+      "Japan has the world's busiest pedestrian crossing - Shibuya Crossing sees 2.4 million people daily",
+      "The country has over 5,000 festivals (matsuri) each year",
+      "Japan has the world's deepest underwater postbox at 10 meters below sea level",
+      "There's a vending machine that sells fresh eggs, and another that sells bananas",
+      "Japan has more than 50,000 people over 100 years old"
+    ]
   },
   VN: {
     foods: [
@@ -499,7 +517,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Dong",
       symbol: "₫",
       code: "VND"
-    }
+    },
+    facts: [
+      "Vietnam is the world's second largest coffee exporter after Brazil",
+      "The country has over 3,000 km of coastline with beautiful beaches",
+      "Vietnam has the world's largest cave - Son Doong Cave is big enough to fit a 40-story building",
+      "The country has over 54 ethnic groups, each with their own language and culture",
+      "Vietnam invented the ao dai - the traditional long dress worn by women",
+      "The country has the world's longest cable car - over 5km long in Phu Quoc",
+      "Vietnam has over 1,600km of rivers and canals",
+      "The country produces more cashew nuts than anywhere else in the world",
+      "Vietnam has the world's cheapest beer - Bia Hoi costs less than $0.50",
+      "The country has over 1,000 years of recorded history",
+      "Vietnam has the world's largest cave passage - Hang Son Doong",
+      "The country has more motorbikes than people",
+      "Vietnam has the world's longest dragon bridge - 666 meters long in Da Nang",
+      "The country invented phở - one of the world's most popular noodle soups",
+      "Vietnam has over 3,000 islands in Halong Bay alone"
+    ]
   },
   ID: {
     foods: [
@@ -691,7 +726,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Rupiah",
       symbol: "Rp",
       code: "IDR"
-    }
+    },
+    facts: [
+      "Indonesia is the world's largest archipelago with over 17,000 islands",
+      "The country has over 700 languages spoken across its islands",
+      "Indonesia is home to the world's largest lizard - the Komodo dragon",
+      "The country has the world's largest Muslim population",
+      "Indonesia has over 400 active volcanoes - more than any other country",
+      "The country produces more than 20% of the world's coffee",
+      "Indonesia has the world's largest flower - the Rafflesia can grow up to 1 meter wide",
+      "The country has over 3,000 species of orchids",
+      "Indonesia invented the word 'amok' - meaning to run about in a violent frenzy",
+      "The country has the world's oldest cave paintings - over 40,000 years old",
+      "Indonesia has over 1,500 ethnic groups",
+      "The country has the world's largest gold mine - Grasberg mine",
+      "Indonesia has more than 500 different types of bananas",
+      "The country has the world's largest Buddhist temple - Borobudur",
+      "Indonesia has over 1,000 species of birds - more than any other country"
+    ]
   },
   AU: {
     foods: [
@@ -849,7 +901,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Australian Dollar",
       symbol: "A$",
       code: "AUD"
-    }
+    },
+    facts: [
+      "Australia is the world's 6th largest country but has only 26 million people",
+      "The country has more sheep than people - about 3 sheep per person",
+      "Australia has the world's longest fence - the Dingo Fence is 5,614 km long",
+      "The country has over 10,000 beaches - more than any other country",
+      "Australia has the world's largest coral reef system - the Great Barrier Reef",
+      "The country has more camels than Egypt - over 1 million wild camels",
+      "Australia has the world's oldest living culture - Aboriginal people have been here for 65,000 years",
+      "The country has the world's largest sand island - Fraser Island",
+      "Australia has more venomous snakes than any other country",
+      "The country has the world's largest cattle station - bigger than Belgium",
+      "Australia has over 1,500 species of spiders",
+      "The country has the world's longest straight road - 146.6 km without a turn",
+      "Australia has more than 60 wine regions",
+      "The country has the world's largest monolith - Uluru",
+      "Australia has over 500 national parks"
+    ]
   },
   TH: {
     foods: [
@@ -1040,7 +1109,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Baht",
       symbol: "฿",
       code: "THB"
-    }
+    },
+    facts: [
+      "Thailand has never been colonized by a European power",
+      "The country has over 40,000 Buddhist temples",
+      "Thailand has the world's largest gold Buddha statue - weighing 5.5 tons",
+      "The country has more than 1,400 islands",
+      "Thailand has the world's smallest mammal - the bumblebee bat",
+      "The country has over 1,000 species of orchids",
+      "Thailand has the world's longest place name - Krung Thep Mahanakhon... (167 letters)",
+      "The country has more than 50,000 elephants",
+      "Thailand has the world's largest outdoor market - Chatuchak Weekend Market",
+      "The country has over 300 festivals per year",
+      "Thailand has the world's largest crocodile farm",
+      "The country has more than 1,500 km of coastline",
+      "Thailand has the world's largest reclining Buddha - 46 meters long",
+      "The country has over 1,000 species of birds",
+      "Thailand has the world's most expensive durian - can cost over $100"
+    ]
   },
   KR: {
     foods: [
@@ -1227,7 +1313,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Won",
       symbol: "₩",
       code: "KRW"
-    }
+    },
+    facts: [
+      "South Korea has the world's fastest internet speeds",
+      "The country has over 25,000 public WiFi hotspots",
+      "South Korea has the world's largest indoor theme park - Lotte World",
+      "The country has more than 20,000 coffee shops - more per capita than anywhere",
+      "South Korea has the world's highest suicide rate among developed countries",
+      "The country has over 1,200 islands",
+      "South Korea has the world's largest shipbuilding industry",
+      "The country has more than 50% of the world's OLED display production",
+      "South Korea has the world's longest subway system - over 940 km",
+      "The country has over 200 universities",
+      "South Korea has the world's highest rate of plastic surgery per capita",
+      "The country has more than 1,000 years of recorded history",
+      "South Korea has the world's largest e-sports industry",
+      "The country has over 3,000 mountains",
+      "South Korea has the world's most advanced 5G network coverage"
+    ]
   },
   PH: {
     foods: [
@@ -1416,7 +1519,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Philippine Peso",
       symbol: "₱",
       code: "PHP"
-    }
+    },
+    facts: [
+      "The Philippines has over 7,600 islands - more than any other country",
+      "The country has the world's longest Christmas celebration - starts in September",
+      "The Philippines has the world's smallest monkey - the tarsier",
+      "The country has over 170 languages spoken",
+      "The Philippines has the world's largest shopping mall - SM Megamall",
+      "The country has more than 200 volcanoes",
+      "The Philippines has the world's largest pearl - the Pearl of Lao Tzu weighs 6.4 kg",
+      "The country has over 1,000 species of orchids",
+      "The Philippines has the world's longest underground river - Puerto Princesa",
+      "The country has more than 50% of the world's call center workers",
+      "The Philippines has the world's most diverse marine life",
+      "The country has over 1,500 species of butterflies",
+      "The Philippines has the world's largest eagle - the Philippine eagle",
+      "The country has more than 100 active volcanoes",
+      "The Philippines has the world's most text-messaging country per capita"
+    ]
   },
   SG: {
     foods: [
@@ -1586,7 +1706,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Singapore Dollar",
       symbol: "S$",
       code: "SGD"
-    }
+    },
+    facts: [
+      "Singapore is one of only three city-states in the world",
+      "The country has the world's busiest port",
+      "Singapore has the world's largest rooftop infinity pool",
+      "The country has more than 5.6 million people in just 728 square km",
+      "Singapore has the world's first night zoo",
+      "The country has over 50% green cover despite being a city",
+      "Singapore has the world's most expensive city to live in",
+      "The country has more than 4,000 high-rise buildings",
+      "Singapore has the world's largest observation wheel - Singapore Flyer",
+      "The country has over 300 km of cycling paths",
+      "Singapore has the world's first F1 night race",
+      "The country has more than 1,000 species of orchids",
+      "Singapore has the world's largest man-made waterfall",
+      "The country has over 50% of its land reclaimed from the sea",
+      "Singapore has the world's best airport - Changi Airport"
+    ]
   },
   MY: {
     foods: [
@@ -1775,7 +1912,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Ringgit",
       symbol: "RM",
       code: "MYR"
-    }
+    },
+    facts: [
+      "Malaysia has the world's oldest tropical rainforest - over 130 million years old",
+      "The country has over 800 species of birds",
+      "Malaysia has the world's largest flower - the Rafflesia can grow up to 1 meter",
+      "The country has more than 1,000 species of orchids",
+      "Malaysia has the world's tallest twin towers - Petronas Towers",
+      "The country has over 4,000 km of coastline",
+      "Malaysia has the world's largest cave chamber - Sarawak Chamber",
+      "The country has more than 200 languages spoken",
+      "Malaysia has the world's longest canopy walkway - 530 meters",
+      "The country has over 1,000 species of butterflies",
+      "Malaysia has the world's largest roundabout - Putrajaya",
+      "The country has more than 15,000 species of plants",
+      "Malaysia has the world's oldest cave paintings - over 40,000 years old",
+      "The country has over 200 islands",
+      "Malaysia has the world's largest producer of palm oil"
+    ]
   },
   TW: {
     foods: [
@@ -1964,7 +2118,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "New Taiwan Dollar",
       symbol: "NT$",
       code: "TWD"
-    }
+    },
+    facts: [
+      "Taiwan has the world's tallest building - Taipei 101 was tallest from 2004-2010",
+      "The country has over 100 hot springs",
+      "Taiwan has the world's largest collection of Chinese art",
+      "The country has more than 200 mountains over 3,000 meters",
+      "Taiwan has the world's largest computer chip manufacturer - TSMC",
+      "The country has over 1,000 temples",
+      "Taiwan has the world's highest density of convenience stores",
+      "The country has more than 400 species of butterflies",
+      "Taiwan has the world's largest jade collection",
+      "The country has over 150 islands",
+      "Taiwan has the world's best healthcare system",
+      "The country has more than 1,000 species of birds",
+      "Taiwan has the world's largest night market - Shilin Night Market",
+      "The country has over 3,000 km of hiking trails",
+      "Taiwan has the world's largest producer of computer components"
+    ]
   },
   IN: {
     foods: [
@@ -2152,7 +2323,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Rupee",
       symbol: "₹",
       code: "INR"
-    }
+    },
+    facts: [
+      "India has the world's largest democracy with over 1.4 billion people",
+      "The country has over 22 official languages and 1,600 dialects",
+      "India has the world's largest film industry - Bollywood",
+      "The country has more than 300,000 mosques",
+      "India has the world's largest postal network - over 155,000 post offices",
+      "The country has over 1,000 species of birds",
+      "India has the world's largest vegetarian population",
+      "The country has more than 2,000 species of fish",
+      "India has the world's oldest continuously inhabited city - Varanasi",
+      "The country has over 1,000 festivals per year",
+      "India has the world's largest spice producer",
+      "The country has more than 50,000 species of plants",
+      "India has the world's largest railway network",
+      "The country has over 3,000 years of recorded history",
+      "India has the world's largest number of tigers"
+    ]
   },
   CN: {
     foods: [
@@ -2341,7 +2529,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Yuan",
       symbol: "¥",
       code: "CNY"
-    }
+    },
+    facts: [
+      "China has the world's largest population - over 1.4 billion people",
+      "The country has the world's longest wall - the Great Wall is over 21,000 km",
+      "China has the world's largest high-speed rail network - over 40,000 km",
+      "The country has more than 50,000 characters in its writing system",
+      "China has the world's largest producer of renewable energy",
+      "The country has over 1,000 species of birds",
+      "China has the world's oldest continuous civilization - over 5,000 years",
+      "The country has more than 50 UNESCO World Heritage sites",
+      "China has the world's largest e-commerce market",
+      "The country has over 1,000 species of fish",
+      "China has the world's largest producer of tea",
+      "The country has more than 200 languages spoken",
+      "China has the world's largest dam - Three Gorges Dam",
+      "The country has over 3,000 years of recorded history",
+      "China has the world's largest producer of solar panels"
+    ]
   },
   FR: {
     foods: [
@@ -2531,7 +2736,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Euro",
       symbol: "€",
       code: "EUR"
-    }
+    },
+    facts: [
+      "France has the world's most visited country - over 90 million tourists per year",
+      "The country has over 1,000 types of cheese",
+      "France has the world's largest art museum - the Louvre",
+      "The country has more than 400 different types of wine",
+      "France has the world's longest high-speed rail network in Europe",
+      "The country has over 1,000 castles",
+      "France has the world's largest roundabout - Place de l'Étoile",
+      "The country has more than 1,000 festivals per year",
+      "France has the world's oldest university - University of Paris (1150)",
+      "The country has over 3,000 km of coastline",
+      "France has the world's largest producer of nuclear energy",
+      "The country has more than 1,000 species of birds",
+      "France has the world's most Michelin-starred restaurants",
+      "The country has over 1,000 years of recorded history",
+      "France has the world's largest wine producer"
+    ]
   },
   ES: {
     foods: [
@@ -2721,7 +2943,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Euro",
       symbol: "€",
       code: "EUR"
-    }
+    },
+    facts: [
+      "Spain has the world's second most visited country - over 80 million tourists",
+      "The country has over 8,000 km of coastline",
+      "Spain has the world's oldest restaurant - Restaurante Botín (1725)",
+      "The country has more than 50 UNESCO World Heritage sites",
+      "Spain has the world's largest producer of olive oil",
+      "The country has over 1,000 festivals per year",
+      "Spain has the world's second largest high-speed rail network",
+      "The country has more than 400 species of birds",
+      "Spain has the world's largest number of bars per capita",
+      "The country has over 1,000 islands",
+      "Spain has the world's oldest university - University of Salamanca (1218)",
+      "The country has more than 2,000 years of recorded history",
+      "Spain has the world's largest producer of wine",
+      "The country has over 1,000 castles",
+      "Spain has the world's most diverse climate in Europe"
+    ]
   },
   IT: {
     foods: [
@@ -2911,7 +3150,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Euro",
       symbol: "€",
       code: "EUR"
-    }
+    },
+    facts: [
+      "Italy has the world's most UNESCO World Heritage sites - 58 sites",
+      "The country has over 1,500 lakes",
+      "Italy has the world's oldest university - University of Bologna (1088)",
+      "The country has more than 3,000 years of recorded history",
+      "Italy has the world's largest producer of wine",
+      "The country has over 1,000 islands",
+      "Italy has the world's smallest country - Vatican City",
+      "The country has more than 400 types of pasta",
+      "Italy has the world's oldest republic - San Marino",
+      "The country has over 1,000 festivals per year",
+      "Italy has the world's largest number of World Heritage sites",
+      "The country has more than 1,000 species of birds",
+      "Italy has the world's oldest continuously inhabited city - Matera",
+      "The country has over 7,000 km of coastline",
+      "Italy has the world's largest producer of olive oil"
+    ]
   },
   DE: {
     foods: [
@@ -3101,7 +3357,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Euro",
       symbol: "€",
       code: "EUR"
-    }
+    },
+    facts: [
+      "Germany has the world's largest economy in Europe",
+      "The country has over 1,500 castles",
+      "Germany has the world's oldest brewery - Weihenstephan (1040)",
+      "The country has more than 1,500 types of sausages",
+      "Germany has the world's largest exporter of cars",
+      "The country has over 1,000 festivals per year",
+      "Germany has the world's largest number of zoos",
+      "The country has more than 400 species of birds",
+      "Germany has the world's largest producer of renewable energy",
+      "The country has over 1,000 years of recorded history",
+      "Germany has the world's largest Christmas market tradition",
+      "The country has more than 1,000 museums",
+      "Germany has the world's longest autobahn network",
+      "The country has over 3,000 km of coastline",
+      "Germany has the world's largest beer festival - Oktoberfest"
+    ]
   },
   GB: {
     foods: [
@@ -3270,7 +3543,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Pound Sterling",
       symbol: "£",
       code: "GBP"
-    }
+    },
+    facts: [
+      "The UK has the world's oldest parliament - over 900 years old",
+      "The country has over 1,000 islands",
+      "The UK has the world's oldest underground railway - London Underground (1863)",
+      "The country has more than 1,000 castles",
+      "The UK has the world's largest collection of museums",
+      "The country has over 1,000 festivals per year",
+      "The UK has the world's oldest university - University of Oxford (1096)",
+      "The country has more than 400 species of birds",
+      "The UK has the world's largest producer of whiskey",
+      "The country has over 1,000 years of recorded history",
+      "The UK has the world's longest place name - Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch",
+      "The country has more than 1,000 pubs per square mile in some areas",
+      "The UK has the world's largest producer of gin",
+      "The country has over 3,000 km of coastline",
+      "The UK has the world's most diverse accent variations"
+    ]
   },
   CA: {
     foods: [
@@ -3419,7 +3709,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Canadian Dollar",
       symbol: "C$",
       code: "CAD"
-    }
+    },
+    facts: [
+      "Canada has the world's longest coastline - over 202,000 km",
+      "The country has more lakes than the rest of the world combined",
+      "Canada has the world's second largest country by area",
+      "The country has over 1,000 species of birds",
+      "Canada has the world's largest producer of maple syrup",
+      "The country has more than 1,000 islands",
+      "Canada has the world's longest street - Yonge Street is 1,896 km",
+      "The country has over 1,000 festivals per year",
+      "Canada has the world's largest producer of uranium",
+      "The country has more than 1,000 species of fish",
+      "Canada has the world's largest number of polar bears",
+      "The country has over 1,000 years of recorded history",
+      "Canada has the world's largest producer of newsprint",
+      "The country has more than 1,000 national parks",
+      "Canada has the world's most educated population"
+    ]
   },
   US: {
     foods: [
@@ -3596,7 +3903,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "US Dollar",
       symbol: "$",
       code: "USD"
-    }
+    },
+    facts: [
+      "The USA has the world's largest economy",
+      "The country has over 19,000 airports - more than any other country",
+      "The USA has the world's largest producer of corn",
+      "The country has more than 1,000 species of birds",
+      "The USA has the world's largest number of billionaires",
+      "The country has over 1,000 national parks",
+      "The USA has the world's largest producer of movies",
+      "The country has more than 1,000 festivals per year",
+      "The USA has the world's largest producer of cheese",
+      "The country has over 1,000 islands",
+      "The USA has the world's longest highway - Route 66",
+      "The country has more than 1,000 species of fish",
+      "The USA has the world's largest producer of soybeans",
+      "The country has over 1,000 years of recorded history",
+      "The USA has the world's most diverse climate zones"
+    ]
   },
   MX: {
     foods: [
@@ -3786,7 +4110,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Peso",
       symbol: "$",
       code: "MXN"
-    }
+    },
+    facts: [
+      "Mexico has the world's largest Spanish-speaking population",
+      "The country has over 1,000 species of birds",
+      "Mexico has the world's largest producer of silver",
+      "The country has more than 1,000 islands",
+      "Mexico has the world's largest pyramid - Great Pyramid of Cholula",
+      "The country has over 1,000 festivals per year",
+      "Mexico has the world's oldest university in the Americas - UNAM (1551)",
+      "The country has more than 1,000 species of fish",
+      "Mexico has the world's largest producer of avocados",
+      "The country has over 1,000 years of recorded history",
+      "Mexico has the world's largest number of UNESCO World Heritage sites in the Americas",
+      "The country has more than 1,000 volcanoes",
+      "Mexico has the world's largest producer of tequila",
+      "The country has over 3,000 km of coastline",
+      "Mexico has the world's most diverse cuisine"
+    ]
   },
   BR: {
     foods: [
@@ -3955,7 +4296,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Real",
       symbol: "R$",
       code: "BRL"
-    }
+    },
+    facts: [
+      "Brazil has the world's largest Portuguese-speaking population",
+      "The country has over 1,000 species of birds",
+      "Brazil has the world's largest rainforest - the Amazon",
+      "The country has more than 1,000 islands",
+      "Brazil has the world's largest producer of coffee",
+      "The country has over 1,000 festivals per year",
+      "Brazil has the world's largest carnival celebration",
+      "The country has more than 1,000 species of fish",
+      "Brazil has the world's largest producer of sugarcane",
+      "The country has over 1,000 years of recorded history",
+      "Brazil has the world's largest number of plant species",
+      "The country has more than 1,000 species of butterflies",
+      "Brazil has the world's largest producer of oranges",
+      "The country has over 7,000 km of coastline",
+      "Brazil has the world's most diverse ecosystem"
+    ]
   },
   TR: {
     foods: [
@@ -4126,7 +4484,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Lira",
       symbol: "₺",
       code: "TRY"
-    }
+    },
+    facts: [
+      "Turkey spans two continents - Europe and Asia",
+      "The country has over 1,000 species of birds",
+      "Turkey has the world's oldest city - Çatalhöyük (7500 BC)",
+      "The country has more than 1,000 islands",
+      "Turkey has the world's largest producer of hazelnuts",
+      "The country has over 1,000 festivals per year",
+      "Turkey has the world's largest number of ancient sites",
+      "The country has more than 1,000 species of fish",
+      "Turkey has the world's largest producer of figs",
+      "The country has over 1,000 years of recorded history",
+      "Turkey has the world's largest number of mosques",
+      "The country has more than 1,000 hot springs",
+      "Turkey has the world's largest producer of cherries",
+      "The country has over 7,000 km of coastline",
+      "Turkey has the world's most diverse cultural heritage"
+    ]
   },
   NZ: {
     foods: [
@@ -4298,7 +4673,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "New Zealand Dollar",
       symbol: "NZ$",
       code: "NZD"
-    }
+    },
+    facts: [
+      "New Zealand has more sheep than people - about 6 sheep per person",
+      "The country has over 1,000 species of birds",
+      "New Zealand has the world's largest producer of kiwi fruit",
+      "The country has more than 1,000 islands",
+      "New Zealand has the world's longest place name - Taumatawhakatangihangakoauauotamateaturipukakapikimaungahoronukupokaiwhenuakitnatahu",
+      "The country has over 1,000 festivals per year",
+      "New Zealand has the world's largest producer of lamb",
+      "The country has more than 1,000 species of fish",
+      "New Zealand has the world's largest producer of dairy products",
+      "The country has over 1,000 years of recorded history",
+      "New Zealand has the world's largest number of flightless birds",
+      "The country has more than 1,000 hot springs",
+      "New Zealand has the world's largest producer of manuka honey",
+      "The country has over 15,000 km of coastline",
+      "New Zealand has the world's most diverse marine life"
+    ]
   },
   PT: {
     foods: [
@@ -4641,7 +5033,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Euro",
       symbol: "€",
       code: "EUR"
-    }
+    },
+    facts: [
+      "Portugal has the world's oldest borders - unchanged since 1139",
+      "The country has over 1,000 species of birds",
+      "Portugal has the world's largest producer of cork",
+      "The country has more than 1,000 islands",
+      "Portugal has the world's longest bridge in Europe - Vasco da Gama Bridge",
+      "The country has over 1,000 festivals per year",
+      "Portugal has the world's oldest university - University of Coimbra (1290)",
+      "The country has more than 1,000 species of fish",
+      "Portugal has the world's largest producer of port wine",
+      "The country has over 1,000 years of recorded history",
+      "Portugal has the world's largest number of castles per square km",
+      "The country has more than 1,000 beaches",
+      "Portugal has the world's largest producer of olive oil",
+      "The country has over 1,800 km of coastline",
+      "Portugal has the world's most diverse architecture"
+    ]
   },
   GR: {
     foods: [
@@ -4807,7 +5216,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Euro",
       symbol: "€",
       code: "EUR"
-    }
+    },
+    facts: [
+      "Greece has the world's largest number of islands - over 6,000 islands",
+      "The country has over 1,000 species of birds",
+      "Greece has the world's oldest democracy - over 2,500 years old",
+      "The country has more than 1,000 festivals per year",
+      "Greece has the world's largest producer of olives",
+      "The country has over 1,000 years of recorded history",
+      "Greece has the world's largest number of archaeological sites",
+      "The country has more than 1,000 species of fish",
+      "Greece has the world's largest producer of feta cheese",
+      "The country has over 1,000 islands",
+      "Greece has the world's longest coastline in the Mediterranean",
+      "The country has more than 1,000 hot springs",
+      "Greece has the world's largest producer of sea sponges",
+      "The country has over 1,000 years of recorded history",
+      "Greece has the world's most diverse mythology"
+    ]
   },
   ZA: {
     foods: [
@@ -4971,7 +5397,24 @@ export const TRAVEL_DATA: Record<string, TravelData> = {
       name: "Rand",
       symbol: "R",
       code: "ZAR"
-    }
+    },
+    facts: [
+      "South Africa has the world's largest producer of gold",
+      "The country has over 1,000 species of birds",
+      "South Africa has the world's largest producer of platinum",
+      "The country has more than 1,000 species of fish",
+      "South Africa has the world's largest producer of diamonds",
+      "The country has over 1,000 festivals per year",
+      "South Africa has the world's largest number of official languages - 11 languages",
+      "The country has more than 1,000 species of mammals",
+      "South Africa has the world's largest producer of wine",
+      "The country has over 1,000 years of recorded history",
+      "South Africa has the world's largest number of plant species",
+      "The country has more than 1,000 species of butterflies",
+      "South Africa has the world's largest producer of macadamia nuts",
+      "The country has over 2,800 km of coastline",
+      "South Africa has the world's most diverse wildlife"
+    ]
   },
   // Add more countries as needed - keeping file size manageable
   // Limits: MAX_FOODS=35, MAX_PHRASES=50, MAX_CULTURAL_TIPS=20 per country

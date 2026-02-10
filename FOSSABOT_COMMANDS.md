@@ -39,12 +39,23 @@ These commands work with or without a query. If no query is provided, they use y
 !weather Tokyo → $(customapi https://app.tazo.wtf/api/chat/weather?q=$(querystring))
 ```
 
+Returns current weather conditions with temperature in both Celsius and Fahrenheit, feels like temperature, notable conditions (wind, humidity, visibility), and weather alerts for severe conditions.
+
+Example outputs:
+- `☀️ 25°C/77°F Clear sky · Feels like 27°C/81°F · 15km/h wind`
+- `⛈️ 22°C/72°F Thunderstorm · ⚠️ Thunderstorm warning · wind 45km/h`
+- `☀️ 42°C/108°F Clear sky · ⚠️ Extreme heat warning · very hot (feels like 45°C/113°F)`
+
 ### Forecast
 
 ```
 !forecast → $(customapi https://app.tazo.wtf/api/chat/forecast)
 !forecast Los Angeles → $(customapi https://app.tazo.wtf/api/chat/forecast?q=$(querystring))
 ```
+
+Returns 5-day weather forecast with temperature ranges, conditions, wind, and humidity for notable days.
+
+Example output: `☀️ Today 20-25°C/68-77°F · 🌧️ Tomorrow 15-18°C/59-64°F · 25km/h wind · 85% humidity | ☀️ Mon Jan 15 18-22°C/64-72°F`
 
 ### Time
 
@@ -59,6 +70,10 @@ These commands work with or without a query. If no query is provided, they use y
 !sun → $(customapi https://app.tazo.wtf/api/chat/sun)
 !sun Paris → $(customapi https://app.tazo.wtf/api/chat/sun?q=$(querystring))
 ```
+
+Returns sunrise and sunset times with time until each event.
+
+Example output: `🌅 Sunrise 6:15 AM (in 2h 30m) · 🌇 Sunset 7:45 PM (in 14h 0m)`
 
 ### Map Link
 
@@ -96,6 +111,20 @@ Or using individual parameters:
 !inch 5.5 4.5 → $(customapi https://app.tazo.wtf/api/chat/inch?l=$(1)&g=$(2))
 !cm 14 11.5 → $(customapi https://app.tazo.wtf/api/chat/cm?l=$(1)&g=$(2))
 ```
+
+Returns size ranking with percentile, percentage above/below average, and porn star comparisons (if similar size found).
+
+**Features:**
+- Uses 2025 meta-analysis data (5.45" avg length, 4.69" avg girth)
+- Shows percentile ranking next to each measurement (length and girth separately)
+- Compares to porn star sizes if similar (within 1" combined difference)
+- Clean, concise format with clear labeling
+- Works with length only or length + girth
+
+Example outputs:
+- `🍆 7" (top 10%) x 5" (top 5%): above average length, large girth. Similar size to Johnny Sins (7" x 5")`
+- `🍆 8.5" (top 0.12%) x 5.8" (top 0.5%): huge length, huge girth. Matches Jax Slayher's size (8.5" x 5.8")`
+- `🍆 6" (top 25%): above average`
 
 ## Travel Commands
 
@@ -158,6 +187,30 @@ Example output: `[Mexico] All: 911 | Police: 066 | Ambulance: 065 | Fire: 068 | 
 Returns the local currency name, symbol, and ISO code. Uses your current country by default, or specify a country code to check other countries.
 
 Example output: `[Japan] Yen (JPY) ¥` or `Euro (EUR) €`
+
+### Convert
+
+```
+!convert 1000 → $(customapi https://app.tazo.wtf/api/chat/convert?q=1000)
+!convert 1,000.50 AUD → $(customapi https://app.tazo.wtf/api/chat/convert?q=1,000.50 AUD)
+!convert 1000 AUD JPY → $(customapi https://app.tazo.wtf/api/chat/convert?q=1000 AUD JPY)
+```
+
+Converts currency amounts. Supports multiple formats:
+- `!convert 1000` - Converts 1000 units of your local currency to USD (or AUD if local currency is USD)
+- `!convert 1,000.50 AUD` - Converts 1,000.50 AUD to USD (defaults to USD if only one currency specified, or AUD if FROM is USD)
+- `!convert 1000 AUD JPY` - Converts 1000 AUD to JPY (specify both FROM and TO currencies)
+
+**Features:**
+- Accepts amounts with commas (1,000) and decimals (1000.50)
+- If local currency is USD, defaults to converting to AUD (more useful)
+- If FROM currency is USD and only one currency specified, converts to AUD
+
+Example outputs:
+- `¥1,000.00 JPY = $6.67 USD | 1 JPY = $0.0067 USD, 1 USD = ¥149.70 JPY` (shows reverse conversion)
+- `A$1,000.50 AUD = $658.42 USD | 1 AUD = $0.6584 USD, 1 USD = A$1.5192 AUD`
+- `$1,000.00 USD = A$1,520.00 AUD | 1 USD = 1.5200 AUD, 1 AUD = $0.6579 USD`
+- `A$1,000.00 AUD = ¥98,765.43 JPY (rate: 1 AUD = 98.7654 JPY)` (reverse shown for common currencies)
 
 ### Flirt
 
@@ -223,6 +276,100 @@ Example output: `Current: 25 km/h | Max: 120 km/h (1h ago)`
 Returns current altitude, highest, and lowest over last 24h.
 
 Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago)`
+
+## Fun Commands
+
+### Dice / Roll
+
+```
+!dice → $(customapi https://app.tazo.wtf/api/chat/dice)
+!roll → $(customapi https://app.tazo.wtf/api/chat/dice)
+!dice 20 → $(customapi https://app.tazo.wtf/api/chat/dice?q=20)
+!roll 6 3 → $(customapi https://app.tazo.wtf/api/chat/dice?q=6 3)
+```
+
+Roll dice with customizable sides and count. Defaults to 6-sided die, single roll.
+
+- `!dice` - Roll a 6-sided die
+- `!dice 20` - Roll a 20-sided die
+- `!roll 6 3` - Roll 3 six-sided dice
+
+Example output: `🎲 Rolled 15 (d20)` or `🎲 Rolled 4, 6, 2 = 12 (3d6)`
+
+### Coin Flip
+
+```
+!coin → $(customapi https://app.tazo.wtf/api/chat/coin)
+!flip → $(customapi https://app.tazo.wtf/api/chat/coin)
+```
+
+Flip a coin and get heads or tails.
+
+Example output: `🪙 Heads` or `🪙 Tails`
+
+### Magic 8-Ball
+
+```
+!8ball → $(customapi https://app.tazo.wtf/api/chat/8ball)
+!magic8ball → $(customapi https://app.tazo.wtf/api/chat/8ball)
+```
+
+Get a random magic 8-ball response to your question.
+
+Example output: `🎱 It is certain` or `🎱 Ask again later`
+
+### Random Number
+
+```
+!random 1 100 → $(customapi https://app.tazo.wtf/api/chat/random?q=1 100)
+```
+
+Generate a random number between min and max.
+
+Example output: `🎲 Random: 42 (1-100)`
+
+## Utility Commands
+
+### Temperature Conversion
+
+```
+!temp 25 → $(customapi https://app.tazo.wtf/api/chat/temp?q=25)
+!temp 77 f → $(customapi https://app.tazo.wtf/api/chat/temp?q=77 f)
+!temp 22c → $(customapi https://app.tazo.wtf/api/chat/temp?q=22c)
+!temp 70f → $(customapi https://app.tazo.wtf/api/chat/temp?q=70f)
+!temperature 100 → $(customapi https://app.tazo.wtf/api/chat/temp?q=100)
+```
+
+Convert between Celsius and Fahrenheit. Defaults to Celsius to Fahrenheit if no unit specified.
+
+- `!temp 25` - Converts 25°C to Fahrenheit
+- `!temp 77 f` - Converts 77°F to Celsius
+- `!temp 22c` - Converts 22°C to Fahrenheit (unit attached)
+- `!temp 70f` - Converts 70°F to Celsius (unit attached)
+
+Example output: `🌡️ 25°C = 77.0°F` or `🌡️ 77°F = 25.0°C`
+
+### Moon Phase
+
+```
+!moon → $(customapi https://app.tazo.wtf/api/chat/moon)
+```
+
+Shows the current moon phase and illumination percentage. Uses your current location for accuracy.
+
+Example output: `🌕 Moon: Full Moon (98% illuminated)` or `🌒 Moon: Waxing Crescent (15% illuminated)`
+
+### Fact
+
+```
+!fact → $(customapi https://app.tazo.wtf/api/chat/fact)
+!fact JP → $(customapi https://app.tazo.wtf/api/chat/fact?q=JP)
+!facts AU → $(customapi https://app.tazo.wtf/api/chat/fact?q=AU)
+```
+
+Returns a random interesting fact about your current country or a specified country code.
+
+Example output: `[Japan] Japan has over 5.5 million vending machines - more than anywhere else in the world`
 
 
 ---

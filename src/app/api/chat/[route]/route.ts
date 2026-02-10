@@ -68,6 +68,61 @@ function requireApiKey(key: string | undefined, name: string) {
   return null;
 }
 
+// Helper to calculate moon phase
+function calculateMoonPhase(): { name: string; emoji: string; illumination: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  
+  // Simplified moon phase calculation (approximate)
+  const daysSinceNewMoon = (year * 365.25 + month * 30.44 + day) % 29.53;
+  const illumination = Math.abs(Math.cos((daysSinceNewMoon / 29.53) * 2 * Math.PI)) * 100;
+  
+  let phase: string;
+  let emoji: string;
+  
+  if (daysSinceNewMoon < 1.84) {
+    phase = 'New Moon';
+    emoji = '🌑';
+  } else if (daysSinceNewMoon < 5.53) {
+    phase = 'Waxing Crescent';
+    emoji = '🌒';
+  } else if (daysSinceNewMoon < 9.22) {
+    phase = 'First Quarter';
+    emoji = '🌓';
+  } else if (daysSinceNewMoon < 12.91) {
+    phase = 'Waxing Gibbous';
+    emoji = '🌔';
+  } else if (daysSinceNewMoon < 16.61) {
+    phase = 'Full Moon';
+    emoji = '🌕';
+  } else if (daysSinceNewMoon < 20.30) {
+    phase = 'Waning Gibbous';
+    emoji = '🌖';
+  } else if (daysSinceNewMoon < 23.99) {
+    phase = 'Last Quarter';
+    emoji = '🌗';
+  } else {
+    phase = 'Waning Crescent';
+    emoji = '🌘';
+  }
+  
+  return { name: phase, emoji, illumination: Math.round(illumination) };
+}
+
+// Helper to get moon emoji from illumination percentage
+function getMoonEmoji(illumination: number): string {
+  if (illumination < 2) return '🌑'; // New Moon
+  if (illumination < 25) return '🌒'; // Waxing Crescent
+  if (illumination < 48) return '🌓'; // First Quarter
+  if (illumination < 52) return '🌔'; // Waxing Gibbous
+  if (illumination < 75) return '🌕'; // Full Moon
+  if (illumination < 98) return '🌖'; // Waning Gibbous
+  if (illumination < 100) return '🌗'; // Last Quarter
+  return '🌘'; // Waning Crescent
+}
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -306,12 +361,48 @@ export async function GET(
         visibility,
       });
 
-      let response = `${emoji} ${formatTemperature(tempC)} ${desc}`;
+      const tempF = Math.round(tempC * 9 / 5 + 32);
+      const feelsF = Math.round(feelsLikeC * 9 / 5 + 32);
+      
+      // Enhanced weather response with feels like and more details
+      const parts: string[] = [];
+      parts.push(`${emoji} ${formatTemperature(tempC)}/${tempF}°F ${desc}`);
+      
+      if (Math.abs(feelsLikeC - tempC) > 1) {
+        parts.push(`Feels like ${Math.round(feelsLikeC)}°C/${feelsF}°F`);
+      }
+      
+      // Weather alerts/warnings for severe conditions
+      const alerts: string[] = [];
+      if (condition === 'thunderstorm') {
+        alerts.push('⚠️ Thunderstorm warning');
+      }
+      if (windKmh > 60) {
+        alerts.push('⚠️ High wind warning');
+      } else if (windKmh > 40) {
+        alerts.push('⚠️ Strong winds');
+      }
+      if (tempC > 40) {
+        alerts.push('⚠️ Extreme heat warning');
+      } else if (tempC < -15) {
+        alerts.push('⚠️ Extreme cold warning');
+      }
+      if (humidity > 90 && tempC > 30) {
+        alerts.push('⚠️ Heat advisory');
+      }
+      if (visibility !== null && visibility < 0.5) {
+        alerts.push('⚠️ Low visibility warning');
+      }
+      
+      if (alerts.length > 0) {
+        parts.push(alerts.join(', '));
+      }
+      
       if (notableConditions.length > 0) {
-        response += `, ${notableConditions.join(', ')}`;
+        parts.push(notableConditions.join(', '));
       }
 
-      return txtResponse(response);
+      return txtResponse(parts.join(' · '));
     }
 
     // Forecast route - fetch fresh (not cached, needs full forecast data)
@@ -378,27 +469,50 @@ export async function GET(
       const out: string[] = [];
       let count = 0;
       
-      // Process today and tomorrow
-      for (let i = todayIndex; i < sortedDates.length && count < 2; i++) {
+      // Process up to 5 days (enhanced from 2)
+      for (let i = todayIndex; i < sortedDates.length && count < 5; i++) {
         const dateStr = sortedDates[i];
         const items = dailyForecasts.get(dateStr)!;
         
-        const dateLabel = count === 0 ? 'Today' : 'Tomorrow';
+        let dateLabel: string;
+        if (count === 0) {
+          dateLabel = 'Today';
+        } else if (count === 1) {
+          dateLabel = 'Tomorrow';
+        } else {
+          // Format date as "Mon 15" or "Mon Jan 15"
+          const date = new Date(dateStr + 'T12:00:00');
+          dateLabel = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
+        }
 
         let minTempC = Infinity;
         let maxTempC = -Infinity;
+        let conditions: string[] = [];
+        let windSpeed = 0;
+        let humidity = 0;
+        
         for (const item of items) {
           if (item?.main?.temp != null) {
             const temp = Math.round(item.main.temp);
             if (temp < minTempC) minTempC = temp;
             if (temp > maxTempC) maxTempC = temp;
           }
+          if (item?.weather?.[0]?.main) {
+            const cond = item.weather[0].main.toLowerCase();
+            if (!conditions.includes(cond)) conditions.push(cond);
+          }
+          if (item?.wind?.speed) {
+            windSpeed = Math.max(windSpeed, item.wind.speed * 3.6); // Convert m/s to km/h
+          }
+          if (item?.main?.humidity) {
+            humidity = Math.max(humidity, item.main.humidity);
+          }
         }
 
         if (minTempC === Infinity || maxTempC === -Infinity) continue;
 
         // Use most common condition or first item's condition
-        const condition = items[0]?.weather?.[0]?.main?.toLowerCase() || '';
+        const condition = conditions[0] || items[0]?.weather?.[0]?.main?.toLowerCase() || '';
         const emoji = getWeatherEmoji(condition);
         const minTempF = Math.round(minTempC * 9 / 5 + 32);
         const maxTempF = Math.round(maxTempC * 9 / 5 + 32);
@@ -408,7 +522,16 @@ export async function GET(
           ? `${minTempC}°C/${minTempF}°F`
           : `${minTempC}-${maxTempC}°C/${minTempF}-${maxTempF}°F`;
 
-        out.push(`${emoji} ${dateLabel} ${tempRange}`);
+        // Enhanced forecast with more details
+        const forecastParts = [`${emoji} ${dateLabel} ${tempRange}`];
+        if (windSpeed > 20) {
+          forecastParts.push(`${Math.round(windSpeed)}km/h wind`);
+        }
+        if (humidity > 80) {
+          forecastParts.push(`${humidity}% humidity`);
+        }
+
+        out.push(forecastParts.join(' · '));
         count++;
       }
 
@@ -423,6 +546,7 @@ export async function GET(
         return txtResponse('Sunrise/sunset data unavailable');
       }
 
+      const now = new Date();
       const sunriseUtc = new Date(freshData.sunriseSunset.sunrise * 1000);
       const sunsetUtc = new Date(freshData.sunriseSunset.sunset * 1000);
       const timeOptions = {
@@ -434,12 +558,38 @@ export async function GET(
       const sunriseStr = sunriseUtc.toLocaleTimeString('en-US', timeOptions);
       const sunsetStr = sunsetUtc.toLocaleTimeString('en-US', timeOptions);
 
+      // Calculate time until sunrise/sunset
+      const timeUntilSunrise = sunriseUtc.getTime() - now.getTime();
+      const timeUntilSunset = sunsetUtc.getTime() - now.getTime();
+      
+      const formatTimeUntil = (ms: number): string => {
+        if (ms < 0) {
+          // Already passed, calculate next occurrence
+          const nextMs = ms + (24 * 60 * 60 * 1000);
+          const hours = Math.floor(nextMs / (60 * 60 * 1000));
+          const minutes = Math.floor((nextMs % (60 * 60 * 1000)) / (60 * 1000));
+          return `in ${hours}h ${minutes}m (tomorrow)`;
+        }
+        const hours = Math.floor(ms / (60 * 60 * 1000));
+        const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+        return `in ${hours}h ${minutes}m`;
+      };
+
+      const sunriseUntil = formatTimeUntil(timeUntilSunrise);
+      const sunsetUntil = formatTimeUntil(timeUntilSunset);
+
       const sunriseIsTomorrow = sunriseUtc.getTime() > sunsetUtc.getTime();
-      return txtResponse(
-        sunriseIsTomorrow
-          ? `🌇 Sunset ${sunsetStr}, 🌅 Sunrise ${sunriseStr}`
-          : `🌅 Sunrise ${sunriseStr}, 🌇 Sunset ${sunsetStr}`
-      );
+      const parts: string[] = [];
+      
+      if (sunriseIsTomorrow) {
+        parts.push(`🌇 Sunset ${sunsetStr} (${sunsetUntil})`);
+        parts.push(`🌅 Sunrise ${sunriseStr} (${sunriseUntil})`);
+      } else {
+        parts.push(`🌅 Sunrise ${sunriseStr} (${sunriseUntil})`);
+        parts.push(`🌇 Sunset ${sunsetStr} (${sunsetUntil})`);
+      }
+
+      return txtResponse(parts.join(' · '));
     }
 
     // Time route - uses cached timezone (can use persistent location)
@@ -709,6 +859,43 @@ export async function GET(
       return txtResponse(`Available countries: ${formatted}`);
     }
 
+    // Fact route - returns random fact about current or specified country
+    if (route === 'fact' || route === 'facts') {
+      // Check if a country code was provided in the query
+      const queryCountryCode = q ? q.trim().toUpperCase() : null;
+      const requestedCountryCode = queryCountryCode && queryCountryCode.length === 2 ? queryCountryCode : null;
+      
+      // Validate country code if provided
+      if (requestedCountryCode) {
+        const availableCountries = getAvailableCountries();
+        const isValidCode = availableCountries.some(c => c.code === requestedCountryCode);
+        if (!isValidCode) {
+          return txtResponse(`Invalid country code: ${requestedCountryCode}. Use !countries to see available countries.`);
+        }
+      }
+      
+      // Use requested country code if provided, otherwise use persistent location
+      const countryCode = requestedCountryCode || persistentLocation?.location?.countryCode || null;
+      const countryName = requestedCountryCode 
+        ? getCountryNameFromCode(requestedCountryCode)
+        : (persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null));
+      const travelData = getTravelData(countryCode);
+      
+      const facts = travelData.facts || [];
+      if (facts.length === 0) {
+        const noFactMsg = countryName 
+          ? `No facts available for ${countryName} yet. Use !countries to see available countries.`
+          : 'No facts available. Specify a country code (e.g., !fact JP) or use !countries to see available countries.';
+        return txtResponse(noFactMsg);
+      }
+      
+      const selectedFact = pickN(facts, 1)[0];
+      const countryPrefix = travelData.isCountrySpecific && countryName
+        ? `[${countryName}] `
+        : '';
+      return txtResponse(`${countryPrefix}${selectedFact}`);
+    }
+
     // Currency route - shows currency for current or specified country
     if (route === 'currency') {
       // Check if a country code was provided in the query
@@ -743,6 +930,283 @@ export async function GET(
         ? `[${countryName}] `
         : '';
       return txtResponse(`${countryPrefix}${name} (${code}) ${symbol}`);
+    }
+
+    // Convert route - converts currency amounts
+    // Usage: !convert <amount> [FROM] [TO]
+    // Examples: !convert 1000 (local to USD/AUD), !convert 1000 AUD (AUD to USD), !convert 1000 AUD JPY (AUD to JPY)
+    if (route === 'convert') {
+      const parts = q.trim().split(/\s+/).filter(p => p);
+      
+      if (parts.length === 0) {
+        return txtResponse('Usage: !convert <amount> [FROM] [TO] (e.g., !convert 1000, !convert 1,000.50 AUD, !convert 1000 AUD JPY)');
+      }
+
+      // Parse amount (first part) - remove commas, handle decimals
+      const amountStr = parts[0].replace(/,/g, ''); // Remove commas
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) {
+        return txtResponse('Usage: !convert <amount> [FROM] [TO] (e.g., !convert 1000, !convert 1,000.50 AUD, !convert 1000 AUD JPY)');
+      }
+
+      // Parse currency codes (remaining parts, uppercase)
+      const currencyCodes = parts.slice(1).map(p => p.toUpperCase());
+      let fromCurrency: string | null = null;
+      let toCurrency: string = 'USD'; // Default to USD
+
+      if (currencyCodes.length === 0) {
+        // No currencies specified - use local currency
+        const countryCode = persistentLocation?.location?.countryCode || null;
+        const travelData = getTravelData(countryCode);
+        if (!travelData.currency) {
+          const countryName = persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null);
+          const noCurrencyMsg = countryName 
+            ? `No currency data available for ${countryName} yet. Specify currencies: !convert ${amount} <FROM> [TO]`
+            : 'No currency data available. Usage: !convert <amount> <FROM> [TO] (e.g., !convert 1000 AUD)';
+          return txtResponse(noCurrencyMsg);
+        }
+        fromCurrency = travelData.currency.code;
+        // If local currency is USD, default to AUD instead (more useful)
+        if (fromCurrency === 'USD') {
+          toCurrency = 'AUD';
+        }
+      } else if (currencyCodes.length === 1) {
+        // One currency specified - FROM currency
+        fromCurrency = currencyCodes[0];
+        // If FROM is USD, default to AUD (more useful than USD to USD)
+        if (fromCurrency === 'USD') {
+          toCurrency = 'AUD';
+        } else {
+          toCurrency = 'USD';
+        }
+      } else if (currencyCodes.length === 2) {
+        // Two currencies specified - FROM and TO
+        fromCurrency = currencyCodes[0];
+        toCurrency = currencyCodes[1];
+      } else {
+        return txtResponse('Usage: !convert <amount> [FROM] [TO] (e.g., !convert 1000, !convert 1,000.50 AUD, !convert 1000 AUD JPY)');
+      }
+
+      // Validate currency codes (3-letter ISO codes)
+      if (fromCurrency && (fromCurrency.length !== 3 || !/^[A-Z]{3}$/.test(fromCurrency))) {
+        return txtResponse(`Invalid currency code: ${fromCurrency}. Use 3-letter ISO codes (e.g., USD, EUR, JPY, AUD)`);
+      }
+      if (toCurrency.length !== 3 || !/^[A-Z]{3}$/.test(toCurrency)) {
+        return txtResponse(`Invalid currency code: ${toCurrency}. Use 3-letter ISO codes (e.g., USD, EUR, JPY, AUD)`);
+      }
+
+      // If same currency, just format and return
+      if (fromCurrency === toCurrency) {
+        // Try to get currency symbol from travel data
+        let symbol = '$';
+        const allCountries = getAvailableCountries();
+        for (const country of allCountries) {
+          const data = getTravelData(country.code);
+          if (data.currency?.code === fromCurrency) {
+            symbol = data.currency.symbol;
+            break;
+          }
+        }
+        const formatted = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return txtResponse(`${symbol}${formatted} ${fromCurrency}`);
+      }
+
+      // Fetch exchange rate from free API (exchangerate.host - no API key required)
+      try {
+        const exchangeUrl = `https://api.exchangerate.host/latest?base=${fromCurrency}&symbols=${toCurrency}`;
+        const exchangeResponse = await fetch(exchangeUrl, {
+          next: { revalidate: 3600 } // Cache for 1 hour
+        });
+        
+        if (!exchangeResponse.ok) {
+          throw new Error('Exchange rate API failed');
+        }
+        
+        const exchangeData = await exchangeResponse.json();
+        const rate = exchangeData.rates?.[toCurrency];
+        
+        if (!rate || typeof rate !== 'number') {
+          throw new Error('Invalid exchange rate data');
+        }
+        
+        const convertedAmount = amount * rate;
+        const formattedAmount = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const formattedConverted = convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        
+        // Get currency symbols
+        let fromSymbol = fromCurrency;
+        let toSymbol = toCurrency;
+        const allCountries = getAvailableCountries();
+        for (const country of allCountries) {
+          const data = getTravelData(country.code);
+          if (data.currency?.code === fromCurrency) {
+            fromSymbol = data.currency.symbol;
+          }
+          if (data.currency?.code === toCurrency) {
+            toSymbol = data.currency.symbol;
+          }
+        }
+        
+        // Calculate reverse rate (1 TO = X FROM)
+        const reverseRate = 1 / rate;
+        
+        // Show reverse conversion if useful (for common conversions or if significantly different)
+        const showReverse = rate < 0.1 || rate > 10 || 
+                           (fromCurrency === 'USD' && ['EUR', 'GBP', 'JPY', 'AUD', 'CAD'].includes(toCurrency)) ||
+                           (toCurrency === 'USD' && ['EUR', 'GBP', 'JPY', 'AUD', 'CAD'].includes(fromCurrency));
+        
+        if (showReverse) {
+          return txtResponse(`${fromSymbol}${formattedAmount} ${fromCurrency} = ${toSymbol}${formattedConverted} ${toCurrency} | 1 ${fromCurrency} = ${rate.toFixed(4)} ${toCurrency}, 1 ${toCurrency} = ${reverseRate.toFixed(4)} ${fromCurrency}`);
+        }
+        
+        return txtResponse(`${fromSymbol}${formattedAmount} ${fromCurrency} = ${toSymbol}${formattedConverted} ${toCurrency} (rate: 1 ${fromCurrency} = ${rate.toFixed(4)} ${toCurrency})`);
+      } catch (error) {
+        console.error('Currency conversion error:', error);
+        return txtResponse(`Unable to fetch exchange rate for ${fromCurrency} to ${toCurrency}. Please try again later.`);
+      }
+    }
+
+    // Fun commands (no RTIRL required)
+    if (route === 'dice' || route === 'roll') {
+      const parts = q.trim().split(/\s+/).filter(p => p);
+      let sides = 6;
+      let count = 1;
+      
+      if (parts.length > 0) {
+        const first = parseInt(parts[0]);
+        if (!isNaN(first) && first > 0) {
+          if (first <= 100) {
+            sides = first;
+            if (parts.length > 1) {
+              const second = parseInt(parts[1]);
+              if (!isNaN(second) && second > 0 && second <= 10) {
+                count = second;
+              }
+            }
+          } else {
+            count = Math.min(first, 10);
+          }
+        }
+      }
+      
+      const results: number[] = [];
+      for (let i = 0; i < count; i++) {
+        results.push(Math.floor(Math.random() * sides) + 1);
+      }
+      
+      if (count === 1) {
+        return txtResponse(`🎲 Rolled ${results[0]} (d${sides})`);
+      } else {
+        const sum = results.reduce((a, b) => a + b, 0);
+        return txtResponse(`🎲 Rolled ${results.join(', ')} = ${sum} (${count}d${sides})`);
+      }
+    }
+
+    if (route === 'coin' || route === 'flip') {
+      const result = Math.random() < 0.5 ? 'Heads' : 'Tails';
+      return txtResponse(`🪙 ${result}`);
+    }
+
+    if (route === '8ball' || route === 'magic8ball') {
+      const responses = [
+        'It is certain',
+        'Without a doubt',
+        'Yes definitely',
+        'You may rely on it',
+        'As I see it, yes',
+        'Most likely',
+        'Outlook good',
+        'Yes',
+        'Signs point to yes',
+        'Reply hazy, try again',
+        'Ask again later',
+        'Better not tell you now',
+        'Cannot predict now',
+        'Concentrate and ask again',
+        "Don't count on it",
+        'My reply is no',
+        'My sources say no',
+        'Outlook not so good',
+        'Very doubtful',
+        'No'
+      ];
+      const response = responses[Math.floor(Math.random() * responses.length)];
+      return txtResponse(`🎱 ${response}`);
+    }
+
+    if (route === 'random') {
+      const parts = q.trim().split(/\s+/).filter(p => p);
+      if (parts.length === 0) {
+        return txtResponse('Usage: !random <min> <max> (e.g., !random 1 100)');
+      }
+      
+      const min = parseInt(parts[0]);
+      const max = parts.length > 1 ? parseInt(parts[1]) : min;
+      
+      if (isNaN(min) || isNaN(max) || min > max || min < 0 || max > 1000000) {
+        return txtResponse('Usage: !random <min> <max> (e.g., !random 1 100)');
+      }
+      
+      const result = Math.floor(Math.random() * (max - min + 1)) + min;
+      return txtResponse(`🎲 Random: ${result} (${min}-${max})`);
+    }
+
+    // Temperature conversion
+    if (route === 'temp' || route === 'temperature') {
+      const input = q.trim();
+      if (!input) {
+        return txtResponse('Usage: !temp <value> [unit] (e.g., !temp 25, !temp 77 f, !temp 22c, !temp 70f)');
+      }
+      
+      // Try to parse formats like "22c", "70f", "22 c", "70 f", or just "22"
+      let value: number;
+      let unit: string = 'c'; // Default to Celsius
+      
+      // Check if unit is attached to number (e.g., "22c", "70f")
+      const attachedUnitMatch = input.match(/^([+-]?\d+\.?\d*)\s*([cf]|celsius|fahrenheit)$/i);
+      if (attachedUnitMatch) {
+        value = parseFloat(attachedUnitMatch[1]);
+        unit = attachedUnitMatch[2].toLowerCase();
+        if (unit === 'celsius') unit = 'c';
+        if (unit === 'fahrenheit') unit = 'f';
+      } else {
+        // Try space-separated format (e.g., "22 c", "70 f")
+        const parts = input.split(/\s+/).filter(p => p);
+        value = parseFloat(parts[0]);
+        if (parts.length > 1) {
+          const unitPart = parts[1].toLowerCase();
+          if (unitPart === 'f' || unitPart === 'fahrenheit') {
+            unit = 'f';
+          } else if (unitPart === 'c' || unitPart === 'celsius') {
+            unit = 'c';
+          }
+        }
+      }
+      
+      if (isNaN(value)) {
+        return txtResponse('Usage: !temp <value> [unit] (e.g., !temp 25, !temp 77 f, !temp 22c, !temp 70f)');
+      }
+      
+      let result: string;
+      
+      if (unit === 'f') {
+        // Fahrenheit to Celsius
+        const celsius = (value - 32) * 5 / 9;
+        result = `${value}°F = ${celsius.toFixed(1)}°C`;
+      } else {
+        // Celsius to Fahrenheit (default)
+        const fahrenheit = value * 9 / 5 + 32;
+        result = `${value}°C = ${fahrenheit.toFixed(1)}°F`;
+      }
+      
+      return txtResponse(`🌡️ ${result}`);
+    }
+
+    // Moon phase command
+    if (route === 'moon') {
+      // Calculate moon phase locally (accurate enough for chat commands)
+      const moonPhase = calculateMoonPhase();
+      return txtResponse(`${moonPhase.emoji} Moon: ${moonPhase.name} (${moonPhase.illumination}% illuminated)`);
     }
 
     // Status/Homepage route - returns JSON for homepage display (uses cached data)
