@@ -284,9 +284,8 @@ function getPercentageAboveAverage(value: number, mean: number): string {
 function findSimilarPornStar(length: number, girth: number | null): string | null {
   if (girth === null) return null;
   
-  // Find closest match by combined distance (length + girth)
-  let closest: typeof PORN_STAR_SIZES[0] | null = null;
-  let minDistance = Infinity;
+  // Find all matches within threshold (within 1" combined difference)
+  const matches: typeof PORN_STAR_SIZES[0][] = [];
   
   for (const star of PORN_STAR_SIZES) {
     // Weighted distance: length difference + girth difference
@@ -294,24 +293,24 @@ function findSimilarPornStar(length: number, girth: number | null): string | nul
     const girthDiff = Math.abs(star.girth - girth);
     const distance = lengthDiff * 1.5 + girthDiff; // Weight length slightly more
     
-    if (distance < minDistance && distance < 1.0) { // Only match if within 1" combined difference
-      minDistance = distance;
-      closest = star;
+    if (distance < 1.0) { // Only match if within 1" combined difference
+      matches.push(star);
     }
   }
   
-  if (closest) {
-    const matchPhrases = [
-      `Similar size to ${closest.name}`,
-      `Matches ${closest.name}'s size`,
-      `Same size as ${closest.name}`,
-      `Comparable to ${closest.name}`,
-    ];
-    const phrase = matchPhrases[Math.floor(Math.random() * matchPhrases.length)];
-    return ` ${phrase} (${closest.length}" x ${closest.girth}")`;
-  }
+  if (matches.length === 0) return null;
   
-  return null;
+  // Randomly select one from all matches within range
+  const selected = matches[Math.floor(Math.random() * matches.length)];
+  
+  const matchPhrases = [
+    `Similar size to ${selected.name}`,
+    `Matches ${selected.name}'s size`,
+    `Same size as ${selected.name}`,
+    `Comparable to ${selected.name}`,
+  ];
+  const phrase = matchPhrases[Math.floor(Math.random() * matchPhrases.length)];
+  return ` ${phrase} (${selected.length}" x ${selected.girth}")`;
 }
 
 function formatMeasurement(val: number, unit: 'inch' | 'cm'): string {
