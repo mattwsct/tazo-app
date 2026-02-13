@@ -571,36 +571,28 @@ export async function GET(
       const sunriseStr = sunriseUtc.toLocaleTimeString('en-US', timeOptions);
       const sunsetStr = sunsetUtc.toLocaleTimeString('en-US', timeOptions);
 
-      // Calculate time until sunrise/sunset
+      // Calculate time until next occurrence (add 24h if already passed today)
+      const DAY_MS = 24 * 60 * 60 * 1000;
       const timeUntilSunrise = sunriseUtc.getTime() - now.getTime();
       const timeUntilSunset = sunsetUtc.getTime() - now.getTime();
-      
-      const formatTimeUntil = (ms: number): string => {
-        if (ms < 0) {
-          // Already passed, calculate next occurrence
-          const nextMs = ms + (24 * 60 * 60 * 1000);
-          const hours = Math.floor(nextMs / (60 * 60 * 1000));
-          const minutes = Math.floor((nextMs % (60 * 60 * 1000)) / (60 * 1000));
-          return `in ${hours}h ${minutes}m (tomorrow)`;
-        }
+      const msUntilNextSunrise = timeUntilSunrise >= 0 ? timeUntilSunrise : timeUntilSunrise + DAY_MS;
+      const msUntilNextSunset = timeUntilSunset >= 0 ? timeUntilSunset : timeUntilSunset + DAY_MS;
+
+      const formatTimeUntil = (ms: number, isTomorrow: boolean): string => {
         const hours = Math.floor(ms / (60 * 60 * 1000));
         const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
-        return `in ${hours}h ${minutes}m`;
+        const m = minutes.toString().padStart(2, '0');
+        return isTomorrow ? `in ${hours}h ${m}m tomorrow` : `in ${hours}h ${m}m`;
       };
 
-      const sunriseUntil = formatTimeUntil(timeUntilSunrise);
-      const sunsetUntil = formatTimeUntil(timeUntilSunset);
+      const sunriseUntil = formatTimeUntil(msUntilNextSunrise, timeUntilSunrise < 0);
+      const sunsetUntil = formatTimeUntil(msUntilNextSunset, timeUntilSunset < 0);
 
-      const sunriseIsTomorrow = sunriseUtc.getTime() > sunsetUtc.getTime();
-      const parts: string[] = [];
-      
-      if (sunriseIsTomorrow) {
-        parts.push(`🌇 Sunset ${sunsetStr} (${sunsetUntil})`);
-        parts.push(`🌅 Sunrise ${sunriseStr} (${sunriseUntil})`);
-      } else {
-        parts.push(`🌅 Sunrise ${sunriseStr} (${sunriseUntil})`);
-        parts.push(`🌇 Sunset ${sunsetStr} (${sunsetUntil})`);
-      }
+      // Order by which event is soonest
+      const sunriseFirst = msUntilNextSunrise <= msUntilNextSunset;
+      const parts = sunriseFirst
+        ? [`🌅 Sunrise ${sunriseStr} (${sunriseUntil})`, `🌇 Sunset ${sunsetStr} (${sunsetUntil})`]
+        : [`🌇 Sunset ${sunsetStr} (${sunsetUntil})`, `🌅 Sunrise ${sunriseStr} (${sunriseUntil})`];
 
       return txtResponse(parts.join(' · '));
     }
@@ -1275,15 +1267,14 @@ export async function GET(
 
     if (route === 'random') {
       const parts = q.trim().split(/\s+/).filter(p => p);
-      if (parts.length === 0) {
-        return txtResponse('Usage: !random <min> <max> (e.g., !random 1 100)');
-      }
-      
-      const min = parseInt(parts[0]);
-      const max = parts.length > 1 ? parseInt(parts[1]) : min;
+      const [min, max] = (() => {
+        if (parts.length === 0) return [1, 100]; // !random alone → 1-100
+        if (parts.length === 1) return [1, parseInt(parts[0])]; // !random 100 → 1-100
+        return [parseInt(parts[0]), parseInt(parts[1])]; // !random 10 50 → 10-50
+      })();
       
       if (isNaN(min) || isNaN(max) || min > max || min < 0 || max > 1000000) {
-        return txtResponse('Usage: !random <min> <max> (e.g., !random 1 100)');
+        return txtResponse('Usage: !random [min max] (e.g., !random, !random 100, !random 1 100)');
       }
       
       const result = Math.floor(Math.random() * (max - min + 1)) + min;

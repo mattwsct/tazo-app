@@ -19,9 +19,38 @@ const STATS = {
   },
 };
 
+// Condom nominal width tiers — girth drives fit.
+//
+// WHY: Nominal width = condom width when laid flat. Condom circumference ≈ 2× nominal width (not π×).
+// Condom must stretch 5–20% to stay on (radial force) without breaking. Gerofi: condom circ < penis circ.
+// Formula: nominal_width ≈ girth_mm / 2 / (1 + stretch). At 15% stretch: 139.7mm → 60.7mm (5.5" → 60mm).
+//
+// SOURCE: condom-sizes.org table (Gerofi study, Smith 1998 STD journal). Cross-checked condomerie.com,
+// MY.SIZE/Playboy/Trojan Magnum XL specs for 5.5" (139–143mm) → 60mm.
+//
+// Verify: 5.5" girth = 139.7mm. 60mm nominal → 120mm unstretched circ → 139.7/120 = 16.4% stretch ✓
+const CONDOM_SIZES: { minGirth: number; maxGirth: number; nominalWidth: number; label: string; brands: string[] }[] = [
+  { minGirth: 3.5, maxGirth: 4.2, nominalWidth: 47, label: 'Snug', brands: ['Skyn Snug Fit', 'Pasante Trim', 'MyONE 47'] },
+  { minGirth: 4.2, maxGirth: 4.5, nominalWidth: 49, label: 'Snug+', brands: ['Glyde SlimFit', 'Lifestyles Snugger Fit', 'MyONE 49'] },
+  { minGirth: 4.5, maxGirth: 4.8, nominalWidth: 52, label: 'Regular', brands: ['Trojan ENZ', 'Durex', 'Skyn'] },
+  { minGirth: 4.8, maxGirth: 5.1, nominalWidth: 54, label: 'Regular+', brands: ['Trojan Magnum Thin', 'Durex Avanti', 'Playboy Ultra Thin'] },
+  { minGirth: 5.1, maxGirth: 5.3, nominalWidth: 56, label: 'Large', brands: ['Trojan Magnum', 'Durex Pleasuremax', 'Skyn Large'] },
+  { minGirth: 5.3, maxGirth: 5.5, nominalWidth: 58, label: 'Large+', brands: ['Trojan Magnum XL', 'Durex XXL', 'Trustex XL'] },
+  { minGirth: 5.5, maxGirth: 5.8, nominalWidth: 60, label: 'XL', brands: ['Trojan Magnum XL', 'Pasante King Size', 'MyONE 60'] },
+  { minGirth: 5.8, maxGirth: 6.2, nominalWidth: 64, label: 'XXL', brands: ['Pasante Super King', 'MyONE 64', 'TITAN 2XL'] },
+  { minGirth: 6.2, maxGirth: 99, nominalWidth: 69, label: 'XXXL', brands: ['Pasante Super King', 'MyONE 69', 'EXS Jumbo'] },
+];
+
 // Porn star size database (measured/verified sizes, not claimed)
-// Format: { name, length, girth, notes }
+// Format: { name, length, girth, notes } - includes spectrum from ~5.5" to 9"
 const PORN_STAR_SIZES = [
+  // 5.5–6.5" range (below-average length for industry)
+  { name: "Owen Gray", length: 6.5, girth: 4.8, notes: "Popular performer" },
+  { name: "Codey Steele", length: 6.2, girth: 4.6, notes: "Popular performer" },
+  { name: "Chad Alva", length: 6.0, girth: 4.5, notes: "Popular performer" },
+  { name: "Seth Gamble", length: 6.5, girth: 4.8, notes: "Director/performer" },
+  { name: "Lucas Frost", length: 6.5, girth: 4.7, notes: "Popular performer" },
+  { name: "Alex Mack", length: 6.3, girth: 4.6, notes: "Popular performer" },
   { name: "Johnny Sins", length: 7.0, girth: 5.0, notes: "Most popular male performer" },
   { name: "Danny D", length: 8.25, girth: 5.5, notes: "Known for girth" },
   { name: "Jax Slayher", length: 8.5, girth: 5.8, notes: "Top performer" },
@@ -236,6 +265,37 @@ function getPercentileFunFact(percentile: number): string {
   return factArray[Math.floor(Math.random() * factArray.length)];
 }
 
+function getCondomSuggestion(girthInches: number): string {
+  for (const tier of CONDOM_SIZES) {
+    if (girthInches >= tier.minGirth && girthInches < tier.maxGirth) {
+      const brands = tier.brands.slice(0, 2).join(', '); // Top 2 brands
+      return ` ~${tier.nominalWidth}mm nominal width (${tier.label}): ${brands}`;
+    }
+  }
+  return '';
+}
+
+function findSimilarPornStarByLength(lengthInches: number, unit: 'inch' | 'cm'): string | null {
+  let closest: (typeof PORN_STAR_SIZES)[0] | null = null;
+  let minDiff = Infinity;
+
+  for (const star of PORN_STAR_SIZES) {
+    const diff = Math.abs(star.length - lengthInches);
+    if (diff < minDiff && diff <= 0.5) {
+      minDiff = diff;
+      closest = star;
+    }
+  }
+
+  if (!closest) return null;
+
+  const lengthMatch = Math.abs(closest.length - lengthInches) < 0.1;
+  const phrase = lengthMatch
+    ? `Same length as ${closest.name}`
+    : `Similar length to ${closest.name}`;
+  return ` ${phrase} (${formatMeasurement(closest.length, unit)})`;
+}
+
 function getSizeComparison(length: number, girth: number | null): string {
   const lengthInches = length;
   const girthInches = girth || 0;
@@ -281,7 +341,7 @@ function getPercentageAboveAverage(value: number, mean: number): string {
   }
 }
 
-function findSimilarPornStar(length: number, girth: number | null): string | null {
+function findSimilarPornStar(length: number, girth: number | null, unit: 'inch' | 'cm'): string | null {
   if (girth === null) return null;
   
   // Find all matches within threshold (within 1" combined difference)
@@ -321,7 +381,7 @@ function findSimilarPornStar(length: number, girth: number | null): string | nul
     phrase = similarPhrases[Math.floor(Math.random() * similarPhrases.length)];
   }
   
-  return ` ${phrase} (${selected.length}" x ${selected.girth}")`;
+  return ` ${phrase} (${formatMeasurement(selected.length, unit)} x ${formatMeasurement(selected.girth, unit)})`;
 }
 
 function formatMeasurement(val: number, unit: 'inch' | 'cm'): string {
@@ -355,9 +415,12 @@ export function handleSizeRanking(
   const typeSuffix = type === 'flaccid' ? ' flaccid' : '';
 
   if (girthInches === null) {
-    // Length only - simplified format
+    // Length only - simplified format + porn star length comparison
     const lengthInfo = lengthPercentileText ? ` (${lengthPercentileText})` : '';
-    return `🍆 ${formatMeasurement(lengthInches, unit)}${typeSuffix}: ${lengthCategory}${lengthInfo}`;
+    const lengthStarMatch = type === 'erect' ? findSimilarPornStarByLength(lengthInches, unit) : null;
+    let result = `🍆 ${formatMeasurement(lengthInches, unit)}${typeSuffix}: ${lengthCategory}${lengthInfo}`;
+    if (lengthStarMatch) result += '.' + lengthStarMatch;
+    return result;
   }
 
   const girthZ = (girthInches - stat.girth.mean) / stat.girth.sd;
@@ -366,7 +429,7 @@ export function handleSizeRanking(
   const girthPercentileText = getPercentileText(girthPercentile);
   
   // Find similar porn star (only for erect measurements)
-  const pornStarMatch = type === 'erect' ? findSimilarPornStar(lengthInches, girthInches) : null;
+  const pornStarMatch = type === 'erect' ? findSimilarPornStar(lengthInches, girthInches, unit) : null;
 
   // Build response: size with percentiles attached to each measurement
   const lengthInfo = lengthPercentileText ? ` (${lengthPercentileText})` : '';
@@ -374,6 +437,9 @@ export function handleSizeRanking(
   
   let result = `🍆 ${formatMeasurement(lengthInches, unit)}${lengthInfo} x ${formatMeasurement(girthInches, unit)}${girthInfo}${typeSuffix}: ${lengthCategory} length, ${girthCategory} girth`;
   
+  const condomSuggestion = getCondomSuggestion(girthInches);
+  if (condomSuggestion) result += condomSuggestion;
+
   if (pornStarMatch) {
     result += `. ${pornStarMatch.trim()}`;
   }

@@ -2,6 +2,11 @@
 
 All chat commands are now available at `https://app.tazo.wtf/api/chat/*`
 
+**Query parameter (`?q=$(querystring)`):**
+- **Required** for commands that accept user input: !weather Tokyo, !random 1 100, !temp 25, etc.
+- **Optional** for no-arg commands (!status, !coin, !speed, etc.) — omit it for brevity, or include it (harmless when empty).
+- **Simplest setup:** Use `?q=$(querystring)` for all commands — one URL per command works for both `!cmd` and `!cmd args`.
+
 ## Social Media Commands
 
 These commands return profile links. If a username is provided, returns the profile link. Otherwise, returns the fallback link.
@@ -117,14 +122,15 @@ Returns size ranking with percentile, percentage above/below average, and porn s
 **Features:**
 - Uses 2025 meta-analysis data (5.45" avg length, 4.69" avg girth)
 - Shows percentile ranking next to each measurement (length and girth separately)
-- Compares to porn star sizes if similar (within 1" combined difference)
-- Clean, concise format with clear labeling
+- **Length only:** Compares to similar porn star length (6–9" spectrum)
+- **Length + girth:** Compares to porn star if within 1" combined difference
+- **Condom suggestion** (when girth provided): Nominal width (mm) + brand hints (Trojan Magnum, Skyn Large, MyONE, etc.) for L/XL/XXL
 - Works with length only or length + girth
 
 Example outputs:
-- `🍆 7" (top 10%) x 5" (top 5%): above average length, large girth. Similar size to Johnny Sins (7" x 5")`
-- `🍆 8.5" (top 0.12%) x 5.8" (top 0.5%): huge length, huge girth. Matches Jax Slayher's size (8.5" x 5.8")`
-- `🍆 6" (top 25%): above average`
+- `🍆 7" (top 10%) x 5" (top 5%): above average length, large girth ~60mm nominal width (XL): Trojan Magnum XL, Pasante King Size. Similar size to Johnny Sins (7" x 5")`
+- `🍆 8.5" (top 0.12%) x 5.8" (top 0.5%): huge length, huge girth ~64mm nominal width (XXL): Pasante Super King, MyONE 64. Matches Jax Slayher's size (8.5" x 5.8")`
+- `🍆 6" (top 25%): above average. Similar length to Chad Alva (6")`
 
 ## Travel Commands
 
@@ -321,10 +327,13 @@ Example output: `🎱 It is certain` or `🎱 Ask again later`
 ### Random Number
 
 ```
-!random 1 100 → $(customapi https://app.tazo.wtf/api/chat/random?q=1 100)
+!random → $(customapi https://app.tazo.wtf/api/chat/random?q=$(querystring))
 ```
 
-Generate a random number between min and max.
+Generate a random number. Works with or without query (use `?q=$(querystring)` so args are passed when provided):
+- `!random` - Random 1-100 (empty query defaults to 1-100)
+- `!random 100` - Random 1-100
+- `!random 1 100` - Random between min and max
 
 Example output: `🎲 Random: 42 (1-100)`
 
