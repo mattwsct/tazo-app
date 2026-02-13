@@ -210,13 +210,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
             if (data.data && typeof data.data.heart_rate === 'number') {
               const newBpm = data.data.heart_rate;
               
-              // Only log if BPM changed significantly (more than 2 BPM difference)
-              const currentBpm = currentBpmRef.current;
-              if (Math.abs(newBpm - currentBpm) > 2) {
-                HeartRateLogger.info(`Heart rate changed: ${currentBpm} → ${newBpm} BPM`);
-              }
-              
-              // Update the ref
+              HeartRateLogger.info(`Heart rate update: ${currentBpmRef.current} → ${newBpm} BPM`);
               currentBpmRef.current = newBpm;
               
               setHeartRate({
