@@ -66,6 +66,7 @@ const {
   WALKING_PACE_THRESHOLD,
   MINIMAP_STALENESS_CHECK_INTERVAL,
   MINIMAP_HIDE_DELAY,
+  GPS_STALE_TIMEOUT,
 } = TIMERS;
 
 // MapLibreMinimap component - WebGL-based map rendering
@@ -1106,6 +1107,14 @@ function OverlayPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Force periodic staleness check for speed indicator (auto mode) - when no RTIRL updates,
+  // the useMemo would never re-run; this ensures we hide after GPS_STALE_TIMEOUT
+  const [speedStaleCheckTime, setSpeedStaleCheckTime] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setSpeedStaleCheckTime(Date.now()), GPS_STALE_TIMEOUT);
+    return () => clearInterval(interval);
+  }, []);
+
   // Memoized display values
   // IMPORTANT: This memo re-formats location from raw data when settings change
   // Broaden display when GPS is stale (e.g. underground - neighbourhood→city→state→country)
@@ -1363,8 +1372,8 @@ function OverlayPage() {
     const speedKmh = displayedSpeed;
     const speedMph = kmhToMph(speedKmh);
     return { value: speedKmh, formatted: `${Math.round(speedKmh)} km/h (${Math.round(speedMph)} mph)` };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- speedUpdateTimestamp forces re-run when speed changes
-  }, [currentSpeed, displayedSpeed, settings.speedDisplay, speedUpdateTimestamp]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- speedUpdateTimestamp + speedStaleCheckTime force re-run (latter for when no RTIRL updates)
+  }, [currentSpeed, displayedSpeed, settings.speedDisplay, speedUpdateTimestamp, speedStaleCheckTime]);
 
   return (
     <ErrorBoundary autoReload={false}>
