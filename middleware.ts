@@ -42,6 +42,8 @@ export function middleware(request: NextRequest) {
     '/api/get-location',
     '/api/update-location',
     '/api/stats/update',
+    '/api/kick-oauth/authorize',
+    '/api/kick-oauth/callback',
   ];
   
   if (publicRoutes.includes(pathname)) {
