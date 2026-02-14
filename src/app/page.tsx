@@ -4,7 +4,23 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
+import { DEFAULT_KICK_MESSAGES, KICK_MESSAGE_KEYS } from '@/types/kick-messages';
+import type { KickMessageTemplates } from '@/types/kick-messages';
 import '@/styles/admin.css';
+
+const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
+  follow: 'Follow',
+  newSub: 'New sub',
+  resub: 'Resub',
+  giftSubSingle: 'Gift sub (to one)',
+  giftSubMulti: 'Gift sub (multiple)',
+  giftSubGeneric: 'Gift sub (generic)',
+  kicksGifted: 'Kicks gifted',
+  kicksGiftedWithMessage: 'Kicks gifted (with message)',
+  channelReward: 'Channel reward',
+  channelRewardWithInput: 'Channel reward (with input)',
+  channelRewardDeclined: 'Channel reward (declined)',
+};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -21,6 +37,13 @@ export default function AdminPage() {
   // Todo editing state
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoText, setEditingTodoText] = useState('');
+
+  // Kick bot state
+  const [kickStatus, setKickStatus] = useState<{ connected: boolean; subscriptions?: unknown[] } | null>(null);
+  const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
+  const [kickTestMessage, setKickTestMessage] = useState('');
+  const [kickTestSending, setKickTestSending] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
 
@@ -123,6 +146,78 @@ export default function AdminPage() {
   }, [router]);
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
+
+  // Kick bot status, OAuth callback, and message loading
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const oauthResult = params.get('kick_oauth');
+    if (oauthResult === 'success') {
+      setToast({ type: 'saved', message: 'Kick bot connected successfully!' });
+      setTimeout(() => setToast(null), 3000);
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (oauthResult === 'error') {
+      const err = params.get('error') ?? 'Unknown error';
+      setToast({ type: 'error', message: `Kick connection failed: ${err}` });
+      setTimeout(() => setToast(null), 5000);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    fetch('/api/kick-oauth/status', { credentials: 'include' })
+      .then((r) => r.json())
+      .then(setKickStatus)
+      .catch(() => setKickStatus({ connected: false }));
+    fetch('/api/kick-messages', { credentials: 'include' })
+      .then((r) => r.json())
+      .then(setKickMessages)
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  const handleKickMessageChange = useCallback((key: keyof KickMessageTemplates, value: string) => {
+    setKickMessages((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const saveKickMessages = useCallback(async () => {
+    setToast({ type: 'saving', message: 'Saving messages...' });
+    try {
+      const r = await authenticatedFetch('/api/kick-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(kickMessages),
+      });
+      if (r.ok) {
+        setToast({ type: 'saved', message: 'Messages saved!' });
+      } else {
+        const data = await r.json().catch(() => ({}));
+        throw new Error(data.error ?? 'Failed to save');
+      }
+    } catch (err) {
+      setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
+    }
+    setTimeout(() => setToast(null), 3000);
+  }, [kickMessages]);
+
+  const sendKickTestMessage = useCallback(async () => {
+    if (!kickTestMessage.trim()) return;
+    setKickTestSending(true);
+    try {
+      const r = await authenticatedFetch('/api/kick-messages/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: kickTestMessage.trim() }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        setToast({ type: 'saved', message: 'Test message sent to kick.com/tazo!' });
+        setKickTestMessage('');
+      } else {
+        throw new Error(data.error ?? 'Failed to send');
+      }
+    } catch (err) {
+      setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to send' });
+    }
+    setTimeout(() => setToast(null), 3000);
+    setKickTestSending(false);
+  }, [kickTestMessage]);
 
   const handleSettingsChange = useCallback(async (updates: Partial<OverlaySettings>) => {
     const mergedSettings = { ...settings, ...updates };
@@ -303,10 +398,29 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Tab Bar */}
+      <div className="admin-tabs">
+        <button
+          className={`admin-tab ${activeTab === 'overlay' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overlay')}
+          type="button"
+        >
+          🎮 Overlay
+        </button>
+        <button
+          className={`admin-tab ${activeTab === 'kick' ? 'active' : ''}`}
+          onClick={() => setActiveTab('kick')}
+          type="button"
+        >
+          🤖 Kick Bot
+        </button>
+      </div>
+
       {/* Main Content */}
       <main className="main-content">
         <div className="settings-container">
-          
+          {activeTab === 'overlay' && (
+            <>
           {/* Location Section */}
           <section className="settings-section">
             <div className="section-header">
@@ -679,6 +793,132 @@ export default function AdminPage() {
               )}
             </div>
           </section>
+            </>
+          )}
+
+          {activeTab === 'kick' && (
+            <section className="settings-section kick-bot-tab">
+              <div className="section-header">
+                <h2>🤖 Kick Bot</h2>
+              </div>
+
+              {/* Connection */}
+              <div className="setting-group">
+                <label className="group-label">Connection</label>
+                {kickStatus?.connected ? (
+                  <div className="kick-status connected">
+                    <span className="status-dot">🟢</span>
+                    <span>Connected to kick.com/tazo</span>
+                    {kickStatus.subscriptions && kickStatus.subscriptions.length > 0 && (
+                      <span className="subscription-count">
+                        ({kickStatus.subscriptions.length} event subscriptions)
+                      </span>
+                    )}
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <a href="/api/kick-oauth/authorize" className="btn btn-secondary btn-small">
+                        🔄 Reconnect
+                      </a>
+                      <button
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          try {
+                            const r = await fetch('/api/kick-oauth/subscribe', {
+                              method: 'POST',
+                              credentials: 'include',
+                            });
+                            const data = await r.json();
+                            if (r.ok) {
+                              setToast({ type: 'saved', message: 'Re-subscribed to events!' });
+                              fetch('/api/kick-oauth/status', { credentials: 'include' })
+                                .then((res) => res.json())
+                                .then(setKickStatus);
+                            } else {
+                              setToast({ type: 'error', message: data.error ?? 'Failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Re-subscribe failed' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        📡 Re-subscribe
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="kick-status disconnected">
+                    <span className="status-dot">🔴</span>
+                    <span>Not connected</span>
+                    <a href="/api/kick-oauth/authorize" className="btn btn-primary" style={{ marginTop: '8px' }}>
+                      Connect Kick
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Test Message */}
+              <div className="setting-group">
+                <label className="group-label">Send test message</label>
+                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  Send a message to kick.com/tazo chat to test the bot.
+                </p>
+                <div className="kick-test-row">
+                  <input
+                    type="text"
+                    className="text-input"
+                    placeholder="Type a message..."
+                    value={kickTestMessage}
+                    onChange={(e) => setKickTestMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && sendKickTestMessage()}
+                    maxLength={500}
+                    disabled={!kickStatus?.connected}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={sendKickTestMessage}
+                    disabled={!kickStatus?.connected || !kickTestMessage.trim() || kickTestSending}
+                  >
+                    {kickTestSending ? 'Sending...' : 'Send'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Message templates */}
+              <div className="setting-group">
+                <label className="group-label">Chat message templates</label>
+                <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  Use placeholders like {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
+                </p>
+                <div className="kick-messages-grid">
+                  {KICK_MESSAGE_KEYS.map((key) => (
+                    <div key={key} className="kick-message-field">
+                      <label className="kick-message-label">{KICK_MESSAGE_LABELS[key]}</label>
+                      <input
+                        type="text"
+                        className="text-input"
+                        value={kickMessages[key]}
+                        onChange={(e) => handleKickMessageChange(key, e.target.value)}
+                        placeholder={DEFAULT_KICK_MESSAGES[key]}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-primary" onClick={saveKickMessages}>
+                    Save messages
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setKickMessages(DEFAULT_KICK_MESSAGES);
+                    }}
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
           
         </div>
       </main>

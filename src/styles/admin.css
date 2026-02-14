@@ -1390,4 +1390,84 @@ body {
   user-select: none;
 }
 
+/* Admin tabs */
+.admin-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.admin-tab {
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin-tab:hover {
+  color: #ffffff;
+}
+
+.admin-tab.active {
+  color: #ffffff;
+  border-bottom-color: #3b82f6;
+}
+
+/* Kick bot tab */
+.kick-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.kick-status .status-dot {
+  font-size: 0.75rem;
+}
+
+.kick-status .subscription-count {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.kick-test-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.kick-test-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.kick-messages-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.kick-message-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kick-message-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
  

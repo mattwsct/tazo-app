@@ -691,6 +691,51 @@ All API limits are enforced client-side to prevent quota exhaustion:
 - Compass indicator for orientation
 - Travel direction/heading display
 
+## 🤖 Kick Bot
+
+The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gifted subs, Kicks gifted, and channel point redemptions.
+
+### Setup checklist
+
+1. **Environment variables** (Vercel or `.env.local`):
+   ```
+   KICK_CLIENT_ID=your_client_id
+   KICK_CLIENT_SECRET=your_client_secret
+   KICK_APP_URL=https://app.tazo.wtf   # Optional
+   ```
+
+2. **Kick Dev Dashboard** ([dev.kick.com](https://dev.kick.com)):
+   - Create or use your existing app
+   - Add **Redirect URL**: `https://app.tazo.wtf/api/kick-oauth/callback` (or your domain)
+   - Enable **Webhooks** and set URL: `https://app.tazo.wtf/api/webhooks/kick`
+   - Ensure scopes: `chat:write`, `events:subscribe`, `channel:rewards:read`
+
+3. **Deploy** to Vercel so the webhook endpoint is live.
+
+4. **Connect**: Log into admin panel → **Kick Bot** tab → **Connect Kick**. Authorize with your Kick account. The bot will auto-subscribe to events and start responding.
+
+5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
+
+### Events & Responses
+
+| Event | Default Response |
+|-------|------------------|
+| Follow | "New follow from {name}! 💚" |
+| New sub | "New sub from {name}! 🎉" |
+| Resub | "{name} resubbed! {months} months 💪" |
+| Gifted subs | "{gifter} gifted a sub to {name}! 🎁" |
+| Kicks gifted | "{sender} sent {amount} {name}! 💰" |
+| Channel reward | "{redeemer} redeemed {title}! ✨" |
+
+Edit templates in the **Kick Bot** tab. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
+
+### Troubleshooting
+
+- **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.
+- **Not responding**: Ensure you completed OAuth (Connect Kick) and tokens are stored. Check Vercel logs for errors.
+
+---
+
 ## 💬 Chat Commands API
 
 The overlay app also provides chat command APIs for Fossabot integration. All commands are available at `/api/chat/*` endpoints.
