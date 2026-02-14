@@ -27,18 +27,18 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[Kick OAuth] Error:', error, searchParams.get('error_description'));
-    return NextResponse.redirect(`${adminUrl}?kick_oauth=error&error=${encodeURIComponent(error)}`);
+    return NextResponse.redirect(`${base}/kick-oauth-complete?error=${encodeURIComponent(error)}`);
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${adminUrl}?kick_oauth=error&error=missing_params`);
+    return NextResponse.redirect(`${base}/kick-oauth-complete?error=missing_params`);
   }
 
   const codeVerifier = await kv.get<string>(`${PKCE_STATE_KEY_PREFIX}${state}`);
   await kv.del(`${PKCE_STATE_KEY_PREFIX}${state}`);
 
   if (!codeVerifier) {
-    return NextResponse.redirect(`${adminUrl}?kick_oauth=error&error=invalid_state`);
+    return NextResponse.redirect(`${base}/kick-oauth-complete?error=invalid_state`);
   }
 
   try {
@@ -60,10 +60,10 @@ export async function GET(request: NextRequest) {
       console.warn('[Kick OAuth] Event subscription failed (may already be subscribed):', subErr);
     }
 
-    return NextResponse.redirect(`${adminUrl}?kick_oauth=success`);
+    return NextResponse.redirect(`${base}/kick-oauth-complete`);
   } catch (err) {
     console.error('[Kick OAuth] Token exchange failed:', err);
     const msg = err instanceof Error ? err.message : 'Token exchange failed';
-    return NextResponse.redirect(`${adminUrl}?kick_oauth=error&error=${encodeURIComponent(msg)}`);
+    return NextResponse.redirect(`${base}/kick-oauth-complete?error=${encodeURIComponent(msg)}`);
   }
 }

@@ -845,9 +845,28 @@ export default function AdminPage() {
                       </span>
                     )}
                     <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <a href="/api/kick-oauth/authorize" className="btn btn-secondary btn-small">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={() => {
+                          const popup = window.open('/api/kick-oauth/authorize', 'kick_oauth', 'width=500,height=600');
+                          const handler = (e: MessageEvent) => {
+                            if (e.origin !== window.location.origin || e.data?.type !== 'kick_oauth_complete') return;
+                            clearInterval(poll);
+                            window.removeEventListener('message', handler);
+                            if (e.data.error) setToast({ type: 'error', message: e.data.error });
+                            else setToast({ type: 'saved', message: 'Kick connected!' });
+                            fetch('/api/kick-oauth/status', { credentials: 'include' }).then((r) => r.json()).then(setKickStatus);
+                            setTimeout(() => setToast(null), 3000);
+                          };
+                          const poll = setInterval(() => {
+                            if (popup?.closed) { clearInterval(poll); window.removeEventListener('message', handler); }
+                          }, 500);
+                          window.addEventListener('message', handler);
+                        }}
+                      >
                         🔄 Reconnect
-                      </a>
+                      </button>
                       <button
                         className="btn btn-secondary btn-small"
                         onClick={async () => {
@@ -879,9 +898,29 @@ export default function AdminPage() {
                   <div className="kick-status disconnected">
                     <span className="status-dot">🔴</span>
                     <span>Not connected</span>
-                    <a href="/api/kick-oauth/authorize" className="btn btn-primary" style={{ marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ marginTop: '8px' }}
+                      onClick={() => {
+                        const popup = window.open('/api/kick-oauth/authorize', 'kick_oauth', 'width=500,height=600');
+                        const handler = (e: MessageEvent) => {
+                          if (e.origin !== window.location.origin || e.data?.type !== 'kick_oauth_complete') return;
+                          clearInterval(poll);
+                          window.removeEventListener('message', handler);
+                          if (e.data.error) setToast({ type: 'error', message: e.data.error });
+                          else setToast({ type: 'saved', message: 'Kick connected!' });
+                          fetch('/api/kick-oauth/status', { credentials: 'include' }).then((r) => r.json()).then(setKickStatus);
+                          setTimeout(() => setToast(null), 3000);
+                        };
+                        const poll = setInterval(() => {
+                          if (popup?.closed) { clearInterval(poll); window.removeEventListener('message', handler); }
+                        }, 500);
+                        window.addEventListener('message', handler);
+                      }}
+                    >
                       Connect Kick
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>

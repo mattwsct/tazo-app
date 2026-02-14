@@ -46,6 +46,7 @@ export function middleware(request: NextRequest) {
     '/api/kick-oauth/authorize',
     '/api/kick-oauth/callback',
     '/api/webhooks/kick',
+    '/kick-oauth-complete',
   ];
   
   if (publicRoutes.includes(pathname)) {
