@@ -752,6 +752,21 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 - **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.
 - **Not responding**: Ensure you completed OAuth (Connect Kick) and tokens are stored. Check Vercel logs for errors.
 
+**Webhooks never arriving (no POST /api/webhooks/kick in logs):**
+
+1. **Vercel Deployment Protection** (most likely): If enabled, it blocks unauthenticated requests (including Kick's webhooks).
+   - Vercel Dashboard → your project → **Settings** → **Deployment Protection**
+   - If "Vercel Authentication", "Password Protection", or "Trusted IPs" is on → Kick cannot reach your endpoint.
+   - **Fix**: Use Protection Bypass. Get the bypass secret from the same page, then in Kick Dev Dashboard set webhook URL to:
+     `https://app.tazo.wtf/api/webhooks/kick?x-vercel-protection-bypass=YOUR_SECRET`
+   - Or disable protection for Production (if you only need it for previews).
+
+2. **Test reachability**: Run `curl -X POST https://app.tazo.wtf/api/webhooks/kick -d '{}'` — you should get 401 (signature invalid). If the request appears in Vercel logs, the endpoint is reachable. If you get a Vercel password/auth screen or 404, protection is blocking.
+
+3. **Kick Dev Dashboard**: Verify webhook URL is exactly `https://app.tazo.wtf/api/webhooks/kick` (or with bypass param), "Enable webhooks" is on, and it's the same app as your OAuth.
+
+4. **Cloudflare** (if you use it): Ensure no firewall rules block Kick's IPs or POST requests.
+
 ---
 
 ## 💬 Chat Commands API
