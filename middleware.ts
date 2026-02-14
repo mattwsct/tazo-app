@@ -32,6 +32,7 @@ export function middleware(request: NextRequest) {
   // - Overlay page (public, used by OBS)
   // - Overlay APIs: get-settings, settings-stream, health, get-location, update-location, stats/update
   //   (overlay runs in OBS browser source without auth cookies)
+  // - Kick webhook: Kick sends server-to-server POSTs without auth cookies
   const publicRoutes = [
     '/login',
     '/api/login',
@@ -44,6 +45,7 @@ export function middleware(request: NextRequest) {
     '/api/stats/update',
     '/api/kick-oauth/authorize',
     '/api/kick-oauth/callback',
+    '/api/webhooks/kick',
   ];
   
   if (publicRoutes.includes(pathname)) {

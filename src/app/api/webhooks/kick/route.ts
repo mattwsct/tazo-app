@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Chat commands - parse !test, !location, !weather, !time and respond
+  // Chat commands - parse !ping, !location, !weather, !time and respond
   if (eventType === 'chat.message.sent') {
     const content = (payload.content as string) || '';
     const parsed = parseKickChatMessage(content);

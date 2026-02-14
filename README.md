@@ -731,16 +731,16 @@ Edit templates in the **Kick Bot** tab. Placeholders: `{name}`, `{gifter}`, `{mo
 
 ### Chat commands
 
-When viewers type these in Kick chat, the bot responds with your live overlay data:
+Type these in Kick chat and the bot responds with your live overlay data:
 
 | Command | Response |
 |---------|----------|
-| `!test` | Current location (same as overlay) |
+| `!ping` | Pong! (bot check) |
 | `!location` | Current location |
 | `!weather` | Temperature, conditions, feels like |
 | `!time` | Local time in your timezone |
 
-Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) and respects your Location Display setting (hidden/country/city/etc.).
+Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) and respects your Location Display setting (hidden/country/city/etc.). Fossabot with `/api/chat/*` is a fallback if Kick webhooks are unreliable.
 
 ### Future ideas
 

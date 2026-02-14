@@ -885,10 +885,10 @@ export default function AdminPage() {
               <div className="setting-group">
                 <label className="group-label">Chat commands</label>
                 <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  When viewers type these in chat, the bot responds with your live data:
+                  Type these in chat and the bot responds with your live overlay data:
                 </p>
                 <div className="kick-commands-list">
-                  <code>!test</code> <span className="kick-cmd-desc">— current location</span><br />
+                  <code>!ping</code> <span className="kick-cmd-desc">— bot check (responds Pong!)</span><br />
                   <code>!location</code> <span className="kick-cmd-desc">— current location</span><br />
                   <code>!weather</code> <span className="kick-cmd-desc">— temp, conditions</span><br />
                   <code>!time</code> <span className="kick-cmd-desc">— local time in your timezone</span>

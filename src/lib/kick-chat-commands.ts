@@ -1,5 +1,5 @@
 /**
- * Kick chat command handlers. Responds to !test, !location, !weather, !time in Kick chat.
+ * Kick chat command handlers. Responds to !ping, !location, !weather, !time in Kick chat.
  * Reuses the same data sources as the overlay and Fossabot chat commands.
  */
 
@@ -17,7 +17,7 @@ import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { OverlaySettings } from '@/types/settings';
 import type { LocationDisplayMode } from '@/types/settings';
 
-export const KICK_CHAT_COMMANDS = ['test', 'location', 'loc', 'weather', 'time'] as const;
+export const KICK_CHAT_COMMANDS = ['ping', 'location', 'loc', 'weather', 'time'] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
 function parseCommand(content: string): { cmd: KickChatCommand; args: string } | null {
@@ -43,8 +43,13 @@ export async function handleKickChatCommand(
   const displayMode = settings.locationDisplay;
   const persistentLocation = await getPersistentLocation();
 
-  // location / test / loc - same as !location
-  if (cmd === 'test' || cmd === 'location' || cmd === 'loc') {
+  // ping - quick bot check
+  if (cmd === 'ping') {
+    return '🏓 Pong!';
+  }
+
+  // location / loc - same as !location
+  if (cmd === 'location' || cmd === 'loc') {
     if (displayMode === 'hidden') return 'Location is hidden';
     if (!persistentLocation?.location) return 'Location unavailable';
 
