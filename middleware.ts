@@ -50,8 +50,8 @@ export function middleware(request: NextRequest) {
   ];
   
   if (publicRoutes.includes(pathname)) {
-    if (pathname === '/api/webhooks/kick' && request.method === 'POST') {
-      console.log('[Kick webhook] Request reached middleware');
+    if (pathname === '/api/webhooks/kick') {
+      console.log('[Kick webhook] Request reached middleware', request.method);
     }
     return NextResponse.next();
   }

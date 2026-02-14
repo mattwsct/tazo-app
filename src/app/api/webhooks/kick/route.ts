@@ -41,6 +41,22 @@ async function logWebhookReceived(eventType: string): Promise<void> {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
+/**
+ * GET - Webhook URL verification.
+ * Kick (or similar) may send a GET when subscribing to verify the URL is reachable.
+ * Some APIs use hub.mode=subscribe&hub.challenge=xxx — echo the challenge if present.
+ */
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const hubMode = url.searchParams.get('hub.mode') ?? url.searchParams.get('hub_mode');
+  const hubChallenge = url.searchParams.get('hub.challenge') ?? url.searchParams.get('hub_challenge');
+  console.log('[Kick webhook] GET verification', { hubMode, hasChallenge: !!hubChallenge });
+  if (hubMode === 'subscribe' && hubChallenge) {
+    return new NextResponse(hubChallenge, { status: 200, headers: { 'Content-Type': 'text/plain' } });
+  }
+  return NextResponse.json({ status: 'ok', message: 'Kick webhook endpoint' }, { status: 200 });
+}
+
 async function getValidAccessToken(): Promise<string | null> {
   const stored = await kv.get<StoredKickTokens>(KICK_TOKENS_KEY);
   if (!stored?.access_token || !stored.refresh_token) return null;
