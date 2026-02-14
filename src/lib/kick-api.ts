@@ -191,17 +191,36 @@ export async function sendKickChatMessage(
 
 // --- Event subscriptions ---
 
+/** Get broadcaster_user_id for the authenticated user (required for reliable webhook delivery) */
+async function getBroadcasterUserId(accessToken: string): Promise<number | null> {
+  const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const channels = data.data ?? [];
+  const channel = Array.isArray(channels) ? channels[0] : channels;
+  const id = channel?.broadcaster_user_id ?? channel?.user_id;
+  return typeof id === 'number' ? id : null;
+}
+
 export async function subscribeToKickEvents(accessToken: string): Promise<unknown[]> {
+  const broadcasterUserId = await getBroadcasterUserId(accessToken);
+  const body: { events: typeof KICK_EVENT_SUBSCRIPTIONS; method: 'webhook'; broadcaster_user_id?: number } = {
+    events: KICK_EVENT_SUBSCRIPTIONS,
+    method: 'webhook',
+  };
+  if (broadcasterUserId != null) {
+    body.broadcaster_user_id = broadcasterUserId;
+  }
+
   const res = await fetch(`${KICK_API_BASE}/public/v1/events/subscriptions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({
-      events: KICK_EVENT_SUBSCRIPTIONS,
-      method: 'webhook',
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
