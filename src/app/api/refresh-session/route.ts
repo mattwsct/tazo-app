@@ -27,6 +27,7 @@ export async function POST(): Promise<NextResponse> {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
+      path: '/',
       maxAge: maxAge,
     });
     
