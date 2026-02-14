@@ -24,6 +24,7 @@ import type { KickMessageTemplates } from '@/types/kick-messages';
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_MESSAGES_KEY = 'kick_message_templates';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
+const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const WEBHOOK_LOG_MAX = 20;
 
 async function logWebhookReceived(eventType: string): Promise<void> {
@@ -69,9 +70,34 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const headers = Object.fromEntries(request.headers.entries());
   const eventType = headers['kick-event-type'] ?? headers['Kick-Event-Type'] ?? '';
-  console.log('[Kick webhook] Received', eventType || '(no event type)');
+  const hasSig = !!(headers['kick-event-signature'] ?? headers['Kick-Event-Signature']);
+  const hasMsgId = !!(headers['kick-event-message-id'] ?? headers['Kick-Event-Message-Id']);
+  const hasTs = !!(headers['kick-event-message-timestamp'] ?? headers['Kick-Event-Message-Timestamp']);
 
-  if (!verifyKickWebhookSignature(rawBody, headers)) {
+  console.log('[Kick webhook] Received', {
+    eventType: eventType || '(none)',
+    bodyLen: rawBody.length,
+    hasSig,
+    hasMsgId,
+    hasTs,
+  });
+
+  const verified = verifyKickWebhookSignature(rawBody, headers);
+  try {
+    await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
+      at: new Date().toISOString(),
+      eventType: eventType || '(none)',
+      bodyLen: rawBody.length,
+      hasSig,
+      hasMsgId,
+      hasTs,
+      verified,
+    });
+  } catch {
+    // Ignore
+  }
+
+  if (!verified) {
     console.warn('[Kick webhook] Signature verification failed');
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }

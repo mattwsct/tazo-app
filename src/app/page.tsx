@@ -41,6 +41,15 @@ export default function AdminPage() {
   // Kick bot state
   const [kickStatus, setKickStatus] = useState<{ connected: boolean; subscriptions?: unknown[] } | null>(null);
   const [kickWebhookLog, setKickWebhookLog] = useState<{ eventType: string; at: string }[]>([]);
+  const [kickWebhookDebug, setKickWebhookDebug] = useState<{
+    at: string;
+    eventType: string;
+    bodyLen: number;
+    hasSig: boolean;
+    hasMsgId: boolean;
+    hasTs: boolean;
+    verified: boolean;
+  } | null>(null);
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
@@ -174,7 +183,10 @@ export default function AdminPage() {
       .catch(() => {});
     fetch('/api/kick-webhook-log', { credentials: 'include' })
       .then((r) => r.json())
-      .then((d) => setKickWebhookLog(d.log ?? []))
+      .then((d) => {
+        setKickWebhookLog(d.log ?? []);
+        setKickWebhookDebug(d.debug ?? null);
+      })
       .catch(() => {});
   }, [isAuthenticated]);
 
@@ -928,6 +940,31 @@ export default function AdminPage() {
               {/* Webhook activity */}
               <div className="setting-group">
                 <label className="group-label">Webhook activity</label>
+                {kickWebhookDebug && (
+                  <div
+                    className="kick-webhook-debug"
+                    style={{
+                      marginBottom: '12px',
+                      padding: '10px 12px',
+                      background: kickWebhookDebug.verified ? 'rgba(34,197,94,0.15)' : 'rgba(234,179,8,0.15)',
+                      borderRadius: 8,
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <strong>Last request received</strong> {new Date(kickWebhookDebug.at).toLocaleString()}
+                    <br />
+                    <code>{kickWebhookDebug.eventType}</code> · body: {kickWebhookDebug.bodyLen}B
+                    {kickWebhookDebug.hasSig ? ' · sig ✓' : ' · no sig'}
+                    {kickWebhookDebug.hasMsgId ? ' · msgId ✓' : ' · no msgId'}
+                    {kickWebhookDebug.hasTs ? ' · ts ✓' : ' · no ts'}
+                    <br />
+                    {kickWebhookDebug.verified ? (
+                      <span style={{ color: 'rgb(34,197,94)' }}>Signature verified ✓</span>
+                    ) : (
+                      <span style={{ color: 'rgb(234,179,8)' }}>Signature failed — check secret / payload order</span>
+                    )}
+                  </div>
+                )}
                 <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
                   {kickWebhookLog.length === 0
                     ? 'No webhooks received yet. Kick may not send chat events when the streamer posts — try having a viewer type !ping or !test.'
@@ -950,7 +987,10 @@ export default function AdminPage() {
                   onClick={() =>
                     fetch('/api/kick-webhook-log', { credentials: 'include' })
                       .then((r) => r.json())
-                      .then((d) => setKickWebhookLog(d.log ?? []))
+                      .then((d) => {
+                        setKickWebhookLog(d.log ?? []);
+                        setKickWebhookDebug(d.debug ?? null);
+                      })
                   }
                 >
                   Refresh

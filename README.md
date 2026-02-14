@@ -767,6 +767,13 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 4. **Cloudflare** (if you use it): Ensure no firewall rules block Kick's IPs or POST requests.
 
+5. **Verify Kick is sending**: Point Kick's webhook URL temporarily at a capture service to confirm they deliver:
+   - Go to [webhook.site](https://webhook.site) (free) and copy your unique URL.
+   - In Kick Dev Dashboard, change webhook URL to that URL.
+   - Have someone type in chat (e.g. `!ping`). Check webhook.site — if you see the request, Kick is sending and the issue is with your app. If you don't, Kick isn't delivering (unverified app, revoked subs, etc.).
+
+6. **Admin panel diagnostics**: The Kick Bot tab shows "Last request received" when *any* POST hits `/api/webhooks/kick` (even before verification). Vercel logs will show `[Kick webhook] Request reached middleware` if the request reaches your app. If both are empty, no request reached your server.
+
 ---
 
 ## 💬 Chat Commands API
