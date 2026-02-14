@@ -14,6 +14,10 @@ import {
   getKicksGiftedResponse,
   getChannelRewardResponse,
 } from '@/lib/kick-event-responses';
+import {
+  parseKickChatMessage,
+  handleKickChatCommand,
+} from '@/lib/kick-chat-commands';
 import { DEFAULT_KICK_MESSAGES } from '@/types/kick-messages';
 import type { KickMessageTemplates } from '@/types/kick-messages';
 
@@ -65,9 +69,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Events we don't auto-respond to (chat.message.sent would spam)
-  const skipResponse = ['chat.message.sent'];
-  if (skipResponse.includes(eventType)) {
+  // Chat commands - parse !test, !location, !weather, !time and respond
+  if (eventType === 'chat.message.sent') {
+    const content = (payload.content as string) || '';
+    const parsed = parseKickChatMessage(content);
+    if (!parsed) {
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+    const response = await handleKickChatCommand(parsed.cmd, parsed.args);
+    if (!response) {
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+    const accessToken = await getValidAccessToken();
+    if (!accessToken) {
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+    try {
+      await sendKickChatMessage(accessToken, response);
+    } catch (err) {
+      console.error('[Kick webhook] Chat command send failed:', err);
+    }
     return NextResponse.json({ received: true }, { status: 200 });
   }
 

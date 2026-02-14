@@ -1464,10 +1464,45 @@ body {
   gap: 0.25rem;
 }
 
+.kick-message-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.kick-message-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.kick-test-btn {
+  flex-shrink: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
 .kick-message-label {
   font-size: 0.85rem;
   font-weight: 600;
   color: #e0e0e0;
+}
+
+.kick-commands-list {
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  line-height: 1.8;
+}
+
+.kick-commands-list code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+}
+
+.kick-cmd-desc {
+  opacity: 0.85;
+  margin-left: 0.25rem;
 }
 
  

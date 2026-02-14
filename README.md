@@ -729,6 +729,24 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 Edit templates in the **Kick Bot** tab. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
+### Chat commands
+
+When viewers type these in Kick chat, the bot responds with your live overlay data:
+
+| Command | Response |
+|---------|----------|
+| `!test` | Current location (same as overlay) |
+| `!location` | Current location |
+| `!weather` | Temperature, conditions, feels like |
+| `!time` | Local time in your timezone |
+
+Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) and respects your Location Display setting (hidden/country/city/etc.).
+
+### Future ideas
+
+- **Stream title from location** — set title to current city/country
+- **More commands** — `!speed`, `!altitude`, `!forecast`, `!map`
+
 ### Troubleshooting
 
 - **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.

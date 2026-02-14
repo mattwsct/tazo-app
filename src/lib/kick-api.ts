@@ -21,11 +21,12 @@ BEbZ5jgB8s8ReQV8H+MkuffjdAj3ajDDX3DOJMIut1lBrUVD1AaSrGCKHooWoL2e
 twIDAQAB
 -----END PUBLIC KEY-----`;
 
-/** Scopes needed for bot: chat, events, channel rewards (for redemptions) */
+/** Scopes needed for bot: chat, events, channel rewards, channel metadata */
 export const KICK_SCOPES = [
   'chat:write',
   'events:subscribe',
   'channel:rewards:read',
+  'channel:read',
 ].join(' ');
 
 /** All event types we subscribe to */
@@ -225,3 +226,4 @@ export async function getKickEventSubscriptions(accessToken: string): Promise<un
   const data = await res.json();
   return data.data ?? [];
 }
+

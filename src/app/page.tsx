@@ -43,6 +43,7 @@ export default function AdminPage() {
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
+  const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -218,6 +219,30 @@ export default function AdminPage() {
     setTimeout(() => setToast(null), 3000);
     setKickTestSending(false);
   }, [kickTestMessage]);
+
+  const sendKickTemplateTest = useCallback(
+    async (key: keyof KickMessageTemplates) => {
+      setKickTemplateTesting(key);
+      try {
+        const r = await authenticatedFetch('/api/kick-messages/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ templateKey: key, templates: kickMessages }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setToast({ type: 'saved', message: `${KICK_MESSAGE_LABELS[key]} test sent!` });
+        } else {
+          throw new Error(data.error ?? 'Failed to send');
+        }
+      } catch (err) {
+        setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to send' });
+      }
+      setTimeout(() => setToast(null), 3000);
+      setKickTemplateTesting(null);
+    },
+    [kickMessages]
+  );
 
   const handleSettingsChange = useCallback(async (updates: Partial<OverlaySettings>) => {
     const mergedSettings = { ...settings, ...updates };
@@ -856,6 +881,20 @@ export default function AdminPage() {
                 )}
               </div>
 
+              {/* Chat commands */}
+              <div className="setting-group">
+                <label className="group-label">Chat commands</label>
+                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  When viewers type these in chat, the bot responds with your live data:
+                </p>
+                <div className="kick-commands-list">
+                  <code>!test</code> <span className="kick-cmd-desc">— current location</span><br />
+                  <code>!location</code> <span className="kick-cmd-desc">— current location</span><br />
+                  <code>!weather</code> <span className="kick-cmd-desc">— temp, conditions</span><br />
+                  <code>!time</code> <span className="kick-cmd-desc">— local time in your timezone</span>
+                </div>
+              </div>
+
               {/* Test Message */}
               <div className="setting-group">
                 <label className="group-label">Send test message</label>
@@ -893,13 +932,24 @@ export default function AdminPage() {
                   {KICK_MESSAGE_KEYS.map((key) => (
                     <div key={key} className="kick-message-field">
                       <label className="kick-message-label">{KICK_MESSAGE_LABELS[key]}</label>
-                      <input
-                        type="text"
-                        className="text-input"
-                        value={kickMessages[key]}
-                        onChange={(e) => handleKickMessageChange(key, e.target.value)}
-                        placeholder={DEFAULT_KICK_MESSAGES[key]}
-                      />
+                      <div className="kick-message-row">
+                        <input
+                          type="text"
+                          className="text-input"
+                          value={kickMessages[key]}
+                          onChange={(e) => handleKickMessageChange(key, e.target.value)}
+                          placeholder={DEFAULT_KICK_MESSAGES[key]}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary kick-test-btn"
+                          onClick={() => sendKickTemplateTest(key)}
+                          disabled={!kickStatus?.connected || kickTemplateTesting === key}
+                          title="Send test to Kick chat"
+                        >
+                          {kickTemplateTesting === key ? 'Sending…' : 'Test'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
