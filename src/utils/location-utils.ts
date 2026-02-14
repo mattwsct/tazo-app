@@ -149,57 +149,11 @@ function cleanForDisplay(value: string | undefined): string | null {
 // === 🌐 LOCATION NAME NORMALIZATION ===
 
 /**
- * Normalizes location names to English
- * Converts common non-English names to their English equivalents
- * This ensures consistent English display even when LocationIQ returns local names
+ * Normalizes location names for display (no hardcoded mappings).
+ * English is ensured via API accept-language parameter.
  */
 function normalizeToEnglish(name: string): string {
-  if (!name) return name;
-  
-  // Common non-English to English mappings
-  // These are common cases where LocationIQ might return local names
-  const englishMappings: Record<string, string> = {
-    // Japanese cities (common romanizations)
-    'tokyo': 'Tokyo',
-    'osaka': 'Osaka',
-    'kyoto': 'Kyoto',
-    'yokohama': 'Yokohama',
-    'nagoya': 'Nagoya',
-    'sapporo': 'Sapporo',
-    'fukuoka': 'Fukuoka',
-    'kobe': 'Kobe',
-    'kawasaki': 'Kawasaki',
-    'hiroshima': 'Hiroshima',
-    
-    // Chinese cities (common romanizations)
-    'beijing': 'Beijing',
-    'shanghai': 'Shanghai',
-    'guangzhou': 'Guangzhou',
-    'shenzhen': 'Shenzhen',
-    'chengdu': 'Chengdu',
-    'hangzhou': 'Hangzhou',
-    'wuhan': 'Wuhan',
-    'xian': 'Xi\'an',
-    'nanjing': 'Nanjing',
-    
-    // Other common non-English names
-    'mumbai': 'Mumbai', // Was Bombay
-    'kolkata': 'Kolkata', // Was Calcutta
-    'chennai': 'Chennai', // Was Madras
-    'bangalore': 'Bangalore', // Now Bengaluru in local
-  };
-  
-  // Check if name matches a known mapping (case-insensitive)
-  const lowerName = name.toLowerCase().trim();
-  if (englishMappings[lowerName]) {
-    return englishMappings[lowerName];
-  }
-  
-  // If name contains non-ASCII characters (likely non-English), try to keep it as-is
-  // LocationIQ with accept-language=en should already return English names
-  // This normalization is a fallback for edge cases
-  
-  return name;
+  return name ? name.trim() : name;
 }
 
 // === 🗺️ LOCATION DATA EXTRACTION ===

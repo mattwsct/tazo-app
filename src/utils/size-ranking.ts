@@ -296,41 +296,6 @@ function findSimilarPornStarByLength(lengthInches: number, unit: 'inch' | 'cm'):
   return ` ${phrase} (${formatMeasurement(closest.length, unit)})`;
 }
 
-function getSizeComparison(length: number, girth: number | null): string {
-  const lengthInches = length;
-  const girthInches = girth || 0;
-  
-  // Length comparisons
-  const comparisons: string[] = [];
-  if (lengthInches >= 8) {
-    comparisons.push('length similar to a banana');
-  } else if (lengthInches >= 7) {
-    comparisons.push('length similar to a large smartphone');
-  } else if (lengthInches >= 6) {
-    comparisons.push('length similar to a dollar bill');
-  } else if (lengthInches >= 5) {
-    comparisons.push('length similar to a credit card');
-  }
-  
-  // Girth comparisons
-  if (girthInches) {
-    if (girthInches >= 6) {
-      comparisons.push('girth like a tennis ball');
-    } else if (girthInches >= 5.5) {
-      comparisons.push('girth like a baseball');
-    } else if (girthInches >= 5) {
-      comparisons.push('girth like a golf ball');
-    } else if (girthInches >= 4.5) {
-      comparisons.push('girth like a ping pong ball');
-    }
-  }
-  
-  if (comparisons.length > 0) {
-    return `Size comparison: ${comparisons.join(', ')}`;
-  }
-  return '';
-}
-
 function getPercentageAboveAverage(value: number, mean: number): string {
   const percentage = ((value - mean) / mean) * 100;
   if (Math.abs(percentage) < 1) return ' (average)';

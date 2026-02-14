@@ -123,9 +123,10 @@ export async function fetchLocationFromLocationIQ(
     
     // Add cache busting timestamp to prevent browser caching
     const timestamp = Date.now();
-    const response = await fetchWithRetry(
-      `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&accept-language=en&_t=${timestamp}`
-    );
+    const url = `https://us1.locationiq.com/v1/reverse.php?key=${apiKey}&lat=${lat}&lon=${lon}&format=json&accept-language=en&_t=${timestamp}`;
+    const response = await fetchWithRetry(url, {
+      headers: { 'Accept-Language': 'en' },
+    });
     
     if (!response.ok) {
       let error: string;
@@ -185,14 +186,7 @@ export async function fetchLocationFromLocationIQ(
                    data.address.region;
       
       // Normalize location names to English and strip trailing numbers (e.g. "Honcho 6" -> "Honcho")
-      const normalizeToEnglish = (name: string | undefined): string | undefined => {
-        if (!name) return name;
-        const englishMappings: Record<string, string> = {
-          'tokyo-to': 'Tokyo', 'osaka-fu': 'Osaka', 'kyoto-fu': 'Kyoto',
-        };
-        const lowerName = name.toLowerCase().trim();
-        return englishMappings[lowerName] || name;
-      };
+      const normalizeToEnglish = (name: string | undefined): string | undefined => (name ? name.trim() : name);
       const clean = (name: string | undefined): string | undefined => {
         if (!name) return name;
         return stripTrailingNumbers(normalizeToEnglish(name) || name) || name;
