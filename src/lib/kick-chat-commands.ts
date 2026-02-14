@@ -17,7 +17,7 @@ import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { OverlaySettings } from '@/types/settings';
 import type { LocationDisplayMode } from '@/types/settings';
 
-export const KICK_CHAT_COMMANDS = ['ping', 'location', 'loc', 'weather', 'time'] as const;
+export const KICK_CHAT_COMMANDS = ['ping', 'test', 'location', 'loc', 'weather', 'time'] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
 function parseCommand(content: string): { cmd: KickChatCommand; args: string } | null {
@@ -43,8 +43,8 @@ export async function handleKickChatCommand(
   const displayMode = settings.locationDisplay;
   const persistentLocation = await getPersistentLocation();
 
-  // ping - quick bot check
-  if (cmd === 'ping') {
+  // ping / test - quick bot check
+  if (cmd === 'ping' || cmd === 'test') {
     return '🏓 Pong!';
   }
 

@@ -40,6 +40,7 @@ export default function AdminPage() {
 
   // Kick bot state
   const [kickStatus, setKickStatus] = useState<{ connected: boolean; subscriptions?: unknown[] } | null>(null);
+  const [kickWebhookLog, setKickWebhookLog] = useState<{ eventType: string; at: string }[]>([]);
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
@@ -170,6 +171,10 @@ export default function AdminPage() {
     fetch('/api/kick-messages', { credentials: 'include' })
       .then((r) => r.json())
       .then(setKickMessages)
+      .catch(() => {});
+    fetch('/api/kick-webhook-log', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setKickWebhookLog(d.log ?? []))
       .catch(() => {});
   }, [isAuthenticated]);
 
@@ -881,17 +886,49 @@ export default function AdminPage() {
                 )}
               </div>
 
+              {/* Webhook activity */}
+              <div className="setting-group">
+                <label className="group-label">Webhook activity</label>
+                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  {kickWebhookLog.length === 0
+                    ? 'No webhooks received yet. Kick may not send chat events when the streamer posts — try having a viewer type !ping or !test.'
+                    : `Last ${kickWebhookLog.length} webhook(s):`}
+                </p>
+                {kickWebhookLog.length > 0 && (
+                  <div className="kick-webhook-log">
+                    {kickWebhookLog.map((e, i) => (
+                      <div key={i} className="kick-webhook-log-entry">
+                        <code>{e.eventType}</code>
+                        <span className="kick-webhook-log-time">{new Date(e.at).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  style={{ marginTop: '8px' }}
+                  onClick={() =>
+                    fetch('/api/kick-webhook-log', { credentials: 'include' })
+                      .then((r) => r.json())
+                      .then((d) => setKickWebhookLog(d.log ?? []))
+                  }
+                >
+                  Refresh
+                </button>
+              </div>
+
               {/* Chat commands */}
               <div className="setting-group">
                 <label className="group-label">Chat commands</label>
                 <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Type these in chat and the bot responds with your live overlay data:
+                  Type <code>!ping</code> or <code>!test</code> (bot check), <code>!location</code>, <code>!weather</code>, <code>!time</code>. Kick may not send webhooks for the streamer&apos;s own messages — have a viewer test.
                 </p>
                 <div className="kick-commands-list">
-                  <code>!ping</code> <span className="kick-cmd-desc">— bot check (responds Pong!)</span><br />
+                  <code>!ping</code> / <code>!test</code> <span className="kick-cmd-desc">— Pong!</span><br />
                   <code>!location</code> <span className="kick-cmd-desc">— current location</span><br />
                   <code>!weather</code> <span className="kick-cmd-desc">— temp, conditions</span><br />
-                  <code>!time</code> <span className="kick-cmd-desc">— local time in your timezone</span>
+                  <code>!time</code> <span className="kick-cmd-desc">— local time</span>
                 </div>
               </div>
 

@@ -23,6 +23,19 @@ import type { KickMessageTemplates } from '@/types/kick-messages';
 
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_MESSAGES_KEY = 'kick_message_templates';
+const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
+const WEBHOOK_LOG_MAX = 20;
+
+async function logWebhookReceived(eventType: string): Promise<void> {
+  try {
+    const entry = { eventType, at: new Date().toISOString() };
+    const existing = (await kv.lrange<{ eventType: string; at: string }[]>(KICK_WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 2)) ?? [];
+    await kv.lpush(KICK_WEBHOOK_LOG_KEY, entry);
+    await kv.ltrim(KICK_WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 1);
+  } catch {
+    // Ignore log failures
+  }
+}
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -55,12 +68,17 @@ async function getValidAccessToken(): Promise<string | null> {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const headers = Object.fromEntries(request.headers.entries());
+  const eventType = headers['kick-event-type'] ?? headers['Kick-Event-Type'] ?? '';
+  console.log('[Kick webhook] Received', eventType || '(no event type)');
 
   if (!verifyKickWebhookSignature(rawBody, headers)) {
+    console.warn('[Kick webhook] Signature verification failed');
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
-  const eventType = headers['kick-event-type'] ?? headers['Kick-Event-Type'] ?? '';
+  console.log('[Kick webhook] Verified:', eventType);
+  await logWebhookReceived(eventType || '(unknown)');
+
   let payload: Record<string, unknown> = {};
   try {
     payload = rawBody ? JSON.parse(rawBody) : {};
