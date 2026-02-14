@@ -88,7 +88,7 @@ export function verifyKickWebhookSignature(
   }
 
   try {
-    const payload = `${rawBody}.${timestamp}.${messageId}`;
+    const payload = `${messageId}.${timestamp}.${rawBody}`;
     const key = createPublicKey(KICK_PUBLIC_KEY);
     const verify = createVerify('RSA-SHA256');
     verify.update(payload);
