@@ -716,7 +716,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
 
-6. **Stream title**: Two fields — (1) Custom title text, (2) Location. Flag/code is the separator between them. **Location prefix**: flag emoji (🇯🇵) or country code ([JP]) — use code if flags don't render on some devices. **Fetch current** (when live) parses Kick's title. **Auto-push** (only when live) at most every 5 min. Requires `channel:read` and `channel:write` scopes.
+6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** (only when live) at most every 5 min. Requires `channel:read` and `channel:write` scopes.
 
 ### Events & Responses
 

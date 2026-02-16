@@ -11,7 +11,7 @@ import {
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
 import { formatLocationForStreamTitle, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
-import type { StreamTitleLocationDisplay, StreamTitleLocationPrefix } from '@/utils/stream-title-utils';
+import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 import type { LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 
@@ -68,7 +68,6 @@ export default function AdminPage() {
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('country_state');
-  const [kickStreamTitleLocationPrefix, setKickStreamTitleLocationPrefix] = useState<StreamTitleLocationPrefix>('emoji');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
@@ -210,7 +209,6 @@ export default function AdminPage() {
       .then((d) => {
         if (d.settings) {
           setKickStreamTitleLocationDisplay(d.settings.locationDisplay ?? 'country_state');
-          setKickStreamTitleLocationPrefix(d.settings.locationPrefix ?? 'emoji');
           setKickStreamTitleAutoUpdate(d.settings.autoUpdateLocation !== false);
         }
         if (d.stream_title != null) {
@@ -256,10 +254,8 @@ export default function AdminPage() {
   const lastPushedLocationRef = useRef<string | null>(null);
   const kickStreamTitleCustomRef = useRef(kickStreamTitleCustom);
   const kickStreamTitleLocationDisplayRef = useRef(kickStreamTitleLocationDisplay);
-  const kickStreamTitleLocationPrefixRef = useRef(kickStreamTitleLocationPrefix);
   kickStreamTitleCustomRef.current = kickStreamTitleCustom;
   kickStreamTitleLocationDisplayRef.current = kickStreamTitleLocationDisplay;
-  kickStreamTitleLocationPrefixRef.current = kickStreamTitleLocationPrefix;
 
   const fetchLocationForStreamTitle = useCallback(async () => {
     try {
@@ -269,8 +265,7 @@ export default function AdminPage() {
       if (raw) {
         setKickStreamTitleRawLocation(raw);
         const display = kickStreamTitleLocationDisplayRef.current;
-        const prefix = kickStreamTitleLocationPrefixRef.current;
-        setKickStreamTitleLocation(formatLocationForStreamTitle(raw, display, prefix));
+        setKickStreamTitleLocation(formatLocationForStreamTitle(raw, display));
       } else {
         setKickStreamTitleLocation('');
         setKickStreamTitleRawLocation(null);
@@ -298,8 +293,7 @@ export default function AdminPage() {
       const raw = locData?.rawLocation ?? locData?.location;
       if (!raw) return;
       const display = kickStreamTitleLocationDisplayRef.current;
-      const prefix = kickStreamTitleLocationPrefixRef.current;
-      const formatted = formatLocationForStreamTitle(raw, display, prefix);
+      const formatted = formatLocationForStreamTitle(raw, display);
       setKickStreamTitleRawLocation(raw);
       setKickStreamTitleLocation(formatted);
       const custom = kickStreamTitleCustomRef.current.trim();
@@ -313,7 +307,6 @@ export default function AdminPage() {
             settings: {
               customTitle: custom,
               locationDisplay: display,
-              locationPrefix: prefix,
               autoUpdateLocation: true,
             },
         }),
@@ -340,9 +333,9 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (kickStreamTitleRawLocation) {
-      setKickStreamTitleLocation(formatLocationForStreamTitle(kickStreamTitleRawLocation, kickStreamTitleLocationDisplay, kickStreamTitleLocationPrefix));
+      setKickStreamTitleLocation(formatLocationForStreamTitle(kickStreamTitleRawLocation, kickStreamTitleLocationDisplay));
     }
-  }, [kickStreamTitleLocationDisplay, kickStreamTitleLocationPrefix, kickStreamTitleRawLocation]);
+  }, [kickStreamTitleLocationDisplay, kickStreamTitleRawLocation]);
 
   const fetchKickStreamTitle = useCallback(async () => {
     setKickStreamTitleLoading(true);
@@ -351,7 +344,6 @@ export default function AdminPage() {
       const data = await r.json();
       if (data.settings) {
         setKickStreamTitleLocationDisplay(data.settings.locationDisplay ?? 'country_state');
-        setKickStreamTitleLocationPrefix(data.settings.locationPrefix ?? 'emoji');
         setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
       }
       if (data.stream_title != null) {
@@ -385,7 +377,6 @@ export default function AdminPage() {
           settings: {
             customTitle: kickStreamTitleCustom,
             locationDisplay: kickStreamTitleLocationDisplay,
-            locationPrefix: kickStreamTitleLocationPrefix,
             autoUpdateLocation: kickStreamTitleAutoUpdate,
           },
         }),
@@ -402,7 +393,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleLocationPrefix, kickStreamTitleAutoUpdate]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleAutoUpdate]);
 
   const saveKickMessages = useCallback(async () => {
     setToast({ type: 'saving', message: 'Saving messages...' });
@@ -1256,7 +1247,7 @@ export default function AdminPage() {
               <div className="setting-group">
                 <label className="group-label">Stream title</label>
                 <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Custom title + location (flag as separator). If flags don&apos;t show on some devices, use <strong>Country code</strong> for [JP]-style. <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> above.
+                  Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> above.
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div>
@@ -1300,16 +1291,6 @@ export default function AdminPage() {
                           <option value="country">Country only</option>
                           <option value="country_state">Country and state</option>
                           <option value="country_city">Country and city</option>
-                        </select>
-                        <select
-                          className="text-input"
-                          value={kickStreamTitleLocationPrefix}
-                          onChange={(e) => setKickStreamTitleLocationPrefix(e.target.value as StreamTitleLocationPrefix)}
-                          style={{ width: 'auto', minWidth: 140 }}
-                          title="Flag emoji may not render on some devices — use country code for compatibility"
-                        >
-                          <option value="emoji">🇯🇵 Flag emoji</option>
-                          <option value="code">[JP] Country code</option>
                         </select>
                       </div>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>

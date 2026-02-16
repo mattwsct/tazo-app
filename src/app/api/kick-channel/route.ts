@@ -15,19 +15,15 @@ const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
 
 export type StreamTitleLocationDisplay = 'country' | 'country_state' | 'country_city';
 
-export type StreamTitleLocationPrefix = 'emoji' | 'code';
-
 export interface StreamTitleSettings {
   customTitle: string;
   locationDisplay: StreamTitleLocationDisplay;
-  locationPrefix: StreamTitleLocationPrefix;
   autoUpdateLocation: boolean;
 }
 
 export const DEFAULT_STREAM_TITLE_SETTINGS: StreamTitleSettings = {
   customTitle: '',
   locationDisplay: 'country_state',
-  locationPrefix: 'emoji',
   autoUpdateLocation: true,
 };
 
