@@ -120,14 +120,13 @@ const PORN_STAR_SIZES = [
 ];
 
 function zToPercentile(z: number): number {
-  if (z >= 4) return 99.9;
-  if (z <= -4) return 0.1;
+  if (z >= 6) return 99.9999999;
+  if (z <= -6) return 0.0000001;
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
   const d = 0.3989423 * Math.exp(-z * z / 2);
   const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
   const percentile = z >= 0 ? (1 - p) * 100 : p * 100;
-  const clamped = Math.max(0.1, Math.min(99.9, percentile));
-  return Math.round(clamped * 10) / 10;
+  return Math.max(1e-7, Math.min(100 - 1e-7, percentile));
 }
 
 function classifySize(z: number): string {
@@ -142,19 +141,26 @@ function classifySize(z: number): string {
   return 'massive';
 }
 
+/** Format small percentages with enough precision (e.g. 0.01, 0.0000001) */
+function formatPercentileValue(p: number): string {
+  if (p >= 10) return p.toFixed(1);
+  if (p >= 1) return p.toFixed(2);
+  if (p >= 0.1) return p.toFixed(3);
+  if (p >= 0.01) return p.toFixed(4);
+  if (p >= 0.001) return p.toFixed(5);
+  if (p >= 0.0001) return p.toFixed(6);
+  if (p >= 0.00001) return p.toFixed(7);
+  if (p >= 0.000001) return p.toFixed(8);
+  const s = p.toFixed(12);
+  return s.replace(/0+$/, '').replace(/\.$/, '') || '0';
+}
+
 function getPercentileText(percentile: number): string {
-  // Show exact percentile for very high rankings, rounded to 2 decimals
-  if (percentile >= 99.9) {
-    const exact = (100 - percentile).toFixed(2);
-    return `top ${exact}%`;
+  if (percentile >= 50) {
+    const topPct = 100 - percentile;
+    return `top ${formatPercentileValue(topPct)}%`;
   }
-  if (percentile >= 99) {
-    const exact = (100 - percentile).toFixed(1);
-    return `top ${exact}%`;
-  }
-  if (percentile >= 95) return 'top 5%';
-  if (percentile >= 90) return 'top 10%';
-  return '';
+  return `bottom ${formatPercentileValue(percentile)}%`;
 }
 
 function getCondomSuggestion(girthInches: number): string {

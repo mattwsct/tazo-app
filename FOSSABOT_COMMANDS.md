@@ -128,9 +128,10 @@ Returns size ranking with percentile, percentage above/below average, and porn s
 - Works with length only or length + girth
 
 Example outputs:
-- `🍆 7" (top 10%) x 5" (top 5%): above average length, large girth ~60mm nominal width (XL): Trojan Magnum XL, Pasante King Size. Similar size to Johnny Sins (7" x 5")`
-- `🍆 8.5" (top 0.12%) x 5.8" (top 0.5%): huge length, huge girth ~64mm nominal width (XXL): Pasante Super King, MyONE 64. Matches Jax Slayher's size (8.5" x 5.8")`
-- `🍆 6" (top 25%): above average. Similar length to Chad Alva (6")`
+- `🍆 7" (top 9.7%) x 5" (top 5.2%): above average length, large girth ~60mm nominal width (XL): Trojan Magnum XL, Pasante King Size. Similar size to Johnny Sins (7" x 5")`
+- `🍆 8.5" (top 0.12%) x 5.8" (top 0.05%): huge length, huge girth ~64mm nominal width (XXL): Pasante Super King, MyONE 64. Matches Jax Slayher's size (8.5" x 5.8")`
+- `🍆 6" (top 19.7%): above average. Similar length to Chad Alva (6")`
+- All ranges show exact top x% or bottom x% with precision down to 0.0000001% when needed.
 
 ## Travel Commands
 
