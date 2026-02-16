@@ -162,11 +162,12 @@ export async function POST(request: NextRequest) {
   const [storedTemplates, storedEnabled, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
     kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
-    kv.get<{ minimumKicks?: number }>(KICK_ALERT_SETTINGS_KEY),
+    kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
   const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
+  const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
   if (toggleKey && enabled[toggleKey] === false) {
@@ -186,22 +187,24 @@ export async function POST(request: NextRequest) {
       break;
     case 'channel.subscription.gifts': {
       let lifetimeSubs = '';
-      const accessTokenForLeaderboard = await getValidAccessToken();
-      if (accessTokenForLeaderboard) {
-        try {
-          const leaderboard = await getKickSubscriptionLeaderboard(accessTokenForLeaderboard);
-          const gifter = payload.gifter as { username?: string; is_anonymous?: boolean } | undefined;
-          if (gifter && !gifter.is_anonymous) {
-            const username = gifter.username;
-            if (username) {
-              const total = leaderboard.get(username.toLowerCase());
-              if (total != null && total > 0) {
-                lifetimeSubs = ` (${total} lifetime)`;
+      if (giftSubShowLifetimeSubs) {
+        const accessTokenForLeaderboard = await getValidAccessToken();
+        if (accessTokenForLeaderboard) {
+          try {
+            const leaderboard = await getKickSubscriptionLeaderboard(accessTokenForLeaderboard);
+            const gifter = payload.gifter as { username?: string; is_anonymous?: boolean } | undefined;
+            if (gifter && !gifter.is_anonymous) {
+              const username = gifter.username;
+              if (username) {
+                const total = leaderboard.get(username.toLowerCase());
+                if (total != null && total > 0) {
+                  lifetimeSubs = ` (${total} lifetime)`;
+                }
               }
             }
+          } catch {
+            // Leaderboard fetch failed - continue without lifetime subs
           }
-        } catch {
-          // Leaderboard fetch failed - continue without lifetime subs
         }
       }
       message = getGiftSubResponse(payload, templates, { lifetimeSubs });

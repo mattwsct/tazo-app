@@ -730,7 +730,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Channel reward | "{redeemer} redeemed {title}! ✨" |
 | Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
 
-Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
+Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. ` (5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
 ### Chat commands
 

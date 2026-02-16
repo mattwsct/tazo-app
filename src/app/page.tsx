@@ -43,6 +43,7 @@ export default function AdminPage() {
   // Custom location input state (for debouncing)
   const [customLocationInput, setCustomLocationInput] = useState('');
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Todo editing state
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export default function AdminPage() {
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const [kickMessageEnabled, setKickMessageEnabled] = useState<KickMessageEnabled>(DEFAULT_KICK_MESSAGE_ENABLED);
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
+  const [kickGiftSubShowLifetimeSubs, setKickGiftSubShowLifetimeSubs] = useState(true);
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
@@ -192,6 +194,7 @@ export default function AdminPage() {
         if (d.messages) setKickMessages({ ...DEFAULT_KICK_MESSAGES, ...d.messages });
         if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
+        if (d.alertSettings?.giftSubShowLifetimeSubs !== undefined) setKickGiftSubShowLifetimeSubs(d.alertSettings.giftSubShowLifetimeSubs);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -212,10 +215,6 @@ export default function AdminPage() {
       })
       .catch(() => {});
   }, [isAuthenticated]);
-
-  const handleKickMessageChange = useCallback((key: keyof KickMessageTemplates, value: string) => {
-    setKickMessages((prev) => ({ ...prev, [key]: value }));
-  }, []);
 
   const handleKickToggleChange = useCallback(
     async (key: keyof KickMessageEnabled, value: boolean) => {
@@ -380,17 +379,23 @@ export default function AdminPage() {
     setTimeout(() => setToast(null), 3000);
   }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleAutoUpdate]);
 
-  const saveKickMessages = useCallback(async () => {
+  const saveKickMessages = useCallback(async (overrides?: {
+    messages?: KickMessageTemplates;
+    enabled?: KickMessageEnabled;
+    alertSettings?: { minimumKicks?: number; giftSubShowLifetimeSubs?: boolean };
+  }) => {
+    const messages = overrides?.messages ?? kickMessages;
+    const enabled = overrides?.enabled ?? kickMessageEnabled;
+    const alertSettings = overrides?.alertSettings ?? {
+      minimumKicks: kickMinimumKicks,
+      giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+    };
     setToast({ type: 'saving', message: 'Saving messages...' });
     try {
       const r = await authenticatedFetch('/api/kick-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: kickMessages,
-          enabled: kickMessageEnabled,
-          alertSettings: { minimumKicks: kickMinimumKicks },
-        }),
+        body: JSON.stringify({ messages, enabled, alertSettings }),
       });
       if (r.ok) {
         setToast({ type: 'saved', message: 'Messages saved!' });
@@ -402,7 +407,24 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickMinimumKicks]);
+  }, [kickMessages, kickMessageEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs]);
+
+  const scheduleKickMessagesSave = useCallback(() => {
+    if (kickMessagesSaveTimeoutRef.current) clearTimeout(kickMessagesSaveTimeoutRef.current);
+    kickMessagesSaveTimeoutRef.current = setTimeout(() => {
+      kickMessagesSaveTimeoutRef.current = null;
+      saveKickMessages();
+    }, 1000);
+  }, [saveKickMessages]);
+
+  useEffect(() => () => {
+    if (kickMessagesSaveTimeoutRef.current) clearTimeout(kickMessagesSaveTimeoutRef.current);
+  }, []);
+
+  const handleKickMessageChange = useCallback((key: keyof KickMessageTemplates, value: string) => {
+    setKickMessages((prev) => ({ ...prev, [key]: value }));
+    scheduleKickMessagesSave();
+  }, [scheduleKickMessagesSave]);
 
   const sendKickTestMessage = useCallback(async () => {
     if (!kickTestMessage.trim()) return;
@@ -434,7 +456,11 @@ export default function AdminPage() {
         const r = await authenticatedFetch('/api/kick-messages/test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ templateKey: key, templates: kickMessages }),
+          body: JSON.stringify({
+            templateKey: key,
+            templates: kickMessages,
+            alertSettings: { giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs },
+          }),
         });
         const data = await r.json().catch(() => ({}));
         if (r.ok) {
@@ -448,7 +474,7 @@ export default function AdminPage() {
       setTimeout(() => setToast(null), 3000);
       setKickTemplateTesting(null);
     },
-    [kickMessages]
+    [kickMessages, kickGiftSubShowLifetimeSubs]
   );
 
   const handleSettingsChange = useCallback(async (updates: Partial<OverlaySettings>) => {
@@ -1285,6 +1311,20 @@ export default function AdminPage() {
                           />
                           <strong>{group.label}</strong>
                         </label>
+                        {group.toggleKey === 'giftSub' && (
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>
+                            <input
+                              type="checkbox"
+                              checked={kickGiftSubShowLifetimeSubs}
+                              onChange={(e) => {
+                                setKickGiftSubShowLifetimeSubs(e.target.checked);
+                                scheduleKickMessagesSave();
+                              }}
+                              className="checkbox-input"
+                            />
+                            <span>Show lifetime subs</span>
+                          </label>
+                        )}
                         {group.toggleKey === 'kicksGifted' && (
                           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
                             Min kicks:
@@ -1292,7 +1332,10 @@ export default function AdminPage() {
                               type="number"
                               className="text-input"
                               value={kickMinimumKicks}
-                              onChange={(e) => setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                              onChange={(e) => {
+                                setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
+                                scheduleKickMessagesSave();
+                              }}
                               min={0}
                               style={{ width: 80 }}
                             />
@@ -1325,30 +1368,16 @@ export default function AdminPage() {
                   ))}
                 </div>
                 <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-primary" onClick={saveKickMessages}>
-                    Save messages
-                  </button>
                   <button
                     className="btn btn-secondary"
                     onClick={() => {
                       setKickMessages(DEFAULT_KICK_MESSAGES);
+                      saveKickMessages({ messages: DEFAULT_KICK_MESSAGES });
                     }}
                   >
                     Reset to defaults
                   </button>
                 </div>
-
-                {/* Suggested additions */}
-                <details className="kick-suggested-additions" style={{ marginTop: '20px', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 500, opacity: 0.9 }}>Possible future message types</summary>
-                  <ul style={{ margin: '12px 0 0 0', paddingLeft: '20px', opacity: 0.9, fontSize: '0.9rem', lineHeight: 1.7 }}>
-                    <li><strong>Top gifter (weekly/monthly)</strong> — No dedicated webhook. Would need leaderboard polling or a Kick feature request.</li>
-                    <li><strong>Gift sub milestone</strong> — &quot;X gifted 10 subs!&quot; — use existing <code>channel.subscription.gifts</code> and add logic when count ≥ threshold.</li>
-                    <li><strong>Moderation banned</strong> — Kick has <code>moderation.banned</code>. e.g. &quot;{'{banned_user}'} was banned. Reason: {'{reason}'}&quot;</li>
-                    <li><strong>First-time chatter</strong> — No webhook; would need to track chatters yourself from <code>chat.message.sent</code>.</li>
-                    <li><strong>Viewer milestone</strong> — e.g. &quot;100 viewers!&quot; — would need livestream viewer count polling.</li>
-                  </ul>
-                </details>
               </div>
             </section>
           )}

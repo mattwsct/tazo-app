@@ -12,10 +12,12 @@ const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 
 export interface KickAlertSettings {
   minimumKicks?: number;
+  giftSubShowLifetimeSubs?: boolean;
 }
 
 export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   minimumKicks: 0,
+  giftSubShowLifetimeSubs: true,
 };
 
 export const dynamic = 'force-dynamic';

@@ -45,14 +45,22 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
   streamEnded: { status: 'offline' },
 };
 
+/** Build response functions for gift sub templates (lifetime subs depends on toggle) */
+function getGiftSubResponseFn(lifetimeSubs: string) {
+  return (p: unknown, t: KickMessageTemplates) =>
+    getGiftSubResponse(p as never, t, { lifetimeSubs });
+}
+
 /** Response functions per template key (giftSub* all use getGiftSubResponse, etc.) */
-const RESPONSE_FNS: Record<keyof KickMessageTemplates, (p: unknown, t: KickMessageTemplates) => string> = {
+function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMessageTemplates, (p: unknown, t: KickMessageTemplates) => string> {
+  const lifetimeSubs = giftSubShowLifetimeSubs ? ' (5 lifetime)' : '';
+  return {
   follow: (p, t) => getFollowResponse(p as never, t),
   newSub: (p, t) => getNewSubResponse(p as never, t),
   resub: (p, t) => getResubResponse(p as never, t),
-  giftSubSingle: (p, t) => getGiftSubResponse(p as never, t, { lifetimeSubs: ' (5 lifetime)' }),
-  giftSubMulti: (p, t) => getGiftSubResponse(p as never, t, { lifetimeSubs: ' (5 lifetime)' }),
-  giftSubGeneric: (p, t) => getGiftSubResponse(p as never, t, { lifetimeSubs: ' (5 lifetime)' }),
+  giftSubSingle: getGiftSubResponseFn(lifetimeSubs),
+  giftSubMulti: getGiftSubResponseFn(lifetimeSubs),
+  giftSubGeneric: getGiftSubResponseFn(lifetimeSubs),
   kicksGifted: (p, t) => getKicksGiftedResponse(p as never, t),
   kicksGiftedWithMessage: (p, t) => getKicksGiftedResponse(p as never, t),
   channelReward: (p, t) => getChannelRewardResponse(p as never, t),
@@ -60,7 +68,8 @@ const RESPONSE_FNS: Record<keyof KickMessageTemplates, (p: unknown, t: KickMessa
   channelRewardDeclined: (p, t) => getChannelRewardResponse(p as never, t),
   streamStarted: (p, t) => getStreamStatusResponse(p as never, t),
   streamEnded: (p, t) => getStreamStatusResponse(p as never, t),
-};
+  };
+}
 
 export async function POST(request: NextRequest) {
   const authToken = request.cookies.get('auth-token')?.value;
@@ -71,18 +80,21 @@ export async function POST(request: NextRequest) {
   let content: string;
   let templateKey: keyof KickMessageTemplates | undefined;
   let templates: KickMessageTemplates | undefined;
+  let giftSubShowLifetimeSubs = true;
   try {
     const body = await request.json();
     content = typeof body.content === 'string' ? body.content.trim() : '';
     templateKey = body.templateKey;
     templates = body.templates;
+    if (body.alertSettings?.giftSubShowLifetimeSubs === false) giftSubShowLifetimeSubs = false;
   } catch {
     content = '';
   }
 
   // Template test: render with mock payload
   if (templateKey && templates) {
-    const fn = RESPONSE_FNS[templateKey];
+    const responseFns = buildResponseFns(giftSubShowLifetimeSubs);
+    const fn = responseFns[templateKey];
     const payload = MOCK_PAYLOADS[templateKey];
     if (fn && payload) {
       content = fn(payload, templates);
