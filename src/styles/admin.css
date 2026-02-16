@@ -1383,6 +1383,38 @@ body {
   accent-color: #3b82f6;
 }
 
+/* Number inputs - readable digits */
+.number-input {
+  min-width: 72px;
+  width: 72px;
+  padding: 10px 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  font-family: inherit;
+}
+
+.number-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.number-input::-webkit-inner-spin-button,
+.number-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+/* Stream title location preview - readable */
+.stream-title-location-preview {
+  color: #ffffff !important;
+  letter-spacing: 0.02em;
+}
+
 .checkbox-text {
   font-size: 15px;
   font-weight: 600;

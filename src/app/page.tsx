@@ -1193,33 +1193,6 @@ export default function AdminPage() {
                 )}
               </div>
 
-              {/* Test Message */}
-              <div className="setting-group">
-                <label className="group-label">Send test message</label>
-                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Send a message to kick.com/tazo chat to test the bot.
-                </p>
-                <div className="kick-test-row">
-                  <input
-                    type="text"
-                    className="text-input"
-                    placeholder="Type a message..."
-                    value={kickTestMessage}
-                    onChange={(e) => setKickTestMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendKickTestMessage()}
-                    maxLength={500}
-                    disabled={!kickStatus?.connected}
-                  />
-                  <button
-                    className="btn btn-primary"
-                    onClick={sendKickTestMessage}
-                    disabled={!kickStatus?.connected || !kickTestMessage.trim() || kickTestSending}
-                  >
-                    {kickTestSending ? 'Sending...' : 'Send'}
-                  </button>
-                </div>
-              </div>
-
               {/* Stream title */}
               <div className="setting-group">
                 <label className="group-label">Stream title</label>
@@ -1245,16 +1218,19 @@ export default function AdminPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                         <div
+                          className="stream-title-location-preview"
                           style={{
-                            padding: '10px 14px',
-                            background: 'rgba(255,255,255,0.06)',
+                            padding: '12px 16px',
+                            background: 'rgba(255,255,255,0.1)',
                             borderRadius: 8,
-                            fontSize: '0.95rem',
-                            minHeight: 42,
+                            fontSize: '1.05rem',
+                            fontWeight: 600,
+                            minHeight: 48,
                             display: 'flex',
                             alignItems: 'center',
                             flex: 1,
                             minWidth: 180,
+                            color: '#ffffff',
                           }}
                         >
                           {kickStreamTitleLocation || <span style={{ opacity: 0.5 }}>No location data</span>}
@@ -1334,7 +1310,7 @@ export default function AdminPage() {
                         Min interval:
                         <input
                           type="number"
-                          className="text-input"
+                          className="text-input number-input"
                           value={kickChatBroadcastLocationInterval}
                           onChange={(e) => {
                             setKickChatBroadcastLocationInterval(Math.max(1, parseInt(e.target.value, 10) || 5));
@@ -1342,7 +1318,6 @@ export default function AdminPage() {
                           }}
                           min={1}
                           max={60}
-                          style={{ width: 60 }}
                         />
                         min
                       </label>
@@ -1367,7 +1342,7 @@ export default function AdminPage() {
                           High:
                           <input
                             type="number"
-                            className="text-input"
+                            className="text-input number-input"
                             value={kickChatBroadcastHeartrateMinBpm}
                             onChange={(e) => {
                               setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100)));
@@ -1375,7 +1350,6 @@ export default function AdminPage() {
                             }}
                             min={0}
                             max={250}
-                            style={{ width: 60 }}
                           />
                           BPM
                         </label>
@@ -1383,7 +1357,7 @@ export default function AdminPage() {
                           Very high:
                           <input
                             type="number"
-                            className="text-input"
+                            className="text-input number-input"
                             value={kickChatBroadcastHeartrateVeryHighBpm}
                             onChange={(e) => {
                               setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120)));
@@ -1391,13 +1365,39 @@ export default function AdminPage() {
                             }}
                             min={0}
                             max={250}
-                            style={{ width: 60 }}
                           />
                           BPM
                         </label>
                       </>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Test Message */}
+              <div className="setting-group">
+                <label className="group-label">Send test message</label>
+                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  Send a message to kick.com/tazo chat to test the bot.
+                </p>
+                <div className="kick-test-row">
+                  <input
+                    type="text"
+                    className="text-input"
+                    placeholder="Type a message..."
+                    value={kickTestMessage}
+                    onChange={(e) => setKickTestMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && sendKickTestMessage()}
+                    maxLength={500}
+                    disabled={!kickStatus?.connected}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={sendKickTestMessage}
+                    disabled={!kickStatus?.connected || !kickTestMessage.trim() || kickTestSending}
+                  >
+                    {kickTestSending ? 'Sending...' : 'Send'}
+                  </button>
                 </div>
               </div>
 
@@ -1439,14 +1439,13 @@ export default function AdminPage() {
                             Min kicks:
                             <input
                               type="number"
-                              className="text-input"
+                              className="text-input number-input"
                               value={kickMinimumKicks}
                               onChange={(e) => {
                                 setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
                                 scheduleKickMessagesSave();
                               }}
                               min={0}
-                              style={{ width: 80 }}
                             />
                           </label>
                         )}
