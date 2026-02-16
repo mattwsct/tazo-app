@@ -7,6 +7,7 @@ import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoom
 import {
   DEFAULT_KICK_MESSAGES,
   TEMPLATE_GROUP_CONFIG,
+  TEMPLATE_GROUP_ICONS,
   DEFAULT_KICK_MESSAGE_ENABLED,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
@@ -491,6 +492,23 @@ export default function AdminPage() {
     },
     [kickMessages, kickGiftSubShowLifetimeSubs]
   );
+
+  const handleKickOAuthConnect = useCallback(() => {
+    const popup = window.open('/api/kick-oauth/authorize', 'kick_oauth', 'width=500,height=600');
+    const handler = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin || e.data?.type !== 'kick_oauth_complete') return;
+      clearInterval(poll);
+      window.removeEventListener('message', handler);
+      if (e.data.error) setToast({ type: 'error', message: e.data.error });
+      else setToast({ type: 'saved', message: 'Kick connected!' });
+      fetch('/api/kick-oauth/status', { credentials: 'include' }).then((r) => r.json()).then(setKickStatus);
+      setTimeout(() => setToast(null), 3000);
+    };
+    const poll = setInterval(() => {
+      if (popup?.closed) { clearInterval(poll); window.removeEventListener('message', handler); }
+    }, 500);
+    window.addEventListener('message', handler);
+  }, []);
 
   const handleSettingsChange = useCallback(async (updates: Partial<OverlaySettings>) => {
     const mergedSettings = { ...settings, ...updates };
@@ -1070,15 +1088,14 @@ export default function AdminPage() {
           )}
 
           {activeTab === 'kick' && (
-            <section className="settings-section kick-bot-tab">
-              <div className="section-header">
-                <h2>🤖 Kick Bot</h2>
-              </div>
-
+            <>
               {/* Connection */}
-              <div className="setting-group">
-                <label className="group-label">Connection</label>
-                {kickStatus?.connected ? (
+              <section className="settings-section">
+                <div className="section-header">
+                  <h2>🔗 Connection</h2>
+                </div>
+                <div className="setting-group">
+                  {kickStatus?.connected ? (
                   <div className="kick-status connected">
                     <span className="status-dot">🟢</span>
                     <span>Connected to kick.com/tazo</span>
@@ -1116,22 +1133,7 @@ export default function AdminPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        onClick={() => {
-                          const popup = window.open('/api/kick-oauth/authorize', 'kick_oauth', 'width=500,height=600');
-                          const handler = (e: MessageEvent) => {
-                            if (e.origin !== window.location.origin || e.data?.type !== 'kick_oauth_complete') return;
-                            clearInterval(poll);
-                            window.removeEventListener('message', handler);
-                            if (e.data.error) setToast({ type: 'error', message: e.data.error });
-                            else setToast({ type: 'saved', message: 'Kick connected!' });
-                            fetch('/api/kick-oauth/status', { credentials: 'include' }).then((r) => r.json()).then(setKickStatus);
-                            setTimeout(() => setToast(null), 3000);
-                          };
-                          const poll = setInterval(() => {
-                            if (popup?.closed) { clearInterval(poll); window.removeEventListener('message', handler); }
-                          }, 500);
-                          window.addEventListener('message', handler);
-                        }}
+                        onClick={handleKickOAuthConnect}
                       >
                         🔄 Reconnect
                       </button>
@@ -1168,40 +1170,28 @@ export default function AdminPage() {
                     <span>Not connected</span>
                     <button
                       type="button"
-                      className="btn btn-primary"
-                      style={{ marginTop: '8px' }}
-                      onClick={() => {
-                        const popup = window.open('/api/kick-oauth/authorize', 'kick_oauth', 'width=500,height=600');
-                        const handler = (e: MessageEvent) => {
-                          if (e.origin !== window.location.origin || e.data?.type !== 'kick_oauth_complete') return;
-                          clearInterval(poll);
-                          window.removeEventListener('message', handler);
-                          if (e.data.error) setToast({ type: 'error', message: e.data.error });
-                          else setToast({ type: 'saved', message: 'Kick connected!' });
-                          fetch('/api/kick-oauth/status', { credentials: 'include' }).then((r) => r.json()).then(setKickStatus);
-                          setTimeout(() => setToast(null), 3000);
-                        };
-                        const poll = setInterval(() => {
-                          if (popup?.closed) { clearInterval(poll); window.removeEventListener('message', handler); }
-                        }, 500);
-                        window.addEventListener('message', handler);
-                      }}
+                      className="btn btn-primary connect-kick-btn"
+                      onClick={handleKickOAuthConnect}
                     >
                       Connect Kick
                     </button>
                   </div>
                 )}
-              </div>
+                </div>
+              </section>
 
               {/* Stream title */}
-              <div className="setting-group">
-                <label className="group-label">Stream title</label>
-                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> above.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <section className="settings-section">
+                <div className="section-header">
+                  <h2>📺 Stream title</h2>
+                </div>
+                <div className="setting-group">
+                  <p className="group-label group-description">
+                    Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> above.
+                  </p>
+                <div className="form-stack">
                   <div>
-                    <label style={{ fontSize: '0.85rem', opacity: 0.9, display: 'block', marginBottom: '4px' }}>Custom title</label>
+                    <label className="field-label">Custom title</label>
                     <input
                       type="text"
                       className="text-input"
@@ -1214,7 +1204,7 @@ export default function AdminPage() {
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '0.85rem', opacity: 0.9, display: 'block', marginBottom: '4px' }}>Location</label>
+                    <label className="field-label">Location</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         <div
@@ -1234,7 +1224,7 @@ export default function AdminPage() {
                           {kickStreamTitleLocation || <span style={{ opacity: 0.5 }}>No location data</span>}
                         </div>
                         <div>
-                          <label style={{ fontSize: '0.85rem', opacity: 0.9, display: 'block', marginBottom: '6px' }}>Display</label>
+                          <label className="field-label field-label-sm">Display</label>
                           <RadioGroup
                           value={kickStreamTitleLocationDisplay}
                           onChange={(v) => setKickStreamTitleLocationDisplay(v as StreamTitleLocationDisplay)}
@@ -1246,7 +1236,7 @@ export default function AdminPage() {
                         />
                         </div>
                       </div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>
+                      <label className="checkbox-label-row">
                         <input
                           type="checkbox"
                           checked={kickStreamTitleAutoUpdate}
@@ -1283,23 +1273,26 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
-              </div>
+                </div>
+              </section>
 
               {/* Chat broadcasts */}
-              <div className="setting-group">
-                <label className="group-label">Chat broadcasts</label>
-                <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Location: periodic updates. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
-                </p>
-                <div className="radio-group segmented" style={{ marginBottom: '12px' }}>
+              <section className="settings-section">
+                <div className="section-header">
+                  <h2>📢 Chat broadcasts</h2>
+                </div>
+                <div className="setting-group">
+                  <p className="group-label group-description">
+                    Location: periodic updates. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
+                  </p>
+                <div className="radio-group segmented section-spacing">
                   <button
                     type="button"
-                    className={`radio-option ${kickChatBroadcastLocation ? 'active' : ''}`}
+                    className={`radio-option radio-option-flex ${kickChatBroadcastLocation ? 'active' : ''}`}
                     onClick={() => {
                       setKickChatBroadcastLocation(!kickChatBroadcastLocation);
                       scheduleKickMessagesSave();
                     }}
-                    style={{ flex: '1 1 auto', minWidth: 120 }}
                   >
                     <span className="radio-icon" aria-hidden="true">📍</span>
                     <div className="radio-content">
@@ -1308,12 +1301,11 @@ export default function AdminPage() {
                   </button>
                   <button
                     type="button"
-                    className={`radio-option ${kickChatBroadcastHeartrate ? 'active' : ''}`}
+                    className={`radio-option radio-option-flex ${kickChatBroadcastHeartrate ? 'active' : ''}`}
                     onClick={() => {
                       setKickChatBroadcastHeartrate(!kickChatBroadcastHeartrate);
                       scheduleKickMessagesSave();
                     }}
-                    style={{ flex: '1 1 auto', minWidth: 120 }}
                   >
                     <span className="radio-icon" aria-hidden="true">❤️</span>
                     <div className="radio-content">
@@ -1322,9 +1314,9 @@ export default function AdminPage() {
                   </button>
                 </div>
                 {(kickChatBroadcastLocation || kickChatBroadcastHeartrate) && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                  <div className="form-stack broadcast-options-box">
                     {kickChatBroadcastLocation && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', opacity: 0.95 }}>
+                      <label className="checkbox-label-row-sm">
                         Min interval:
                         <input
                           type="number"
@@ -1341,8 +1333,8 @@ export default function AdminPage() {
                       </label>
                     )}
                     {kickChatBroadcastHeartrate && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.95 }}>
+                      <div className="form-row-wrap">
+                        <label className="checkbox-label-row-sm">
                           High:
                           <input
                             type="number"
@@ -1357,7 +1349,7 @@ export default function AdminPage() {
                           />
                           BPM
                         </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.95 }}>
+                        <label className="checkbox-label-row-sm">
                           Very high:
                           <input
                             type="number"
@@ -1376,14 +1368,18 @@ export default function AdminPage() {
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              </section>
 
               {/* Test Message */}
-              <div className="setting-group">
-                <label className="group-label">Send test message</label>
-                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Send a message to kick.com/tazo chat to test the bot.
-                </p>
+              <section className="settings-section">
+                <div className="section-header">
+                  <h2>💬 Test message</h2>
+                </div>
+                <div className="setting-group">
+                  <p className="group-label group-description group-description-sm">
+                    Send a message to kick.com/tazo chat to test the bot.
+                  </p>
                 <div className="kick-test-row">
                   <input
                     type="text"
@@ -1403,15 +1399,19 @@ export default function AdminPage() {
                     {kickTestSending ? 'Sending...' : 'Send'}
                   </button>
                 </div>
-              </div>
+                </div>
+              </section>
 
               {/* Message templates */}
-              <div className="setting-group">
-                <label className="group-label">Chat message templates</label>
-                <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Toggle and edit. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
-                </p>
-                <div className="kick-messages-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', marginBottom: '16px' }}>
+              <section className="settings-section">
+                <div className="section-header">
+                  <h2>📋 Message templates</h2>
+                </div>
+                <div className="setting-group">
+                  <p className="group-label group-description">
+                    Toggle and edit. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
+                  </p>
+                <div className="kick-messages-grid kick-messages-toggle-grid">
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
                     <button
                       key={group.toggleKey}
@@ -1420,22 +1420,20 @@ export default function AdminPage() {
                       onClick={() => handleKickToggleChange(group.toggleKey, !(kickMessageEnabled[group.toggleKey] !== false))}
                       style={{ minHeight: 56 }}
                     >
-                      <span className="radio-icon" aria-hidden="true">
-                        {group.toggleKey === 'follow' ? '💚' : group.toggleKey === 'newSub' ? '🎉' : group.toggleKey === 'resub' ? '💪' : group.toggleKey === 'giftSub' ? '🎁' : group.toggleKey === 'kicksGifted' ? '💰' : group.toggleKey === 'channelReward' ? '✨' : '🎬'}
-                      </span>
+                      <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
                       <div className="radio-content">
                         <span className="radio-label">{group.label}</span>
                       </div>
                     </button>
                   ))}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-stack">
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
                     <div key={group.toggleKey} className="kick-message-group kick-message-card" style={{ opacity: kickMessageEnabled[group.toggleKey] !== false ? 1 : 0.6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                      <div className="form-row-wrap group-header-row">
                         <strong style={{ fontSize: '0.95rem' }}>{group.label}</strong>
                         {group.toggleKey === 'giftSub' && (
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>
+                          <label className="checkbox-label-row">
                             <input
                               type="checkbox"
                               checked={kickGiftSubShowLifetimeSubs}
@@ -1449,7 +1447,7 @@ export default function AdminPage() {
                           </label>
                         )}
                         {group.toggleKey === 'kicksGifted' && (
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                          <label className="checkbox-label-row-tight">
                             Min kicks:
                             <input
                               type="number"
@@ -1465,15 +1463,14 @@ export default function AdminPage() {
                         )}
                       </div>
                       {group.templateKeys.map((key) => (
-                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                          <span style={{ width: 140, fontSize: '0.9rem', opacity: 0.9, flexShrink: 0 }}>{KICK_MESSAGE_LABELS[key]}</span>
+                        <div key={key} className="kick-message-row kick-message-template-row">
+                          <span className="inline-label-muted kick-template-label">{KICK_MESSAGE_LABELS[key]}</span>
                           <input
                             type="text"
                             className="text-input"
                             value={kickMessages[key]}
                             onChange={(e) => handleKickMessageChange(key, e.target.value)}
                             placeholder={DEFAULT_KICK_MESSAGES[key]}
-                            style={{ flex: 1 }}
                           />
                           <button
                             type="button"
@@ -1489,7 +1486,7 @@ export default function AdminPage() {
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                <div className="section-actions">
                   <button
                     className="btn btn-secondary"
                     onClick={() => {
@@ -1500,8 +1497,9 @@ export default function AdminPage() {
                     Reset to defaults
                   </button>
                 </div>
-              </div>
-            </section>
+                </div>
+              </section>
+            </>
           )}
           
         </div>

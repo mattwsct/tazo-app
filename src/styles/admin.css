@@ -767,6 +767,11 @@ body {
   flex-shrink: 0;
 }
 
+.radio-option-flex {
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
 .radio-content {
   display: flex;
   flex-direction: column;
@@ -1487,6 +1492,93 @@ body {
   opacity: 0.8;
 }
 
+.connect-kick-btn {
+  margin-top: 8px;
+}
+
+/* Reusable label/description styles - avoid DRY inline styles */
+.group-description {
+  margin-bottom: 12px;
+  font-weight: 400;
+  opacity: 0.9;
+  font-size: 0.9rem;
+}
+
+.group-description-sm {
+  margin-bottom: 8px;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.field-label-sm {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.checkbox-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.checkbox-label-row-sm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  opacity: 0.95;
+}
+
+.checkbox-label-row-tight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.inline-label-muted {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-spacing {
+  margin-bottom: 12px;
+}
+
+.broadcast-options-box {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+.form-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.group-header-row {
+  margin-bottom: 8px;
+}
+
 .kick-test-row {
   display: flex;
   gap: 0.5rem;
@@ -1503,6 +1595,19 @@ body {
   flex-direction: column;
   gap: 0.75rem;
   margin-bottom: 0.5rem;
+}
+
+.kick-messages-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.section-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
 }
 
 .kick-message-field {
@@ -1532,6 +1637,15 @@ body {
   font-size: 0.85rem;
   font-weight: 600;
   color: #e0e0e0;
+}
+
+.kick-message-template-row {
+  margin-bottom: 6px;
+}
+
+.kick-template-label {
+  width: 140px;
+  flex-shrink: 0;
 }
 
 .kick-commands-list {

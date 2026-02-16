@@ -79,6 +79,17 @@ export const DEFAULT_KICK_MESSAGE_ENABLED: Required<KickMessageEnabled> = {
   streamStatus: true,
 };
 
+/** Icons for each template group */
+export const TEMPLATE_GROUP_ICONS: Record<KickEventToggleKey, string> = {
+  follow: '💚',
+  newSub: '🎉',
+  resub: '💪',
+  giftSub: '🎁',
+  kicksGifted: '💰',
+  channelReward: '✨',
+  streamStatus: '🎬',
+};
+
 /** Groups templates by toggle, for inline toggle+template UI */
 export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: string; templateKeys: (keyof KickMessageTemplates)[] }[] = [
   { toggleKey: 'follow', label: 'Follow', templateKeys: ['follow'] },
