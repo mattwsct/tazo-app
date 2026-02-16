@@ -716,7 +716,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
 
-6. **API Playground**: The **Kick API Playground** in the Kick Bot tab lets you call any Kick API endpoint — channel (get/patch), livestreams, rewards, redemptions (accept/reject), leaderboard, categories, moderation (ban/unban), users, subscriptions. Reconnect Kick to grant new scopes if prompted.
+6. **Stream title**: Get current title, add location from GPS, and update via the Kick Bot tab. Requires `channel:read` and `channel:write` scopes.
 
 ### Events & Responses
 

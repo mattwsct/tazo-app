@@ -70,6 +70,16 @@ export const DEFAULT_KICK_MESSAGE_ENABLED: Required<KickMessageEnabled> = {
   channelReward: true,
 };
 
+/** Groups templates by toggle, for inline toggle+template UI */
+export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: string; templateKeys: (keyof KickMessageTemplates)[] }[] = [
+  { toggleKey: 'follow', label: 'Follow', templateKeys: ['follow'] },
+  { toggleKey: 'newSub', label: 'New sub', templateKeys: ['newSub'] },
+  { toggleKey: 'resub', label: 'Resub', templateKeys: ['resub'] },
+  { toggleKey: 'giftSub', label: 'Gift subs', templateKeys: ['giftSubSingle', 'giftSubMulti', 'giftSubGeneric'] },
+  { toggleKey: 'kicksGifted', label: 'Kicks gifted', templateKeys: ['kicksGifted', 'kicksGiftedWithMessage'] },
+  { toggleKey: 'channelReward', label: 'Channel reward', templateKeys: ['channelReward', 'channelRewardWithInput', 'channelRewardDeclined'] },
+];
+
 /** Maps webhook event type to toggle key */
 export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
   'channel.followed': 'follow',

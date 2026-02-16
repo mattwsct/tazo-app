@@ -6,8 +6,7 @@ import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
-  KICK_MESSAGE_KEYS,
-  KICK_EVENT_TOGGLE_KEYS,
+  TEMPLATE_GROUP_CONFIG,
   DEFAULT_KICK_MESSAGE_ENABLED,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
@@ -27,14 +26,6 @@ const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   channelRewardDeclined: 'Channel reward (declined)',
 };
 
-const KICK_TOGGLE_LABELS: Record<keyof KickMessageEnabled, string> = {
-  follow: 'Follow alerts',
-  newSub: 'New sub alerts',
-  resub: 'Resub alerts',
-  giftSub: 'Gift sub alerts',
-  kicksGifted: 'Kicks gifted alerts',
-  channelReward: 'Channel reward alerts',
-};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -69,8 +60,9 @@ export default function AdminPage() {
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
-  const [kickApiResult, setKickApiResult] = useState<{ action: string; data: unknown } | null>(null);
-  const [kickApiLoading, setKickApiLoading] = useState(false);
+  const [kickStreamTitle, setKickStreamTitle] = useState('');
+  const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
+  const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -201,6 +193,10 @@ export default function AdminPage() {
         if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
       })
       .catch(() => {});
+    fetch('/api/kick-channel', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => { if (d.stream_title != null) setKickStreamTitle(d.stream_title); })
+      .catch(() => {});
     fetch('/api/kick-webhook-log', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
@@ -231,29 +227,64 @@ export default function AdminPage() {
     [kickMessageEnabled]
   );
 
-  const kickApiCall = useCallback(
-    async (action: string, params: Record<string, unknown> = {}) => {
-      setKickApiLoading(true);
-      setKickApiResult(null);
-      try {
-        const r = await authenticatedFetch('/api/kick-api', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, ...params }),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (r.ok) {
-          setKickApiResult({ action, data });
-        } else {
-          setKickApiResult({ action, data: { error: data.error ?? 'Request failed' } });
-        }
-      } catch {
-        setKickApiResult({ action, data: { error: 'Network error' } });
+  const fetchKickStreamTitle = useCallback(async () => {
+    if (!kickStatus?.connected) return;
+    setKickStreamTitleLoading(true);
+    try {
+      const r = await authenticatedFetch('/api/kick-channel');
+      const data = await r.json();
+      if (r.ok && data.stream_title != null) {
+        setKickStreamTitle(data.stream_title);
+      } else {
+        setToast({ type: 'error', message: data.error ?? 'Failed to fetch' });
       }
-      setKickApiLoading(false);
-    },
-    []
-  );
+    } catch {
+      setToast({ type: 'error', message: 'Failed to fetch stream title' });
+    }
+    setKickStreamTitleLoading(false);
+    setTimeout(() => setToast(null), 3000);
+  }, [kickStatus?.connected]);
+
+  const updateKickStreamTitle = useCallback(async () => {
+    if (!kickStatus?.connected) return;
+    setKickStreamTitleSaving(true);
+    try {
+      const r = await authenticatedFetch('/api/kick-channel', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stream_title: kickStreamTitle }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setToast({ type: 'saved', message: 'Stream title updated!' });
+      } else {
+        setToast({ type: 'error', message: data.error ?? 'Failed to update' });
+      }
+    } catch {
+      setToast({ type: 'error', message: 'Failed to update stream title' });
+    }
+    setKickStreamTitleSaving(false);
+    setTimeout(() => setToast(null), 3000);
+  }, [kickStatus?.connected, kickStreamTitle]);
+
+  const addLocationToKickStreamTitle = useCallback(async () => {
+    try {
+      const locRes = await fetch('/api/get-location', { credentials: 'include' });
+      const locData = await locRes.json();
+      const primary = locData?.location?.primary ?? '';
+      const secondary = locData?.location?.secondary;
+      const locText = secondary ? `${primary}${primary ? ', ' : ''}${secondary}` : primary;
+      if (locText) {
+        setKickStreamTitle((prev) => (prev ? `${prev} · ${locText}` : locText));
+      } else {
+        setToast({ type: 'error', message: 'Location unavailable' });
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch {
+      setToast({ type: 'error', message: 'Failed to get location' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  }, []);
 
   const saveKickMessages = useCallback(async () => {
     setToast({ type: 'saving', message: 'Saving messages...' });
@@ -1099,49 +1130,93 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* Stream title */}
+              <div className="setting-group">
+                <label className="group-label">Stream title</label>
+                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  Update your Kick stream title. Add current location from GPS.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="text-input"
+                      value={kickStreamTitle}
+                      onChange={(e) => setKickStreamTitle(e.target.value)}
+                      placeholder="Stream title..."
+                      style={{ flex: 1, minWidth: 200 }}
+                      maxLength={200}
+                      disabled={!kickStatus?.connected}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={fetchKickStreamTitle}
+                      disabled={!kickStatus?.connected || kickStreamTitleLoading}
+                    >
+                      {kickStreamTitleLoading ? 'Fetching…' : 'Fetch current'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={addLocationToKickStreamTitle}
+                      disabled={!kickStatus?.connected}
+                    >
+                      Add location
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-small"
+                      onClick={updateKickStreamTitle}
+                      disabled={!kickStatus?.connected || kickStreamTitleSaving}
+                    >
+                      {kickStreamTitleSaving ? 'Updating…' : 'Update'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Message templates */}
               <div className="setting-group">
                 <label className="group-label">Chat message templates</label>
-                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Toggle which events trigger a chat message:
-                </p>
-                <div className="kick-toggles-row" style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px 20px' }}>
-                  {KICK_EVENT_TOGGLE_KEYS.map((key) => (
-                    <label key={key} className="kick-toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                      <input
-                        type="checkbox"
-                        checked={kickMessageEnabled[key] !== false}
-                        onChange={(e) => handleKickToggleChange(key, e.target.checked)}
-                      />
-                      {KICK_TOGGLE_LABELS[key]}
-                    </label>
-                  ))}
-                </div>
                 <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Use placeholders like {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
+                  Toggle and edit. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
                 </p>
-                <div className="kick-messages-grid">
-                  {KICK_MESSAGE_KEYS.map((key) => (
-                    <div key={key} className="kick-message-field">
-                      <label className="kick-message-label">{KICK_MESSAGE_LABELS[key]}</label>
-                      <div className="kick-message-row">
-                        <input
-                          type="text"
-                          className="text-input"
-                          value={kickMessages[key]}
-                          onChange={(e) => handleKickMessageChange(key, e.target.value)}
-                          placeholder={DEFAULT_KICK_MESSAGES[key]}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-secondary kick-test-btn"
-                          onClick={() => sendKickTemplateTest(key)}
-                          disabled={!kickStatus?.connected || kickTemplateTesting === key}
-                          title="Send test to Kick chat"
-                        >
-                          {kickTemplateTesting === key ? 'Sending…' : 'Test'}
-                        </button>
+                <div className="kick-messages-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {TEMPLATE_GROUP_CONFIG.map((group) => (
+                    <div key={group.toggleKey} className="kick-message-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: 140 }}>
+                          <input
+                            type="checkbox"
+                            checked={kickMessageEnabled[group.toggleKey] !== false}
+                            onChange={(e) => handleKickToggleChange(group.toggleKey, e.target.checked)}
+                          />
+                          <strong>{group.label}</strong>
+                        </label>
                       </div>
+                      {group.templateKeys.map((key) => (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '28px' }}>
+                          <span style={{ width: 140, fontSize: '0.9rem', opacity: 0.9 }}>{KICK_MESSAGE_LABELS[key]}</span>
+                          <input
+                            type="text"
+                            className="text-input"
+                            value={kickMessages[key]}
+                            onChange={(e) => handleKickMessageChange(key, e.target.value)}
+                            placeholder={DEFAULT_KICK_MESSAGES[key]}
+                            style={{ flex: 1 }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary kick-test-btn btn-small"
+                            onClick={() => sendKickTemplateTest(key)}
+                            disabled={!kickStatus?.connected || kickTemplateTesting === key}
+                            title="Send test to Kick chat"
+                          >
+                            {kickTemplateTesting === key ? '…' : 'Test'}
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -1171,118 +1246,6 @@ export default function AdminPage() {
                     <li><strong>Viewer milestone</strong> — e.g. &quot;100 viewers!&quot; — would need livestream viewer count polling.</li>
                   </ul>
                 </details>
-              </div>
-
-              {/* Kick API Playground */}
-              <div className="setting-group">
-                <label className="group-label">Kick API Playground</label>
-                <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Call Kick API endpoints. Reconnect to grant new scopes (channel:write, channel:rewards:write, kicks:read, moderation:ban) if needed.
-                </p>
-                {kickApiLoading && <p style={{ opacity: 0.8, fontSize: '0.9rem' }}>Loading…</p>}
-                {kickApiResult && (
-                  <pre className="kick-api-result" style={{ marginBottom: '16px', padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: 8, fontSize: '0.8rem', overflow: 'auto', maxHeight: 300 }}>
-                    {JSON.stringify(kickApiResult.data, null, 2)}
-                  </pre>
-                )}
-
-                <div className="kick-api-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Channel */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Channel</summary>
-                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-end' }}>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getChannel')} disabled={!kickStatus?.connected || kickApiLoading}>GET Channel</button>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <input type="text" className="text-input" placeholder="Stream title" id="patch-title" style={{ width: 180 }} />
-                        <input type="number" className="text-input" placeholder="Category ID" id="patch-category" style={{ width: 100 }} />
-                        <input type="text" className="text-input" placeholder="Tags (comma)" id="patch-tags" style={{ width: 140 }} />
-                        <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('patchChannel', { body: { stream_title: (document.getElementById('patch-title') as HTMLInputElement)?.value || undefined, category_id: parseInt((document.getElementById('patch-category') as HTMLInputElement)?.value || '0') || undefined, custom_tags: (document.getElementById('patch-tags') as HTMLInputElement)?.value?.split(',').map((t) => t.trim()).filter(Boolean) || undefined } })} disabled={!kickStatus?.connected || kickApiLoading}>PATCH Channel</button>
-                      </div>
-                    </div>
-                  </details>
-
-                  {/* Livestreams */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Livestreams</summary>
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getLivestreams')} disabled={!kickStatus?.connected || kickApiLoading}>GET Livestreams</button>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getLivestreamStats')} disabled={!kickStatus?.connected || kickApiLoading}>GET Stats</button>
-                    </div>
-                  </details>
-
-                  {/* Rewards */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Channel Rewards</summary>
-                    <div style={{ marginTop: '12px' }}>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getRewards')} disabled={!kickStatus?.connected || kickApiLoading}>GET Rewards</button>
-                    </div>
-                  </details>
-
-                  {/* Redemptions */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Reward Redemptions</summary>
-                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                      <select id="redemption-status" className="text-input" style={{ width: 120 }}>
-                        <option value="pending">pending</option>
-                        <option value="accepted">accepted</option>
-                        <option value="rejected">rejected</option>
-                      </select>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getRedemptions', { query: { status: (document.getElementById('redemption-status') as HTMLSelectElement)?.value || 'pending' } })} disabled={!kickStatus?.connected || kickApiLoading}>GET Redemptions</button>
-                      <input type="text" className="text-input" placeholder="Redemption IDs (comma)" id="redemption-ids" style={{ width: 200 }} />
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('acceptRedemptions', { ids: (document.getElementById('redemption-ids') as HTMLInputElement)?.value?.split(',').map((i) => i.trim()).filter(Boolean) })} disabled={!kickStatus?.connected || kickApiLoading}>Accept</button>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('rejectRedemptions', { ids: (document.getElementById('redemption-ids') as HTMLInputElement)?.value?.split(',').map((i) => i.trim()).filter(Boolean) })} disabled={!kickStatus?.connected || kickApiLoading}>Reject</button>
-                    </div>
-                  </details>
-
-                  {/* Leaderboard */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Kicks Leaderboard</summary>
-                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getLeaderboard', { query: { top: 10 } })} disabled={!kickStatus?.connected || kickApiLoading}>GET Leaderboard (top 10)</button>
-                    </div>
-                  </details>
-
-                  {/* Categories */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Categories</summary>
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <input type="text" className="text-input" placeholder="Search by name" id="category-name" style={{ width: 160 }} />
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getCategories', { query: { name: (document.getElementById('category-name') as HTMLInputElement)?.value || '', limit: 20 } })} disabled={!kickStatus?.connected || kickApiLoading}>Search</button>
-                      <input type="number" className="text-input" placeholder="Category ID" id="category-id" style={{ width: 90 }} />
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getCategory', { category_id: (document.getElementById('category-id') as HTMLInputElement)?.value })} disabled={!kickStatus?.connected || kickApiLoading}>GET by ID</button>
-                    </div>
-                  </details>
-
-                  {/* Moderation */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Moderation (Ban / Unban)</summary>
-                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                      <input type="number" className="text-input" placeholder="User ID to ban" id="ban-user-id" style={{ width: 110 }} />
-                      <input type="number" className="text-input" placeholder="Duration (min, omit=permanent)" id="ban-duration" style={{ width: 90 }} />
-                      <input type="text" className="text-input" placeholder="Reason" id="ban-reason" style={{ width: 120 }} />
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('postBan', { body: { user_id: parseInt((document.getElementById('ban-user-id') as HTMLInputElement)?.value || '0'), duration: parseInt((document.getElementById('ban-duration') as HTMLInputElement)?.value || '0') || undefined, reason: (document.getElementById('ban-reason') as HTMLInputElement)?.value || undefined } })} disabled={!kickStatus?.connected || kickApiLoading}>Ban</button>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('deleteBan', { body: { user_id: parseInt((document.getElementById('ban-user-id') as HTMLInputElement)?.value || '0') } })} disabled={!kickStatus?.connected || kickApiLoading}>Unban</button>
-                    </div>
-                    <p style={{ marginTop: 8, fontSize: '0.8rem', opacity: 0.8 }}>Broadcaster ID is inferred from your token. Get user_id from channel/chat or users API.</p>
-                  </details>
-
-                  {/* Users */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Users</summary>
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="text" className="text-input" placeholder="User IDs (comma)" id="user-ids" style={{ width: 180 }} />
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getUsers', { query: { id: (document.getElementById('user-ids') as HTMLInputElement)?.value?.split(',').map((i) => i.trim()).filter(Boolean) } })} disabled={!kickStatus?.connected || kickApiLoading}>GET Users</button>
-                    </div>
-                  </details>
-
-                  {/* Subscriptions */}
-                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Event Subscriptions</summary>
-                    <div style={{ marginTop: '12px' }}>
-                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getSubscriptions')} disabled={!kickStatus?.connected || kickApiLoading}>GET Subscriptions</button>
-                    </div>
-                  </details>
-                </div>
               </div>
             </section>
           )}
