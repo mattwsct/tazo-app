@@ -30,6 +30,7 @@ import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-mess
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_MESSAGES_KEY = 'kick_message_templates';
 const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
+const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const WEBHOOK_LOG_MAX = 20;
@@ -158,12 +159,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const [storedTemplates, storedEnabled] = await Promise.all([
+  const [storedTemplates, storedEnabled, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
     kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
+    kv.get<{ minimumKicks?: number }>(KICK_ALERT_SETTINGS_KEY),
   ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
   const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
+  const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
 
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
   if (toggleKey && enabled[toggleKey] === false) {
@@ -204,9 +207,14 @@ export async function POST(request: NextRequest) {
       message = getGiftSubResponse(payload, templates, { lifetimeSubs });
       break;
     }
-    case 'kicks.gifted':
+    case 'kicks.gifted': {
+      const amount = Number((payload.gift as { amount?: number })?.amount ?? 0);
+      if (amount < minimumKicks) {
+        break;
+      }
       message = getKicksGiftedResponse(payload, templates);
       break;
+    }
     case 'channel.reward.redemption.updated':
       message = getChannelRewardResponse(payload, templates);
       break;

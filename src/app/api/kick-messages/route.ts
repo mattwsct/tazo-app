@@ -8,22 +8,34 @@ import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-mess
 
 const KICK_MESSAGES_KEY = 'kick_message_templates';
 const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
+const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
+
+export interface KickAlertSettings {
+  minimumKicks?: number;
+}
+
+export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
+  minimumKicks: 0,
+};
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const [stored, storedEnabled] = await Promise.all([
+    const [stored, storedEnabled, storedAlert] = await Promise.all([
       kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
       kv.get<Partial<KickMessageEnabled>>(KICK_MESSAGE_ENABLED_KEY),
+      kv.get<Partial<KickAlertSettings>>(KICK_ALERT_SETTINGS_KEY),
     ]);
     const messages = { ...DEFAULT_KICK_MESSAGES, ...stored };
     const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
-    return NextResponse.json({ messages, enabled });
+    const alertSettings = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlert };
+    return NextResponse.json({ messages, enabled, alertSettings });
   } catch {
     return NextResponse.json({
       messages: DEFAULT_KICK_MESSAGES,
       enabled: DEFAULT_KICK_MESSAGE_ENABLED,
+      alertSettings: DEFAULT_KICK_ALERT_SETTINGS,
     });
   }
 }
@@ -38,14 +50,17 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Record<string, unknown>;
     const messagesBody = body.messages as Partial<KickMessageTemplates> | undefined;
     const enabledBody = body.enabled as Partial<KickMessageEnabled> | undefined;
+    const alertSettingsBody = body.alertSettings as Partial<KickAlertSettings> | undefined;
     const rest = { ...body };
     delete rest.enabled;
     delete rest.messages;
+    delete rest.alertSettings;
     delete rest.action;
     const updates: Partial<KickMessageTemplates> = messagesBody ?? rest;
     const hasMessageUpdates = Object.keys(updates).length > 0;
 
     const hasEnabledUpdates = enabledBody && typeof enabledBody === 'object';
+    const hasAlertSettingsUpdates = alertSettingsBody && typeof alertSettingsBody === 'object';
 
     if (hasMessageUpdates) {
       const stored = await kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY);
@@ -59,13 +74,21 @@ export async function POST(request: NextRequest) {
       await kv.set(KICK_MESSAGE_ENABLED_KEY, merged);
     }
 
-    const [messages, enabled] = await Promise.all([
+    if (hasAlertSettingsUpdates) {
+      const stored = await kv.get<Partial<KickAlertSettings>>(KICK_ALERT_SETTINGS_KEY);
+      const merged = { ...DEFAULT_KICK_ALERT_SETTINGS, ...stored, ...alertSettingsBody };
+      await kv.set(KICK_ALERT_SETTINGS_KEY, merged);
+    }
+
+    const [messages, enabled, alertSettings] = await Promise.all([
       kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
       kv.get<Partial<KickMessageEnabled>>(KICK_MESSAGE_ENABLED_KEY),
+      kv.get<Partial<KickAlertSettings>>(KICK_ALERT_SETTINGS_KEY),
     ]);
     return NextResponse.json({
       messages: { ...DEFAULT_KICK_MESSAGES, ...messages },
       enabled: { ...DEFAULT_KICK_MESSAGE_ENABLED, ...enabled },
+      alertSettings: { ...DEFAULT_KICK_ALERT_SETTINGS, ...alertSettings },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to save';

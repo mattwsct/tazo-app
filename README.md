@@ -716,7 +716,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
 
-6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag, dropdown (country only / country+state / country+city), and auto-update every 5 min (toggle off to disable). Combine and update Kick. Requires `channel:read` and `channel:write` scopes. *Note: Stream title may be empty when offline — Kick typically returns it only when live.*
+6. **Stream title**: Two fields — (1) Custom title text, (2) Location. Flag/code is the separator between them. **Location prefix**: flag emoji (🇯🇵) or country code ([JP]) — use code if flags don't render on some devices. **Fetch current** (when live) parses Kick's title. **Auto-push** (only when live) at most every 5 min. Requires `channel:read` and `channel:write` scopes.
 
 ### Events & Responses
 
@@ -730,7 +730,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Channel reward | "{redeemer} redeemed {title}! ✨" |
 | Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
 
-Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
+Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
 ### Chat commands
 

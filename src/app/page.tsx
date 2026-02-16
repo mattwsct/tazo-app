@@ -10,8 +10,8 @@ import {
   DEFAULT_KICK_MESSAGE_ENABLED,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
-import { formatLocationForStreamTitle } from '@/utils/stream-title-utils';
-import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
+import { formatLocationForStreamTitle, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
+import type { StreamTitleLocationDisplay, StreamTitleLocationPrefix } from '@/utils/stream-title-utils';
 import type { LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 
@@ -62,11 +62,13 @@ export default function AdminPage() {
   } | null>(null);
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const [kickMessageEnabled, setKickMessageEnabled] = useState<KickMessageEnabled>(DEFAULT_KICK_MESSAGE_ENABLED);
+  const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('country_state');
+  const [kickStreamTitleLocationPrefix, setKickStreamTitleLocationPrefix] = useState<StreamTitleLocationPrefix>('emoji');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
@@ -200,16 +202,24 @@ export default function AdminPage() {
       .then((d) => {
         if (d.messages) setKickMessages({ ...DEFAULT_KICK_MESSAGES, ...d.messages });
         if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
+        if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
-        if (d.stream_title != null) setKickStreamTitleCustom(d.stream_title);
         if (d.settings) {
-          setKickStreamTitleCustom((prev) => d.settings.customTitle ?? prev);
           setKickStreamTitleLocationDisplay(d.settings.locationDisplay ?? 'country_state');
+          setKickStreamTitleLocationPrefix(d.settings.locationPrefix ?? 'emoji');
           setKickStreamTitleAutoUpdate(d.settings.autoUpdateLocation !== false);
+        }
+        if (d.stream_title != null) {
+          if (d.is_live) {
+            const parsed = parseStreamTitleToCustom(d.stream_title);
+            setKickStreamTitleCustom(parsed || (d.settings?.customTitle ?? ''));
+          } else {
+            setKickStreamTitleCustom(d.settings?.customTitle ?? d.stream_title ?? '');
+          }
         }
       })
       .catch(() => {});
@@ -243,6 +253,14 @@ export default function AdminPage() {
     [kickMessageEnabled]
   );
 
+  const lastPushedLocationRef = useRef<string | null>(null);
+  const kickStreamTitleCustomRef = useRef(kickStreamTitleCustom);
+  const kickStreamTitleLocationDisplayRef = useRef(kickStreamTitleLocationDisplay);
+  const kickStreamTitleLocationPrefixRef = useRef(kickStreamTitleLocationPrefix);
+  kickStreamTitleCustomRef.current = kickStreamTitleCustom;
+  kickStreamTitleLocationDisplayRef.current = kickStreamTitleLocationDisplay;
+  kickStreamTitleLocationPrefixRef.current = kickStreamTitleLocationPrefix;
+
   const fetchLocationForStreamTitle = useCallback(async () => {
     try {
       const locRes = await fetch('/api/get-location', { credentials: 'include' });
@@ -250,7 +268,9 @@ export default function AdminPage() {
       const raw = locData?.rawLocation ?? locData?.location;
       if (raw) {
         setKickStreamTitleRawLocation(raw);
-        setKickStreamTitleLocation(formatLocationForStreamTitle(raw, kickStreamTitleLocationDisplay));
+        const display = kickStreamTitleLocationDisplayRef.current;
+        const prefix = kickStreamTitleLocationPrefixRef.current;
+        setKickStreamTitleLocation(formatLocationForStreamTitle(raw, display, prefix));
       } else {
         setKickStreamTitleLocation('');
         setKickStreamTitleRawLocation(null);
@@ -259,7 +279,54 @@ export default function AdminPage() {
       setKickStreamTitleLocation('');
       setKickStreamTitleRawLocation(null);
     }
-  }, [kickStreamTitleLocationDisplay]);
+  }, []);
+
+  const tryAutoPushStreamTitle = useCallback(async () => {
+    if (!kickStatus?.connected || !kickStreamTitleAutoUpdate) return;
+    try {
+      const channelRes = await authenticatedFetch('/api/kick-channel');
+      const channelData = await channelRes.json();
+      if (!channelData.is_live) return;
+      const currentKickTitle = channelData.stream_title ?? '';
+      const parsedCustom = parseStreamTitleToCustom(currentKickTitle);
+      if (parsedCustom) {
+        kickStreamTitleCustomRef.current = parsedCustom;
+        setKickStreamTitleCustom(parsedCustom);
+      }
+      const locRes = await fetch('/api/get-location', { credentials: 'include' });
+      const locData = await locRes.json();
+      const raw = locData?.rawLocation ?? locData?.location;
+      if (!raw) return;
+      const display = kickStreamTitleLocationDisplayRef.current;
+      const prefix = kickStreamTitleLocationPrefixRef.current;
+      const formatted = formatLocationForStreamTitle(raw, display, prefix);
+      setKickStreamTitleRawLocation(raw);
+      setKickStreamTitleLocation(formatted);
+      const custom = kickStreamTitleCustomRef.current.trim();
+      const newFullTitle = buildStreamTitle(custom, formatted);
+      if (newFullTitle === currentKickTitle.trim()) return;
+      const r = await authenticatedFetch('/api/kick-channel', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stream_title: newFullTitle,
+            settings: {
+              customTitle: custom,
+              locationDisplay: display,
+              locationPrefix: prefix,
+              autoUpdateLocation: true,
+            },
+        }),
+      });
+      if (r.ok) {
+        lastPushedLocationRef.current = formatted;
+        setToast({ type: 'saved', message: 'Stream title auto-updated!' });
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch {
+      // Silently ignore auto-push failures
+    }
+  }, [kickStatus?.connected, kickStreamTitleAutoUpdate]);
 
   useEffect(() => {
     fetchLocationForStreamTitle();
@@ -267,28 +334,33 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!kickStreamTitleAutoUpdate) return;
-    const interval = setInterval(fetchLocationForStreamTitle, 5 * 60 * 1000);
+    const interval = setInterval(tryAutoPushStreamTitle, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [kickStreamTitleAutoUpdate, fetchLocationForStreamTitle]);
+  }, [kickStreamTitleAutoUpdate, tryAutoPushStreamTitle]);
 
   useEffect(() => {
     if (kickStreamTitleRawLocation) {
-      setKickStreamTitleLocation(formatLocationForStreamTitle(kickStreamTitleRawLocation, kickStreamTitleLocationDisplay));
+      setKickStreamTitleLocation(formatLocationForStreamTitle(kickStreamTitleRawLocation, kickStreamTitleLocationDisplay, kickStreamTitleLocationPrefix));
     }
-  }, [kickStreamTitleLocationDisplay, kickStreamTitleRawLocation]);
+  }, [kickStreamTitleLocationDisplay, kickStreamTitleLocationPrefix, kickStreamTitleRawLocation]);
 
   const fetchKickStreamTitle = useCallback(async () => {
     setKickStreamTitleLoading(true);
     try {
       const r = await authenticatedFetch('/api/kick-channel');
       const data = await r.json();
-      if (data.stream_title != null) {
-        setKickStreamTitleCustom(data.stream_title);
-      }
       if (data.settings) {
-        setKickStreamTitleCustom((prev) => data.settings.customTitle ?? prev);
         setKickStreamTitleLocationDisplay(data.settings.locationDisplay ?? 'country_state');
+        setKickStreamTitleLocationPrefix(data.settings.locationPrefix ?? 'emoji');
         setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
+      }
+      if (data.stream_title != null) {
+        if (data.is_live) {
+          const parsed = parseStreamTitleToCustom(data.stream_title);
+          setKickStreamTitleCustom(parsed || (data.settings?.customTitle ?? ''));
+        } else {
+          setKickStreamTitleCustom(data.settings?.customTitle ?? data.stream_title ?? '');
+        }
       }
       if (data.error && !data.stream_title) {
         setToast({ type: 'error', message: data.error });
@@ -303,24 +375,24 @@ export default function AdminPage() {
   const updateKickStreamTitle = useCallback(async () => {
     if (!kickStatus?.connected) return;
     setKickStreamTitleSaving(true);
-    const fullTitle = kickStreamTitleLocation
-      ? (kickStreamTitleCustom ? `${kickStreamTitleCustom.trim()} · ${kickStreamTitleLocation}` : kickStreamTitleLocation)
-      : kickStreamTitleCustom.trim();
+    const fullTitle = buildStreamTitle(kickStreamTitleCustom, kickStreamTitleLocation || '');
     try {
       const r = await authenticatedFetch('/api/kick-channel', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          stream_title: fullTitle,
+          stream_title: fullTitle.trim(),
           settings: {
             customTitle: kickStreamTitleCustom,
             locationDisplay: kickStreamTitleLocationDisplay,
+            locationPrefix: kickStreamTitleLocationPrefix,
             autoUpdateLocation: kickStreamTitleAutoUpdate,
           },
         }),
       });
       const data = await r.json();
       if (r.ok) {
+        lastPushedLocationRef.current = kickStreamTitleLocation || null;
         setToast({ type: 'saved', message: 'Stream title updated!' });
       } else {
         setToast({ type: 'error', message: data.error ?? 'Failed to update' });
@@ -330,7 +402,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleAutoUpdate]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleLocationPrefix, kickStreamTitleAutoUpdate]);
 
   const saveKickMessages = useCallback(async () => {
     setToast({ type: 'saving', message: 'Saving messages...' });
@@ -338,7 +410,11 @@ export default function AdminPage() {
       const r = await authenticatedFetch('/api/kick-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: kickMessages, enabled: kickMessageEnabled }),
+        body: JSON.stringify({
+          messages: kickMessages,
+          enabled: kickMessageEnabled,
+          alertSettings: { minimumKicks: kickMinimumKicks },
+        }),
       });
       if (r.ok) {
         setToast({ type: 'saved', message: 'Messages saved!' });
@@ -350,7 +426,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled]);
+  }, [kickMessages, kickMessageEnabled, kickMinimumKicks]);
 
   const sendKickTestMessage = useCallback(async () => {
     if (!kickTestMessage.trim()) return;
@@ -1180,7 +1256,7 @@ export default function AdminPage() {
               <div className="setting-group">
                 <label className="group-label">Stream title</label>
                 <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Custom title + location (with flag). Location from GPS, auto-updates every 5 min when enabled. If you get 401, use <strong>Reconnect</strong> above. Stream title may be empty when <strong>offline</strong>.
+                  Custom title + location (flag as separator). If flags don&apos;t show on some devices, use <strong>Country code</strong> for [JP]-style. <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> above.
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div>
@@ -1225,6 +1301,16 @@ export default function AdminPage() {
                           <option value="country_state">Country and state</option>
                           <option value="country_city">Country and city</option>
                         </select>
+                        <select
+                          className="text-input"
+                          value={kickStreamTitleLocationPrefix}
+                          onChange={(e) => setKickStreamTitleLocationPrefix(e.target.value as StreamTitleLocationPrefix)}
+                          style={{ width: 'auto', minWidth: 140 }}
+                          title="Flag emoji may not render on some devices — use country code for compatibility"
+                        >
+                          <option value="emoji">🇯🇵 Flag emoji</option>
+                          <option value="code">[JP] Country code</option>
+                        </select>
                       </div>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>
                         <input
@@ -1232,7 +1318,7 @@ export default function AdminPage() {
                           checked={kickStreamTitleAutoUpdate}
                           onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
                         />
-                        Auto-update location every 5 minutes
+                        Auto-push when live and location changes (at most every 5 min)
                       </label>
                     </div>
                   </div>
@@ -1273,7 +1359,7 @@ export default function AdminPage() {
                 <div className="kick-messages-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
                     <div key={group.toggleKey} className="kick-message-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: 140 }}>
                           <input
                             type="checkbox"
@@ -1282,6 +1368,19 @@ export default function AdminPage() {
                           />
                           <strong>{group.label}</strong>
                         </label>
+                        {group.toggleKey === 'kicksGifted' && (
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                            Min kicks:
+                            <input
+                              type="number"
+                              className="text-input"
+                              value={kickMinimumKicks}
+                              onChange={(e) => setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                              min={0}
+                              style={{ width: 80 }}
+                            />
+                          </label>
+                        )}
                       </div>
                       {group.templateKeys.map((key) => (
                         <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '28px' }}>

@@ -19,6 +19,7 @@ import type { KickMessageTemplates } from '@/types/kick-messages';
 
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_MESSAGES_KEY = 'kick_message_templates';
+const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -71,8 +72,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const storedTemplates = await kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY);
+  const [storedTemplates, storedAlertSettings] = await Promise.all([
+    kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
+    kv.get<{ minimumKicks?: number }>(KICK_ALERT_SETTINGS_KEY),
+  ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
+  const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
 
   let message: string | null = null;
   switch (eventType) {
@@ -88,9 +93,12 @@ export async function POST(request: NextRequest) {
     case 'channel.subscription.gifts':
       message = getGiftSubResponse(payload, templates);
       break;
-    case 'kicks.gifted':
+    case 'kicks.gifted': {
+      const amount = Number((payload.gift as { amount?: number })?.amount ?? 0);
+      if (amount < minimumKicks) break;
       message = getKicksGiftedResponse(payload, templates);
       break;
+    }
     case 'channel.reward.redemption.updated':
       message = getChannelRewardResponse(payload, templates);
       break;
