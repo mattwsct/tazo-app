@@ -1260,6 +1260,7 @@ export default function AdminPage() {
                           type="checkbox"
                           checked={kickStreamTitleAutoUpdate}
                           onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
+                          className="checkbox-input"
                         />
                         Auto-push when live and location changes (at most every 5 min)
                       </label>
@@ -1308,6 +1309,7 @@ export default function AdminPage() {
                             type="checkbox"
                             checked={kickMessageEnabled[group.toggleKey] !== false}
                             onChange={(e) => handleKickToggleChange(group.toggleKey, e.target.checked)}
+                            className="checkbox-input"
                           />
                           <strong>{group.label}</strong>
                         </label>
