@@ -14,6 +14,7 @@ import {
   getKicksGiftedResponse,
   getChannelRewardResponse,
   getStreamStatusResponse,
+  getHostResponse,
 } from '@/lib/kick-event-responses';
 import { getKickSubscriptionLeaderboard } from '@/lib/kick-api';
 import {
@@ -223,6 +224,9 @@ export async function POST(request: NextRequest) {
       break;
     case 'livestream.status.updated':
       message = getStreamStatusResponse(payload, templates);
+      break;
+    case 'channel.hosted':
+      message = getHostResponse(payload, templates);
       break;
     default:
       // Unknown event - acknowledge but don't respond

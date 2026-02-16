@@ -716,7 +716,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
 
-6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** (only when live) at most every 5 min. Requires `channel:read` and `channel:write` scopes.
+6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** when admin page is open (every 5 min) and via cron when location updates (runs every 2 min, updates title if live and location changed). Requires `channel:read` and `channel:write` scopes.
 
 ### Events & Responses
 
@@ -725,14 +725,15 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Follow | "New follow from {name}! 💚" |
 | New sub | "New sub from {name}! 🎉" |
 | Resub | "{name} resubbed! {months} months 💪" |
-| Gifted subs | "{gifter} gifted a sub to {name}!{lifetimeSubs} 🎁" (adds lifetime total when gifter is on leaderboard) |
-| Kicks gifted | "{sender} sent {amount} {name}! 💰" |
+| Gifted subs | "{gifter} gifted a sub to {name}! 🎁 {lifetimeSubs}" (adds lifetime total when gifter is on leaderboard) |
+| Kicks gifted | "{sender} sent {kickDescription}! 💰" (e.g. "High Five (100 Kicks)" or "100 Kicks") |
 | Channel reward | "{redeemer} redeemed {title}! ✨" |
 | Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
+| Host | "{host} hosted with {viewers} viewers! 🎉" |
 
-Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. ` (5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
+Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. `(5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. **Host** — template ready when Kick adds the webhook event. Until then, use third-party bots (e.g. [Kick.bot](https://kick.bot), [KAOSBOT](https://bot.ka0s.uk), [KickBot](https://kickbot.com)) for raid/host alerts via chat monitoring or Discord integration. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{kickDescription}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`, `{host}`, `{viewers}`.
 
-**Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint.
+**Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint. The same cron also auto-updates the Kick stream title with current location when **Auto-push location** is on (every 2 min while live).
 
 ### Chat commands
 
@@ -749,7 +750,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 ### Future ideas
 
-- **Stream title from location** — set title to current city/country
+- **Stream title from location** — now implemented via cron when Auto-push is on
 - **More commands** — `!speed`, `!altitude`, `!forecast`, `!map`
 - **Top gifter (weekly/monthly)** — no dedicated webhook; would need leaderboard polling or Kick feature request
 - **Gift sub milestone** — special message when gift count ≥ threshold (e.g. "X gifted 10 subs!")

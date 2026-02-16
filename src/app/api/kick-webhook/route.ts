@@ -13,12 +13,20 @@ import {
   getGiftSubResponse,
   getKicksGiftedResponse,
   getChannelRewardResponse,
+  getStreamStatusResponse,
+  getHostResponse,
 } from '@/lib/kick-event-responses';
-import { DEFAULT_KICK_MESSAGES } from '@/types/kick-messages';
-import type { KickMessageTemplates } from '@/types/kick-messages';
+import { getKickSubscriptionLeaderboard } from '@/lib/kick-api';
+import {
+  DEFAULT_KICK_MESSAGES,
+  DEFAULT_KICK_MESSAGE_ENABLED,
+  EVENT_TYPE_TO_TOGGLE,
+} from '@/types/kick-messages';
+import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-messages';
 
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_MESSAGES_KEY = 'kick_message_templates';
+const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
 const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 
 export const dynamic = 'force-dynamic';
@@ -72,12 +80,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const [storedTemplates, storedAlertSettings] = await Promise.all([
+  const [storedTemplates, storedEnabled, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
-    kv.get<{ minimumKicks?: number }>(KICK_ALERT_SETTINGS_KEY),
+    kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
+    kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
+  const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
+  const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
+
+  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
+  if (toggleKey && enabled[toggleKey] === false) {
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
 
   let message: string | null = null;
   switch (eventType) {
@@ -90,9 +106,31 @@ export async function POST(request: NextRequest) {
     case 'channel.subscription.renewal':
       message = getResubResponse(payload, templates);
       break;
-    case 'channel.subscription.gifts':
-      message = getGiftSubResponse(payload, templates);
+    case 'channel.subscription.gifts': {
+      let lifetimeSubs = '';
+      if (giftSubShowLifetimeSubs) {
+        const accessTokenForLeaderboard = await getValidAccessToken();
+        if (accessTokenForLeaderboard) {
+          try {
+            const leaderboard = await getKickSubscriptionLeaderboard(accessTokenForLeaderboard);
+            const gifter = payload.gifter as { username?: string; is_anonymous?: boolean } | undefined;
+            if (gifter && !gifter.is_anonymous) {
+              const username = gifter.username;
+              if (username) {
+                const total = leaderboard.get(username.toLowerCase());
+                if (total != null && total > 0) {
+                  lifetimeSubs = `(${total} lifetime)`;
+                }
+              }
+            }
+          } catch {
+            // Leaderboard fetch failed - continue without lifetime subs
+          }
+        }
+      }
+      message = getGiftSubResponse(payload, templates, { lifetimeSubs });
       break;
+    }
     case 'kicks.gifted': {
       const amount = Number((payload.gift as { amount?: number })?.amount ?? 0);
       if (amount < minimumKicks) break;
@@ -101,6 +139,12 @@ export async function POST(request: NextRequest) {
     }
     case 'channel.reward.redemption.updated':
       message = getChannelRewardResponse(payload, templates);
+      break;
+    case 'livestream.status.updated':
+      message = getStreamStatusResponse(payload, templates);
+      break;
+    case 'channel.hosted':
+      message = getHostResponse(payload, templates);
       break;
     default:
       // Unknown event - acknowledge but don't respond

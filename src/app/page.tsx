@@ -30,6 +30,7 @@ const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   channelRewardDeclined: 'Channel reward (declined)',
   streamStarted: 'Stream started',
   streamEnded: 'Stream ended',
+  host: 'Host',
 };
 
 
@@ -1413,7 +1414,7 @@ export default function AdminPage() {
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description">
-                    Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
+                    Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}, {'{host}'}, {'{viewers}'}.
                   </p>
                 <div className="form-stack">
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
@@ -1435,8 +1436,9 @@ export default function AdminPage() {
                               type="checkbox"
                               checked={kickGiftSubShowLifetimeSubs}
                               onChange={(e) => {
-                                setKickGiftSubShowLifetimeSubs(e.target.checked);
-                                scheduleKickMessagesSave();
+                                const checked = e.target.checked;
+                                setKickGiftSubShowLifetimeSubs(checked);
+                                saveKickMessages({ alertSettings: { giftSubShowLifetimeSubs: checked } });
                               }}
                               className="checkbox-input"
                             />

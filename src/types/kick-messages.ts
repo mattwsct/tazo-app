@@ -12,6 +12,7 @@ export interface KickMessageTemplates {
   channelRewardDeclined: string;
   streamStarted: string;
   streamEnded: string;
+  host: string;
 }
 
 export const DEFAULT_KICK_MESSAGES: KickMessageTemplates = {
@@ -21,13 +22,14 @@ export const DEFAULT_KICK_MESSAGES: KickMessageTemplates = {
   giftSubSingle: '{gifter} gifted a sub to {name}! 🎁 {lifetimeSubs}',
   giftSubMulti: '{gifter} gifted {count} subs! 🎁 {lifetimeSubs}',
   giftSubGeneric: '{gifter} gifted a sub! 🎁 {lifetimeSubs}',
-  kicksGifted: '{sender} sent {amount} {name}! 💰',
-  kicksGiftedWithMessage: '{sender} sent {amount} {name}: "{message}" 💰',
+  kicksGifted: '{sender} sent {kickDescription}! 💰',
+  kicksGiftedWithMessage: '{sender} sent {kickDescription}: "{message}" 💰',
   channelReward: '{redeemer} redeemed {title}! ✨',
   channelRewardWithInput: '{redeemer} redeemed {title}: "{userInput}" ✨',
   channelRewardDeclined: "{redeemer}'s {title} redemption was declined.",
   streamStarted: "We're live! 🎬",
   streamEnded: 'Thanks for watching! Stream ended. 🙏',
+  host: '{host} hosted with {viewers} viewers! 🎉',
 };
 
 export const KICK_MESSAGE_KEYS = [
@@ -44,6 +46,7 @@ export const KICK_MESSAGE_KEYS = [
   'channelRewardDeclined',
   'streamStarted',
   'streamEnded',
+  'host',
 ] as const satisfies readonly (keyof KickMessageTemplates)[];
 
 /** Toggle keys: one per logical event type */
@@ -55,6 +58,7 @@ export const KICK_EVENT_TOGGLE_KEYS = [
   'kicksGifted',
   'channelReward',
   'streamStatus',
+  'host',
 ] as const;
 
 export type KickEventToggleKey = (typeof KICK_EVENT_TOGGLE_KEYS)[number];
@@ -67,6 +71,7 @@ export interface KickMessageEnabled {
   kicksGifted?: boolean;
   channelReward?: boolean;
   streamStatus?: boolean;
+  host?: boolean;
 }
 
 export const DEFAULT_KICK_MESSAGE_ENABLED: Required<KickMessageEnabled> = {
@@ -77,6 +82,7 @@ export const DEFAULT_KICK_MESSAGE_ENABLED: Required<KickMessageEnabled> = {
   kicksGifted: true,
   channelReward: true,
   streamStatus: true,
+  host: true,
 };
 
 /** Icons for each template group */
@@ -88,6 +94,7 @@ export const TEMPLATE_GROUP_ICONS: Record<KickEventToggleKey, string> = {
   kicksGifted: '💰',
   channelReward: '✨',
   streamStatus: '🎬',
+  host: '📺',
 };
 
 /** Groups templates by toggle, for inline toggle+template UI */
@@ -99,6 +106,7 @@ export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: stri
   { toggleKey: 'kicksGifted', label: 'Kicks gifted', templateKeys: ['kicksGifted', 'kicksGiftedWithMessage'] },
   { toggleKey: 'channelReward', label: 'Channel reward', templateKeys: ['channelReward', 'channelRewardWithInput', 'channelRewardDeclined'] },
   { toggleKey: 'streamStatus', label: 'Stream started/ended', templateKeys: ['streamStarted', 'streamEnded'] },
+  { toggleKey: 'host', label: 'Host', templateKeys: ['host'] },
 ];
 
 /** Maps webhook event type to toggle key */
@@ -110,4 +118,5 @@ export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
   'kicks.gifted': 'kicksGifted',
   'channel.reward.redemption.updated': 'channelReward',
   'livestream.status.updated': 'streamStatus',
+  'channel.hosted': 'host',
 };

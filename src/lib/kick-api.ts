@@ -34,7 +34,7 @@ export const KICK_SCOPES = [
   'user:read',
 ].join(' ');
 
-/** All event types we subscribe to */
+/** All event types we subscribe to. Note: channel.hosted not yet in Kick API; handler ready when added. */
 export const KICK_EVENT_SUBSCRIPTIONS = [
   { name: 'channel.followed', version: 1 },
   { name: 'channel.subscription.new', version: 1 },

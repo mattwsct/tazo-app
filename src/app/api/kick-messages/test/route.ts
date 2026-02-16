@@ -10,6 +10,7 @@ import {
   getKicksGiftedResponse,
   getChannelRewardResponse,
   getStreamStatusResponse,
+  getHostResponse,
 } from '@/lib/kick-event-responses';
 import type { KickMessageTemplates } from '@/types/kick-messages';
 
@@ -25,10 +26,10 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
   giftSubSingle: { gifter: { username: 'TestGifter' }, giftees: [{ username: 'TestViewer' }] },
   giftSubMulti: { gifter: { username: 'TestGifter' }, giftees: [{}, {}, {}] },
   giftSubGeneric: { gifter: { username: 'TestGifter' }, giftees: [] },
-  kicksGifted: { sender: { username: 'TestViewer' }, gift: { amount: 100, name: 'Kicks' } },
+  kicksGifted: { sender: { username: 'TestViewer' }, gift: { amount: 100, name: 'High Five' } },
   kicksGiftedWithMessage: {
     sender: { username: 'TestViewer' },
-    gift: { amount: 100, name: 'Kicks', message: 'Great stream!' },
+    gift: { amount: 500, name: 'Rage Quit', message: 'Great stream!' },
   },
   channelReward: { redeemer: { username: 'TestViewer' }, reward: { title: 'Sample reward' } },
   channelRewardWithInput: {
@@ -41,8 +42,9 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
     reward: { title: 'Sample reward' },
     status: 'rejected',
   },
-  streamStarted: { status: 'live' },
-  streamEnded: { status: 'offline' },
+  streamStarted: { is_live: true },
+  streamEnded: { is_live: false },
+  host: { host: { username: 'HostChannel' }, viewers: 150 },
 };
 
 /** Build response functions for gift sub templates (lifetime subs depends on toggle) */
@@ -68,6 +70,7 @@ function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMe
   channelRewardDeclined: (p, t) => getChannelRewardResponse(p as never, t),
   streamStarted: (p, t) => getStreamStatusResponse(p as never, t),
   streamEnded: (p, t) => getStreamStatusResponse(p as never, t),
+  host: (p, t) => getHostResponse(p as never, t),
   };
 }
 
