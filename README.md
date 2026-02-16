@@ -732,6 +732,8 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. ` (5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
+**Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint.
+
 ### Chat commands
 
 Type these in Kick chat and the bot responds with your live overlay data:

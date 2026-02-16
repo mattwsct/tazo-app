@@ -3,7 +3,7 @@
 // Accepts speed and altitude updates
 
 import { NextRequest, NextResponse } from 'next/server';
-import { storeSpeed, storeAltitude } from '@/utils/stats-storage';
+import { storeSpeed, storeAltitude, storeHeartrate } from '@/utils/stats-storage';
 import { checkApiRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body = await request.json();
-    const { speed, altitude } = body;
+    const { speed, altitude, heartrate } = body;
 
     const promises: Promise<void>[] = [];
 
@@ -27,6 +27,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } else if (typeof speed === 'object' && speed !== null && typeof speed.speed === 'number') {
         const ts = (speed as { speed: number; timestamp?: number }).timestamp || Date.now();
         promises.push(storeSpeed((speed as { speed: number }).speed, ts));
+      }
+    }
+
+    // Heartrate update (number or object with bpm and timestamp)
+    if (heartrate !== undefined) {
+      if (typeof heartrate === 'number' && heartrate >= 0) {
+        promises.push(storeHeartrate(heartrate));
+      } else if (typeof heartrate === 'object' && heartrate !== null && typeof heartrate.bpm === 'number') {
+        const ts = (heartrate as { bpm: number; timestamp?: number }).timestamp || Date.now();
+        promises.push(storeHeartrate((heartrate as { bpm: number }).bpm, ts));
       }
     }
 

@@ -55,6 +55,11 @@ export default function AdminPage() {
   const [kickMessageEnabled, setKickMessageEnabled] = useState<KickMessageEnabled>(DEFAULT_KICK_MESSAGE_ENABLED);
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickGiftSubShowLifetimeSubs, setKickGiftSubShowLifetimeSubs] = useState(true);
+  const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
+  const [kickChatBroadcastLocationInterval, setKickChatBroadcastLocationInterval] = useState(5);
+  const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
+  const [kickChatBroadcastHeartrateMinBpm, setKickChatBroadcastHeartrateMinBpm] = useState(100);
+  const [kickChatBroadcastHeartrateVeryHighBpm, setKickChatBroadcastHeartrateVeryHighBpm] = useState(120);
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
@@ -195,6 +200,11 @@ export default function AdminPage() {
         if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
         if (d.alertSettings?.giftSubShowLifetimeSubs !== undefined) setKickGiftSubShowLifetimeSubs(d.alertSettings.giftSubShowLifetimeSubs);
+        if (d.alertSettings?.chatBroadcastLocation !== undefined) setKickChatBroadcastLocation(d.alertSettings.chatBroadcastLocation);
+        if (d.alertSettings?.chatBroadcastLocationIntervalMin != null) setKickChatBroadcastLocationInterval(d.alertSettings.chatBroadcastLocationIntervalMin);
+        if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
+        if (d.alertSettings?.chatBroadcastHeartrateMinBpm != null) setKickChatBroadcastHeartrateMinBpm(d.alertSettings.chatBroadcastHeartrateMinBpm);
+        if (d.alertSettings?.chatBroadcastHeartrateVeryHighBpm != null) setKickChatBroadcastHeartrateVeryHighBpm(d.alertSettings.chatBroadcastHeartrateVeryHighBpm);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -389,6 +399,11 @@ export default function AdminPage() {
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
       giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+      chatBroadcastLocation: kickChatBroadcastLocation,
+      chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
+      chatBroadcastHeartrate: kickChatBroadcastHeartrate,
+      chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
+      chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
     };
     setToast({ type: 'saving', message: 'Saving messages...' });
     try {
@@ -407,7 +422,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs]);
+  }, [kickMessages, kickMessageEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
 
   const scheduleKickMessagesSave = useCallback(() => {
     if (kickMessagesSaveTimeoutRef.current) clearTimeout(kickMessagesSaveTimeoutRef.current);
@@ -1290,6 +1305,98 @@ export default function AdminPage() {
                     >
                       {kickStreamTitleSaving ? 'Updating…' : 'Update'}
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chat broadcasts */}
+              <div className="setting-group">
+                <label className="group-label">Chat broadcasts</label>
+                <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  Location: periodic updates. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={kickChatBroadcastLocation}
+                        onChange={(e) => {
+                          setKickChatBroadcastLocation(e.target.checked);
+                          scheduleKickMessagesSave();
+                        }}
+                        className="checkbox-input"
+                      />
+                      <span>Send location updates</span>
+                    </label>
+                    {kickChatBroadcastLocation && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                        Min interval:
+                        <input
+                          type="number"
+                          className="text-input"
+                          value={kickChatBroadcastLocationInterval}
+                          onChange={(e) => {
+                            setKickChatBroadcastLocationInterval(Math.max(1, parseInt(e.target.value, 10) || 5));
+                            scheduleKickMessagesSave();
+                          }}
+                          min={1}
+                          max={60}
+                          style={{ width: 60 }}
+                        />
+                        min
+                      </label>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={kickChatBroadcastHeartrate}
+                        onChange={(e) => {
+                          setKickChatBroadcastHeartrate(e.target.checked);
+                          scheduleKickMessagesSave();
+                        }}
+                        className="checkbox-input"
+                      />
+                      <span>Heart rate warnings</span>
+                    </label>
+                    {kickChatBroadcastHeartrate && (
+                      <>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                          High:
+                          <input
+                            type="number"
+                            className="text-input"
+                            value={kickChatBroadcastHeartrateMinBpm}
+                            onChange={(e) => {
+                              setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100)));
+                              scheduleKickMessagesSave();
+                            }}
+                            min={0}
+                            max={250}
+                            style={{ width: 60 }}
+                          />
+                          BPM
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                          Very high:
+                          <input
+                            type="number"
+                            className="text-input"
+                            value={kickChatBroadcastHeartrateVeryHighBpm}
+                            onChange={(e) => {
+                              setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120)));
+                              scheduleKickMessagesSave();
+                            }}
+                            min={0}
+                            max={250}
+                            style={{ width: 60 }}
+                          />
+                          BPM
+                        </label>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

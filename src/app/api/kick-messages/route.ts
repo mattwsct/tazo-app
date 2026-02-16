@@ -10,7 +10,15 @@ const KICK_MESSAGES_KEY = 'kick_message_templates';
 const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
 const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 
-export interface KickAlertSettings {
+export interface KickChatBroadcastSettings {
+  chatBroadcastLocation?: boolean;
+  chatBroadcastLocationIntervalMin?: number;
+  chatBroadcastHeartrate?: boolean;
+  chatBroadcastHeartrateMinBpm?: number;
+  chatBroadcastHeartrateVeryHighBpm?: number;
+}
+
+export interface KickAlertSettings extends KickChatBroadcastSettings {
   minimumKicks?: number;
   giftSubShowLifetimeSubs?: boolean;
 }
@@ -18,6 +26,11 @@ export interface KickAlertSettings {
 export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   minimumKicks: 0,
   giftSubShowLifetimeSubs: true,
+  chatBroadcastLocation: false,
+  chatBroadcastLocationIntervalMin: 5,
+  chatBroadcastHeartrate: false,
+  chatBroadcastHeartrateMinBpm: 100,
+  chatBroadcastHeartrateVeryHighBpm: 120,
 };
 
 export const dynamic = 'force-dynamic';

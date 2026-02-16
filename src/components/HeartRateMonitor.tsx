@@ -25,6 +25,7 @@ const HEART_RATE_CONFIG = {
   MAX_RECONNECT_ATTEMPTS: 10,
   CONNECTION_DEBOUNCE: 30000, // 30 seconds - keep showing last BPM during brief socket drops before hiding
   COLOR_DEBOUNCE: 5000, // 5 seconds - debounce color changes to prevent rapid flashing
+  STATS_SEND_INTERVAL: 5000, // 5 seconds - throttle stats API updates
 } as const;
 
 // === 💗 HEART RATE MONITOR COMPONENT ===
@@ -58,6 +59,19 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   const connectionTimer = useRef<NodeJS.Timeout | null>(null);
   const colorDebounceTimer = useRef<NodeJS.Timeout | null>(null);
   const currentBpmRef = useRef(0);
+  const lastStatsSendTime = useRef(0);
+
+  const sendHeartrateToStats = useCallback((bpm: number, measuredAt?: number) => {
+    const now = Date.now();
+    if (now - lastStatsSendTime.current < HEART_RATE_CONFIG.STATS_SEND_INTERVAL) return;
+    lastStatsSendTime.current = now;
+    const ts = typeof measuredAt === 'number' ? measuredAt : now;
+    fetch('/api/stats/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ heartrate: { bpm, timestamp: ts } }),
+    }).catch(() => {});
+  }, []);
 
   // === 💗 DEBOUNCED CONNECTION STATE UPDATE ===
   const updateConnectionState = useCallback((isConnected: boolean) => {
@@ -219,7 +233,8 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
                 isConnected: true,
               });
 
-              // Heartrate is no longer sent to stats API - only displayed on overlay
+              // Send to stats API for chat broadcast (throttled in sendHeartrateToStats)
+              sendHeartrateToStats(newBpm, data.measured_at);
             }
           } catch (error) {
             HeartRateLogger.error('Failed to parse Pulsoid data:', error);
@@ -345,7 +360,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
         colorDebounceTimer.current = null;
       }
     };
-      }, [pulsoidToken, onConnected, updateConnectionState]); // Include onConnected dependency
+      }, [pulsoidToken, onConnected, updateConnectionState, sendHeartrateToStats]);
 
   // Don't render if not connected or no BPM data
   if (!heartRate.isConnected || heartRate.bpm <= 0) {
