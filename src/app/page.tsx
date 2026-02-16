@@ -232,15 +232,24 @@ export default function AdminPage() {
     async (key: keyof KickMessageEnabled, value: boolean) => {
       const next = { ...kickMessageEnabled, [key]: value };
       setKickMessageEnabled(next);
+      setToast({ type: 'saving', message: 'Saving...' });
       try {
-        await authenticatedFetch('/api/kick-messages', {
+        const r = await authenticatedFetch('/api/kick-messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enabled: next }),
         });
-      } catch {
+        if (r.ok) {
+          setToast({ type: 'saved', message: 'Event toggles saved!' });
+        } else {
+          const data = await r.json().catch(() => ({}));
+          throw new Error(data.error ?? 'Failed to save');
+        }
+      } catch (err) {
         setKickMessageEnabled((prev) => ({ ...prev, [key]: !value }));
+        setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
       }
+      setTimeout(() => setToast(null), 3000);
     },
     [kickMessageEnabled]
   );
