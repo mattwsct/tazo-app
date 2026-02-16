@@ -1643,31 +1643,6 @@ export default function AdminPage() {
                   >
                     Reset to defaults
                   </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={async () => {
-                      setToast({ type: 'saving', message: 'Saving...' });
-                      try {
-                        const r = await authenticatedFetch('/api/kick-messages', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ enabled: kickMessageEnabled }),
-                        });
-                        if (r.ok) {
-                          setToast({ type: 'saved', message: 'Toggles saved!' });
-                        } else {
-                          const d = await r.json().catch(() => ({}));
-                          throw new Error(d.error ?? 'Failed');
-                        }
-                      } catch (err) {
-                        setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed' });
-                      }
-                      setTimeout(() => setToast(null), 3000);
-                    }}
-                    title="Force-save current toggle state to KV"
-                  >
-                    Force save toggles
-                  </button>
                 </div>
                 </div>
               </section>
