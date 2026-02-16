@@ -187,7 +187,7 @@ export default function AdminPage() {
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const oauthResult = params.get('kick_oauth');
     if (oauthResult === 'success') {
-      setToast({ type: 'saved', message: 'Kick bot connected successfully!' });
+      setToast({ type: 'saved', message: 'Saved!' });
       setTimeout(() => setToast(null), 3000);
       window.history.replaceState({}, '', window.location.pathname);
     } else if (oauthResult === 'error') {
@@ -245,7 +245,7 @@ export default function AdminPage() {
           body: JSON.stringify({ enabled: next }),
         });
         if (r.ok) {
-          setToast({ type: 'saved', message: 'Event toggles saved!' });
+          setToast({ type: 'saved', message: 'Saved!' });
         } else {
           const data = await r.json().catch(() => ({}));
           throw new Error(data.error ?? 'Failed to save');
@@ -321,7 +321,7 @@ export default function AdminPage() {
       });
       if (r.ok) {
         lastPushedLocationRef.current = formatted;
-        setToast({ type: 'saved', message: 'Stream title auto-updated!' });
+        setToast({ type: 'saved', message: 'Saved!' });
         setTimeout(() => setToast(null), 2000);
       }
     } catch {
@@ -394,7 +394,7 @@ export default function AdminPage() {
       const data = await r.json();
       if (r.ok) {
         lastPushedLocationRef.current = kickStreamTitleLocation || null;
-        setToast({ type: 'saved', message: 'Stream title updated!' });
+        setToast({ type: 'saved', message: 'Saved!' });
       } else {
         setToast({ type: 'error', message: data.error ?? 'Failed to update' });
       }
@@ -408,7 +408,15 @@ export default function AdminPage() {
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
     enabled?: KickMessageEnabled;
-    alertSettings?: { minimumKicks?: number; giftSubShowLifetimeSubs?: boolean };
+    alertSettings?: Partial<{
+      minimumKicks: number;
+      giftSubShowLifetimeSubs: boolean;
+      chatBroadcastLocation: boolean;
+      chatBroadcastLocationIntervalMin: number;
+      chatBroadcastHeartrate: boolean;
+      chatBroadcastHeartrateMinBpm: number;
+      chatBroadcastHeartrateVeryHighBpm: number;
+    }>;
   }) => {
     const messages = overrides?.messages ?? kickMessages;
     const enabled = overrides?.enabled ?? kickMessageEnabled;
@@ -421,7 +429,7 @@ export default function AdminPage() {
       chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
       chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
     };
-    setToast({ type: 'saving', message: 'Saving messages...' });
+    setToast({ type: 'saving', message: 'Saving...' });
     try {
       const r = await authenticatedFetch('/api/kick-messages', {
         method: 'POST',
@@ -429,7 +437,7 @@ export default function AdminPage() {
         body: JSON.stringify({ messages, enabled, alertSettings }),
       });
       if (r.ok) {
-        setToast({ type: 'saved', message: 'Messages saved!' });
+        setToast({ type: 'saved', message: 'Saved!' });
       } else {
         const data = await r.json().catch(() => ({}));
         throw new Error(data.error ?? 'Failed to save');
@@ -440,11 +448,30 @@ export default function AdminPage() {
     setTimeout(() => setToast(null), 3000);
   }, [kickMessages, kickMessageEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
 
+  const kickAlertSettingsRef = useRef({
+    minimumKicks: kickMinimumKicks,
+    giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+    chatBroadcastLocation: kickChatBroadcastLocation,
+    chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
+    chatBroadcastHeartrate: kickChatBroadcastHeartrate,
+    chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
+    chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
+  });
+  kickAlertSettingsRef.current = {
+    minimumKicks: kickMinimumKicks,
+    giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+    chatBroadcastLocation: kickChatBroadcastLocation,
+    chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
+    chatBroadcastHeartrate: kickChatBroadcastHeartrate,
+    chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
+    chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
+  };
+
   const scheduleKickMessagesSave = useCallback(() => {
     if (kickMessagesSaveTimeoutRef.current) clearTimeout(kickMessagesSaveTimeoutRef.current);
     kickMessagesSaveTimeoutRef.current = setTimeout(() => {
       kickMessagesSaveTimeoutRef.current = null;
-      saveKickMessages();
+      saveKickMessages({ alertSettings: kickAlertSettingsRef.current });
     }, 1000);
   }, [saveKickMessages]);
 
@@ -468,7 +495,7 @@ export default function AdminPage() {
       });
       const data = await r.json().catch(() => ({}));
       if (r.ok) {
-        setToast({ type: 'saved', message: 'Test message sent to kick.com/tazo!' });
+        setToast({ type: 'saved', message: 'Test sent!' });
         setKickTestMessage('');
       } else {
         throw new Error(data.error ?? 'Failed to send');
@@ -495,7 +522,7 @@ export default function AdminPage() {
         });
         const data = await r.json().catch(() => ({}));
         if (r.ok) {
-          setToast({ type: 'saved', message: `${KICK_MESSAGE_LABELS[key]} test sent!` });
+          setToast({ type: 'saved', message: 'Test sent!' });
         } else {
           throw new Error(data.error ?? 'Failed to send');
         }
@@ -515,7 +542,7 @@ export default function AdminPage() {
       clearInterval(poll);
       window.removeEventListener('message', handler);
       if (e.data.error) setToast({ type: 'error', message: e.data.error });
-      else setToast({ type: 'saved', message: 'Kick connected!' });
+      else setToast({ type: 'saved', message: 'Saved!' });
       fetch('/api/kick-oauth/status', { credentials: 'include' }).then((r) => r.json()).then(setKickStatus);
       setTimeout(() => setToast(null), 3000);
     };
@@ -542,7 +569,7 @@ export default function AdminPage() {
     }
     
     setSettings(mergedSettings);
-    setToast({ type: 'saving', message: 'Saving settings...' });
+    setToast({ type: 'saving', message: 'Saving...' });
     setSyncStatus('syncing');
     
     try {
@@ -558,7 +585,7 @@ export default function AdminPage() {
         throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
       
-      setToast({ type: 'saved', message: 'Settings saved successfully!' });
+      setToast({ type: 'saved', message: 'Saved!' });
       setSyncStatus('connected');
       setTimeout(() => setToast(null), 2000);
     } catch (error) {
@@ -1133,7 +1160,7 @@ export default function AdminPage() {
                             const d = await r.json();
                             if (r.ok) {
                               setKickStatus({ connected: false });
-                              setToast({ type: 'saved', message: 'Kick disconnected' });
+                              setToast({ type: 'saved', message: 'Disconnected' });
                             } else {
                               setToast({ type: 'error', message: d.error ?? 'Failed' });
                             }
@@ -1162,7 +1189,7 @@ export default function AdminPage() {
                             });
                             const data = await r.json();
                             if (r.ok) {
-                              setToast({ type: 'saved', message: 'Re-subscribed to events!' });
+                              setToast({ type: 'saved', message: 'Re-subscribed!' });
                               fetch('/api/kick-oauth/status', { credentials: 'include' })
                                 .then((res) => res.json())
                                 .then(setKickStatus);
@@ -1307,8 +1334,9 @@ export default function AdminPage() {
                         type="checkbox"
                         checked={kickChatBroadcastLocation}
                         onChange={(e) => {
-                          setKickChatBroadcastLocation(e.target.checked);
-                          scheduleKickMessagesSave();
+                          const checked = e.target.checked;
+                          setKickChatBroadcastLocation(checked);
+                          saveKickMessages({ alertSettings: { chatBroadcastLocation: checked } });
                         }}
                         className="checkbox-input"
                       />
@@ -1324,8 +1352,9 @@ export default function AdminPage() {
                             className="text-input number-input"
                             value={kickChatBroadcastLocationInterval}
                             onChange={(e) => {
-                              setKickChatBroadcastLocationInterval(Math.max(1, parseInt(e.target.value, 10) || 5));
-                              scheduleKickMessagesSave();
+                              const val = Math.max(1, parseInt(e.target.value, 10) || 5);
+                              setKickChatBroadcastLocationInterval(val);
+                              saveKickMessages({ alertSettings: { chatBroadcastLocationIntervalMin: val } });
                             }}
                             min={1}
                             max={60}
@@ -1341,8 +1370,9 @@ export default function AdminPage() {
                         type="checkbox"
                         checked={kickChatBroadcastHeartrate}
                         onChange={(e) => {
-                          setKickChatBroadcastHeartrate(e.target.checked);
-                          scheduleKickMessagesSave();
+                          const checked = e.target.checked;
+                          setKickChatBroadcastHeartrate(checked);
+                          saveKickMessages({ alertSettings: { chatBroadcastHeartrate: checked } });
                         }}
                         className="checkbox-input"
                       />
@@ -1359,8 +1389,9 @@ export default function AdminPage() {
                               className="text-input number-input"
                               value={kickChatBroadcastHeartrateMinBpm}
                               onChange={(e) => {
-                                setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100)));
-                                scheduleKickMessagesSave();
+                                const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100));
+                                setKickChatBroadcastHeartrateMinBpm(val);
+                                saveKickMessages({ alertSettings: { chatBroadcastHeartrateMinBpm: val } });
                               }}
                               min={0}
                               max={250}
@@ -1374,8 +1405,9 @@ export default function AdminPage() {
                               className="text-input number-input"
                               value={kickChatBroadcastHeartrateVeryHighBpm}
                               onChange={(e) => {
-                                setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120)));
-                                scheduleKickMessagesSave();
+                                const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120));
+                                setKickChatBroadcastHeartrateVeryHighBpm(val);
+                                saveKickMessages({ alertSettings: { chatBroadcastHeartrateVeryHighBpm: val } });
                               }}
                               min={0}
                               max={250}
@@ -1416,7 +1448,7 @@ export default function AdminPage() {
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ resetHrState: true }),
                             });
-                            setToast({ type: 'saved', message: 'HR state reset — next crossing will send' });
+                            setToast({ type: 'saved', message: 'Saved!' });
                             setTimeout(() => setToast(null), 3000);
                             const r = await fetch('/api/cron/kick-chat-broadcast/status', { credentials: 'include' });
                             const data = await r.json();
