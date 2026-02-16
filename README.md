@@ -708,13 +708,15 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
    - Create or use your existing app
    - Add **Redirect URL**: `https://app.tazo.wtf/api/kick-oauth/callback` (or your domain)
    - Enable **Webhooks** and set URL: `https://app.tazo.wtf/api/webhooks/kick`
-   - Ensure scopes: `chat:write`, `events:subscribe`, `channel:rewards:read`
+   - Ensure scopes: `chat:write`, `events:subscribe`, `channel:read`, `channel:write`, `channel:rewards:read`, `channel:rewards:write`, `kicks:read`, `moderation:ban`, `user:read`
 
 3. **Deploy** to Vercel so the webhook endpoint is live.
 
 4. **Connect**: Log into admin panel → **Kick Bot** tab → **Connect Kick**. Authorize with your Kick account. The bot will auto-subscribe to events and start responding.
 
 5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
+
+6. **API Playground**: The **Kick API Playground** in the Kick Bot tab lets you call any Kick API endpoint — channel (get/patch), livestreams, rewards, redemptions (accept/reject), leaderboard, categories, moderation (ban/unban), users, subscriptions. Reconnect Kick to grant new scopes if prompted.
 
 ### Events & Responses
 
@@ -727,7 +729,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Kicks gifted | "{sender} sent {amount} {name}! 💰" |
 | Channel reward | "{redeemer} redeemed {title}! ✨" |
 
-Edit templates in the **Kick Bot** tab. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
+Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable follow, sub, resub, gift sub, Kicks gifted, and channel reward alerts individually. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
 ### Chat commands
 
@@ -746,6 +748,10 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 - **Stream title from location** — set title to current city/country
 - **More commands** — `!speed`, `!altitude`, `!forecast`, `!map`
+- **Stream started/ended** — subscribe to `livestream.status.updated`, add templates
+- **Top gifter** — no webhook; would need leaderboard polling (GET /kicks/leaderboard) or Kick to add event
+- **Gift sub milestone** — special message when gift count ≥ threshold (e.g. "X gifted 10 subs!")
+- **Moderation banned** — subscribe to `moderation.banned`, add template
 
 ### Troubleshooting
 

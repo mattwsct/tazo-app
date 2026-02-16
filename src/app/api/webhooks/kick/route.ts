@@ -18,11 +18,16 @@ import {
   parseKickChatMessage,
   handleKickChatCommand,
 } from '@/lib/kick-chat-commands';
-import { DEFAULT_KICK_MESSAGES } from '@/types/kick-messages';
-import type { KickMessageTemplates } from '@/types/kick-messages';
+import {
+  DEFAULT_KICK_MESSAGES,
+  DEFAULT_KICK_MESSAGE_ENABLED,
+  EVENT_TYPE_TO_TOGGLE,
+} from '@/types/kick-messages';
+import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-messages';
 
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_MESSAGES_KEY = 'kick_message_templates';
+const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const WEBHOOK_LOG_MAX = 20;
@@ -152,8 +157,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const storedTemplates = await kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY);
+  const [storedTemplates, storedEnabled] = await Promise.all([
+    kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
+    kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
+  ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
+  const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
+
+  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
+  if (toggleKey && enabled[toggleKey] === false) {
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
 
   let message: string | null = null;
   switch (eventType) {

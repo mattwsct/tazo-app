@@ -39,3 +39,43 @@ export const KICK_MESSAGE_KEYS = [
   'channelRewardWithInput',
   'channelRewardDeclined',
 ] as const satisfies readonly (keyof KickMessageTemplates)[];
+
+/** Toggle keys: one per logical event type (Follow, New sub, Resub, Gift subs, Kicks gifted, Channel reward) */
+export const KICK_EVENT_TOGGLE_KEYS = [
+  'follow',
+  'newSub',
+  'resub',
+  'giftSub',
+  'kicksGifted',
+  'channelReward',
+] as const;
+
+export type KickEventToggleKey = (typeof KICK_EVENT_TOGGLE_KEYS)[number];
+
+export interface KickMessageEnabled {
+  follow?: boolean;
+  newSub?: boolean;
+  resub?: boolean;
+  giftSub?: boolean;
+  kicksGifted?: boolean;
+  channelReward?: boolean;
+}
+
+export const DEFAULT_KICK_MESSAGE_ENABLED: Required<KickMessageEnabled> = {
+  follow: true,
+  newSub: true,
+  resub: true,
+  giftSub: true,
+  kicksGifted: true,
+  channelReward: true,
+};
+
+/** Maps webhook event type to toggle key */
+export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
+  'channel.followed': 'follow',
+  'channel.subscription.new': 'newSub',
+  'channel.subscription.renewal': 'resub',
+  'channel.subscription.gifts': 'giftSub',
+  'kicks.gifted': 'kicksGifted',
+  'channel.reward.redemption.updated': 'channelReward',
+};

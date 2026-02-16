@@ -4,8 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
-import { DEFAULT_KICK_MESSAGES, KICK_MESSAGE_KEYS } from '@/types/kick-messages';
-import type { KickMessageTemplates } from '@/types/kick-messages';
+import {
+  DEFAULT_KICK_MESSAGES,
+  KICK_MESSAGE_KEYS,
+  KICK_EVENT_TOGGLE_KEYS,
+  DEFAULT_KICK_MESSAGE_ENABLED,
+} from '@/types/kick-messages';
+import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
 import '@/styles/admin.css';
 
 const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
@@ -20,6 +25,15 @@ const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   channelReward: 'Channel reward',
   channelRewardWithInput: 'Channel reward (with input)',
   channelRewardDeclined: 'Channel reward (declined)',
+};
+
+const KICK_TOGGLE_LABELS: Record<keyof KickMessageEnabled, string> = {
+  follow: 'Follow alerts',
+  newSub: 'New sub alerts',
+  resub: 'Resub alerts',
+  giftSub: 'Gift sub alerts',
+  kicksGifted: 'Kicks gifted alerts',
+  channelReward: 'Channel reward alerts',
 };
 
 export default function AdminPage() {
@@ -51,9 +65,12 @@ export default function AdminPage() {
     verified: boolean;
   } | null>(null);
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
+  const [kickMessageEnabled, setKickMessageEnabled] = useState<KickMessageEnabled>(DEFAULT_KICK_MESSAGE_ENABLED);
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
+  const [kickApiResult, setKickApiResult] = useState<{ action: string; data: unknown } | null>(null);
+  const [kickApiLoading, setKickApiLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -179,7 +196,10 @@ export default function AdminPage() {
       .catch(() => setKickStatus({ connected: false }));
     fetch('/api/kick-messages', { credentials: 'include' })
       .then((r) => r.json())
-      .then(setKickMessages)
+      .then((d) => {
+        if (d.messages) setKickMessages({ ...DEFAULT_KICK_MESSAGES, ...d.messages });
+        if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
+      })
       .catch(() => {});
     fetch('/api/kick-webhook-log', { credentials: 'include' })
       .then((r) => r.json())
@@ -194,13 +214,54 @@ export default function AdminPage() {
     setKickMessages((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const handleKickToggleChange = useCallback(
+    async (key: keyof KickMessageEnabled, value: boolean) => {
+      const next = { ...kickMessageEnabled, [key]: value };
+      setKickMessageEnabled(next);
+      try {
+        await authenticatedFetch('/api/kick-messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: next }),
+        });
+      } catch {
+        setKickMessageEnabled((prev) => ({ ...prev, [key]: !value }));
+      }
+    },
+    [kickMessageEnabled]
+  );
+
+  const kickApiCall = useCallback(
+    async (action: string, params: Record<string, unknown> = {}) => {
+      setKickApiLoading(true);
+      setKickApiResult(null);
+      try {
+        const r = await authenticatedFetch('/api/kick-api', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, ...params }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setKickApiResult({ action, data });
+        } else {
+          setKickApiResult({ action, data: { error: data.error ?? 'Request failed' } });
+        }
+      } catch {
+        setKickApiResult({ action, data: { error: 'Network error' } });
+      }
+      setKickApiLoading(false);
+    },
+    []
+  );
+
   const saveKickMessages = useCallback(async () => {
     setToast({ type: 'saving', message: 'Saving messages...' });
     try {
       const r = await authenticatedFetch('/api/kick-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(kickMessages),
+        body: JSON.stringify({ messages: kickMessages, enabled: kickMessageEnabled }),
       });
       if (r.ok) {
         setToast({ type: 'saved', message: 'Messages saved!' });
@@ -212,7 +273,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages]);
+  }, [kickMessages, kickMessageEnabled]);
 
   const sendKickTestMessage = useCallback(async () => {
     if (!kickTestMessage.trim()) return;
@@ -1041,6 +1102,21 @@ export default function AdminPage() {
               {/* Message templates */}
               <div className="setting-group">
                 <label className="group-label">Chat message templates</label>
+                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  Toggle which events trigger a chat message:
+                </p>
+                <div className="kick-toggles-row" style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px 20px' }}>
+                  {KICK_EVENT_TOGGLE_KEYS.map((key) => (
+                    <label key={key} className="kick-toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={kickMessageEnabled[key] !== false}
+                        onChange={(e) => handleKickToggleChange(key, e.target.checked)}
+                      />
+                      {KICK_TOGGLE_LABELS[key]}
+                    </label>
+                  ))}
+                </div>
                 <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
                   Use placeholders like {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
                 </p>
@@ -1081,6 +1157,131 @@ export default function AdminPage() {
                   >
                     Reset to defaults
                   </button>
+                </div>
+
+                {/* Suggested additions */}
+                <details className="kick-suggested-additions" style={{ marginTop: '20px', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 500, opacity: 0.9 }}>Possible future message types</summary>
+                  <ul style={{ margin: '12px 0 0 0', paddingLeft: '20px', opacity: 0.9, fontSize: '0.9rem', lineHeight: 1.7 }}>
+                    <li><strong>Stream started/ended</strong> — Kick has <code>livestream.status.updated</code>. Add subscription + templates for &quot;Stream starting!&quot; / &quot;Thanks for watching!&quot;</li>
+                    <li><strong>Top gifter (weekly/monthly/all-time)</strong> — No dedicated webhook. Would need leaderboard polling (GET /kicks/leaderboard) or a Kick feature request.</li>
+                    <li><strong>Gift sub milestone</strong> — &quot;X gifted 10 subs!&quot; — use existing <code>channel.subscription.gifts</code> and add logic when count ≥ threshold.</li>
+                    <li><strong>Moderation banned</strong> — Kick has <code>moderation.banned</code>. e.g. &quot;{'{banned_user}'} was banned. Reason: {'{reason}'}&quot;</li>
+                    <li><strong>First-time chatter</strong> — No webhook; would need to track chatters yourself from <code>chat.message.sent</code>.</li>
+                    <li><strong>Viewer milestone</strong> — e.g. &quot;100 viewers!&quot; — would need livestream viewer count polling.</li>
+                  </ul>
+                </details>
+              </div>
+
+              {/* Kick API Playground */}
+              <div className="setting-group">
+                <label className="group-label">Kick API Playground</label>
+                <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
+                  Call Kick API endpoints. Reconnect to grant new scopes (channel:write, channel:rewards:write, kicks:read, moderation:ban) if needed.
+                </p>
+                {kickApiLoading && <p style={{ opacity: 0.8, fontSize: '0.9rem' }}>Loading…</p>}
+                {kickApiResult && (
+                  <pre className="kick-api-result" style={{ marginBottom: '16px', padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: 8, fontSize: '0.8rem', overflow: 'auto', maxHeight: 300 }}>
+                    {JSON.stringify(kickApiResult.data, null, 2)}
+                  </pre>
+                )}
+
+                <div className="kick-api-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Channel */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Channel</summary>
+                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-end' }}>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getChannel')} disabled={!kickStatus?.connected || kickApiLoading}>GET Channel</button>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <input type="text" className="text-input" placeholder="Stream title" id="patch-title" style={{ width: 180 }} />
+                        <input type="number" className="text-input" placeholder="Category ID" id="patch-category" style={{ width: 100 }} />
+                        <input type="text" className="text-input" placeholder="Tags (comma)" id="patch-tags" style={{ width: 140 }} />
+                        <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('patchChannel', { body: { stream_title: (document.getElementById('patch-title') as HTMLInputElement)?.value || undefined, category_id: parseInt((document.getElementById('patch-category') as HTMLInputElement)?.value || '0') || undefined, custom_tags: (document.getElementById('patch-tags') as HTMLInputElement)?.value?.split(',').map((t) => t.trim()).filter(Boolean) || undefined } })} disabled={!kickStatus?.connected || kickApiLoading}>PATCH Channel</button>
+                      </div>
+                    </div>
+                  </details>
+
+                  {/* Livestreams */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Livestreams</summary>
+                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getLivestreams')} disabled={!kickStatus?.connected || kickApiLoading}>GET Livestreams</button>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getLivestreamStats')} disabled={!kickStatus?.connected || kickApiLoading}>GET Stats</button>
+                    </div>
+                  </details>
+
+                  {/* Rewards */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Channel Rewards</summary>
+                    <div style={{ marginTop: '12px' }}>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getRewards')} disabled={!kickStatus?.connected || kickApiLoading}>GET Rewards</button>
+                    </div>
+                  </details>
+
+                  {/* Redemptions */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Reward Redemptions</summary>
+                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                      <select id="redemption-status" className="text-input" style={{ width: 120 }}>
+                        <option value="pending">pending</option>
+                        <option value="accepted">accepted</option>
+                        <option value="rejected">rejected</option>
+                      </select>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getRedemptions', { query: { status: (document.getElementById('redemption-status') as HTMLSelectElement)?.value || 'pending' } })} disabled={!kickStatus?.connected || kickApiLoading}>GET Redemptions</button>
+                      <input type="text" className="text-input" placeholder="Redemption IDs (comma)" id="redemption-ids" style={{ width: 200 }} />
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('acceptRedemptions', { ids: (document.getElementById('redemption-ids') as HTMLInputElement)?.value?.split(',').map((i) => i.trim()).filter(Boolean) })} disabled={!kickStatus?.connected || kickApiLoading}>Accept</button>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('rejectRedemptions', { ids: (document.getElementById('redemption-ids') as HTMLInputElement)?.value?.split(',').map((i) => i.trim()).filter(Boolean) })} disabled={!kickStatus?.connected || kickApiLoading}>Reject</button>
+                    </div>
+                  </details>
+
+                  {/* Leaderboard */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Kicks Leaderboard</summary>
+                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getLeaderboard', { query: { top: 10 } })} disabled={!kickStatus?.connected || kickApiLoading}>GET Leaderboard (top 10)</button>
+                    </div>
+                  </details>
+
+                  {/* Categories */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Categories</summary>
+                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input type="text" className="text-input" placeholder="Search by name" id="category-name" style={{ width: 160 }} />
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getCategories', { query: { name: (document.getElementById('category-name') as HTMLInputElement)?.value || '', limit: 20 } })} disabled={!kickStatus?.connected || kickApiLoading}>Search</button>
+                      <input type="number" className="text-input" placeholder="Category ID" id="category-id" style={{ width: 90 }} />
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getCategory', { category_id: (document.getElementById('category-id') as HTMLInputElement)?.value })} disabled={!kickStatus?.connected || kickApiLoading}>GET by ID</button>
+                    </div>
+                  </details>
+
+                  {/* Moderation */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Moderation (Ban / Unban)</summary>
+                    <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                      <input type="number" className="text-input" placeholder="User ID to ban" id="ban-user-id" style={{ width: 110 }} />
+                      <input type="number" className="text-input" placeholder="Duration (min, omit=permanent)" id="ban-duration" style={{ width: 90 }} />
+                      <input type="text" className="text-input" placeholder="Reason" id="ban-reason" style={{ width: 120 }} />
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('postBan', { body: { user_id: parseInt((document.getElementById('ban-user-id') as HTMLInputElement)?.value || '0'), duration: parseInt((document.getElementById('ban-duration') as HTMLInputElement)?.value || '0') || undefined, reason: (document.getElementById('ban-reason') as HTMLInputElement)?.value || undefined } })} disabled={!kickStatus?.connected || kickApiLoading}>Ban</button>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('deleteBan', { body: { user_id: parseInt((document.getElementById('ban-user-id') as HTMLInputElement)?.value || '0') } })} disabled={!kickStatus?.connected || kickApiLoading}>Unban</button>
+                    </div>
+                    <p style={{ marginTop: 8, fontSize: '0.8rem', opacity: 0.8 }}>Broadcaster ID is inferred from your token. Get user_id from channel/chat or users API.</p>
+                  </details>
+
+                  {/* Users */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Users</summary>
+                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="text" className="text-input" placeholder="User IDs (comma)" id="user-ids" style={{ width: 180 }} />
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getUsers', { query: { id: (document.getElementById('user-ids') as HTMLInputElement)?.value?.split(',').map((i) => i.trim()).filter(Boolean) } })} disabled={!kickStatus?.connected || kickApiLoading}>GET Users</button>
+                    </div>
+                  </details>
+
+                  {/* Subscriptions */}
+                  <details style={{ padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Event Subscriptions</summary>
+                    <div style={{ marginTop: '12px' }}>
+                      <button className="btn btn-secondary btn-small" onClick={() => kickApiCall('getSubscriptions')} disabled={!kickStatus?.connected || kickApiLoading}>GET Subscriptions</button>
+                    </div>
+                  </details>
                 </div>
               </div>
             </section>

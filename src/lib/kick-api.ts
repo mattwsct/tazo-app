@@ -21,12 +21,17 @@ BEbZ5jgB8s8ReQV8H+MkuffjdAj3ajDDX3DOJMIut1lBrUVD1AaSrGCKHooWoL2e
 twIDAQAB
 -----END PUBLIC KEY-----`;
 
-/** Scopes needed for bot: chat, events, channel rewards, channel metadata */
+/** Scopes for full API access (chat, events, channel, rewards, moderation, kicks) */
 export const KICK_SCOPES = [
   'chat:write',
   'events:subscribe',
-  'channel:rewards:read',
   'channel:read',
+  'channel:write',
+  'channel:rewards:read',
+  'channel:rewards:write',
+  'kicks:read',
+  'moderation:ban',
+  'user:read',
 ].join(' ');
 
 /** All event types we subscribe to */
