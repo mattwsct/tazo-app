@@ -1383,11 +1383,11 @@ body {
   accent-color: #3b82f6;
 }
 
-/* Number inputs - readable digits */
+/* Number inputs - readable digits, enough width for 3 digits + spinner */
 .number-input {
-  min-width: 72px;
-  width: 72px;
-  padding: 10px 12px;
+  min-width: 96px;
+  width: 96px;
+  padding: 10px 28px 10px 12px;
   font-size: 1.05rem;
   font-weight: 600;
   text-align: center;
@@ -1407,12 +1407,27 @@ body {
 .number-input::-webkit-inner-spin-button,
 .number-input::-webkit-outer-spin-button {
   opacity: 1;
+  margin-left: 4px;
 }
 
 /* Stream title location preview - readable */
 .stream-title-location-preview {
   color: #ffffff !important;
   letter-spacing: 0.02em;
+}
+
+/* Kick message group cards - match overlay box style */
+.kick-message-card {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.kick-message-card:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .checkbox-text {

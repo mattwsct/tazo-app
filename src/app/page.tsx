@@ -1216,7 +1216,7 @@ export default function AdminPage() {
                   <div>
                     <label style={{ fontSize: '0.85rem', opacity: 0.9, display: 'block', marginBottom: '4px' }}>Location</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         <div
                           className="stream-title-location-preview"
                           style={{
@@ -1228,23 +1228,23 @@ export default function AdminPage() {
                             minHeight: 48,
                             display: 'flex',
                             alignItems: 'center',
-                            flex: 1,
-                            minWidth: 180,
                             color: '#ffffff',
                           }}
                         >
                           {kickStreamTitleLocation || <span style={{ opacity: 0.5 }}>No location data</span>}
                         </div>
-                        <select
-                          className="text-input"
+                        <div>
+                          <label style={{ fontSize: '0.85rem', opacity: 0.9, display: 'block', marginBottom: '6px' }}>Display</label>
+                          <RadioGroup
                           value={kickStreamTitleLocationDisplay}
-                          onChange={(e) => setKickStreamTitleLocationDisplay(e.target.value as StreamTitleLocationDisplay)}
-                          style={{ width: 'auto', minWidth: 140 }}
-                        >
-                          <option value="city">City</option>
-                          <option value="state">State</option>
-                          <option value="country">Country</option>
-                        </select>
+                          onChange={(v) => setKickStreamTitleLocationDisplay(v as StreamTitleLocationDisplay)}
+                          options={[
+                            { value: 'city', label: 'City', icon: '🏙️' },
+                            { value: 'state', label: 'State', icon: '🗺️' },
+                            { value: 'country', label: 'Country', icon: '🌍' },
+                          ]}
+                        />
+                        </div>
                       </div>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>
                         <input
@@ -1291,22 +1291,40 @@ export default function AdminPage() {
                 <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
                   Location: periodic updates. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={kickChatBroadcastLocation}
-                        onChange={(e) => {
-                          setKickChatBroadcastLocation(e.target.checked);
-                          scheduleKickMessagesSave();
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span>Send location updates</span>
-                    </label>
+                <div className="radio-group segmented" style={{ marginBottom: '12px' }}>
+                  <button
+                    type="button"
+                    className={`radio-option ${kickChatBroadcastLocation ? 'active' : ''}`}
+                    onClick={() => {
+                      setKickChatBroadcastLocation(!kickChatBroadcastLocation);
+                      scheduleKickMessagesSave();
+                    }}
+                    style={{ flex: '1 1 auto', minWidth: 120 }}
+                  >
+                    <span className="radio-icon" aria-hidden="true">📍</span>
+                    <div className="radio-content">
+                      <span className="radio-label">Location</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className={`radio-option ${kickChatBroadcastHeartrate ? 'active' : ''}`}
+                    onClick={() => {
+                      setKickChatBroadcastHeartrate(!kickChatBroadcastHeartrate);
+                      scheduleKickMessagesSave();
+                    }}
+                    style={{ flex: '1 1 auto', minWidth: 120 }}
+                  >
+                    <span className="radio-icon" aria-hidden="true">❤️</span>
+                    <div className="radio-content">
+                      <span className="radio-label">Heart rate</span>
+                    </div>
+                  </button>
+                </div>
+                {(kickChatBroadcastLocation || kickChatBroadcastHeartrate) && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
                     {kickChatBroadcastLocation && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem', opacity: 0.95 }}>
                         Min interval:
                         <input
                           type="number"
@@ -1322,23 +1340,9 @@ export default function AdminPage() {
                         min
                       </label>
                     )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={kickChatBroadcastHeartrate}
-                        onChange={(e) => {
-                          setKickChatBroadcastHeartrate(e.target.checked);
-                          scheduleKickMessagesSave();
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span>Heart rate warnings</span>
-                    </label>
                     {kickChatBroadcastHeartrate && (
-                      <>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.95 }}>
                           High:
                           <input
                             type="number"
@@ -1353,7 +1357,7 @@ export default function AdminPage() {
                           />
                           BPM
                         </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.9 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', opacity: 0.95 }}>
                           Very high:
                           <input
                             type="number"
@@ -1368,10 +1372,10 @@ export default function AdminPage() {
                           />
                           BPM
                         </label>
-                      </>
+                      </div>
                     )}
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Test Message */}
@@ -1407,19 +1411,29 @@ export default function AdminPage() {
                 <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
                   Toggle and edit. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
                 </p>
-                <div className="kick-messages-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="kick-messages-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', marginBottom: '16px' }}>
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
-                    <div key={group.toggleKey} className="kick-message-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', minWidth: 140 }}>
-                          <input
-                            type="checkbox"
-                            checked={kickMessageEnabled[group.toggleKey] !== false}
-                            onChange={(e) => handleKickToggleChange(group.toggleKey, e.target.checked)}
-                            className="checkbox-input"
-                          />
-                          <strong>{group.label}</strong>
-                        </label>
+                    <button
+                      key={group.toggleKey}
+                      type="button"
+                      className={`radio-option ${kickMessageEnabled[group.toggleKey] !== false ? 'active' : ''}`}
+                      onClick={() => handleKickToggleChange(group.toggleKey, !(kickMessageEnabled[group.toggleKey] !== false))}
+                      style={{ minHeight: 56 }}
+                    >
+                      <span className="radio-icon" aria-hidden="true">
+                        {group.toggleKey === 'follow' ? '💚' : group.toggleKey === 'newSub' ? '🎉' : group.toggleKey === 'resub' ? '💪' : group.toggleKey === 'giftSub' ? '🎁' : group.toggleKey === 'kicksGifted' ? '💰' : group.toggleKey === 'channelReward' ? '✨' : '🎬'}
+                      </span>
+                      <div className="radio-content">
+                        <span className="radio-label">{group.label}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {TEMPLATE_GROUP_CONFIG.map((group) => (
+                    <div key={group.toggleKey} className="kick-message-group kick-message-card" style={{ opacity: kickMessageEnabled[group.toggleKey] !== false ? 1 : 0.6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                        <strong style={{ fontSize: '0.95rem' }}>{group.label}</strong>
                         {group.toggleKey === 'giftSub' && (
                           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>
                             <input
@@ -1451,8 +1465,8 @@ export default function AdminPage() {
                         )}
                       </div>
                       {group.templateKeys.map((key) => (
-                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '28px' }}>
-                          <span style={{ width: 140, fontSize: '0.9rem', opacity: 0.9 }}>{KICK_MESSAGE_LABELS[key]}</span>
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <span style={{ width: 140, fontSize: '0.9rem', opacity: 0.9, flexShrink: 0 }}>{KICK_MESSAGE_LABELS[key]}</span>
                           <input
                             type="text"
                             className="text-input"
