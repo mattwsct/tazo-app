@@ -689,10 +689,10 @@ body {
     max-width: calc(50% - 0.125rem);
   }
 
-  /* Chat broadcasts - stack checkboxes on mobile */
-  .broadcast-checkboxes {
-    flex-direction: column;
-    gap: 0.5rem;
+  /* Chat broadcasts - compact on mobile */
+  .broadcast-option-detail {
+    margin-left: 1rem;
+    padding: 0.625rem 0.75rem;
   }
 
   .broadcast-checkbox-item {
@@ -1474,12 +1474,24 @@ body {
   font-size: 0.95rem;
 }
 
-/* Chat broadcast checkboxes - clearer than pill toggles */
-.broadcast-checkboxes {
+/* Chat broadcast - each option with its settings directly below */
+.broadcast-options-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.5rem;
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.broadcast-option-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.broadcast-option-detail {
+  margin-left: 2rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
 }
 
 .broadcast-checkbox-item {

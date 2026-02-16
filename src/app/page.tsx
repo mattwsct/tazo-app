@@ -1285,89 +1285,93 @@ export default function AdminPage() {
                   <p className="group-label group-description">
                     Location: periodic updates. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
                   </p>
-                <div className="broadcast-checkboxes">
-                  <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={kickChatBroadcastLocation}
-                      onChange={(e) => {
-                        setKickChatBroadcastLocation(e.target.checked);
-                        scheduleKickMessagesSave();
-                      }}
-                      className="checkbox-input"
-                    />
-                    <span className="radio-icon" aria-hidden="true">📍</span>
-                    <span>Location</span>
-                  </label>
-                  <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={kickChatBroadcastHeartrate}
-                      onChange={(e) => {
-                        setKickChatBroadcastHeartrate(e.target.checked);
-                        scheduleKickMessagesSave();
-                      }}
-                      className="checkbox-input"
-                    />
-                    <span className="radio-icon" aria-hidden="true">❤️</span>
-                    <span>Heart rate</span>
-                  </label>
-                </div>
-                {(kickChatBroadcastLocation || kickChatBroadcastHeartrate) && (
-                  <div className="form-stack broadcast-options-box">
+                <div className="broadcast-options-list">
+                  <div className="broadcast-option-block">
+                    <label className="checkbox-label-row broadcast-checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={kickChatBroadcastLocation}
+                        onChange={(e) => {
+                          setKickChatBroadcastLocation(e.target.checked);
+                          scheduleKickMessagesSave();
+                        }}
+                        className="checkbox-input"
+                      />
+                      <span className="radio-icon" aria-hidden="true">📍</span>
+                      <span>Location</span>
+                    </label>
                     {kickChatBroadcastLocation && (
-                      <label className="checkbox-label-row-sm">
-                        Min interval:
-                        <input
-                          type="number"
-                          className="text-input number-input"
-                          value={kickChatBroadcastLocationInterval}
-                          onChange={(e) => {
-                            setKickChatBroadcastLocationInterval(Math.max(1, parseInt(e.target.value, 10) || 5));
-                            scheduleKickMessagesSave();
-                          }}
-                          min={1}
-                          max={60}
-                        />
-                        min
-                      </label>
-                    )}
-                    {kickChatBroadcastHeartrate && (
-                      <div className="form-row-wrap">
+                      <div className="broadcast-option-detail">
                         <label className="checkbox-label-row-sm">
-                          High:
+                          Min interval:
                           <input
                             type="number"
                             className="text-input number-input"
-                            value={kickChatBroadcastHeartrateMinBpm}
+                            value={kickChatBroadcastLocationInterval}
                             onChange={(e) => {
-                              setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100)));
+                              setKickChatBroadcastLocationInterval(Math.max(1, parseInt(e.target.value, 10) || 5));
                               scheduleKickMessagesSave();
                             }}
-                            min={0}
-                            max={250}
+                            min={1}
+                            max={60}
                           />
-                          BPM
-                        </label>
-                        <label className="checkbox-label-row-sm">
-                          Very high:
-                          <input
-                            type="number"
-                            className="text-input number-input"
-                            value={kickChatBroadcastHeartrateVeryHighBpm}
-                            onChange={(e) => {
-                              setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120)));
-                              scheduleKickMessagesSave();
-                            }}
-                            min={0}
-                            max={250}
-                          />
-                          BPM
+                          min
                         </label>
                       </div>
                     )}
                   </div>
-                )}
+                  <div className="broadcast-option-block">
+                    <label className="checkbox-label-row broadcast-checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={kickChatBroadcastHeartrate}
+                        onChange={(e) => {
+                          setKickChatBroadcastHeartrate(e.target.checked);
+                          scheduleKickMessagesSave();
+                        }}
+                        className="checkbox-input"
+                      />
+                      <span className="radio-icon" aria-hidden="true">❤️</span>
+                      <span>Heart rate</span>
+                    </label>
+                    {kickChatBroadcastHeartrate && (
+                      <div className="broadcast-option-detail">
+                        <div className="form-row-wrap">
+                          <label className="checkbox-label-row-sm">
+                            High:
+                            <input
+                              type="number"
+                              className="text-input number-input"
+                              value={kickChatBroadcastHeartrateMinBpm}
+                              onChange={(e) => {
+                                setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100)));
+                                scheduleKickMessagesSave();
+                              }}
+                              min={0}
+                              max={250}
+                            />
+                            BPM
+                          </label>
+                          <label className="checkbox-label-row-sm">
+                            Very high:
+                            <input
+                              type="number"
+                              className="text-input number-input"
+                              value={kickChatBroadcastHeartrateVeryHighBpm}
+                              onChange={(e) => {
+                                setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120)));
+                                scheduleKickMessagesSave();
+                              }}
+                              min={0}
+                              max={250}
+                            />
+                            BPM
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 </div>
               </section>
 
