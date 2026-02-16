@@ -1499,6 +1499,42 @@ body {
   padding: 0.5rem 0;
 }
 
+.broadcast-status-block {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+.broadcast-status-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.broadcast-status-details {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.broadcast-status-details p {
+  margin: 0.25rem 0;
+}
+
+.broadcast-status-warning {
+  color: #fbbf24;
+}
+
+.broadcast-status-ok {
+  color: #34d399;
+}
+
+.broadcast-status-note {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+}
+
 .checkbox-text {
   font-size: 15px;
   font-weight: 600;

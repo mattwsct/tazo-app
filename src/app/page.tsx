@@ -65,6 +65,11 @@ export default function AdminPage() {
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
+  const [kickBroadcastStatus, setKickBroadcastStatus] = useState<{
+    heartRate?: { currentBpm: number; age: string; hasData: boolean; state: string; reason: string; wouldSendMessage: boolean };
+    kick?: { hasTokens: boolean };
+    cron?: { runsEvery: string; note: string };
+  } | null>(null);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('state');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
@@ -1381,6 +1386,73 @@ export default function AdminPage() {
                       </div>
                     )}
                   </div>
+                </div>
+                <div className="broadcast-status-block">
+                  <div className="broadcast-status-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={async () => {
+                        try {
+                          const r = await fetch('/api/cron/kick-chat-broadcast/status', { credentials: 'include' });
+                          const data = await r.json();
+                          setKickBroadcastStatus(data);
+                        } catch {
+                          setKickBroadcastStatus(null);
+                        }
+                      }}
+                    >
+                      Check broadcast status
+                    </button>
+                    {kickBroadcastStatus?.heartRate?.state !== 'below' && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          try {
+                            await fetch('/api/cron/kick-chat-broadcast/status', {
+                              method: 'POST',
+                              credentials: 'include',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ resetHrState: true }),
+                            });
+                            setToast({ type: 'saved', message: 'HR state reset — next crossing will send' });
+                            setTimeout(() => setToast(null), 3000);
+                            const r = await fetch('/api/cron/kick-chat-broadcast/status', { credentials: 'include' });
+                            const data = await r.json();
+                            setKickBroadcastStatus(data);
+                          } catch {
+                            setToast({ type: 'error', message: 'Reset failed' });
+                            setTimeout(() => setToast(null), 3000);
+                          }
+                        }}
+                      >
+                        Reset HR state (retest)
+                      </button>
+                    )}
+                  </div>
+                  {kickBroadcastStatus && (
+                    <div className="broadcast-status-details">
+                      {kickBroadcastStatus.heartRate && (
+                        <div>
+                          <strong>Heart rate:</strong> {kickBroadcastStatus.heartRate.currentBpm} BPM ({kickBroadcastStatus.heartRate.age})
+                          {!kickBroadcastStatus.heartRate.hasData && (
+                            <p className="broadcast-status-warning">No HR data — keep overlay open with Pulsoid connected. Data is stored when the overlay sends it.</p>
+                          )}
+                          <p>{kickBroadcastStatus.heartRate.reason}</p>
+                          {kickBroadcastStatus.heartRate.wouldSendMessage && (
+                            <p className="broadcast-status-ok">Next cron run would send a message.</p>
+                          )}
+                        </div>
+                      )}
+                      {kickBroadcastStatus.kick && !kickBroadcastStatus.kick.hasTokens && (
+                        <p className="broadcast-status-warning">Kick not connected — connect in Kick Bot tab.</p>
+                      )}
+                      {kickBroadcastStatus.cron && (
+                        <p className="broadcast-status-note">Cron: {kickBroadcastStatus.cron.runsEvery}. {kickBroadcastStatus.cron.note}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 </div>
               </section>
