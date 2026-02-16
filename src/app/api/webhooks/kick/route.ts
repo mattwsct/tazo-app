@@ -171,7 +171,9 @@ export async function POST(request: NextRequest) {
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
-  if (toggleKey && enabled[toggleKey] !== true) {
+  const isExplicitlyEnabled = toggleKey ? enabled[toggleKey] === true : true;
+  if (toggleKey && !isExplicitlyEnabled) {
+    console.log('[Kick webhook] Skipping', eventType, '|', toggleKey + ':', enabled[toggleKey], '| storedEnabled:', JSON.stringify(storedEnabled));
     return NextResponse.json({ received: true }, { status: 200 });
   }
 

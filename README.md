@@ -760,7 +760,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 - **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.
 - **Not responding**: Ensure you completed OAuth (Connect Kick) and tokens are stored. Check Vercel logs for errors.
-- **Two follower messages**: Kick shows a native notification (e.g. "@Kicklet: username followed!") — that is Kick's built-in feature and cannot be disabled here. Your bot's message (e.g. "@Tazo: New follow from X! 💚") is controlled by the Follow toggle. If the bot still sends when toggle is off, ensure you see "Saved!" after toggling, then wait for the next follow to test.
+- **Event toggles**: Each event (Follow, New sub, Resub, etc.) can be toggled off. If toggles don't persist, use **Force save toggles** and verify the KV debug display. Check Vercel logs for `[Kick webhook] Skipping ...` when events are disabled.
 
 **Webhooks never arriving (no POST /api/webhooks/kick in logs):**
 

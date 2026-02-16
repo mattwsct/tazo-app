@@ -45,7 +45,12 @@ export async function GET() {
     const messages = { ...DEFAULT_KICK_MESSAGES, ...stored };
     const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
     const alertSettings = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlert };
-    return NextResponse.json({ messages, enabled, alertSettings });
+    return NextResponse.json({
+      messages,
+      enabled,
+      alertSettings,
+      storedEnabledRaw: storedEnabled ?? null,
+    });
   } catch {
     return NextResponse.json({
       messages: DEFAULT_KICK_MESSAGES,
@@ -104,6 +109,7 @@ export async function POST(request: NextRequest) {
       messages: { ...DEFAULT_KICK_MESSAGES, ...messages },
       enabled: { ...DEFAULT_KICK_MESSAGE_ENABLED, ...enabled },
       alertSettings: { ...DEFAULT_KICK_ALERT_SETTINGS, ...alertSettings },
+      storedEnabledRaw: enabled ?? null,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to save';
