@@ -14,7 +14,14 @@ import { getPersistentLocation } from '@/utils/location-cache';
 const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
+const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
 const KICK_TOKENS_KEY = 'kick_tokens';
+
+function formatAgo(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
+  if (ms < 3600_000) return `${Math.round(ms / 60_000)}m ago`;
+  return `${Math.round(ms / 3600_000)}h ago`;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -25,10 +32,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [storedAlert, hrStats, hrState, lastLocationSent, hasKickTokens] = await Promise.all([
+  const [storedAlert, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     getHeartrateStats(),
     kv.get<string>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
+    kv.get<number>(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get(KICK_TOKENS_KEY).then((t) => !!t),
   ]);
@@ -65,6 +73,9 @@ export async function GET(request: NextRequest) {
   const persistent = await getPersistentLocation();
   const hasLocation = !!persistent?.location;
 
+  const hrLastSentAt = hrLastSent ? new Date(hrLastSent).toISOString() : null;
+  const hrLastSentAgo = hrLastSent ? formatAgo(Date.now() - hrLastSent) : null;
+
   return NextResponse.json({
     heartRate: {
       currentBpm,
@@ -75,6 +86,8 @@ export async function GET(request: NextRequest) {
       broadcastEnabled: chatBroadcastHeartrate,
       wouldSendMessage: wouldSendHrMessage,
       reason: hrMessageReason,
+      lastSentAt: hrLastSentAt,
+      lastSentAgo: hrLastSentAgo,
     },
     location: {
       broadcastEnabled: chatBroadcastLocation,
@@ -100,7 +113,10 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   if (body.resetHrState === true) {
-    await kv.del(KICK_BROADCAST_HEARTRATE_STATE_KEY);
+    await Promise.all([
+      kv.del(KICK_BROADCAST_HEARTRATE_STATE_KEY),
+      kv.del(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY),
+    ]);
     return NextResponse.json({ success: true, message: 'HR broadcast state reset. Next threshold crossing will send a message.' });
   }
 

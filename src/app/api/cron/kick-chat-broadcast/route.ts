@@ -24,6 +24,7 @@ const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
+const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
 const KICK_STREAM_TITLE_LAST_PUSHED_KEY = 'kick_stream_title_last_pushed';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
@@ -62,8 +63,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  console.log('[Cron HR] Run at', new Date().toISOString());
   const accessToken = await getValidAccessToken();
-  if (!accessToken) return NextResponse.json({ ok: true, sent: 0 });
+  if (!accessToken) {
+    console.log('[Cron HR] No valid Kick token — skipping');
+    return NextResponse.json({ ok: true, sent: 0 });
+  }
 
   const [storedAlert, lastLocationSent, hrState, overlaySettings] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
@@ -105,12 +110,18 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  if (storedAlert?.chatBroadcastHeartrate) {
+  if (!storedAlert?.chatBroadcastHeartrate) {
+    if (storedAlert?.chatBroadcastLocation) console.log('[Cron HR] Heart rate broadcast disabled');
+  } else {
     const hrStats = await getHeartrateStats();
     const bpm = hrStats.current?.bpm ?? 0;
+    if (!hrStats.hasData || bpm === 0) {
+      console.log('[Cron HR] No HR data in cron — hasData:', hrStats.hasData, 'bpm:', bpm);
+    }
 
     if (bpm < minBpm) {
       currentHrState = 'below';
+      if (hrState !== 'below') console.log('[Cron HR] HR below threshold, state -> below. bpm:', bpm, 'minBpm:', minBpm);
     } else if (veryHighBpm > minBpm && bpm >= veryHighBpm) {
       if (currentHrState !== 'very_high') {
         const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
@@ -118,9 +129,13 @@ export async function GET(request: NextRequest) {
           await sendKickChatMessage(accessToken, msg);
           currentHrState = 'very_high';
           sent++;
-        } catch {
-          // Ignore send failures
+          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
+          console.log('[Cron HR] Sent very high:', bpm, 'BPM');
+        } catch (err) {
+          console.error('[Cron HR] Send failed (very high):', err);
         }
+      } else {
+        console.log('[Cron HR] Skip — already sent very high. state:', currentHrState);
       }
     } else if (bpm >= minBpm) {
       if (currentHrState === 'below') {
@@ -129,11 +144,16 @@ export async function GET(request: NextRequest) {
           await sendKickChatMessage(accessToken, msg);
           currentHrState = 'high';
           sent++;
-        } catch {
-          // Ignore send failures
+          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
+          console.log('[Cron HR] Sent high:', bpm, 'BPM');
+        } catch (err) {
+          console.error('[Cron HR] Send failed (high):', err);
         }
       } else if (currentHrState === 'very_high' && bpm < veryHighBpm) {
         currentHrState = 'high';
+        console.log('[Cron HR] HR dropped from very_high to high. bpm:', bpm);
+      } else {
+        console.log('[Cron HR] Skip — already sent high. state:', currentHrState, 'bpm:', bpm);
       }
     }
 

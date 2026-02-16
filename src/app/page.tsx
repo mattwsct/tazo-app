@@ -66,7 +66,7 @@ export default function AdminPage() {
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
   const [kickBroadcastStatus, setKickBroadcastStatus] = useState<{
-    heartRate?: { currentBpm: number; age: string; hasData: boolean; state: string; reason: string; wouldSendMessage: boolean };
+    heartRate?: { currentBpm: number; age: string; hasData: boolean; state: string; reason: string; wouldSendMessage: boolean; lastSentAt: string | null; lastSentAgo: string | null };
     kick?: { hasTokens: boolean };
     cron?: { runsEvery: string; note: string };
   } | null>(null);
@@ -1476,6 +1476,11 @@ export default function AdminPage() {
                             <p className="broadcast-status-warning">No HR data — keep overlay open with Pulsoid connected. Data is stored when the overlay sends it.</p>
                           )}
                           <p>{kickBroadcastStatus.heartRate.reason}</p>
+                          <p className="broadcast-status-note">
+                            {kickBroadcastStatus.heartRate.lastSentAgo
+                              ? `Last message sent: ${kickBroadcastStatus.heartRate.lastSentAgo}`
+                              : 'No HR message sent recently'}
+                          </p>
                           {kickBroadcastStatus.heartRate.wouldSendMessage && (
                             <p className="broadcast-status-ok">Next cron run would send a message.</p>
                           )}
