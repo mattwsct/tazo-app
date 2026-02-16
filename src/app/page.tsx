@@ -1535,73 +1535,103 @@ export default function AdminPage() {
                     Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}, {'{host}'}, {'{viewers}'}.
                   </p>
                 <div className="form-stack">
-                  {TEMPLATE_GROUP_CONFIG.map((group) => (
-                    <div key={group.toggleKey} className={`kick-message-group kick-message-card ${kickMessageEnabled[group.toggleKey] === false ? 'kick-message-card-disabled' : ''}`}>
-                      <div className="form-row-wrap group-header-row">
-                        <label className="checkbox-label-row kick-event-toggle">
-                          <input
-                            type="checkbox"
-                            checked={kickMessageEnabled[group.toggleKey] !== false}
-                            onChange={(e) => handleKickToggleChange(group.toggleKey, e.target.checked)}
-                            className="checkbox-input"
-                          />
-                          <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
-                          <strong className="kick-event-label">{group.label}</strong>
-                        </label>
-                        {group.toggleKey === 'giftSub' && (
-                          <label className="checkbox-label-row">
+                  {TEMPLATE_GROUP_CONFIG.map((group) => {
+                    const isSingleTemplate = group.templateKeys.length === 1;
+                    const toggleControl = (
+                      <label className="checkbox-label-row kick-event-toggle">
+                        <input
+                          type="checkbox"
+                          checked={kickMessageEnabled[group.toggleKey] !== false}
+                          onChange={(e) => handleKickToggleChange(group.toggleKey, e.target.checked)}
+                          className="checkbox-input"
+                        />
+                        <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
+                        <strong className="kick-event-label">{group.label}</strong>
+                      </label>
+                    );
+                    return (
+                      <div key={group.toggleKey} className={`kick-message-group kick-message-card ${kickMessageEnabled[group.toggleKey] === false ? 'kick-message-card-disabled' : ''}`}>
+                        {isSingleTemplate ? (
+                          <div className="kick-message-row kick-message-template-row kick-message-row-with-toggle">
+                            {toggleControl}
                             <input
-                              type="checkbox"
-                              checked={kickGiftSubShowLifetimeSubs}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setKickGiftSubShowLifetimeSubs(checked);
-                                saveKickMessages({ alertSettings: { giftSubShowLifetimeSubs: checked } });
-                              }}
-                              className="checkbox-input"
+                              type="text"
+                              className="text-input"
+                              value={kickMessages[group.templateKeys[0]]}
+                              onChange={(e) => handleKickMessageChange(group.templateKeys[0], e.target.value)}
+                              placeholder={DEFAULT_KICK_MESSAGES[group.templateKeys[0]]}
                             />
-                            <span>Show lifetime subs</span>
-                          </label>
-                        )}
-                        {group.toggleKey === 'kicksGifted' && (
-                          <label className="checkbox-label-row-tight">
-                            Min kicks:
-                            <input
-                              type="number"
-                              className="text-input number-input"
-                              value={kickMinimumKicks}
-                              onChange={(e) => {
-                                setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
-                                scheduleKickMessagesSave();
-                              }}
-                              min={0}
-                            />
-                          </label>
+                            <button
+                              type="button"
+                              className="btn btn-secondary kick-test-btn btn-small"
+                              onClick={() => sendKickTemplateTest(group.templateKeys[0])}
+                              disabled={!kickStatus?.connected || kickTemplateTesting === group.templateKeys[0]}
+                              title="Send test to Kick chat"
+                            >
+                              {kickTemplateTesting === group.templateKeys[0] ? '…' : 'Test'}
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="form-row-wrap group-header-row">
+                              {toggleControl}
+                              {group.toggleKey === 'giftSub' && (
+                                <label className="checkbox-label-row">
+                                  <input
+                                    type="checkbox"
+                                    checked={kickGiftSubShowLifetimeSubs}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setKickGiftSubShowLifetimeSubs(checked);
+                                      saveKickMessages({ alertSettings: { giftSubShowLifetimeSubs: checked } });
+                                    }}
+                                    className="checkbox-input"
+                                  />
+                                  <span>Show lifetime subs</span>
+                                </label>
+                              )}
+                              {group.toggleKey === 'kicksGifted' && (
+                                <label className="checkbox-label-row-tight">
+                                  Min kicks:
+                                  <input
+                                    type="number"
+                                    className="text-input number-input"
+                                    value={kickMinimumKicks}
+                                    onChange={(e) => {
+                                      setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
+                                      scheduleKickMessagesSave();
+                                    }}
+                                    min={0}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                            {group.templateKeys.map((key) => (
+                              <div key={key} className="kick-message-row kick-message-template-row">
+                                <span className="inline-label-muted kick-template-label">{KICK_MESSAGE_LABELS[key]}</span>
+                                <input
+                                  type="text"
+                                  className="text-input"
+                                  value={kickMessages[key]}
+                                  onChange={(e) => handleKickMessageChange(key, e.target.value)}
+                                  placeholder={DEFAULT_KICK_MESSAGES[key]}
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary kick-test-btn btn-small"
+                                  onClick={() => sendKickTemplateTest(key)}
+                                  disabled={!kickStatus?.connected || kickTemplateTesting === key}
+                                  title="Send test to Kick chat"
+                                >
+                                  {kickTemplateTesting === key ? '…' : 'Test'}
+                                </button>
+                              </div>
+                            ))}
+                          </>
                         )}
                       </div>
-                      {group.templateKeys.map((key) => (
-                        <div key={key} className="kick-message-row kick-message-template-row">
-                          <span className="inline-label-muted kick-template-label">{KICK_MESSAGE_LABELS[key]}</span>
-                          <input
-                            type="text"
-                            className="text-input"
-                            value={kickMessages[key]}
-                            onChange={(e) => handleKickMessageChange(key, e.target.value)}
-                            placeholder={DEFAULT_KICK_MESSAGES[key]}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-secondary kick-test-btn btn-small"
-                            onClick={() => sendKickTemplateTest(key)}
-                            disabled={!kickStatus?.connected || kickTemplateTesting === key}
-                            title="Send test to Kick chat"
-                          >
-                            {kickTemplateTesting === key ? '…' : 'Test'}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="section-actions">
                   <button

@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
   const isExplicitlyEnabled = toggleKey ? enabled[toggleKey] === true : true;
   if (toggleKey && !isExplicitlyEnabled) {
-    console.log('[Kick webhook] Skipping', eventType, '|', toggleKey + ':', enabled[toggleKey], '| storedEnabled:', JSON.stringify(storedEnabled));
+    console.log('[Kick webhook] Skipping', eventType, '|', toggleKey + ':', enabled[toggleKey]);
     return NextResponse.json({ received: true }, { status: 200 });
   }
 

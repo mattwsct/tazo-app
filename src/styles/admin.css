@@ -1743,6 +1743,11 @@ body {
   margin-bottom: 6px;
 }
 
+.kick-message-row-with-toggle .kick-event-toggle {
+  flex-shrink: 0;
+  min-width: 140px;
+}
+
 .kick-template-label {
   width: 140px;
   flex-shrink: 0;
