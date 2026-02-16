@@ -53,7 +53,7 @@ function getGiftSubResponseFn(lifetimeSubs: string) {
 
 /** Response functions per template key (giftSub* all use getGiftSubResponse, etc.) */
 function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMessageTemplates, (p: unknown, t: KickMessageTemplates) => string> {
-  const lifetimeSubs = giftSubShowLifetimeSubs ? ' (5 lifetime)' : '';
+  const lifetimeSubs = giftSubShowLifetimeSubs ? '(5 lifetime)' : '';
   return {
   follow: (p, t) => getFollowResponse(p as never, t),
   newSub: (p, t) => getNewSubResponse(p as never, t),

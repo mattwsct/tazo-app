@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
               if (username) {
                 const total = leaderboard.get(username.toLowerCase());
                 if (total != null && total > 0) {
-                  lifetimeSubs = ` (${total} lifetime)`;
+                  lifetimeSubs = `(${total} lifetime)`;
                 }
               }
             }
