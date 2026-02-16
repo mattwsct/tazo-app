@@ -688,6 +688,17 @@ body {
   .radio-group.segmented .radio-option {
     max-width: calc(50% - 0.125rem);
   }
+
+  /* Chat broadcasts - stack checkboxes on mobile */
+  .broadcast-checkboxes {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .broadcast-checkbox-item {
+    min-height: 48px;
+    padding: 0.625rem 0;
+  }
 }
 
 .radio-group.segmented .radio-option .radio-content {
@@ -1079,6 +1090,21 @@ body {
     font-size: 0.875rem;
     margin-bottom: 0.125rem;
   }
+
+  /* Message templates - stack label above input on narrow screens */
+  .kick-message-template-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .kick-message-template-row .kick-template-label {
+    flex-basis: 100%;
+  }
+
+  .kick-event-toggle {
+    min-height: 44px;
+    padding: 0.5rem 0;
+  }
 }
 
 /* Extra small screens - stack location options vertically */
@@ -1433,6 +1459,32 @@ body {
 .kick-message-card:hover {
   background: rgba(255, 255, 255, 0.07);
   border-color: rgba(255, 255, 255, 0.18);
+}
+
+.kick-message-card-disabled {
+  opacity: 0.6;
+}
+
+.kick-event-toggle {
+  flex: 1;
+  min-width: 0;
+}
+
+.kick-event-label {
+  font-size: 0.95rem;
+}
+
+/* Chat broadcast checkboxes - clearer than pill toggles */
+.broadcast-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 12px;
+}
+
+.broadcast-checkbox-item {
+  min-height: 44px;
+  padding: 0.5rem 0;
 }
 
 .checkbox-text {

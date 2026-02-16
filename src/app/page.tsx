@@ -1285,33 +1285,33 @@ export default function AdminPage() {
                   <p className="group-label group-description">
                     Location: periodic updates. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
                   </p>
-                <div className="radio-group segmented section-spacing">
-                  <button
-                    type="button"
-                    className={`radio-option radio-option-flex ${kickChatBroadcastLocation ? 'active' : ''}`}
-                    onClick={() => {
-                      setKickChatBroadcastLocation(!kickChatBroadcastLocation);
-                      scheduleKickMessagesSave();
-                    }}
-                  >
+                <div className="broadcast-checkboxes">
+                  <label className="checkbox-label-row broadcast-checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={kickChatBroadcastLocation}
+                      onChange={(e) => {
+                        setKickChatBroadcastLocation(e.target.checked);
+                        scheduleKickMessagesSave();
+                      }}
+                      className="checkbox-input"
+                    />
                     <span className="radio-icon" aria-hidden="true">📍</span>
-                    <div className="radio-content">
-                      <span className="radio-label">Location</span>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className={`radio-option radio-option-flex ${kickChatBroadcastHeartrate ? 'active' : ''}`}
-                    onClick={() => {
-                      setKickChatBroadcastHeartrate(!kickChatBroadcastHeartrate);
-                      scheduleKickMessagesSave();
-                    }}
-                  >
+                    <span>Location</span>
+                  </label>
+                  <label className="checkbox-label-row broadcast-checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={kickChatBroadcastHeartrate}
+                      onChange={(e) => {
+                        setKickChatBroadcastHeartrate(e.target.checked);
+                        scheduleKickMessagesSave();
+                      }}
+                      className="checkbox-input"
+                    />
                     <span className="radio-icon" aria-hidden="true">❤️</span>
-                    <div className="radio-content">
-                      <span className="radio-label">Heart rate</span>
-                    </div>
-                  </button>
+                    <span>Heart rate</span>
+                  </label>
                 </div>
                 {(kickChatBroadcastLocation || kickChatBroadcastHeartrate) && (
                   <div className="form-stack broadcast-options-box">
@@ -1409,29 +1409,22 @@ export default function AdminPage() {
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description">
-                    Toggle and edit. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
+                    Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
                   </p>
-                <div className="kick-messages-grid kick-messages-toggle-grid">
-                  {TEMPLATE_GROUP_CONFIG.map((group) => (
-                    <button
-                      key={group.toggleKey}
-                      type="button"
-                      className={`radio-option ${kickMessageEnabled[group.toggleKey] !== false ? 'active' : ''}`}
-                      onClick={() => handleKickToggleChange(group.toggleKey, !(kickMessageEnabled[group.toggleKey] !== false))}
-                      style={{ minHeight: 56 }}
-                    >
-                      <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
-                      <div className="radio-content">
-                        <span className="radio-label">{group.label}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
                 <div className="form-stack">
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
-                    <div key={group.toggleKey} className="kick-message-group kick-message-card" style={{ opacity: kickMessageEnabled[group.toggleKey] !== false ? 1 : 0.6 }}>
+                    <div key={group.toggleKey} className={`kick-message-group kick-message-card ${kickMessageEnabled[group.toggleKey] === false ? 'kick-message-card-disabled' : ''}`}>
                       <div className="form-row-wrap group-header-row">
-                        <strong style={{ fontSize: '0.95rem' }}>{group.label}</strong>
+                        <label className="checkbox-label-row kick-event-toggle">
+                          <input
+                            type="checkbox"
+                            checked={kickMessageEnabled[group.toggleKey] !== false}
+                            onChange={(e) => handleKickToggleChange(group.toggleKey, e.target.checked)}
+                            className="checkbox-input"
+                          />
+                          <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
+                          <strong className="kick-event-label">{group.label}</strong>
+                        </label>
                         {group.toggleKey === 'giftSub' && (
                           <label className="checkbox-label-row">
                             <input
