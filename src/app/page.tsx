@@ -57,7 +57,7 @@ export default function AdminPage() {
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
-  const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('state_country');
+  const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('state');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
@@ -198,7 +198,7 @@ export default function AdminPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.settings) {
-          setKickStreamTitleLocationDisplay((d.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state_country');
+          setKickStreamTitleLocationDisplay((d.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state');
           setKickStreamTitleAutoUpdate(d.settings.autoUpdateLocation !== false);
         }
         if (d.stream_title != null) {
@@ -326,7 +326,7 @@ export default function AdminPage() {
       const r = await authenticatedFetch('/api/kick-channel');
       const data = await r.json();
       if (data.settings) {
-        setKickStreamTitleLocationDisplay((data.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state_country');
+        setKickStreamTitleLocationDisplay((data.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state');
         setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
       }
       if (data.stream_title != null) {
@@ -1224,9 +1224,9 @@ export default function AdminPage() {
                           onChange={(e) => setKickStreamTitleLocationDisplay(e.target.value as StreamTitleLocationDisplay)}
                           style={{ width: 'auto', minWidth: 140 }}
                         >
-                          <option value="country_only">Country only</option>
-                          <option value="state_country">State and country</option>
-                          <option value="city_state">City and state</option>
+                          <option value="city">City</option>
+                          <option value="state">State</option>
+                          <option value="country">Country</option>
                         </select>
                       </div>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>

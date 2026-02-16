@@ -13,7 +13,7 @@ const KICK_API_BASE = 'https://api.kick.com';
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
 
-export type StreamTitleLocationDisplay = 'country_only' | 'state_country' | 'city_state';
+export type StreamTitleLocationDisplay = 'city' | 'state' | 'country';
 
 export interface StreamTitleSettings {
   customTitle: string;
@@ -23,7 +23,7 @@ export interface StreamTitleSettings {
 
 export const DEFAULT_STREAM_TITLE_SETTINGS: StreamTitleSettings = {
   customTitle: '',
-  locationDisplay: 'state_country',
+  locationDisplay: 'state',
   autoUpdateLocation: true,
 };
 
@@ -65,10 +65,10 @@ export async function GET() {
   const stored = await kv.get<Record<string, unknown>>(KICK_STREAM_TITLE_SETTINGS_KEY);
   const locDisplay = stored?.locationDisplay as string | undefined;
   const migratedDisplay: StreamTitleLocationDisplay =
-    locDisplay === 'country' ? 'country_only' :
-    locDisplay === 'country_state' ? 'state_country' :
-    locDisplay === 'country_city' ? 'city_state' :
-    (locDisplay === 'country_only' || locDisplay === 'state_country' || locDisplay === 'city_state' ? locDisplay : undefined) ?? DEFAULT_STREAM_TITLE_SETTINGS.locationDisplay;
+    locDisplay === 'country' || locDisplay === 'country_only' ? 'country' :
+    locDisplay === 'state' || locDisplay === 'country_state' || locDisplay === 'state_country' ? 'state' :
+    locDisplay === 'city' || locDisplay === 'country_city' || locDisplay === 'city_state' ? 'city' :
+    DEFAULT_STREAM_TITLE_SETTINGS.locationDisplay;
   const settingsResponse: StreamTitleSettings = {
     ...DEFAULT_STREAM_TITLE_SETTINGS,
     ...(stored as Partial<StreamTitleSettings>),

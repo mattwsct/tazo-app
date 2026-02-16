@@ -738,7 +738,7 @@ Type these in Kick chat and the bot responds with your live overlay data:
 
 | Command | Response |
 |---------|----------|
-| `!ping` | Pong! (bot check) |
+| `!ping` | Pong! (bot check; use to verify webhooks) |
 | `!location` | Current location |
 | `!weather` | Temperature, conditions, feels like |
 | `!time` | Local time in your timezone |
@@ -776,7 +776,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 5. **Verify Kick is sending**: Point Kick's webhook URL temporarily at a capture service to confirm they deliver:
    - Go to [webhook.site](https://webhook.site) (free) and copy your unique URL.
    - In Kick Dev Dashboard, change webhook URL to that URL.
-   - Have someone type in chat (e.g. `!ping`). Check webhook.site — if you see the request, Kick is sending and the issue is with your app. If you don't, Kick isn't delivering (unverified app, revoked subs, etc.).
+   - Have someone type `!ping` in chat. Check webhook.site — if you see the request, Kick is sending and the issue is with your app. If you don't, Kick isn't delivering (unverified app, revoked subs, etc.).
 
 6. **Admin panel diagnostics**: The Kick Bot tab shows "Last request received" when *any* POST hits `/api/webhooks/kick` (even before verification). Vercel logs will show `[Kick webhook] Request reached middleware` if the request reaches your app. If both are empty, no request reached your server.
 

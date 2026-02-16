@@ -4,11 +4,11 @@
  */
 
 import type { LocationData } from './location-utils';
-import { formatCountryName } from './location-utils';
+import { formatCountryName, stripTrailingNumbers } from './location-utils';
 import { getCountryFlagEmoji, getCountryNameFromCode } from './chat-utils';
 
-/** Country only = flag + country; State and country = flag + country, state; City and state = flag + city, state */
-export type StreamTitleLocationDisplay = 'country_only' | 'state_country' | 'city_state';
+/** city = city+state (or city+country if no state); state = state+country; country = country only */
+export type StreamTitleLocationDisplay = 'city' | 'state' | 'country';
 
 /** Extract custom title from full Kick stream title (removes location part — flag prefix). */
 export function parseStreamTitleToCustom(fullTitle: string): string {
@@ -61,8 +61,8 @@ export function formatLocationForStreamTitle(
 
   const countryCode = (rawLocation.countryCode || '').toUpperCase();
   const country = rawLocation.country || getCountryNameFromCode(countryCode);
-  const state = rawLocation.state || rawLocation.province || rawLocation.region;
-  const city =
+  const rawState = rawLocation.state || rawLocation.province || rawLocation.region;
+  const rawCity =
     rawLocation.city ||
     rawLocation.municipality ||
     rawLocation.town ||
@@ -70,32 +70,37 @@ export function formatLocationForStreamTitle(
     rawLocation.village ||
     rawLocation.hamlet;
 
+  const state = rawState ? stripTrailingNumbers(rawState) : undefined;
+  const city = rawCity ? stripTrailingNumbers(rawCity) : undefined;
+
   const flag = getCountryFlagEmoji(countryCode);
   const countryName = formatCountryName(country, countryCode);
 
   if (!flag && !countryName) return '';
 
   switch (display) {
-    case 'country_only':
+    case 'country':
       return flag ? `${flag} ${countryName}` : countryName;
-    case 'state_country': {
+    case 'state': {
       if (!state || hasOverlappingNames(state, countryName)) {
         return flag ? `${flag} ${countryName}` : countryName;
       }
-      return flag ? `${flag} ${countryName}, ${state}` : `${countryName}, ${state}`;
+      return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
     }
-    case 'city_state': {
+    case 'city': {
       if (city) {
-        const includeState = state && !hasOverlappingNames(city, state);
+        // City option: city + state if state exists, else city + country
+        const includeState = state && !hasOverlappingNames(city, state) && !hasOverlappingNames(state, countryName);
         if (hasOverlappingNames(city, countryName)) {
           return flag ? `${flag} ${city}` : city;
         }
-        return flag
-          ? `${flag} ${includeState ? `${city}, ${state}` : city}`
-          : includeState ? `${city}, ${state}` : city;
+        const locationPart = includeState
+          ? `${city}, ${state}`
+          : `${city}, ${countryName}`;
+        return flag ? `${flag} ${locationPart}` : locationPart;
       }
       if (state && !hasOverlappingNames(state, countryName)) {
-        return flag ? `${flag} ${countryName}, ${state}` : `${countryName}, ${state}`;
+        return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
       }
       return flag ? `${flag} ${countryName}` : countryName;
     }
