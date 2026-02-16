@@ -716,7 +716,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
 
-6. **Stream title**: Get current title, add location from GPS, and update via the Kick Bot tab. Requires `channel:read` and `channel:write` scopes.
+6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag, dropdown (country only / country+state / country+city), and auto-update every 5 min (toggle off to disable). Combine and update Kick. Requires `channel:read` and `channel:write` scopes. *Note: Stream title may be empty when offline — Kick typically returns it only when live.*
 
 ### Events & Responses
 
@@ -725,11 +725,12 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Follow | "New follow from {name}! 💚" |
 | New sub | "New sub from {name}! 🎉" |
 | Resub | "{name} resubbed! {months} months 💪" |
-| Gifted subs | "{gifter} gifted a sub to {name}! 🎁" |
+| Gifted subs | "{gifter} gifted a sub to {name}!{lifetimeSubs} 🎁" (adds lifetime total when gifter is on leaderboard) |
 | Kicks gifted | "{sender} sent {amount} {name}! 💰" |
 | Channel reward | "{redeemer} redeemed {title}! ✨" |
+| Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
 
-Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable follow, sub, resub, gift sub, Kicks gifted, and channel reward alerts individually. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
+Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
 ### Chat commands
 
@@ -748,8 +749,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 - **Stream title from location** — set title to current city/country
 - **More commands** — `!speed`, `!altitude`, `!forecast`, `!map`
-- **Stream started/ended** — subscribe to `livestream.status.updated`, add templates
-- **Top gifter** — no webhook; would need leaderboard polling (GET /kicks/leaderboard) or Kick to add event
+- **Top gifter (weekly/monthly)** — no dedicated webhook; would need leaderboard polling or Kick feature request
 - **Gift sub milestone** — special message when gift count ≥ threshold (e.g. "X gifted 10 subs!")
 - **Moderation banned** — subscribe to `moderation.banned`, add template
 

@@ -42,6 +42,7 @@ export const KICK_EVENT_SUBSCRIPTIONS = [
   { name: 'channel.subscription.gifts', version: 1 },
   { name: 'kicks.gifted', version: 1 },
   { name: 'channel.reward.redemption.updated', version: 1 },
+  { name: 'livestream.status.updated', version: 1 },
   { name: 'chat.message.sent', version: 1 },
 ] as const;
 
@@ -249,5 +250,33 @@ export async function getKickEventSubscriptions(accessToken: string): Promise<un
 
   const data = await res.json();
   return data.data ?? [];
+}
+
+/** Fetch gift sub leaderboard. Returns Map<username_lowercase, total_subs>. Requires kicks:read scope. */
+export async function getKickSubscriptionLeaderboard(accessToken: string): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  try {
+    const res = await fetch(`${KICK_API_BASE}/public/v1/kicks/leaderboard`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return map;
+    const data = await res.json();
+    const entries = (data.data ?? data) as unknown[];
+    const items = Array.isArray(entries) ? entries : [];
+    for (const item of items) {
+      const user = (item as { user?: { username?: string }; username?: string }).user ?? item;
+      const username = (user as { username?: string }).username;
+      const count = (item as { count?: number; subscription_count?: number; total?: number }).count
+        ?? (item as { subscription_count?: number }).subscription_count
+        ?? (item as { total?: number }).total
+        ?? 0;
+      if (username && typeof count === 'number') {
+        map.set(username.toLowerCase(), count);
+      }
+    }
+  } catch {
+    // Ignore - leaderboard is best-effort
+  }
+  return map;
 }
 

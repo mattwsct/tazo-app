@@ -10,20 +10,24 @@ export interface KickMessageTemplates {
   channelReward: string;
   channelRewardWithInput: string;
   channelRewardDeclined: string;
+  streamStarted: string;
+  streamEnded: string;
 }
 
 export const DEFAULT_KICK_MESSAGES: KickMessageTemplates = {
   follow: 'New follow from {name}! 💚',
   newSub: 'New sub from {name}! 🎉',
   resub: '{name} resubbed! {months} months 💪',
-  giftSubSingle: '{gifter} gifted a sub to {name}! 🎁',
-  giftSubMulti: '{gifter} gifted {count} subs! 🎁',
-  giftSubGeneric: '{gifter} gifted a sub! 🎁',
+  giftSubSingle: '{gifter} gifted a sub to {name}!{lifetimeSubs} 🎁',
+  giftSubMulti: '{gifter} gifted {count} subs!{lifetimeSubs} 🎁',
+  giftSubGeneric: '{gifter} gifted a sub!{lifetimeSubs} 🎁',
   kicksGifted: '{sender} sent {amount} {name}! 💰',
   kicksGiftedWithMessage: '{sender} sent {amount} {name}: "{message}" 💰',
   channelReward: '{redeemer} redeemed {title}! ✨',
   channelRewardWithInput: '{redeemer} redeemed {title}: "{userInput}" ✨',
   channelRewardDeclined: "{redeemer}'s {title} redemption was declined.",
+  streamStarted: "We're live! 🎬",
+  streamEnded: 'Thanks for watching! Stream ended. 🙏',
 };
 
 export const KICK_MESSAGE_KEYS = [
@@ -38,9 +42,11 @@ export const KICK_MESSAGE_KEYS = [
   'channelReward',
   'channelRewardWithInput',
   'channelRewardDeclined',
+  'streamStarted',
+  'streamEnded',
 ] as const satisfies readonly (keyof KickMessageTemplates)[];
 
-/** Toggle keys: one per logical event type (Follow, New sub, Resub, Gift subs, Kicks gifted, Channel reward) */
+/** Toggle keys: one per logical event type */
 export const KICK_EVENT_TOGGLE_KEYS = [
   'follow',
   'newSub',
@@ -48,6 +54,7 @@ export const KICK_EVENT_TOGGLE_KEYS = [
   'giftSub',
   'kicksGifted',
   'channelReward',
+  'streamStatus',
 ] as const;
 
 export type KickEventToggleKey = (typeof KICK_EVENT_TOGGLE_KEYS)[number];
@@ -59,6 +66,7 @@ export interface KickMessageEnabled {
   giftSub?: boolean;
   kicksGifted?: boolean;
   channelReward?: boolean;
+  streamStatus?: boolean;
 }
 
 export const DEFAULT_KICK_MESSAGE_ENABLED: Required<KickMessageEnabled> = {
@@ -68,6 +76,7 @@ export const DEFAULT_KICK_MESSAGE_ENABLED: Required<KickMessageEnabled> = {
   giftSub: true,
   kicksGifted: true,
   channelReward: true,
+  streamStatus: true,
 };
 
 /** Groups templates by toggle, for inline toggle+template UI */
@@ -78,6 +87,7 @@ export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: stri
   { toggleKey: 'giftSub', label: 'Gift subs', templateKeys: ['giftSubSingle', 'giftSubMulti', 'giftSubGeneric'] },
   { toggleKey: 'kicksGifted', label: 'Kicks gifted', templateKeys: ['kicksGifted', 'kicksGiftedWithMessage'] },
   { toggleKey: 'channelReward', label: 'Channel reward', templateKeys: ['channelReward', 'channelRewardWithInput', 'channelRewardDeclined'] },
+  { toggleKey: 'streamStatus', label: 'Stream started/ended', templateKeys: ['streamStarted', 'streamEnded'] },
 ];
 
 /** Maps webhook event type to toggle key */
@@ -88,4 +98,5 @@ export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
   'channel.subscription.gifts': 'giftSub',
   'kicks.gifted': 'kicksGifted',
   'channel.reward.redemption.updated': 'channelReward',
+  'livestream.status.updated': 'streamStatus',
 };

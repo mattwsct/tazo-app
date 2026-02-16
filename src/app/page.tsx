@@ -10,6 +10,9 @@ import {
   DEFAULT_KICK_MESSAGE_ENABLED,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
+import { formatLocationForStreamTitle } from '@/utils/stream-title-utils';
+import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
+import type { LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 
 const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
@@ -24,6 +27,8 @@ const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   channelReward: 'Channel reward',
   channelRewardWithInput: 'Channel reward (with input)',
   channelRewardDeclined: 'Channel reward (declined)',
+  streamStarted: 'Stream started',
+  streamEnded: 'Stream ended',
 };
 
 
@@ -60,7 +65,11 @@ export default function AdminPage() {
   const [kickTestMessage, setKickTestMessage] = useState('');
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
-  const [kickStreamTitle, setKickStreamTitle] = useState('');
+  const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
+  const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('country_state');
+  const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
+  const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
+  const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
@@ -195,7 +204,14 @@ export default function AdminPage() {
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
       .then((r) => r.json())
-      .then((d) => { if (d.stream_title != null) setKickStreamTitle(d.stream_title); })
+      .then((d) => {
+        if (d.stream_title != null) setKickStreamTitleCustom(d.stream_title);
+        if (d.settings) {
+          setKickStreamTitleCustom((prev) => d.settings.customTitle ?? prev);
+          setKickStreamTitleLocationDisplay(d.settings.locationDisplay ?? 'country_state');
+          setKickStreamTitleAutoUpdate(d.settings.autoUpdateLocation !== false);
+        }
+      })
       .catch(() => {});
     fetch('/api/kick-webhook-log', { credentials: 'include' })
       .then((r) => r.json())
@@ -227,32 +243,81 @@ export default function AdminPage() {
     [kickMessageEnabled]
   );
 
+  const fetchLocationForStreamTitle = useCallback(async () => {
+    try {
+      const locRes = await fetch('/api/get-location', { credentials: 'include' });
+      const locData = await locRes.json();
+      const raw = locData?.rawLocation ?? locData?.location;
+      if (raw) {
+        setKickStreamTitleRawLocation(raw);
+        setKickStreamTitleLocation(formatLocationForStreamTitle(raw, kickStreamTitleLocationDisplay));
+      } else {
+        setKickStreamTitleLocation('');
+        setKickStreamTitleRawLocation(null);
+      }
+    } catch {
+      setKickStreamTitleLocation('');
+      setKickStreamTitleRawLocation(null);
+    }
+  }, [kickStreamTitleLocationDisplay]);
+
+  useEffect(() => {
+    fetchLocationForStreamTitle();
+  }, [fetchLocationForStreamTitle]);
+
+  useEffect(() => {
+    if (!kickStreamTitleAutoUpdate) return;
+    const interval = setInterval(fetchLocationForStreamTitle, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [kickStreamTitleAutoUpdate, fetchLocationForStreamTitle]);
+
+  useEffect(() => {
+    if (kickStreamTitleRawLocation) {
+      setKickStreamTitleLocation(formatLocationForStreamTitle(kickStreamTitleRawLocation, kickStreamTitleLocationDisplay));
+    }
+  }, [kickStreamTitleLocationDisplay, kickStreamTitleRawLocation]);
+
   const fetchKickStreamTitle = useCallback(async () => {
-    if (!kickStatus?.connected) return;
     setKickStreamTitleLoading(true);
     try {
       const r = await authenticatedFetch('/api/kick-channel');
       const data = await r.json();
-      if (r.ok && data.stream_title != null) {
-        setKickStreamTitle(data.stream_title);
-      } else {
-        setToast({ type: 'error', message: data.error ?? 'Failed to fetch' });
+      if (data.stream_title != null) {
+        setKickStreamTitleCustom(data.stream_title);
+      }
+      if (data.settings) {
+        setKickStreamTitleCustom((prev) => data.settings.customTitle ?? prev);
+        setKickStreamTitleLocationDisplay(data.settings.locationDisplay ?? 'country_state');
+        setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
+      }
+      if (data.error && !data.stream_title) {
+        setToast({ type: 'error', message: data.error });
       }
     } catch {
       setToast({ type: 'error', message: 'Failed to fetch stream title' });
     }
     setKickStreamTitleLoading(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected]);
+  }, []);
 
   const updateKickStreamTitle = useCallback(async () => {
     if (!kickStatus?.connected) return;
     setKickStreamTitleSaving(true);
+    const fullTitle = kickStreamTitleLocation
+      ? (kickStreamTitleCustom ? `${kickStreamTitleCustom.trim()} · ${kickStreamTitleLocation}` : kickStreamTitleLocation)
+      : kickStreamTitleCustom.trim();
     try {
       const r = await authenticatedFetch('/api/kick-channel', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stream_title: kickStreamTitle }),
+        body: JSON.stringify({
+          stream_title: fullTitle,
+          settings: {
+            customTitle: kickStreamTitleCustom,
+            locationDisplay: kickStreamTitleLocationDisplay,
+            autoUpdateLocation: kickStreamTitleAutoUpdate,
+          },
+        }),
       });
       const data = await r.json();
       if (r.ok) {
@@ -265,26 +330,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitle]);
-
-  const addLocationToKickStreamTitle = useCallback(async () => {
-    try {
-      const locRes = await fetch('/api/get-location', { credentials: 'include' });
-      const locData = await locRes.json();
-      const primary = locData?.location?.primary ?? '';
-      const secondary = locData?.location?.secondary;
-      const locText = secondary ? `${primary}${primary ? ', ' : ''}${secondary}` : primary;
-      if (locText) {
-        setKickStreamTitle((prev) => (prev ? `${prev} · ${locText}` : locText));
-      } else {
-        setToast({ type: 'error', message: 'Location unavailable' });
-        setTimeout(() => setToast(null), 3000);
-      }
-    } catch {
-      setToast({ type: 'error', message: 'Failed to get location' });
-      setTimeout(() => setToast(null), 3000);
-    }
-  }, []);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleAutoUpdate]);
 
   const saveKickMessages = useCallback(async () => {
     setToast({ type: 'saving', message: 'Saving messages...' });
@@ -1134,20 +1180,63 @@ export default function AdminPage() {
               <div className="setting-group">
                 <label className="group-label">Stream title</label>
                 <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Update your Kick stream title. Add current location from GPS. If you get 401, use <strong>Reconnect</strong> above to grant channel permissions.
+                  Custom title + location (with flag). Location from GPS, auto-updates every 5 min when enabled. If you get 401, use <strong>Reconnect</strong> above. Stream title may be empty when <strong>offline</strong>.
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.85rem', opacity: 0.9, display: 'block', marginBottom: '4px' }}>Custom title</label>
                     <input
                       type="text"
                       className="text-input"
-                      value={kickStreamTitle}
-                      onChange={(e) => setKickStreamTitle(e.target.value)}
-                      placeholder="Stream title..."
-                      style={{ flex: 1, minWidth: 200 }}
+                      value={kickStreamTitleCustom}
+                      onChange={(e) => setKickStreamTitleCustom(e.target.value)}
+                      placeholder="Add any title text..."
+                      style={{ width: '100%', minWidth: 200 }}
                       maxLength={200}
                       disabled={!kickStatus?.connected}
                     />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.85rem', opacity: 0.9, display: 'block', marginBottom: '4px' }}>Location</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <div
+                          style={{
+                            padding: '10px 14px',
+                            background: 'rgba(255,255,255,0.06)',
+                            borderRadius: 8,
+                            fontSize: '0.95rem',
+                            minHeight: 42,
+                            display: 'flex',
+                            alignItems: 'center',
+                            flex: 1,
+                            minWidth: 180,
+                          }}
+                        >
+                          {kickStreamTitleLocation || <span style={{ opacity: 0.5 }}>No location data</span>}
+                        </div>
+                        <select
+                          className="text-input"
+                          value={kickStreamTitleLocationDisplay}
+                          onChange={(e) => setKickStreamTitleLocationDisplay(e.target.value as StreamTitleLocationDisplay)}
+                          style={{ width: 'auto', minWidth: 140 }}
+                        >
+                          <option value="country">Country only</option>
+                          <option value="country_state">Country and state</option>
+                          <option value="country_city">Country and city</option>
+                        </select>
+                      </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>
+                        <input
+                          type="checkbox"
+                          checked={kickStreamTitleAutoUpdate}
+                          onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
+                        />
+                        Auto-update location every 5 minutes
+                      </label>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       className="btn btn-secondary btn-small"
@@ -1159,10 +1248,9 @@ export default function AdminPage() {
                     <button
                       type="button"
                       className="btn btn-secondary btn-small"
-                      onClick={addLocationToKickStreamTitle}
-                      disabled={!kickStatus?.connected}
+                      onClick={fetchLocationForStreamTitle}
                     >
-                      Add location
+                      Refresh location
                     </button>
                     <button
                       type="button"
@@ -1180,7 +1268,7 @@ export default function AdminPage() {
               <div className="setting-group">
                 <label className="group-label">Chat message templates</label>
                 <p className="group-label" style={{ marginBottom: '12px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Toggle and edit. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
+                  Toggle and edit. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
                 </p>
                 <div className="kick-messages-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
@@ -1238,8 +1326,7 @@ export default function AdminPage() {
                 <details className="kick-suggested-additions" style={{ marginTop: '20px', padding: '12px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: 8 }}>
                   <summary style={{ cursor: 'pointer', fontWeight: 500, opacity: 0.9 }}>Possible future message types</summary>
                   <ul style={{ margin: '12px 0 0 0', paddingLeft: '20px', opacity: 0.9, fontSize: '0.9rem', lineHeight: 1.7 }}>
-                    <li><strong>Stream started/ended</strong> — Kick has <code>livestream.status.updated</code>. Add subscription + templates for &quot;Stream starting!&quot; / &quot;Thanks for watching!&quot;</li>
-                    <li><strong>Top gifter (weekly/monthly/all-time)</strong> — No dedicated webhook. Would need leaderboard polling (GET /kicks/leaderboard) or a Kick feature request.</li>
+                    <li><strong>Top gifter (weekly/monthly)</strong> — No dedicated webhook. Would need leaderboard polling or a Kick feature request.</li>
                     <li><strong>Gift sub milestone</strong> — &quot;X gifted 10 subs!&quot; — use existing <code>channel.subscription.gifts</code> and add logic when count ≥ threshold.</li>
                     <li><strong>Moderation banned</strong> — Kick has <code>moderation.banned</code>. e.g. &quot;{'{banned_user}'} was banned. Reason: {'{reason}'}&quot;</li>
                     <li><strong>First-time chatter</strong> — No webhook; would need to track chatters yourself from <code>chat.message.sent</code>.</li>

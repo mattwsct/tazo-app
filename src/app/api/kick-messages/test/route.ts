@@ -9,6 +9,7 @@ import {
   getGiftSubResponse,
   getKicksGiftedResponse,
   getChannelRewardResponse,
+  getStreamStatusResponse,
 } from '@/lib/kick-event-responses';
 import type { KickMessageTemplates } from '@/types/kick-messages';
 
@@ -40,6 +41,8 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
     reward: { title: 'Sample reward' },
     status: 'rejected',
   },
+  streamStarted: { status: 'live' },
+  streamEnded: { status: 'offline' },
 };
 
 /** Response functions per template key (giftSub* all use getGiftSubResponse, etc.) */
@@ -47,14 +50,16 @@ const RESPONSE_FNS: Record<keyof KickMessageTemplates, (p: unknown, t: KickMessa
   follow: (p, t) => getFollowResponse(p as never, t),
   newSub: (p, t) => getNewSubResponse(p as never, t),
   resub: (p, t) => getResubResponse(p as never, t),
-  giftSubSingle: (p, t) => getGiftSubResponse(p as never, t),
-  giftSubMulti: (p, t) => getGiftSubResponse(p as never, t),
-  giftSubGeneric: (p, t) => getGiftSubResponse(p as never, t),
+  giftSubSingle: (p, t) => getGiftSubResponse(p as never, t, { lifetimeSubs: ' (5 lifetime)' }),
+  giftSubMulti: (p, t) => getGiftSubResponse(p as never, t, { lifetimeSubs: ' (5 lifetime)' }),
+  giftSubGeneric: (p, t) => getGiftSubResponse(p as never, t, { lifetimeSubs: ' (5 lifetime)' }),
   kicksGifted: (p, t) => getKicksGiftedResponse(p as never, t),
   kicksGiftedWithMessage: (p, t) => getKicksGiftedResponse(p as never, t),
   channelReward: (p, t) => getChannelRewardResponse(p as never, t),
   channelRewardWithInput: (p, t) => getChannelRewardResponse(p as never, t),
   channelRewardDeclined: (p, t) => getChannelRewardResponse(p as never, t),
+  streamStarted: (p, t) => getStreamStatusResponse(p as never, t),
+  streamEnded: (p, t) => getStreamStatusResponse(p as never, t),
 };
 
 export async function POST(request: NextRequest) {

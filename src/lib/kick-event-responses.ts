@@ -31,19 +31,25 @@ export function getResubResponse(payload: KickPayload, templates: KickMessageTem
   return replace(templates.resub, { name, months });
 }
 
-export function getGiftSubResponse(payload: KickPayload, templates: KickMessageTemplates): string {
+export function getGiftSubResponse(
+  payload: KickPayload,
+  templates: KickMessageTemplates,
+  extraReplacements?: Record<string, string>
+): string {
   const gifter = payload.gifter;
   const gifterName = gifter?.is_anonymous ? 'Anonymous' : getUsername(gifter);
   const giftees = payload.giftees ?? [];
   const count = giftees.length;
   const names = giftees.map((g: { username?: string }) => g.username).filter(Boolean);
+  const base: Record<string, string> = { gifter: gifterName };
+  if (extraReplacements) Object.assign(base, extraReplacements);
   if (count === 1 && names[0]) {
-    return replace(templates.giftSubSingle, { gifter: gifterName, name: names[0] });
+    return replace(templates.giftSubSingle, { ...base, name: names[0] });
   }
   if (count > 1) {
-    return replace(templates.giftSubMulti, { gifter: gifterName, count: String(count) });
+    return replace(templates.giftSubMulti, { ...base, count: String(count) });
   }
-  return replace(templates.giftSubGeneric, { gifter: gifterName });
+  return replace(templates.giftSubGeneric, base);
 }
 
 export function getKicksGiftedResponse(payload: KickPayload, templates: KickMessageTemplates): string {
@@ -71,4 +77,12 @@ export function getChannelRewardResponse(payload: KickPayload, templates: KickMe
     return replace(templates.channelRewardWithInput, { redeemer, title, userInput });
   }
   return replace(templates.channelReward, { redeemer, title });
+}
+
+/** Payload: livestream.status.updated - status is 'live' | 'offline' (or similar) */
+export function getStreamStatusResponse(payload: KickPayload, templates: KickMessageTemplates): string {
+  const status = String(payload.status ?? payload.livestream?.status ?? '').toLowerCase();
+  const isLive = status === 'live' || status === 'started' || status === 'online';
+  const template = isLive ? templates.streamStarted : templates.streamEnded;
+  return template;
 }

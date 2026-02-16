@@ -13,7 +13,9 @@ import {
   getGiftSubResponse,
   getKicksGiftedResponse,
   getChannelRewardResponse,
+  getStreamStatusResponse,
 } from '@/lib/kick-event-responses';
+import { getKickSubscriptionLeaderboard } from '@/lib/kick-api';
 import {
   parseKickChatMessage,
   handleKickChatCommand,
@@ -179,14 +181,37 @@ export async function POST(request: NextRequest) {
     case 'channel.subscription.renewal':
       message = getResubResponse(payload, templates);
       break;
-    case 'channel.subscription.gifts':
-      message = getGiftSubResponse(payload, templates);
+    case 'channel.subscription.gifts': {
+      let lifetimeSubs = '';
+      const accessTokenForLeaderboard = await getValidAccessToken();
+      if (accessTokenForLeaderboard) {
+        try {
+          const leaderboard = await getKickSubscriptionLeaderboard(accessTokenForLeaderboard);
+          const gifter = payload.gifter as { username?: string; is_anonymous?: boolean } | undefined;
+          if (gifter && !gifter.is_anonymous) {
+            const username = gifter.username;
+            if (username) {
+              const total = leaderboard.get(username.toLowerCase());
+              if (total != null && total > 0) {
+                lifetimeSubs = ` (${total} lifetime)`;
+              }
+            }
+          }
+        } catch {
+          // Leaderboard fetch failed - continue without lifetime subs
+        }
+      }
+      message = getGiftSubResponse(payload, templates, { lifetimeSubs });
       break;
+    }
     case 'kicks.gifted':
       message = getKicksGiftedResponse(payload, templates);
       break;
     case 'channel.reward.redemption.updated':
       message = getChannelRewardResponse(payload, templates);
+      break;
+    case 'livestream.status.updated':
+      message = getStreamStatusResponse(payload, templates);
       break;
     default:
       // Unknown event - acknowledge but don't respond

@@ -11,6 +11,21 @@ import type { StoredKickTokens } from '@/lib/kick-api';
 
 const KICK_API_BASE = 'https://api.kick.com';
 const KICK_TOKENS_KEY = 'kick_tokens';
+const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
+
+export type StreamTitleLocationDisplay = 'country' | 'country_state' | 'country_city';
+
+export interface StreamTitleSettings {
+  customTitle: string;
+  locationDisplay: StreamTitleLocationDisplay;
+  autoUpdateLocation: boolean;
+}
+
+export const DEFAULT_STREAM_TITLE_SETTINGS: StreamTitleSettings = {
+  customTitle: '',
+  locationDisplay: 'country_state',
+  autoUpdateLocation: true,
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -47,8 +62,15 @@ export async function GET() {
   }
 
   const accessToken = await getValidAccessToken();
+  const settings = await kv.get<Partial<StreamTitleSettings>>(KICK_STREAM_TITLE_SETTINGS_KEY);
+  const settingsResponse = { ...DEFAULT_STREAM_TITLE_SETTINGS, ...settings };
+
   if (!accessToken) {
-    return NextResponse.json({ error: 'Not connected to Kick' }, { status: 401 });
+    return NextResponse.json({
+      stream_title: '',
+      settings: settingsResponse,
+      error: 'Not connected to Kick',
+    });
   }
 
   const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
@@ -62,6 +84,8 @@ export async function GET() {
       : '';
     return NextResponse.json({
       error: `Kick API ${res.status}: ${err}${hint}`,
+      stream_title: '',
+      settings: settingsResponse,
     }, { status: 502 });
   }
 
@@ -70,6 +94,7 @@ export async function GET() {
   return NextResponse.json({
     stream_title: ch?.stream_title ?? '',
     slug: ch?.slug,
+    settings: settingsResponse,
   });
 }
 
@@ -86,8 +111,17 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const streamTitle = typeof body.stream_title === 'string' ? body.stream_title : undefined;
+  const settingsBody = body.settings as Partial<StreamTitleSettings> | undefined;
+
+  // Save settings to KV if provided
+  if (settingsBody && typeof settingsBody === 'object') {
+    const stored = await kv.get<Partial<StreamTitleSettings>>(KICK_STREAM_TITLE_SETTINGS_KEY);
+    const merged = { ...DEFAULT_STREAM_TITLE_SETTINGS, ...stored, ...settingsBody };
+    await kv.set(KICK_STREAM_TITLE_SETTINGS_KEY, merged);
+  }
+
   if (streamTitle === undefined) {
-    return NextResponse.json({ error: 'stream_title required' }, { status: 400 });
+    return NextResponse.json({ success: true });
   }
 
   const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {

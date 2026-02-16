@@ -28,7 +28,7 @@ export function formatLocationForChat(
 /**
  * Converts ISO country code to flag emoji
  */
-function getCountryFlagEmoji(countryCode: string | null | undefined): string {
+export function getCountryFlagEmoji(countryCode: string | null | undefined): string {
   if (!countryCode || countryCode.length !== 2) return '';
   
   const codePoints = countryCode
