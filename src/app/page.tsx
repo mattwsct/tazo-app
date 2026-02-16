@@ -78,7 +78,6 @@ export default function AdminPage() {
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
-  const [kickStoredEnabledRaw, setKickStoredEnabledRaw] = useState<Partial<KickMessageEnabled> | null>(null);
 
   
 
@@ -206,7 +205,6 @@ export default function AdminPage() {
       .then((d) => {
         if (d.messages) setKickMessages({ ...DEFAULT_KICK_MESSAGES, ...d.messages });
         if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
-        if (d.storedEnabledRaw !== undefined) setKickStoredEnabledRaw(d.storedEnabledRaw);
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
         if (d.alertSettings?.giftSubShowLifetimeSubs !== undefined) setKickGiftSubShowLifetimeSubs(d.alertSettings.giftSubShowLifetimeSubs);
         if (d.alertSettings?.chatBroadcastLocation !== undefined) setKickChatBroadcastLocation(d.alertSettings.chatBroadcastLocation);
@@ -247,8 +245,6 @@ export default function AdminPage() {
           body: JSON.stringify({ enabled: next }),
         });
         if (r.ok) {
-          const data = await r.json().catch(() => ({}));
-          if (data.storedEnabledRaw !== undefined) setKickStoredEnabledRaw(data.storedEnabledRaw);
           setToast({ type: 'saved', message: 'Saved!' });
         } else {
           const data = await r.json().catch(() => ({}));
@@ -1617,11 +1613,6 @@ export default function AdminPage() {
                   >
                     Reset to defaults
                   </button>
-                  {kickStoredEnabledRaw && (
-                    <span className="group-description" style={{ fontSize: '0.85rem', opacity: 0.8 }}>
-                      KV: {JSON.stringify(kickStoredEnabledRaw)}
-                    </span>
-                  )}
                   <button
                     className="btn btn-secondary"
                     onClick={async () => {
@@ -1633,8 +1624,6 @@ export default function AdminPage() {
                           body: JSON.stringify({ enabled: kickMessageEnabled }),
                         });
                         if (r.ok) {
-                          const data = await r.json().catch(() => ({}));
-                          if (data.storedEnabledRaw !== undefined) setKickStoredEnabledRaw(data.storedEnabledRaw);
                           setToast({ type: 'saved', message: 'Toggles saved!' });
                         } else {
                           const d = await r.json().catch(() => ({}));
