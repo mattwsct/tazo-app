@@ -35,7 +35,6 @@ const WEBHOOK_LOG_MAX = 20;
 async function logWebhookReceived(eventType: string): Promise<void> {
   try {
     const entry = { eventType, at: new Date().toISOString() };
-    const existing = (await kv.lrange<{ eventType: string; at: string }[]>(KICK_WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 2)) ?? [];
     await kv.lpush(KICK_WEBHOOK_LOG_KEY, entry);
     await kv.ltrim(KICK_WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 1);
   } catch {

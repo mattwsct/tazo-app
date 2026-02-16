@@ -38,7 +38,10 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Record<string, unknown>;
     const messagesBody = body.messages as Partial<KickMessageTemplates> | undefined;
     const enabledBody = body.enabled as Partial<KickMessageEnabled> | undefined;
-    const { enabled: _e, ...rest } = body;
+    const rest = { ...body };
+    delete rest.enabled;
+    delete rest.messages;
+    delete rest.action;
     const updates: Partial<KickMessageTemplates> = messagesBody ?? rest;
     const hasMessageUpdates = Object.keys(updates).length > 0;
 

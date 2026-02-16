@@ -10,7 +10,6 @@ import {
   getKicksGiftedResponse,
   getChannelRewardResponse,
 } from '@/lib/kick-event-responses';
-import { DEFAULT_KICK_MESSAGES } from '@/types/kick-messages';
 import type { KickMessageTemplates } from '@/types/kick-messages';
 
 const KICK_TOKENS_KEY = 'kick_tokens';

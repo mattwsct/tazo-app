@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
     request.nextUrl.origin;
   const base = baseUrl.replace(/\/$/, '');
   const redirectUri = `${base}/api/kick-oauth/callback`;
-  const adminUrl = base;
 
   if (error) {
     console.error('[Kick OAuth] Error:', error, searchParams.get('error_description'));

@@ -111,18 +111,6 @@ function calculateMoonPhase(): { name: string; emoji: string; illumination: numb
   return { name: phase, emoji, illumination: Math.round(illumination) };
 }
 
-// Helper to get moon emoji from illumination percentage
-function getMoonEmoji(illumination: number): string {
-  if (illumination < 2) return '🌑'; // New Moon
-  if (illumination < 25) return '🌒'; // Waxing Crescent
-  if (illumination < 48) return '🌓'; // First Quarter
-  if (illumination < 52) return '🌔'; // Waxing Gibbous
-  if (illumination < 75) return '🌕'; // Full Moon
-  if (illumination < 98) return '🌖'; // Waning Gibbous
-  if (illumination < 100) return '🌗'; // Last Quarter
-  return '🌘'; // Waning Crescent
-}
-
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -361,8 +349,6 @@ export async function GET(
         visibility,
       });
 
-      const feelsF = Math.round(feelsLikeC * 9 / 5 + 32);
-      
       // Enhanced weather response with feels like and more details
       const parts: string[] = [];
       parts.push(`${emoji} ${formatTemperature(tempC)} ${desc}`);
@@ -500,7 +486,7 @@ export async function GET(
 
         let minTempC = Infinity;
         let maxTempC = -Infinity;
-        let conditions: string[] = [];
+        const conditions: string[] = [];
         let windSpeed = 0;
         let humidity = 0;
         

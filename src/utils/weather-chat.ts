@@ -49,8 +49,7 @@ export function getNotableConditions(data: {
   visibility: number | null;
 }): string[] {
   const conditions: string[] = [];
-  const { tempC, feelsLikeC, windKmh, humidity, visibility } = data;
-  const feelsLikeF = Math.round(feelsLikeC * 9 / 5 + 32);
+  const { tempC, windKmh, humidity, visibility } = data;
 
   if (windKmh > 30) conditions.push(`wind ${windKmh}km/h`);
   if (tempC > 35) {

@@ -142,40 +142,6 @@ function classifySize(z: number): string {
   return 'massive';
 }
 
-function getFunFact(avgZ: number): string {
-  const messages = {
-    high: [
-      'legendary size', 'exceptional', 'absolute unit', 'god-tier', 'mythical proportions',
-      'legendary status', 'elite tier', 'top shelf', 'premium grade', 'exceptional specimen',
-      'monster energy', 'beast mode', 'titanic', 'colossal', 'magnificent', 'spectacular',
-      'world-class', 'champion size', 'hall of fame', 'legendary', 'epic proportions',
-      'king-sized', 'emperor tier', 'divine proportions', 'celestial size', 'immortal status',
-    ],
-    medium: [
-      'impressive', 'respectable', 'notable', 'commendable', 'praiseworthy', 'standout',
-      'remarkable', 'admirable', 'worthy of respect', 'excellent', 'outstanding',
-      'top-tier', 'premium', 'first-class', 'high-grade', 'superior', 'exceptional',
-      'impressive specimen', 'noteworthy', 'praiseworthy', 'commendable', 'admirable',
-    ],
-    low: [
-      'perfectly sized', 'just right', 'classic', 'tried and true', 'reliable choice',
-      'goldilocks zone', 'sweet spot', 'ideal proportions', 'well-balanced', 'perfectly proportioned',
-      'standard issue', 'textbook perfect', 'exactly as expected', 'right in the middle',
-      'perfectly average', 'just the right size', 'ideal dimensions', 'perfect balance',
-      'classic proportions', 'standard build', 'normal and nice', 'perfectly normal',
-      'right where it should be', 'ideal size', 'perfect fit', 'just perfect',
-    ],
-  };
-
-  let category: keyof typeof messages;
-  if (avgZ >= 3) category = 'high';
-  else if (avgZ >= 2) category = 'medium';
-  else category = 'low';
-
-  const arr = messages[category];
-  return `, ${arr[Math.floor(Math.random() * arr.length)]}`;
-}
-
 function getPercentileText(percentile: number): string {
   // Show exact percentile for very high rankings, rounded to 2 decimals
   if (percentile >= 99.9) {
@@ -189,80 +155,6 @@ function getPercentileText(percentile: number): string {
   if (percentile >= 95) return 'top 5%';
   if (percentile >= 90) return 'top 10%';
   return '';
-}
-
-function getPercentileFunFact(percentile: number): string {
-  const topPercent = 100 - percentile;
-  
-  // Fun facts based on rarity - randomized for variety
-  const facts: Record<string, string[]> = {
-    '99.9+': [
-      'Rarer than finding a four-leaf clover!',
-      'Rarer than being struck by lightning!',
-      'Top 0.1% - absolutely exceptional!',
-      'Statistically extraordinary!',
-    ],
-    '99.5-99.9': [
-      'Rarer than winning the lottery!',
-      'Top 0.5% - incredibly rare!',
-      'Statistically remarkable!',
-    ],
-    '99-99.5': [
-      'Top 1% - exceptional!',
-      'Rarer than 99% of people!',
-      'Statistically elite!',
-    ],
-    '97.5-99': [
-      'Top 2.5% - very impressive!',
-      'Well above average - great size!',
-      'Statistically excellent!',
-    ],
-    '95-97.5': [
-      'Top 5% - well above average!',
-      'Statistically impressive!',
-      'Above 95% of people!',
-    ],
-    '90-95': [
-      'Top 10% - great size!',
-      'Well above average!',
-      'Statistically notable!',
-    ],
-    '75-90': [
-      'Top 25% - above average!',
-      'Better than most!',
-      'Statistically above average!',
-    ],
-    '50-75': [
-      'Right around average - perfectly normal!',
-      'Average size - totally normal!',
-      'Right in the middle - perfectly fine!',
-    ],
-    '25-50': [
-      'Below average but still common!',
-      'Slightly below average - still normal!',
-      'Common size - nothing unusual!',
-    ],
-    '0-25': [
-      'Less common but still normal!',
-      'Smaller than average - still normal!',
-      'Below average - perfectly fine!',
-    ],
-  };
-  
-  let category: string;
-  if (percentile >= 99.9) category = '99.9+';
-  else if (percentile >= 99.5) category = '99.5-99.9';
-  else if (percentile >= 99) category = '99-99.5';
-  else if (percentile >= 97.5) category = '97.5-99';
-  else if (percentile >= 95) category = '95-97.5';
-  else if (percentile >= 90) category = '90-95';
-  else if (percentile >= 75) category = '75-90';
-  else if (percentile >= 50) category = '50-75';
-  else if (percentile >= 25) category = '25-50';
-  else category = '0-25';
-  
-  const factArray = facts[category];
-  return factArray[Math.floor(Math.random() * factArray.length)];
 }
 
 function getCondomSuggestion(girthInches: number): string {
@@ -294,16 +186,6 @@ function findSimilarPornStarByLength(lengthInches: number, unit: 'inch' | 'cm'):
     ? `Same length as ${closest.name}`
     : `Similar length to ${closest.name}`;
   return ` ${phrase} (${formatMeasurement(closest.length, unit)})`;
-}
-
-function getPercentageAboveAverage(value: number, mean: number): string {
-  const percentage = ((value - mean) / mean) * 100;
-  if (Math.abs(percentage) < 1) return ' (average)';
-  if (percentage > 0) {
-    return ` (+${percentage.toFixed(1)}% above avg)`;
-  } else {
-    return ` (${percentage.toFixed(1)}% below avg)`;
-  }
 }
 
 function findSimilarPornStar(length: number, girth: number | null, unit: 'inch' | 'cm'): string | null {

@@ -39,6 +39,7 @@ export async function handleKickChatCommand(
   cmd: KickChatCommand,
   _args: string
 ): Promise<string | null> {
+  void _args; // Reserved for future command arguments
   const settings = (await kv.get<OverlaySettings>('overlay_settings')) || DEFAULT_OVERLAY_SETTINGS;
   const displayMode = settings.locationDisplay;
   const persistentLocation = await getPersistentLocation();
@@ -95,7 +96,6 @@ export async function handleKickChatCommand(
       humidity,
       visibility,
     });
-    const feelsF = Math.round(feelsLikeC * 9 / 5 + 32);
     const parts: string[] = [`${emoji} ${formatTemperature(tempC)} ${desc}`];
     if (Math.abs(feelsLikeC - tempC) > 1) {
       parts.push(`feels like ${formatTemperature(feelsLikeC)}`);

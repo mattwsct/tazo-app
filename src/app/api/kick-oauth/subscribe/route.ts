@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
         expires_at: now + tokens.expires_in * 1000,
         scope: tokens.scope,
       });
-    } catch (err) {
+    } catch {
       return NextResponse.json({
         error: 'Token refresh failed. Re-connect via /api/kick-oauth/authorize',
       }, { status: 401 });

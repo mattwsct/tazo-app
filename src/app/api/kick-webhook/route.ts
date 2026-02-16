@@ -14,8 +14,11 @@ import {
   getKicksGiftedResponse,
   getChannelRewardResponse,
 } from '@/lib/kick-event-responses';
+import { DEFAULT_KICK_MESSAGES } from '@/types/kick-messages';
+import type { KickMessageTemplates } from '@/types/kick-messages';
 
 const KICK_TOKENS_KEY = 'kick_tokens';
+const KICK_MESSAGES_KEY = 'kick_message_templates';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -68,25 +71,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  const storedTemplates = await kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY);
+  const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
+
   let message: string | null = null;
   switch (eventType) {
     case 'channel.followed':
-      message = getFollowResponse(payload);
+      message = getFollowResponse(payload, templates);
       break;
     case 'channel.subscription.new':
-      message = getNewSubResponse(payload);
+      message = getNewSubResponse(payload, templates);
       break;
     case 'channel.subscription.renewal':
-      message = getResubResponse(payload);
+      message = getResubResponse(payload, templates);
       break;
     case 'channel.subscription.gifts':
-      message = getGiftSubResponse(payload);
+      message = getGiftSubResponse(payload, templates);
       break;
     case 'kicks.gifted':
-      message = getKicksGiftedResponse(payload);
+      message = getKicksGiftedResponse(payload, templates);
       break;
     case 'channel.reward.redemption.updated':
-      message = getChannelRewardResponse(payload);
+      message = getChannelRewardResponse(payload, templates);
       break;
     default:
       // Unknown event - acknowledge but don't respond
