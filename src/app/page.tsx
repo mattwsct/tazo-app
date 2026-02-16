@@ -50,16 +50,6 @@ export default function AdminPage() {
 
   // Kick bot state
   const [kickStatus, setKickStatus] = useState<{ connected: boolean; subscriptions?: unknown[] } | null>(null);
-  const [kickWebhookLog, setKickWebhookLog] = useState<{ eventType: string; at: string }[]>([]);
-  const [kickWebhookDebug, setKickWebhookDebug] = useState<{
-    at: string;
-    eventType: string;
-    bodyLen: number;
-    hasSig: boolean;
-    hasMsgId: boolean;
-    hasTs: boolean;
-    verified: boolean;
-  } | null>(null);
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const [kickMessageEnabled, setKickMessageEnabled] = useState<KickMessageEnabled>(DEFAULT_KICK_MESSAGE_ENABLED);
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
@@ -67,7 +57,7 @@ export default function AdminPage() {
   const [kickTestSending, setKickTestSending] = useState(false);
   const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
-  const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('country_state');
+  const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('state_country');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
@@ -208,7 +198,7 @@ export default function AdminPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.settings) {
-          setKickStreamTitleLocationDisplay(d.settings.locationDisplay ?? 'country_state');
+          setKickStreamTitleLocationDisplay((d.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state_country');
           setKickStreamTitleAutoUpdate(d.settings.autoUpdateLocation !== false);
         }
         if (d.stream_title != null) {
@@ -219,13 +209,6 @@ export default function AdminPage() {
             setKickStreamTitleCustom(d.settings?.customTitle ?? d.stream_title ?? '');
           }
         }
-      })
-      .catch(() => {});
-    fetch('/api/kick-webhook-log', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((d) => {
-        setKickWebhookLog(d.log ?? []);
-        setKickWebhookDebug(d.debug ?? null);
       })
       .catch(() => {});
   }, [isAuthenticated]);
@@ -343,11 +326,13 @@ export default function AdminPage() {
       const r = await authenticatedFetch('/api/kick-channel');
       const data = await r.json();
       if (data.settings) {
-        setKickStreamTitleLocationDisplay(data.settings.locationDisplay ?? 'country_state');
+        setKickStreamTitleLocationDisplay((data.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state_country');
         setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
       }
       if (data.stream_title != null) {
-        if (data.is_live) {
+        if (data.stream_title === '' && !data.error) {
+          setToast({ type: 'error', message: 'Stream title is empty — you may need to be live.' });
+        } else if (data.is_live && data.stream_title) {
           const parsed = parseStreamTitleToCustom(data.stream_title);
           setKickStreamTitleCustom(parsed || (data.settings?.customTitle ?? ''));
         } else {
@@ -1065,6 +1050,31 @@ export default function AdminPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          if (!confirm('Disconnect Kick? Event subscriptions and chat responses will stop.')) return;
+                          try {
+                            const r = await fetch('/api/kick-oauth/disconnect', {
+                              method: 'POST',
+                              credentials: 'include',
+                            });
+                            const d = await r.json();
+                            if (r.ok) {
+                              setKickStatus({ connected: false });
+                              setToast({ type: 'saved', message: 'Kick disconnected' });
+                            } else {
+                              setToast({ type: 'error', message: d.error ?? 'Failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Failed to disconnect' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
                         onClick={() => {
                           const popup = window.open('/api/kick-oauth/authorize', 'kick_oauth', 'width=500,height=600');
                           const handler = (e: MessageEvent) => {
@@ -1142,80 +1152,6 @@ export default function AdminPage() {
                 )}
               </div>
 
-              {/* Webhook activity */}
-              <div className="setting-group">
-                <label className="group-label">Webhook activity</label>
-                {kickWebhookDebug && (
-                  <div
-                    className="kick-webhook-debug"
-                    style={{
-                      marginBottom: '12px',
-                      padding: '10px 12px',
-                      background: kickWebhookDebug.verified ? 'rgba(34,197,94,0.15)' : 'rgba(234,179,8,0.15)',
-                      borderRadius: 8,
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    <strong>Last request received</strong> {new Date(kickWebhookDebug.at).toLocaleString()}
-                    <br />
-                    <code>{kickWebhookDebug.eventType}</code> · body: {kickWebhookDebug.bodyLen}B
-                    {kickWebhookDebug.hasSig ? ' · sig ✓' : ' · no sig'}
-                    {kickWebhookDebug.hasMsgId ? ' · msgId ✓' : ' · no msgId'}
-                    {kickWebhookDebug.hasTs ? ' · ts ✓' : ' · no ts'}
-                    <br />
-                    {kickWebhookDebug.verified ? (
-                      <span style={{ color: 'rgb(34,197,94)' }}>Signature verified ✓</span>
-                    ) : (
-                      <span style={{ color: 'rgb(234,179,8)' }}>Signature failed — check secret / payload order</span>
-                    )}
-                  </div>
-                )}
-                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  {kickWebhookLog.length === 0
-                    ? 'No webhooks received yet. Kick may not send chat events when the streamer posts — try having a viewer type !ping or !test.'
-                    : `Last ${kickWebhookLog.length} webhook(s):`}
-                </p>
-                {kickWebhookLog.length > 0 && (
-                  <div className="kick-webhook-log">
-                    {kickWebhookLog.map((e, i) => (
-                      <div key={i} className="kick-webhook-log-entry">
-                        <code>{e.eventType}</code>
-                        <span className="kick-webhook-log-time">{new Date(e.at).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-small"
-                  style={{ marginTop: '8px' }}
-                  onClick={() =>
-                    fetch('/api/kick-webhook-log', { credentials: 'include' })
-                      .then((r) => r.json())
-                      .then((d) => {
-                        setKickWebhookLog(d.log ?? []);
-                        setKickWebhookDebug(d.debug ?? null);
-                      })
-                  }
-                >
-                  Refresh
-                </button>
-              </div>
-
-              {/* Chat commands */}
-              <div className="setting-group">
-                <label className="group-label">Chat commands</label>
-                <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Type <code>!ping</code> or <code>!test</code> (bot check), <code>!location</code>, <code>!weather</code>, <code>!time</code>. Kick may not send webhooks for the streamer&apos;s own messages — have a viewer test.
-                </p>
-                <div className="kick-commands-list">
-                  <code>!ping</code> / <code>!test</code> <span className="kick-cmd-desc">— Pong!</span><br />
-                  <code>!location</code> <span className="kick-cmd-desc">— current location</span><br />
-                  <code>!weather</code> <span className="kick-cmd-desc">— temp, conditions</span><br />
-                  <code>!time</code> <span className="kick-cmd-desc">— local time</span>
-                </div>
-              </div>
-
               {/* Test Message */}
               <div className="setting-group">
                 <label className="group-label">Send test message</label>
@@ -1288,9 +1224,9 @@ export default function AdminPage() {
                           onChange={(e) => setKickStreamTitleLocationDisplay(e.target.value as StreamTitleLocationDisplay)}
                           style={{ width: 'auto', minWidth: 140 }}
                         >
-                          <option value="country">Country only</option>
-                          <option value="country_state">Country and state</option>
-                          <option value="country_city">Country and city</option>
+                          <option value="country_only">Country only</option>
+                          <option value="state_country">State and country</option>
+                          <option value="city_state">City and state</option>
                         </select>
                       </div>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>

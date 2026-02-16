@@ -13,7 +13,7 @@ const KICK_API_BASE = 'https://api.kick.com';
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
 
-export type StreamTitleLocationDisplay = 'country' | 'country_state' | 'country_city';
+export type StreamTitleLocationDisplay = 'country_only' | 'state_country' | 'city_state';
 
 export interface StreamTitleSettings {
   customTitle: string;
@@ -23,7 +23,7 @@ export interface StreamTitleSettings {
 
 export const DEFAULT_STREAM_TITLE_SETTINGS: StreamTitleSettings = {
   customTitle: '',
-  locationDisplay: 'country_state',
+  locationDisplay: 'state_country',
   autoUpdateLocation: true,
 };
 
@@ -62,8 +62,18 @@ export async function GET() {
   }
 
   const accessToken = await getValidAccessToken();
-  const settings = await kv.get<Partial<StreamTitleSettings>>(KICK_STREAM_TITLE_SETTINGS_KEY);
-  const settingsResponse = { ...DEFAULT_STREAM_TITLE_SETTINGS, ...settings };
+  const stored = await kv.get<Record<string, unknown>>(KICK_STREAM_TITLE_SETTINGS_KEY);
+  const locDisplay = stored?.locationDisplay as string | undefined;
+  const migratedDisplay: StreamTitleLocationDisplay =
+    locDisplay === 'country' ? 'country_only' :
+    locDisplay === 'country_state' ? 'state_country' :
+    locDisplay === 'country_city' ? 'city_state' :
+    (locDisplay === 'country_only' || locDisplay === 'state_country' || locDisplay === 'city_state' ? locDisplay : undefined) ?? DEFAULT_STREAM_TITLE_SETTINGS.locationDisplay;
+  const settingsResponse: StreamTitleSettings = {
+    ...DEFAULT_STREAM_TITLE_SETTINGS,
+    ...(stored as Partial<StreamTitleSettings>),
+    locationDisplay: migratedDisplay,
+  };
 
   if (!accessToken) {
     return NextResponse.json({
@@ -119,7 +129,7 @@ export async function PATCH(request: NextRequest) {
   // Save settings to KV if provided
   if (settingsBody && typeof settingsBody === 'object') {
     const stored = await kv.get<Partial<StreamTitleSettings>>(KICK_STREAM_TITLE_SETTINGS_KEY);
-    const merged = { ...DEFAULT_STREAM_TITLE_SETTINGS, ...stored, ...settingsBody };
+    const merged: StreamTitleSettings = { ...DEFAULT_STREAM_TITLE_SETTINGS, ...stored, ...settingsBody };
     await kv.set(KICK_STREAM_TITLE_SETTINGS_KEY, merged);
   }
 

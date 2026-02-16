@@ -7,7 +7,8 @@ import type { LocationData } from './location-utils';
 import { formatCountryName } from './location-utils';
 import { getCountryFlagEmoji, getCountryNameFromCode } from './chat-utils';
 
-export type StreamTitleLocationDisplay = 'country' | 'country_state' | 'country_city';
+/** Country only = flag + country; State and country = flag + country, state; City and state = flag + city, state */
+export type StreamTitleLocationDisplay = 'country_only' | 'state_country' | 'city_state';
 
 /** Extract custom title from full Kick stream title (removes location part — flag prefix). */
 export function parseStreamTitleToCustom(fullTitle: string): string {
@@ -75,25 +76,26 @@ export function formatLocationForStreamTitle(
   if (!flag && !countryName) return '';
 
   switch (display) {
-    case 'country':
+    case 'country_only':
       return flag ? `${flag} ${countryName}` : countryName;
-    case 'country_state': {
+    case 'state_country': {
       if (!state || hasOverlappingNames(state, countryName)) {
         return flag ? `${flag} ${countryName}` : countryName;
       }
-      return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
+      return flag ? `${flag} ${countryName}, ${state}` : `${countryName}, ${state}`;
     }
-    case 'country_city': {
+    case 'city_state': {
       if (city) {
-        const includeState = state && !hasOverlappingNames(city, state) && !hasOverlappingNames(state, countryName);
-        const suffix = includeState ? `${state}, ${countryName}` : countryName;
+        const includeState = state && !hasOverlappingNames(city, state);
         if (hasOverlappingNames(city, countryName)) {
           return flag ? `${flag} ${city}` : city;
         }
-        return flag ? `${flag} ${city}, ${suffix}` : `${city}, ${suffix}`;
+        return flag
+          ? `${flag} ${includeState ? `${city}, ${state}` : city}`
+          : includeState ? `${city}, ${state}` : city;
       }
       if (state && !hasOverlappingNames(state, countryName)) {
-        return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
+        return flag ? `${flag} ${countryName}, ${state}` : `${countryName}, ${state}`;
       }
       return flag ? `${flag} ${countryName}` : countryName;
     }
