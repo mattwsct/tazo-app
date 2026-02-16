@@ -57,7 +57,12 @@ export async function GET() {
 
   if (!res.ok) {
     const err = await res.text();
-    return NextResponse.json({ error: `Kick API ${res.status}: ${err}` }, { status: res.status >= 400 && res.status < 500 ? res.status : 502 });
+    const hint = res.status === 401
+      ? ' Reconnect Kick (Reconnect button above) to grant channel:read and channel:write scopes.'
+      : '';
+    return NextResponse.json({
+      error: `Kick API ${res.status}: ${err}${hint}`,
+    }, { status: 502 });
   }
 
   const data = await res.json();
@@ -96,7 +101,12 @@ export async function PATCH(request: NextRequest) {
 
   if (!res.ok) {
     const err = await res.text();
-    return NextResponse.json({ error: `Kick API ${res.status}: ${err}` }, { status: res.status >= 400 && res.status < 500 ? res.status : 502 });
+    const hint = res.status === 401
+      ? ' Reconnect Kick (Reconnect button above) to grant channel:read and channel:write scopes.'
+      : '';
+    return NextResponse.json({
+      error: `Kick API ${res.status}: ${err}${hint}`,
+    }, { status: 502 });
   }
 
   return NextResponse.json({ success: true });

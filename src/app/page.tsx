@@ -1134,7 +1134,7 @@ export default function AdminPage() {
               <div className="setting-group">
                 <label className="group-label">Stream title</label>
                 <p className="group-label" style={{ marginBottom: '8px', fontWeight: 400, opacity: 0.9, fontSize: '0.9rem' }}>
-                  Update your Kick stream title. Add current location from GPS.
+                  Update your Kick stream title. Add current location from GPS. If you get 401, use <strong>Reconnect</strong> above to grant channel permissions.
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
