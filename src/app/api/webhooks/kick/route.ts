@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
   const isDisabled = toggleKey && (
     toggleValue === false ||
-    toggleValue === 0 ||
+    (toggleValue as unknown) === 0 ||
     String(toggleValue).toLowerCase() === 'false'
   );
 
@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
   const toggleValueRecheck = toggleKey ? enabledRecheck[toggleKey] : undefined;
   const isDisabledRecheck = toggleKey && (
     toggleValueRecheck === false ||
-    toggleValueRecheck === 0 ||
+    (toggleValueRecheck as unknown) === 0 ||
     String(toggleValueRecheck).toLowerCase() === 'false'
   );
   if (isDisabledRecheck) {

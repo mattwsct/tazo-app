@@ -31,7 +31,7 @@ export async function GET() {
     const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
     const isDisabled = toggleKey && (
       toggleValue === false ||
-      toggleValue === 0 ||
+      (toggleValue as unknown) === 0 ||
       String(toggleValue).toLowerCase() === 'false'
     );
     const diagnostic = {
