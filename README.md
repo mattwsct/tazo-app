@@ -263,8 +263,8 @@ Settings changes propagate to overlay in real-time via:
    - Public read-only access (no authentication required)
    - Requires Vercel KV for persistence
    - Falls back to polling if SSE unavailable
-2. **Polling Fallback** - Checks for updates every 2 seconds
-   - Used when SSE not available (e.g., no KV configured)
+2. **Polling Fallback** - Checks every 15s when SSE hasn't updated recently
+   - Skipped for 20s after each SSE update to reduce KV reads
    - Ensures settings eventually sync even without SSE
 
 **Security Model**
@@ -324,12 +324,14 @@ The overlay automatically prevents caching issues:
 
 **Settings Update Flow**
 1. Admin panel saves settings → Settings stored in KV database
-2. Server-Sent Events (SSE) broadcasts update → All connected overlays receive update instantly
-3. Polling fallback → Overlays check for updates every 2 seconds if SSE unavailable
+2. Server-Sent Events (SSE) broadcasts update → All connected overlays receive update (checks every 10s)
+3. Polling fallback → Overlays poll every 15s when SSE hasn't updated recently (skipped when SSE is active to reduce KV usage)
 4. Settings appear in OBS → No manual refresh needed!
 
+**Vercel KV limits** — Free tier is ~30,000 commands/day. The overlay uses SSE (10s) and polling (15s fallback) to stay under limits. Kick chat webhooks read poll state and settings per message; a busy chat adds reads. One overlay + typical Kick usage fits free tier. Multiple overlays or very active chat may need a paid KV plan.
+
 **If settings changes don't appear in OBS:**
-1. **Wait 2-5 seconds** - Settings sync automatically via SSE/polling
+1. **Wait 10-15 seconds** - Settings sync via SSE/polling
 2. **Refresh the browser source**: Right-click → Refresh (if needed)
 3. **Check browser console**: Right-click browser source → Interact → F12 → Console tab
 4. **Verify URL**: Should include version parameter (e.g., `/overlay?v=1234567890`)
@@ -756,7 +758,7 @@ Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks
 
 ### Chat poll
 
-When enabled, broadcaster or mods can start a poll with `!poll Question? Option1, Option2, Option3`. No options after `?` = Yes/No. Chatters vote by typing the option text (e.g. `pizza`, `yes`, `y`). Every message counts. Poll runs for a configurable duration (default 30s), then the winner is posted in chat and shown on the overlay (bottom-right) for 10 seconds. If a new `!poll` is sent while one is running, it queues and starts after the current poll and winner display. When a queued poll starts, the bot announces it in chat with how to vote. Use `!pollstatus` (or `!poll status`) to see the current poll and how to vote, or "No poll active" if none is running. Admin settings: enable/disable, duration, toggles for Everyone/Mods/VIPs/OGs/Subs to start polls (broadcaster can always start), max queued polls (1–20), **Pin poll start message** (when Kick adds the API), and **Send poll reminder at halfway** (sends one reminder at 50% of duration to keep the poll visible in chat). Poll start and winner messages reply to the original `!poll` message to keep the thread together. When queue is full, the bot replies to the user. When a poll is queued, the bot replies with position and estimated start time. Winner message format: `Poll "Question" — Winner wins! (N votes). Top voter: username (M votes).` Requires Kick connected and chat webhooks.
+When enabled, broadcaster or mods can start a poll with `!poll Question? Option1, Option2, Option3`. No options after `?` = Yes/No. Chatters vote by typing the option text (e.g. `pizza`, `yes`, `y`). Every message counts. Poll runs for a configurable duration (default 30s), then the winner is posted in chat and shown on the overlay (bottom-right) for 10 seconds. If a new `!poll` is sent while one is running, it queues and starts after the current poll and winner display. When a queued poll starts, the bot announces it in chat with how to vote. Use `!pollstatus` (or `!poll status`) to see the current poll and how to vote, or "No poll active" if none is running. Poll options and text on the overlay are displayed in lowercase; special characters and emojis are stripped; slurs and profanity are blocked (both at poll creation and on overlay display). Edit `src/lib/poll-content-filter.ts` to add or remove blocked terms. Admin settings: enable/disable, duration, toggles for Everyone/Mods/VIPs/OGs/Subs to start polls (broadcaster can always start), max queued polls (1–20), **Pin poll start message** (when Kick adds the API), and **Send poll reminder at halfway** (sends one reminder at 50% of duration to keep the poll visible in chat). Poll start and winner messages reply to the original `!poll` message to keep the thread together. When queue is full, the bot replies to the user. When a poll is queued, the bot replies with position and estimated start time. Winner message format: `Poll "Question" — Winner wins! (N votes). Top voter: username (M votes).` Requires Kick connected and chat webhooks.
 
 ### Future ideas
 

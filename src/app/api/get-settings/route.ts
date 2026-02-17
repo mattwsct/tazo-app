@@ -16,15 +16,16 @@ async function handleGET() {
       kv.get<PollState | null>(POLL_STATE_KEY),
     ]);
     const pollState: PollState | null = rawPollState ?? null;
-
-    if (process.env.NODE_ENV === 'development') {
-      OverlayLogger.settings('Raw settings from KV', settings);
-    }
-
     const combinedSettings = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
-    
+
+    // Log at most once per 30s in dev to avoid log spam (get-settings is polled frequently)
     if (process.env.NODE_ENV === 'development') {
-      OverlayLogger.settings('Final combined settings', combinedSettings);
+      const now = Date.now();
+      const lastLog = (globalThis as { _getSettingsLastLog?: number })._getSettingsLastLog ?? 0;
+      if (now - lastLog > 30000) {
+        (globalThis as { _getSettingsLastLog?: number })._getSettingsLastLog = now;
+        OverlayLogger.settings('Settings loaded', { hasPollState: !!pollState });
+      }
     }
     
     return NextResponse.json(combinedSettings, {

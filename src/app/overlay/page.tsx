@@ -60,6 +60,7 @@ import {
   isAltitudeStale
 } from '@/utils/staleness-utils';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
+import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
 
 // Extract constants for cleaner code
 const {
@@ -1561,17 +1562,29 @@ function OverlayPage() {
               if (poll.status === 'active' || showWinner) {
                 return (
                   <div className="overlay-box poll-box">
-                    <div className="poll-question">{poll.question}</div>
+                    <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
                     {showWinner ? (
-                      <div className="poll-winner">{poll.winnerMessage ?? 'Poll ended'}</div>
+                      <div className="poll-winner">{filterTextForDisplay(poll.winnerMessage ?? 'Poll ended')}</div>
                     ) : (
                       <div className="poll-options">
-                        {poll.options.map((opt, i) => (
-                          <div key={i} className="poll-option">
-                            <span className="poll-option-label">{opt.label}</span>
-                            <span className="poll-option-votes">{opt.votes}</span>
-                          </div>
-                        ))}
+                        {(() => {
+                          const totalVotes = poll.options.reduce((s, o) => s + o.votes, 0);
+                          return poll.options.map((opt, i) => {
+                            const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+                            const displayLabel = filterOptionForDisplay(opt.label);
+                            return (
+                              <div key={i} className="poll-option">
+                                <div className="poll-option-bar">
+                                  <div className="poll-option-fill" style={{ width: `${pct}%` }} />
+                                  <div className="poll-option-text">
+                                    <span className="poll-option-label">{displayLabel}</span>
+                                    <span className="poll-option-votes">{opt.votes}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </div>

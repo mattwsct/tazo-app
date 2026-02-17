@@ -105,8 +105,8 @@ export async function GET(request: NextRequest): Promise<Response> {
           checkForUpdates();
         }, 100);
       
-      // Check for updates every 2 seconds for more responsive updates
-      const interval = setInterval(checkForUpdates, 2000);
+      // Check every 10s to balance responsiveness with KV limits (Vercel free tier ~30k/day)
+      const interval = setInterval(checkForUpdates, 10000);
       
       // Cleanup on close
       request.signal.addEventListener('abort', () => {

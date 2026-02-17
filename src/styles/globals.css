@@ -216,6 +216,7 @@ body.overlay-page {
 /* === POLL STYLES === */
 .poll-box {
   font-size: var(--font-size-sm);
+  max-width: 33.333vw;
 }
 
 .poll-question {
@@ -233,21 +234,47 @@ body.overlay-page {
 
 .poll-option {
   display: flex;
+}
+
+.poll-option-bar {
+  position: relative;
+  width: 100%;
+  min-height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.poll-option-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(34, 197, 94, 0.7);
+  border-radius: 8px;
+  transition: width 0.2s ease-out;
+}
+
+.poll-option-text {
+  position: relative;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  padding: 6px 8px;
   gap: var(--gap-md);
+  z-index: 1;
 }
 
 .poll-option-label {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .poll-option-votes {
   font-weight: 700;
   flex-shrink: 0;
-  color: rgba(34, 197, 94, 0.95);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .poll-winner {

@@ -4,7 +4,7 @@
 
 import { kv } from '@vercel/kv';
 import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
-import { parsePollCommand, parseVote, canStartPoll, computePollResult } from '@/lib/poll-logic';
+import { parsePollCommand, parseVote, canStartPoll, computePollResult, pollContainsBlockedContent } from '@/lib/poll-logic';
 import {
   getPollState,
   setPollState,
@@ -176,6 +176,21 @@ export async function handleChatPoll(
     const parsed = parsePollCommand(contentTrimmed);
     if (!parsed) return { handled: true };
 
+    if (pollContainsBlockedContent(parsed.question, parsed.options)) {
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            'Poll rejected: question or options contain inappropriate content.',
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+
     const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
     const roles = getSenderRoles(payload.sender);
     const canStart = canStartPoll(senderUsername, broadcasterSlug, settings, roles);
@@ -187,6 +202,37 @@ export async function handleChatPoll(
 
     if (hasActive || hasWinner) {
       const queue = await getPollQueue();
+
+      if (hasWinner && queue.length === 0) {
+        await setPollState(null);
+        const state: PollState = {
+          id: `poll_${Date.now()}`,
+          question: parsed.question,
+          options: parsed.options.map((o) => ({ ...o, votes: 0, voters: {} })),
+          startedAt: Date.now(),
+          durationSeconds: settings.durationSeconds,
+          status: 'active',
+        };
+        await setPollState(state);
+        const accessToken = await getValidAccessToken();
+        const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
+        if (accessToken) {
+          try {
+            const sent = await sendKickChatMessage(
+              accessToken,
+              buildPollStartMessage(parsed.question, parsed.options, settings.durationSeconds),
+              triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
+            );
+            const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
+            if (msgId) {
+              state.startMessageId = String(msgId);
+              await setPollState(state);
+            }
+          } catch { /* ignore */ }
+        }
+        return { handled: true };
+      }
+
       const maxQueued = Math.max(1, settings.maxQueuedPolls ?? 5);
 
       if (queue.length >= maxQueued) {
@@ -272,8 +318,10 @@ export async function handleChatPoll(
   const now = Date.now();
   const elapsed = (now - currentState.startedAt) / 1000;
 
-  // Optional reminder at halfway (pseudo-pin when Kick has no pin API)
+  // Optional reminder at halfway (pseudo-pin when Kick has no pin API). Skip if already past duration.
+  const remaining = Math.max(0, Math.ceil(currentState.durationSeconds - elapsed));
   if (
+    remaining > 0 &&
     settings.sendPollReminder &&
     !currentState.reminderSent &&
     elapsed >= currentState.durationSeconds / 2
@@ -282,7 +330,6 @@ export async function handleChatPoll(
     await setPollState(currentState);
     const labels = currentState.options.map((o) => `'${o.label.toLowerCase()}'`);
     const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
-    const remaining = Math.max(0, Math.ceil(currentState.durationSeconds - elapsed));
     const accessToken = await getValidAccessToken();
     if (accessToken) {
       try {
@@ -296,8 +343,15 @@ export async function handleChatPoll(
   }
 
   if (elapsed >= currentState.durationSeconds) {
-    // Poll ended - compute winner, post to chat, set winner state
-    const { winnerMessage } = computePollResult(currentState);
+    const { winnerMessage, topVoter } = computePollResult(currentState);
+    const winnerState: PollState = {
+      ...currentState,
+      status: 'winner',
+      winnerMessage,
+      winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
+      topVoter,
+    };
+    await setPollState(winnerState);
     const accessToken = await getValidAccessToken();
     if (accessToken) {
       try {
@@ -308,14 +362,6 @@ export async function handleChatPoll(
         );
       } catch { /* ignore */ }
     }
-    const winnerState: PollState = {
-      ...currentState,
-      status: 'winner',
-      winnerMessage,
-      winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
-      topVoter: computePollResult(currentState).topVoter,
-    };
-    await setPollState(winnerState);
     return { handled: true };
   }
 

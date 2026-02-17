@@ -3,6 +3,7 @@
  */
 
 import type { PollOption, PollState, QueuedPoll } from '@/types/poll';
+import { containsBlockedContent } from '@/lib/poll-content-filter';
 
 const YES_ALIASES = new Set(['yes', 'y']);
 const NO_ALIASES = new Set(['no', 'n']);
@@ -29,6 +30,15 @@ export function parsePollCommand(content: string): { question: string; options: 
     options = parts.map((label) => ({ label, votes: 0, voters: {} }));
   }
   return { question, options };
+}
+
+/** Returns true if poll question or any option contains blocked content. */
+export function pollContainsBlockedContent(question: string, options: { label: string }[]): boolean {
+  if (containsBlockedContent(question)) return true;
+  for (const opt of options) {
+    if (containsBlockedContent(opt.label)) return true;
+  }
+  return false;
 }
 
 /** Map chat message to poll option index. Returns -1 if not a valid vote. */

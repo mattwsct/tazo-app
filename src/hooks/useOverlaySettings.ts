@@ -20,6 +20,7 @@ export function useOverlaySettings(): [
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const lastSettingsHash = useRef<string>('');
   const settingsLoadedRef = useRef(false);
+  const lastSseUpdateRef = useRef<number>(0);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -50,6 +51,7 @@ export function useOverlaySettings(): [
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- type/timestamp excluded from settingsData
             const { type: _t, timestamp: _ts, ...settingsData } = data;
             const merged = mergeSettingsWithDefaults(settingsData);
+            lastSseUpdateRef.current = Date.now();
             OverlayLogger.settings('Settings updated via SSE', { locationDisplay: merged.locationDisplay, showWeather: merged.showWeather, showMinimap: merged.showMinimap });
             setSettings(merged);
             lastSettingsHash.current = createSettingsHash(merged);
@@ -82,6 +84,8 @@ export function useOverlaySettings(): [
 
     const poll = setInterval(async () => {
       try {
+        // Skip poll if SSE updated recently (saves KV reads)
+        if (Date.now() - lastSseUpdateRef.current < 20000) return;
         const res = await fetch(`/api/get-settings?_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
         if (res.ok) {
           const data = await res.json();
