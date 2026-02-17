@@ -91,7 +91,9 @@ export async function POST(request: NextRequest) {
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
-  if (toggleKey && enabled[toggleKey] !== true) {
+  const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
+  const isDisabled = toggleKey && (toggleValue === false || String(toggleValue) === 'false');
+  if (isDisabled) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 

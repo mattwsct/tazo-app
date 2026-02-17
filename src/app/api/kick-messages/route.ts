@@ -91,6 +91,12 @@ export async function POST(request: NextRequest) {
     if (hasEnabledUpdates) {
       const stored = await kv.get<Partial<KickMessageEnabled>>(KICK_MESSAGE_ENABLED_KEY);
       const merged = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...stored, ...enabledBody };
+      // Ensure booleans (KV/Redis can sometimes return strings)
+      for (const k of Object.keys(merged) as (keyof KickMessageEnabled)[]) {
+        const v = merged[k] as unknown;
+        if (String(v) === 'false') merged[k] = false;
+        else if (String(v) === 'true') merged[k] = true;
+      }
       await kv.set(KICK_MESSAGE_ENABLED_KEY, merged);
     }
 

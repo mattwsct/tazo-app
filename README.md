@@ -726,7 +726,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | New sub | "New sub from {name}! 🎉" |
 | Resub | "{name} resubbed! {months} months 💪" |
 | Gifted subs | "{gifter} gifted a sub to {name}! 🎁 {lifetimeSubs}" (adds lifetime total when gifter is on leaderboard) |
-| Kicks gifted | "{sender} sent {kickDescription}! 💰" (e.g. "High Five (100 Kicks)" or "100 Kicks") |
+| Kicks gifted | "{sender} sent {kickDescription}! 💰" (e.g. "Viewer sent Rage Quit (500 kicks)! 💰") |
 | Channel reward | "{redeemer} redeemed {title}! ✨" |
 | Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
 | Host | "{host} hosted with {viewers} viewers! 🎉" |

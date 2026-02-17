@@ -11,8 +11,15 @@ function getUsername(obj: { username?: string | null } | null | undefined): stri
   return obj?.username ?? 'someone';
 }
 
+const OPTIONAL_PLACEHOLDERS = new Set(['lifetimeSubs']);
+
 function replace(template: string, replacements: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (_, key) => replacements[key] ?? `{${key}}`);
+  return template.replace(/\{(\w+)\}/g, (_, key) => {
+    const val = replacements[key];
+    if (val !== undefined && val !== null) return String(val);
+    if (OPTIONAL_PLACEHOLDERS.has(key)) return '';
+    return `{${key}}`;
+  });
 }
 
 export function getFollowResponse(payload: KickPayload, templates: KickMessageTemplates): string {
@@ -54,29 +61,24 @@ export function getGiftSubResponse(
 
 export function getKicksGiftedResponse(payload: KickPayload, templates: KickMessageTemplates): string {
   const sender = getUsername(payload.sender);
-  const gift = payload.gift ?? {};
-  const amount = String(gift.amount ?? 0);
-  const rawName = gift.name ?? 'Kicks';
-  const message = gift.message?.trim();
+  const gift = payload.gift ?? payload.data?.gift ?? {};
+  const amount = String(gift.amount ?? gift.amount_display ?? 0);
+  const rawName = gift.name ?? gift.display_name ?? 'Kicks';
+  const message = (gift.message ?? '').toString().trim();
   const kickDescription =
     rawName && rawName !== 'Kicks'
-      ? `${rawName} (${amount} Kicks)`
-      : `${amount} Kicks`;
-  if (message) {
-    return replace(templates.kicksGiftedWithMessage, {
-      sender,
-      amount,
-      name: rawName,
-      kickDescription,
-      message,
-    });
-  }
-  return replace(templates.kicksGifted, {
+      ? `${rawName} (${amount} kicks)`
+      : `${amount} kicks`;
+  const replacements: Record<string, string> = {
     sender,
     amount,
     name: rawName,
     kickDescription,
-  });
+  };
+  if (message) {
+    return replace(templates.kicksGiftedWithMessage, { ...replacements, message });
+  }
+  return replace(templates.kicksGifted, replacements);
 }
 
 export function getChannelRewardResponse(payload: KickPayload, templates: KickMessageTemplates): string {
