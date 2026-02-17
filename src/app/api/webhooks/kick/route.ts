@@ -78,8 +78,6 @@ export async function POST(request: NextRequest) {
   const hasMsgId = !!(headers['kick-event-message-id'] ?? headers['Kick-Event-Message-Id']);
   const hasTs = !!(headers['kick-event-message-timestamp'] ?? headers['Kick-Event-Message-Timestamp']);
 
-  console.log('[Kick webhook] WEBHOOK_IN', JSON.stringify({ eventType: eventType || '(none)', bodyLen: rawBody.length, hasSig, hasMsgId, hasTs }));
-
   const verified = verifyKickWebhookSignature(rawBody, headers);
   try {
     await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
@@ -96,12 +94,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (!verified) {
-    console.warn('[Kick webhook] WEBHOOK_REJECT', JSON.stringify({ reason: 'bad_signature', eventType: eventType || '(none)' }));
+    console.warn('[Kick webhook] Rejected', JSON.stringify({ reason: 'bad_signature', eventType: eventType || '(none)' }));
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
-
-  console.log('[Kick webhook] WEBHOOK_VERIFIED', JSON.stringify({ eventType: eventType || '(none)' }));
-  await logWebhookReceived(eventType || '(unknown)');
 
   let payload: Record<string, unknown> = {};
   try {
@@ -111,22 +106,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Log payload content for debugging (Kick API: payload structure per event-types.md)
   const eventNorm = (eventType || '').toLowerCase().trim();
+
+  // Single concise log: event + key payload (Kick docs: top-level id/status/reward/redeemer for rewards)
+  let verifiedMsg: string;
   if (eventNorm === 'chat.message.sent') {
     const data = payload.data as Record<string, unknown> | undefined;
     const p = payload.payload as Record<string, unknown> | undefined;
-    const content = String(payload.content ?? data?.content ?? p?.content ?? '').slice(0, 200);
-    const sender = (payload.sender ?? data?.sender ?? p?.sender) as { username?: string } | undefined;
-    console.log('[Kick webhook] PAYLOAD_CONTENT', JSON.stringify({ eventType: 'chat.message.sent', content, sender: sender?.username }));
+    const content = String(payload.content ?? data?.content ?? p?.content ?? '').slice(0, 80);
+    const sender = ((payload.sender ?? data?.sender ?? p?.sender) as { username?: string })?.username ?? '?';
+    verifiedMsg = `chat.message.sent content="${content}" sender=${sender}`;
   } else if (eventNorm === 'channel.reward.redemption.updated') {
     const inner = getRewardInnerPayload(payload);
-    const redeemer = (inner.redeemer as { username?: string })?.username ?? (payload.redeemer as { username?: string })?.username;
+    const status = String(inner.status ?? payload.status ?? '').toLowerCase();
+    const redeemer = (inner.redeemer as { username?: string })?.username ?? (payload.redeemer as { username?: string })?.username ?? '?';
     const reward = (inner.reward ?? payload.reward) as { title?: string; name?: string } | undefined;
     const title = reward?.title ?? reward?.name ?? '?';
-    const status = String(inner.status ?? payload.status ?? '').toLowerCase();
-    console.log('[Kick webhook] PAYLOAD_CONTENT', JSON.stringify({ eventType: 'channel.reward.redemption.updated', status, id: inner.id ?? payload.id, redeemer, rewardTitle: title, userInput: ((inner.user_input ?? payload.user_input) as string)?.slice(0, 50) ?? null }));
+    verifiedMsg = `channel.reward.redemption.updated status=${status} redeemer=${redeemer} reward="${title}"`;
+  } else {
+    const summary = getEventPayloadSummary(eventNorm, payload);
+    verifiedMsg = `${eventType || '(none)'} ${JSON.stringify(summary)}`;
   }
+  console.log('[Kick webhook] Verified:', verifiedMsg);
+
+  await logWebhookReceived(eventType || '(unknown)');
 
   // Chat commands - parse !ping, !location, !weather, !time and respond
   if (eventType === 'chat.message.sent') {

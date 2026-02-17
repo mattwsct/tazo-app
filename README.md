@@ -781,8 +781,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 3. **Vercel CLI**: `vercel logs` (or `vercel logs --follow` for real-time)
 4. The `/api/kick-webhook-log` endpoint (requires auth) returns decision log, **rewardPayloadLog** (id, status, payload structure for last 10 channel rewards), and debug data.
 5. **Vercel function logs**: Deployments → select deployment → Logs (or Functions → click a request). Search for these prefixes:
-   - `[Kick webhook] WEBHOOK_IN` — incoming webhook (event type, body size)
-   - `[Kick webhook] PAYLOAD_CONTENT` — parsed payload: for `chat.message.sent` (content, sender), for `channel.reward.redemption.updated` (status, id, redeemer, rewardTitle, userInput)
+   - `[Kick webhook] Verified:` — single concise log: for chat `content="..." sender=...`, for rewards `status=... redeemer=... reward="..."`
    - `[Kick webhook] CHAT_CMD_*` — chat commands (!ping, !location, etc.): IN, RESPONSE, SENT, FAIL, SKIP
    - `[Kick webhook] CHAT_RESPONSE` — event→message (follow, sub, gift, reward, etc.) with payload summary
    - `[Kick webhook] REWARD_DEBUG` / `REWARD_DECISION` — channel reward payload, status, template chosen
@@ -816,7 +815,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
    - In Kick Dev Dashboard, change webhook URL to that URL.
    - Have someone type `!ping` in chat. Check webhook.site — if you see the request, Kick is sending and the issue is with your app. If you don't, Kick isn't delivering (unverified app, revoked subs, etc.).
 
-6. **Admin panel diagnostics**: The Kick Bot tab shows "Last request received" when *any* POST hits `/api/webhooks/kick` (even before verification). Vercel logs will show `[Kick webhook] Request reached middleware` if the request reaches your app. If both are empty, no request reached your server.
+6. **Admin panel diagnostics**: The Kick Bot tab shows "Last request received" when *any* POST hits `/api/webhooks/kick` (even before verification). Vercel logs will show `[Kick webhook] Verified:` when the webhook is processed. If both are empty, no request reached your server.
 
 ---
 

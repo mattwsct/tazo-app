@@ -53,9 +53,6 @@ export function middleware(request: NextRequest) {
   ];
   
   if (publicRoutes.includes(pathname)) {
-    if (pathname === '/api/webhooks/kick' || pathname === '/api/kick-webhook') {
-      console.log('[Kick webhook] Request reached middleware', pathname, request.method);
-    }
     return NextResponse.next();
   }
   
