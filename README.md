@@ -760,7 +760,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 - **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.
 - **Not responding**: Ensure you completed OAuth (Connect Kick) and tokens are stored. Check Vercel logs for errors.
-- **Event toggles**: Each event (Follow, New sub, Resub, etc.) can be toggled off. If toggles don't persist, use **Force save toggles** and verify the KV debug display. Check Vercel logs for `[Kick webhook] Skipping ...` when events are disabled.
+- **Event toggles**: Each event (Follow, New sub, Resub, Channel reward, etc.) can be toggled off. Flow: (1) You toggle off → POST /api/kick-messages saves to KV. (2) Kick sends webhook → POST /api/webhooks/kick loads from KV, checks enabled[toggleKey], skips if false. (3) If messages still appear, use **Toggle debug** (under Connection) and click "Check KV & last webhook" to see what's stored and what the last webhook read. Check Vercel logs for `[Kick webhook] Skipping (toggle off)` when events are disabled.
 
 **Webhooks never arriving (no POST /api/webhooks/kick in logs):**
 

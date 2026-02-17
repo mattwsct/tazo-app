@@ -16,6 +16,40 @@ import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 import type { LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 
+function ToggleDebug() {
+  const [data, setData] = useState<{ storedEnabledInKv?: Record<string, unknown>; debug?: Record<string, unknown> } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const fetchDebug = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/kick-webhook-log', { credentials: 'include' });
+      const d = await r.json();
+      setData({ storedEnabledInKv: d.storedEnabledInKv ?? null, debug: d.debug ?? null });
+    } catch {
+      setData(null);
+    }
+    setLoading(false);
+  }, []);
+  return (
+    <div className="kick-toggle-debug-inner" style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: 8, fontSize: '0.8rem' }}>
+      <button type="button" className="btn btn-secondary btn-small" onClick={fetchDebug} disabled={loading}>
+        {loading ? 'Loading...' : 'Check KV & last webhook'}
+      </button>
+      {data && (
+        <div style={{ marginTop: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          <div><strong>Stored in KV:</strong> {JSON.stringify(data.storedEnabledInKv, null, 2)}</div>
+          {data.debug && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <strong>Last webhook saw:</strong>{' '}
+              event: {String(data.debug.eventType)}, toggleKey: {String(data.debug.toggleKey)}, value: {String(data.debug.toggleValue)}, skipped: {String(data.debug.isDisabled)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   follow: 'Follow',
   newSub: 'New sub',
@@ -1220,6 +1254,10 @@ export default function AdminPage() {
                   </div>
                 )}
                 </div>
+                <details className="kick-toggle-debug" style={{ marginTop: '1rem' }}>
+                  <summary style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>🔍 Toggle debug (if toggles don&apos;t work)</summary>
+                  <ToggleDebug />
+                </details>
               </section>
 
               {/* Stream title */}

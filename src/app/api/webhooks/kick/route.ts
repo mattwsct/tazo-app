@@ -165,21 +165,42 @@ export async function POST(request: NextRequest) {
     kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
     kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
+
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
-  const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
+  const enabled: Record<KickEventToggleKey, boolean> = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabled ?? {}) };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
-  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
+  // Normalize event type (Kick may send different casing) and look up toggle
+  const eventTypeNorm = (eventType || '').toLowerCase().trim();
+  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
   const isDisabled = toggleKey && (toggleValue === false || String(toggleValue) === 'false');
+
+  try {
+    await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
+      at: new Date().toISOString(),
+      eventType: eventType || '(none)',
+      eventTypeNorm,
+      bodyLen: rawBody.length,
+      storedEnabledRaw: storedEnabled ?? null,
+      enabledSnapshot: enabled,
+      toggleKey: toggleKey ?? null,
+      toggleValue: toggleValue ?? null,
+      isDisabled,
+      verified: !!verified,
+    });
+  } catch {
+    // Ignore
+  }
+
   if (isDisabled) {
-    console.log('[Kick webhook] Skipping (toggle off)', eventType, '|', toggleKey + ':', toggleValue);
+    console.log('[Kick webhook] Skipping (toggle off)', eventType, '|', toggleKey + ':', toggleValue, '| stored:', JSON.stringify(storedEnabled));
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
   let message: string | null = null;
-  switch (eventType) {
+  switch (eventTypeNorm) {
     case 'channel.followed':
       message = getFollowResponse(payload, templates);
       break;
