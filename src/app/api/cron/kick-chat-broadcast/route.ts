@@ -42,10 +42,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  console.log('[Cron HR] Run at', new Date().toISOString());
+  const runAt = new Date().toISOString();
+  console.log('[Cron HR] CRON_START', JSON.stringify({ runAt }));
   const accessToken = await getValidAccessToken();
   if (!accessToken) {
-    console.log('[Cron HR] No valid Kick token — skipping');
+    console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'no_token', runAt }));
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
@@ -140,8 +141,9 @@ export async function GET(request: NextRequest) {
             try {
               await sendKickChatMessage(accessToken, formattedForChat);
               sent++;
-            } catch {
-              // ignore
+              console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'location', msgPreview: formattedForChat.slice(0, 80) }));
+            } catch (err) {
+              console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'location', error: err instanceof Error ? err.message : String(err) }));
             }
           }
           await kv.set(KICK_BROADCAST_LAST_LOCATION_KEY, now);
@@ -152,17 +154,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (!storedAlert?.chatBroadcastHeartrate) {
-    if (storedAlert?.chatBroadcastLocation) console.log('[Cron HR] Heart rate broadcast disabled');
+    if (storedAlert?.chatBroadcastLocation) console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrBroadcast: false, locationBroadcast: true }));
   } else {
     const hrStats = await getHeartrateStats();
     const bpm = hrStats.current?.bpm ?? 0;
     if (!hrStats.hasData || bpm === 0) {
-      console.log('[Cron HR] No HR data in cron — hasData:', hrStats.hasData, 'bpm:', bpm);
+      console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrData: false, hasData: hrStats.hasData, bpm }));
     }
 
     if (bpm < minBpm) {
       currentHrState = 'below';
-      if (hrState !== 'below') console.log('[Cron HR] HR below threshold, state -> below. bpm:', bpm, 'minBpm:', minBpm);
+      if (hrState !== 'below') console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrStateChange: '->below', bpm, minBpm }));
     } else if (veryHighBpm > minBpm && bpm >= veryHighBpm) {
       if (currentHrState !== 'very_high') {
         const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
@@ -171,12 +173,12 @@ export async function GET(request: NextRequest) {
           currentHrState = 'very_high';
           sent++;
           await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-          console.log('[Cron HR] Sent very high:', bpm, 'BPM');
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, msgPreview: msg.slice(0, 50) }));
         } catch (err) {
-          console.error('[Cron HR] Send failed (very high):', err);
+          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', error: err instanceof Error ? err.message : String(err) }));
         }
       } else {
-        console.log('[Cron HR] Skip — already sent very high. state:', currentHrState);
+        console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'already_sent_very_high', state: currentHrState }));
       }
     } else if (bpm >= minBpm) {
       if (currentHrState === 'below') {
@@ -186,15 +188,15 @@ export async function GET(request: NextRequest) {
           currentHrState = 'high';
           sent++;
           await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-          console.log('[Cron HR] Sent high:', bpm, 'BPM');
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, msgPreview: msg.slice(0, 50) }));
         } catch (err) {
-          console.error('[Cron HR] Send failed (high):', err);
+          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', error: err instanceof Error ? err.message : String(err) }));
         }
       } else if (currentHrState === 'very_high' && bpm < veryHighBpm) {
         currentHrState = 'high';
-        console.log('[Cron HR] HR dropped from very_high to high. bpm:', bpm);
+        console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrStateChange: 'very_high->high', bpm }));
       } else {
-        console.log('[Cron HR] Skip — already sent high. state:', currentHrState, 'bpm:', bpm);
+        console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'already_sent_high', state: currentHrState, bpm }));
       }
     }
 
@@ -203,5 +205,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  console.log('[Cron HR] CRON_END', JSON.stringify({ sent, runAt }));
   return NextResponse.json({ ok: true, sent });
 }

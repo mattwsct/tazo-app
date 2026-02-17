@@ -779,7 +779,14 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 1. **Vercel Dashboard** → your project → **Logs** tab (filter by "function" or search for `[Kick webhook]`)
 2. **Vercel Dashboard** → Deployments → select a deployment → **Functions** → view logs
 3. **Vercel CLI**: `vercel logs` (or `vercel logs --follow` for real-time)
-4. The `/api/kick-webhook-log` endpoint (requires auth) returns decision log data if you need to debug toggle behavior.
+4. The `/api/kick-webhook-log` endpoint (requires auth) returns decision log, **rewardPayloadLog** (id, status, payload structure for last 10 channel rewards), and debug data.
+5. **Vercel function logs**: Deployments → select deployment → Logs (or Functions → click a request). Search for these prefixes:
+   - `[Kick webhook] WEBHOOK_IN` — incoming webhook (event type, body size)
+   - `[Kick webhook] CHAT_CMD_*` — chat commands (!ping, !location, etc.): IN, RESPONSE, SENT, FAIL, SKIP
+   - `[Kick webhook] CHAT_RESPONSE` — event→message (follow, sub, gift, reward, etc.) with payload summary
+   - `[Kick webhook] REWARD_DEBUG` / `REWARD_DECISION` — channel reward payload, status, template chosen
+   - `[Kick webhook] CHAT_SENT` / `CHAT_SKIP` / `CHAT_FAIL` — final send/skip/fail with reason
+   - `[Cron HR] CRON_*` — cron chat broadcasts (location, heart rate)
 
 **Cloudflare caching:** POST requests (webhooks) are normally **not** cached. If you use Cloudflare as a proxy:
 - Add a **Cache Rule** (or Page Rule) to *bypass cache* for `/api/webhooks/*` and `/api/kick-webhook`. Example: URL `*app.tazo.wtf/api/webhooks/*` → Cache Level: Bypass.

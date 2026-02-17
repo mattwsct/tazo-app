@@ -113,14 +113,20 @@ export interface GetChannelRewardOptions {
   forceApproved?: boolean;
 }
 
+/** Extract reward payload; Kick may send top-level or wrapped in data/payload */
+function getRewardInnerPayload(payload: KickPayload): Record<string, unknown> {
+  const d = payload.data as Record<string, unknown> | undefined;
+  const p = payload.payload as Record<string, unknown> | undefined;
+  return (d ?? p ?? payload) as Record<string, unknown>;
+}
+
 export function getChannelRewardResponse(
   payload: KickPayload,
   templates: KickMessageTemplates,
   options?: GetChannelRewardOptions,
   templateEnabled?: KickMessageTemplateEnabled
 ): string | null {
-  const data = payload.data as Record<string, unknown> | undefined;
-  const inner = data ?? payload;
+  const inner = getRewardInnerPayload(payload);
   const redeemer = getUsername((inner.redeemer ?? payload.redeemer) as { username?: string });
   const reward = (inner.reward ?? payload.reward ?? {}) as Record<string, unknown>;
   const title = String(reward.title ?? reward.name ?? 'reward');

@@ -6,6 +6,7 @@ import { DEFAULT_KICK_MESSAGE_ENABLED, EVENT_TYPE_TO_TOGGLE, KICK_MESSAGE_ENABLE
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
+const KICK_REWARD_PAYLOAD_LOG_KEY = 'kick_reward_payload_log';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,10 +18,11 @@ export async function GET() {
   }
 
   try {
-    const [log, debug, decisionLog, storedEnabled] = await Promise.all([
+    const [log, debug, decisionLog, rewardPayloadLog, storedEnabled] = await Promise.all([
       kv.lrange<{ eventType: string; at: string }[]>(KICK_WEBHOOK_LOG_KEY, 0, 19),
       kv.get<Record<string, unknown>>(KICK_WEBHOOK_DEBUG_KEY),
-      kv.lrange<{ at: string; eventType: string; toggleKey: string | null; toggleValue: unknown; isDisabled: boolean; action: string; storedEnabledRaw?: unknown }[]>(KICK_WEBHOOK_DECISION_LOG_KEY, 0, 14),
+      kv.lrange<{ at: string; eventType: string; toggleKey: string | null; toggleValue: unknown; action: string; storedEnabledRaw?: unknown }[]>(KICK_WEBHOOK_DECISION_LOG_KEY, 0, 14),
+      kv.lrange<Record<string, unknown>[]>(KICK_REWARD_PAYLOAD_LOG_KEY, 0, 9),
       kv.get<Record<string, unknown>>(KICK_MESSAGE_ENABLED_KEY),
     ]);
 
@@ -45,10 +47,11 @@ export async function GET() {
       log: log ?? [],
       debug: debug ?? null,
       decisionLog: decisionLog ?? [],
+      rewardPayloadLog: rewardPayloadLog ?? [],
       storedEnabledInKv: storedEnabled ?? null,
       diagnostic,
     });
   } catch {
-    return NextResponse.json({ log: [], debug: null, decisionLog: [], storedEnabledInKv: null, diagnostic: null });
+    return NextResponse.json({ log: [], debug: null, decisionLog: [], rewardPayloadLog: [], storedEnabledInKv: null, diagnostic: null });
   }
 }

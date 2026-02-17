@@ -144,9 +144,11 @@ export async function POST(request: NextRequest) {
 
   try {
     await sendKickChatMessage(accessToken, content);
+    console.log('[Kick test] CHAT_SENT', JSON.stringify({ source: templateKey ? 'template_test' : 'raw', templateKey: templateKey ?? null, msgPreview: content.slice(0, 80) }));
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to send';
+    console.error('[Kick test] CHAT_FAIL', JSON.stringify({ error: msg }));
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
