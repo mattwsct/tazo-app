@@ -727,7 +727,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
 
-6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** when admin page is open (every 5 min) and via cron when location updates (runs every 2 min, updates title if live and location changed). Requires `channel:read` and `channel:write` scopes.
+6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** when admin page is open (every 5 min) and via cron when location updates (runs every 2 min, updates title if live and location changed). Requires `channel:read` and `channel:write` scopes. The app uses Kick's `GET /channels` to fetch your channel (stream title, live status) and `broadcaster_user_id` for webhook subscription setup.
 
 ### Events & Responses
 
@@ -742,22 +742,17 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
 | Host | "{host} hosted with {viewers} viewers! 🎉" |
 
+**Host notifications** — Kick has not yet added the `channel.hosted` webhook event. The template is ready when they do; until then, host alerts will not trigger.
+
+**Pin high-value alerts** — A separate section lets you configure pinning for gift subs or kicks above thresholds. Kick does not yet support pinning bot messages; settings are saved for when the API becomes available.
+
 Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. When a toggle is off, the bot simply doesn't send a message (template text is kept). **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. `(5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. **Host** — template ready when Kick adds the webhook event. Until then, use third-party bots (e.g. [Kick.bot](https://kick.bot), [KAOSBOT](https://bot.ka0s.uk), [KickBot](https://kickbot.com)) for raid/host alerts via chat monitoring or Discord integration. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{kickDescription}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`, `{host}`, `{viewers}`.
 
 **Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint. The cron path must be in middleware public routes (no auth cookies) since Vercel Cron sends GET with no cookies; the route itself validates `CRON_SECRET` if set. The same cron also auto-updates the Kick stream title with current location when **Auto-push location** is on (every 2 min while live).
 
 ### Chat commands
 
-Type these in Kick chat and the bot responds with your live overlay data:
-
-| Command | Response |
-|---------|----------|
-| `!ping` | Pong! (bot check; use to verify webhooks) |
-| `!location` | Current location |
-| `!weather` | Temperature, conditions, feels like |
-| `!time` | Local time in your timezone |
-
-Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) and respects your Location Display setting (hidden/country/city/etc.). Fossabot with `/api/chat/*` is a fallback if Kick webhooks are unreliable.
+Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
 
 ### Future ideas
 

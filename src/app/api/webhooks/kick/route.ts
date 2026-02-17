@@ -7,7 +7,7 @@ import {
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
-import { getChannelRewardResponse, getRewardInnerPayload } from '@/lib/kick-event-responses';
+import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
   DEFAULT_KICK_MESSAGES,
   DEFAULT_KICK_MESSAGE_ENABLED,
@@ -76,25 +76,8 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const headers = Object.fromEntries(request.headers.entries());
   const eventType = headers['kick-event-type'] ?? headers['Kick-Event-Type'] ?? '';
-  const hasSig = !!(headers['kick-event-signature'] ?? headers['Kick-Event-Signature']);
-  const hasMsgId = !!(headers['kick-event-message-id'] ?? headers['Kick-Event-Message-Id']);
-  const hasTs = !!(headers['kick-event-message-timestamp'] ?? headers['Kick-Event-Message-Timestamp']);
 
   const verified = verifyKickWebhookSignature(rawBody, headers);
-  try {
-    await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
-      at: new Date().toISOString(),
-      eventType: eventType || '(none)',
-      bodyLen: rawBody.length,
-      hasSig,
-      hasMsgId,
-      hasTs,
-      verified,
-    });
-  } catch {
-    // Ignore
-  }
-
   if (!verified) {
     console.warn('[Kick webhook] Rejected: bad signature');
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
@@ -114,21 +97,18 @@ export async function POST(request: NextRequest) {
   let verifiedMsg: string;
   let eventSummary: Record<string, unknown> = { eventType: eventType || '(none)', at: new Date().toISOString() };
   if (eventNorm === 'chat.message.sent') {
-    const data = payload.data as Record<string, unknown> | undefined;
-    const p = payload.payload as Record<string, unknown> | undefined;
-    const content = String(payload.content ?? data?.content ?? p?.content ?? '').slice(0, 200);
-    const sender = ((payload.sender ?? data?.sender ?? p?.sender) as { username?: string })?.username ?? '?';
+    const content = String(payload.content ?? '').slice(0, 200);
+    const sender = (payload.sender as { username?: string })?.username ?? '?';
     verifiedMsg = `chat.message.sent content="${content.slice(0, 80)}" sender=${sender}`;
     eventSummary = { ...eventSummary, content, sender };
   } else if (eventNorm === 'channel.reward.redemption.updated') {
-    const inner = getRewardInnerPayload(payload);
-    const status = String(inner.status ?? payload.status ?? '').toLowerCase();
-    const redeemer = (inner.redeemer as { username?: string })?.username ?? (payload.redeemer as { username?: string })?.username ?? '?';
-    const reward = (inner.reward ?? payload.reward) as { title?: string; name?: string } | undefined;
+    const status = String(payload.status ?? '').toLowerCase();
+    const redeemer = (payload.redeemer as { username?: string })?.username ?? '?';
+    const reward = payload.reward as { title?: string; name?: string } | undefined;
     const title = reward?.title ?? reward?.name ?? '?';
-    const userInput = ((inner.user_input ?? payload.user_input) as string)?.slice(0, 100) ?? null;
+    const userInput = (payload.user_input as string)?.slice(0, 100) ?? null;
     verifiedMsg = `channel.reward.redemption.updated status=${status} redeemer=${redeemer} reward="${title}"`;
-    eventSummary = { ...eventSummary, status, redeemer, rewardTitle: title, id: inner.id ?? payload.id, userInput };
+    eventSummary = { ...eventSummary, status, redeemer, rewardTitle: title, id: payload.id, userInput };
   } else {
     const summary = getEventPayloadSummary(eventNorm, payload);
     verifiedMsg = `${eventType || '(none)'} ${JSON.stringify(summary)}`;
@@ -139,29 +119,24 @@ export async function POST(request: NextRequest) {
   try {
     await kv.lpush(KICK_RECENT_EVENTS_KEY, eventSummary);
     await kv.ltrim(KICK_RECENT_EVENTS_KEY, 0, RECENT_EVENTS_MAX - 1);
-  } catch (e) {
-    console.warn('[Kick webhook] recentEvents push failed:', e instanceof Error ? e.message : String(e));
+    await kv.set(KICK_WEBHOOK_DEBUG_KEY, { at: new Date().toISOString(), eventType: eventType || '(none)', verified: true });
+  } catch {
+    /* ignore */
   }
   await logWebhookReceived(eventType || '(unknown)');
 
-  // Chat commands - parse !ping, !location, !weather, !time and respond
-  if (eventType === 'chat.message.sent') {
+  // Chat commands — !ping only; reply to the user's message
+  if (eventNorm === 'chat.message.sent') {
     const content = (payload.content as string) || '';
-    const sender = (payload.sender as { username?: string })?.username ?? '?';
     const parsed = parseKickChatMessage(content);
-    if (!parsed) {
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-    const response = await handleKickChatCommand(parsed.cmd, parsed.args);
-    if (!response) {
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
+    if (!parsed) return NextResponse.json({ received: true }, { status: 200 });
+    const response = await handleKickChatCommand(parsed.cmd);
+    if (!response) return NextResponse.json({ received: true }, { status: 200 });
     const accessToken = await getValidAccessToken();
-    if (!accessToken) {
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
+    if (!accessToken) return NextResponse.json({ received: true }, { status: 200 });
+    const messageId = (payload.id ?? payload.message_id) as string | undefined;
     try {
-      await sendKickChatMessage(accessToken, response);
+      await sendKickChatMessage(accessToken, response, messageId ? { replyToMessageId: messageId } : undefined);
     } catch (err) {
       console.error('[Kick webhook] Chat command failed:', err instanceof Error ? err.message : String(err));
     }
@@ -181,9 +156,7 @@ export async function POST(request: NextRequest) {
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
-  // Normalize event type (Kick may send different casing) and look up toggle
-  const eventTypeNorm = (eventType || '').toLowerCase().trim();
-  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
+  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
 
   const pushDecision = async (action: string) => {
@@ -200,49 +173,25 @@ export async function POST(request: NextRequest) {
     } catch { /* ignore */ }
   };
 
-  const rewardInner = eventTypeNorm === 'channel.reward.redemption.updated' ? getRewardInnerPayload(payload) : null;
-  const debugPayload =
-    rewardInner
-      ? (() => {
-          const reward = (rewardInner.reward ?? payload.reward) as { title?: string; name?: string } | undefined;
-          const redeemer = (rewardInner.redeemer as { username?: string })?.username ?? (payload.redeemer as { username?: string })?.username;
-          return {
-            at: new Date().toISOString(),
-            id: rewardInner.id ?? payload.id,
-            status: String(rewardInner.status ?? payload.status ?? '').toLowerCase(),
-            redeemer,
-            rewardTitle: reward?.title ?? reward?.name ?? '?',
-            userInput: ((rewardInner.user_input ?? payload.user_input) as string)?.slice(0, 100) ?? null,
-            payloadKeys: Object.keys(payload),
-          };
-        })()
-      : undefined;
-  try {
-    if (debugPayload) {
-      try {
-        await kv.lpush(KICK_REWARD_PAYLOAD_LOG_KEY, debugPayload);
-        await kv.ltrim(KICK_REWARD_PAYLOAD_LOG_KEY, 0, REWARD_PAYLOAD_LOG_MAX - 1);
-      } catch {
-        /* ignore */
-      }
-    }
-    await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
+  if (eventNorm === 'channel.reward.redemption.updated') {
+    const reward = payload.reward as { title?: string; name?: string } | undefined;
+    const rewardLog = {
       at: new Date().toISOString(),
-      eventType: eventType || '(none)',
-      eventTypeNorm,
-      bodyLen: rawBody.length,
-      storedEnabledRaw: storedEnabled ?? null,
-      enabledSnapshot: enabled,
-      toggleKey: toggleKey ?? null,
-      toggleValue: toggleValue ?? null,
-      verified: !!verified,
-      channelRewardPayload: debugPayload,
-    });
-  } catch {
-    // Ignore
+      id: payload.id,
+      status: String(payload.status ?? '').toLowerCase(),
+      redeemer: (payload.redeemer as { username?: string })?.username,
+      rewardTitle: reward?.title ?? reward?.name ?? '?',
+      userInput: (payload.user_input as string)?.slice(0, 100) ?? null,
+    };
+    try {
+      await kv.lpush(KICK_REWARD_PAYLOAD_LOG_KEY, rewardLog);
+      await kv.ltrim(KICK_REWARD_PAYLOAD_LOG_KEY, 0, REWARD_PAYLOAD_LOG_MAX - 1);
+    } catch {
+      /* ignore */
+    }
   }
 
-  const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
+  const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
   if (!isKnownEvent) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
@@ -261,15 +210,14 @@ export async function POST(request: NextRequest) {
   };
 
   let message: string | null;
-  if (eventTypeNorm === 'channel.reward.redemption.updated' && rewardInner) {
-    const redemptionId = String(rewardInner.id ?? payload.id ?? '');
-    const status = String(rewardInner.status ?? payload.status ?? '').toLowerCase();
+  if (eventNorm === 'channel.reward.redemption.updated') {
+    const redemptionId = String(payload.id ?? '');
     const seenKey = redemptionId ? `${KICK_REWARD_SEEN_PREFIX}${redemptionId}` : null;
     const alreadySeen = !!seenKey && (await kv.get(seenKey));
     if (alreadySeen) {
       message = getChannelRewardResponse(payload, templates, { forceApproved: true }, templateEnabled);
     } else {
-      message = await buildEventMessage(eventTypeNorm, payload, buildOptions);
+      message = await buildEventMessage(eventNorm, payload, buildOptions);
       if (message && seenKey) {
         try {
           await kv.set(seenKey, 1);
@@ -279,7 +227,7 @@ export async function POST(request: NextRequest) {
       }
     }
   } else {
-    message = await buildEventMessage(eventTypeNorm, payload, buildOptions);
+    message = await buildEventMessage(eventNorm, payload, buildOptions);
   }
 
   if (!message || !message.trim()) {

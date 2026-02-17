@@ -202,15 +202,18 @@ export async function getValidAccessToken(): Promise<string | null> {
 
 export async function sendKickChatMessage(
   accessToken: string,
-  content: string
+  content: string,
+  opts?: { replyToMessageId?: string }
 ): Promise<{ is_sent: boolean; message_id?: string }> {
+  const body: { content: string; type: string; reply_to_message_id?: string } = { content, type: 'bot' };
+  if (opts?.replyToMessageId) body.reply_to_message_id = opts.replyToMessageId;
   const res = await fetch(`${KICK_API_BASE}/public/v1/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ content, type: 'bot' }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -224,7 +227,11 @@ export async function sendKickChatMessage(
 
 // --- Event subscriptions ---
 
-/** Get broadcaster_user_id for the authenticated user (required for reliable webhook delivery) */
+/**
+ * Get broadcaster_user_id for the authenticated user.
+ * GET /channels returns the authenticated broadcaster's channel (stream title, live status, etc).
+ * Used for: webhook subscription setup (broadcaster_user_id), stream title UI, broadcast cron.
+ */
 async function getBroadcasterUserId(accessToken: string): Promise<number | null> {
   const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
     headers: { Authorization: `Bearer ${accessToken}` },

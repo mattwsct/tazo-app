@@ -69,6 +69,10 @@ export default function AdminPage() {
   });
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickGiftSubShowLifetimeSubs, setKickGiftSubShowLifetimeSubs] = useState(true);
+  const [kickPinHighValueEnabled, setKickPinHighValueEnabled] = useState(false);
+  const [kickPinMinGiftSubs, setKickPinMinGiftSubs] = useState(5);
+  const [kickPinMinKicks, setKickPinMinKicks] = useState(500);
+  const [kickPinDurationSeconds, setKickPinDurationSeconds] = useState(60);
   const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
   const [kickChatBroadcastLocationInterval, setKickChatBroadcastLocationInterval] = useState(5);
   const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
@@ -227,6 +231,10 @@ export default function AdminPage() {
         if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
         if (d.alertSettings?.chatBroadcastHeartrateMinBpm != null) setKickChatBroadcastHeartrateMinBpm(d.alertSettings.chatBroadcastHeartrateMinBpm);
         if (d.alertSettings?.chatBroadcastHeartrateVeryHighBpm != null) setKickChatBroadcastHeartrateVeryHighBpm(d.alertSettings.chatBroadcastHeartrateVeryHighBpm);
+        if (d.alertSettings?.pinHighValueEnabled !== undefined) setKickPinHighValueEnabled(d.alertSettings.pinHighValueEnabled);
+        if (d.alertSettings?.pinMinGiftSubs != null) setKickPinMinGiftSubs(d.alertSettings.pinMinGiftSubs);
+        if (d.alertSettings?.pinMinKicks != null) setKickPinMinKicks(d.alertSettings.pinMinKicks);
+        if (d.alertSettings?.pinDurationSeconds != null) setKickPinDurationSeconds(d.alertSettings.pinDurationSeconds);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -427,6 +435,10 @@ export default function AdminPage() {
     alertSettings?: Partial<{
       minimumKicks: number;
       giftSubShowLifetimeSubs: boolean;
+      pinHighValueEnabled: boolean;
+      pinMinGiftSubs: number;
+      pinMinKicks: number;
+      pinDurationSeconds: number;
       chatBroadcastLocation: boolean;
       chatBroadcastLocationIntervalMin: number;
       chatBroadcastHeartrate: boolean;
@@ -440,6 +452,10 @@ export default function AdminPage() {
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
       giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+      pinHighValueEnabled: kickPinHighValueEnabled,
+      pinMinGiftSubs: kickPinMinGiftSubs,
+      pinMinKicks: kickPinMinKicks,
+      pinDurationSeconds: kickPinDurationSeconds,
       chatBroadcastLocation: kickChatBroadcastLocation,
       chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
       chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -463,11 +479,15 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickPinHighValueEnabled, kickPinMinGiftSubs, kickPinMinKicks, kickPinDurationSeconds, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
     giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+    pinHighValueEnabled: kickPinHighValueEnabled,
+    pinMinGiftSubs: kickPinMinGiftSubs,
+    pinMinKicks: kickPinMinKicks,
+    pinDurationSeconds: kickPinDurationSeconds,
     chatBroadcastLocation: kickChatBroadcastLocation,
     chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -477,6 +497,10 @@ export default function AdminPage() {
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
     giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+    pinHighValueEnabled: kickPinHighValueEnabled,
+    pinMinGiftSubs: kickPinMinGiftSubs,
+    pinMinKicks: kickPinMinKicks,
+    pinDurationSeconds: kickPinDurationSeconds,
     chatBroadcastLocation: kickChatBroadcastLocation,
     chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -1528,7 +1552,7 @@ export default function AdminPage() {
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description group-description-sm">
-                    Send a message to kick.com/tazo chat to test the bot.
+                    Type <code>!ping</code> in kick.com/tazo chat to test the bot.
                   </p>
                 <div className="kick-test-row">
                   <input
@@ -1565,9 +1589,10 @@ export default function AdminPage() {
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
                     <div key={group.toggleKey} className="kick-message-group kick-message-card">
                       {(group.toggleKey === 'giftSub' || group.toggleKey === 'kicksGifted') && (
-                        <div className="form-row-wrap group-header-row" style={{ marginBottom: 8 }}>
+                        <div className="kick-group-options">
+                          <span className="kick-group-options-label">Options:</span>
                           {group.toggleKey === 'giftSub' && (
-                            <label className="checkbox-label-row">
+                            <label className="kick-group-options-item">
                               <input
                                 type="checkbox"
                                 checked={kickGiftSubShowLifetimeSubs}
@@ -1578,15 +1603,15 @@ export default function AdminPage() {
                                 }}
                                 className="checkbox-input"
                               />
-                              <span>Show lifetime subs</span>
+                              <span>Show lifetime subs in message</span>
                             </label>
                           )}
                           {group.toggleKey === 'kicksGifted' && (
-                            <label className="checkbox-label-row-tight">
-                              Min kicks:
+                            <label className="kick-group-options-item">
+                              <span>Min kicks to alert:</span>
                               <input
                                 type="number"
-                                className="text-input number-input"
+                                className="text-input number-input kick-group-options-input"
                                 value={kickMinimumKicks}
                                 onChange={(e) => {
                                   setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
@@ -1597,6 +1622,11 @@ export default function AdminPage() {
                             </label>
                           )}
                         </div>
+                      )}
+                      {group.toggleKey === 'host' && (
+                        <p className="group-label group-description group-description-sm" style={{ marginBottom: 8, fontStyle: 'italic', color: 'var(--text-muted, #666)' }}>
+                          Note: Kick has not yet added the channel.hosted webhook event. Host notifications will not trigger until they do.
+                        </p>
                       )}
                       {group.templateKeys.map((key) => (
                         <div
@@ -1645,6 +1675,82 @@ export default function AdminPage() {
                     Reset to defaults
                   </button>
                 </div>
+                </div>
+              </section>
+
+              {/* Pin high-value alerts */}
+              <section className="settings-section">
+                <div className="section-header">
+                  <h2>📌 Pin high-value alerts</h2>
+                </div>
+                <div className="setting-group">
+                  <p className="group-label group-description group-description-sm">
+                    When enabled, announcements for gift subs or kicks above the thresholds would be pinned. Kick does not yet support pinning bot messages; these settings are saved for when the API becomes available.
+                  </p>
+                  <div className="form-stack" style={{ maxWidth: 480 }}>
+                    <label className="checkbox-label-row">
+                      <input
+                        type="checkbox"
+                        checked={kickPinHighValueEnabled}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setKickPinHighValueEnabled(checked);
+                          saveKickMessages({ alertSettings: { pinHighValueEnabled: checked } });
+                        }}
+                        className="checkbox-input"
+                      />
+                      <span>Enable pin for high-value gifts</span>
+                    </label>
+                    {kickPinHighValueEnabled && (
+                      <div className="kick-group-options" style={{ flexWrap: 'wrap', gap: 12 }}>
+                        <label className="kick-group-options-item">
+                          <span>Min gift subs:</span>
+                          <input
+                            type="number"
+                            className="text-input number-input kick-group-options-input"
+                            value={kickPinMinGiftSubs}
+                            onChange={(e) => {
+                              const v = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              setKickPinMinGiftSubs(v);
+                              scheduleKickMessagesSave();
+                            }}
+                            min={0}
+                            style={{ width: 72 }}
+                          />
+                        </label>
+                        <label className="kick-group-options-item">
+                          <span>Min kicks:</span>
+                          <input
+                            type="number"
+                            className="text-input number-input kick-group-options-input"
+                            value={kickPinMinKicks}
+                            onChange={(e) => {
+                              const v = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              setKickPinMinKicks(v);
+                              scheduleKickMessagesSave();
+                            }}
+                            min={0}
+                            style={{ width: 72 }}
+                          />
+                        </label>
+                        <label className="kick-group-options-item">
+                          <span>Duration (sec):</span>
+                          <input
+                            type="number"
+                            className="text-input number-input kick-group-options-input"
+                            value={kickPinDurationSeconds}
+                            onChange={(e) => {
+                              const v = Math.max(1, parseInt(e.target.value, 10) || 60);
+                              setKickPinDurationSeconds(v);
+                              scheduleKickMessagesSave();
+                            }}
+                            min={1}
+                            style={{ width: 72 }}
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
 

@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const headers = Object.fromEntries(request.headers.entries());
   const eventType = headers['kick-event-type'] ?? headers['Kick-Event-Type'] ?? '';
-  console.log('[Kick webhook /api/kick-webhook] Received', eventType || '(no event type)');
 
   if (!verifyKickWebhookSignature(rawBody, headers)) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
@@ -72,7 +71,6 @@ export async function POST(request: NextRequest) {
 
   const accessToken = await getValidAccessToken();
   if (!accessToken) {
-    console.warn('[Kick webhook] No valid token - cannot send chat response');
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
@@ -81,8 +79,8 @@ export async function POST(request: NextRequest) {
 
   try {
     await sendKickChatMessage(accessToken, finalMessage);
-  } catch (err) {
-    console.error('[Kick webhook] Chat send failed:', err);
+  } catch {
+    /* ignore - main webhook has logging */
   }
 
   return NextResponse.json({ received: true }, { status: 200 });
