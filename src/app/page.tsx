@@ -16,88 +16,6 @@ import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 import type { LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 
-function ToggleDebug() {
-  const [data, setData] = useState<{
-    log?: { eventType: string; at: string }[];
-    storedEnabledInKv?: Record<string, unknown>;
-    debug?: Record<string, unknown>;
-    decisionLog?: { at: string; eventType: string; toggleKey: string | null; toggleValue: unknown; isDisabled: boolean; action: string; storedEnabledRaw?: unknown }[];
-    diagnostic?: { summary: string; toggleKey: string; toggleValue: unknown; storedEnabledRaw: unknown };
-  } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const fetchDebug = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await fetch('/api/kick-webhook-log', { credentials: 'include' });
-      const d = await r.json();
-      setData({
-        log: d.log ?? [],
-        storedEnabledInKv: d.storedEnabledInKv ?? null,
-        debug: d.debug ?? null,
-        decisionLog: d.decisionLog ?? [],
-        diagnostic: d.diagnostic ?? null,
-      });
-    } catch {
-      setData(null);
-    }
-    setLoading(false);
-  }, []);
-  return (
-    <div className="kick-toggle-debug-inner" style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: 8, fontSize: '0.8rem' }}>
-      <p style={{ marginBottom: '0.5rem', opacity: 0.9 }}>
-        Toggles only apply to event webhooks (follow, reward, sub, etc.). <code>chat.message.sent</code> is for commands like !ping and ignores toggles. <strong>Vercel logs</strong> (Dashboard → Logs) show <code>[Kick webhook]</code> — not the browser.
-      </p>
-      <button type="button" className="btn btn-secondary btn-small" onClick={fetchDebug} disabled={loading}>
-        {loading ? 'Loading...' : 'Check KV & decision log'}
-      </button>
-      {data && (
-        <div style={{ marginTop: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-          {data.log && data.log.length > 0 && (
-            <div style={{ marginBottom: '0.5rem' }}>
-              <strong>Recent webhooks received:</strong>
-              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, listStyle: 'disc', fontSize: '0.75rem' }}>
-                {data.log.slice(0, 8).map((e, i) => (
-                  <li key={i}>{e.at} — <code>{e.eventType}</code></li>
-                ))}
-              </ul>
-              {!data.log.some(e => e.eventType?.toLowerCase().includes('reward')) && (
-                <em style={{ fontSize: '0.7rem', opacity: 0.8 }}>No reward events—if you just redeemed, webhook may not be reaching the app (check Vercel/Cloudflare).</em>
-              )}
-            </div>
-          )}
-          {data.diagnostic && (
-            <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 4 }}>
-              <strong>What would happen now?</strong> {data.diagnostic.summary}
-              <div style={{ marginTop: '0.25rem', fontSize: '0.75rem', opacity: 0.9 }}>
-                (channelReward toggle: {String(data.diagnostic.toggleValue)}, raw KV: {JSON.stringify(data.diagnostic.storedEnabledRaw)})
-              </div>
-            </div>
-          )}
-          <div><strong>Stored in KV:</strong> {JSON.stringify(data.storedEnabledInKv, null, 2)}</div>
-          {data.debug && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <strong>Last event webhook:</strong> event={String(data.debug.eventType)} toggleKey={String(data.debug.toggleKey)} value={String(data.debug.toggleValue)} skipped={String(data.debug.isDisabled)}
-            </div>
-          )}
-          {data.decisionLog && data.decisionLog.length > 0 && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <strong>Recent decisions (event webhooks only):</strong>
-              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, listStyle: 'disc' }}>
-                {data.decisionLog.map((entry, i) => (
-                  <li key={i} style={{ marginBottom: '0.25rem' }}>
-                    {entry.at} — {entry.eventType} → {entry.toggleKey ?? 'n/a'} (value={String(entry.toggleValue)}) → <strong>{entry.action}</strong>
-                    {entry.storedEnabledRaw != null && <span style={{ opacity: 0.8 }}> [KV: {JSON.stringify(entry.storedEnabledRaw)}]</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   follow: 'Follow',
   newSub: 'New sub',
@@ -128,6 +46,7 @@ export default function AdminPage() {
   const [customLocationInput, setCustomLocationInput] = useState('');
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
 
   // Todo editing state
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
@@ -548,13 +467,17 @@ export default function AdminPage() {
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
   };
+  kickMessagesRef.current = kickMessages;
 
   const scheduleKickMessagesSave = useCallback(() => {
     if (kickMessagesSaveTimeoutRef.current) clearTimeout(kickMessagesSaveTimeoutRef.current);
     kickMessagesSaveTimeoutRef.current = setTimeout(() => {
       kickMessagesSaveTimeoutRef.current = null;
-      saveKickMessages({ alertSettings: kickAlertSettingsRef.current });
-    }, 1000);
+      saveKickMessages({
+        messages: kickMessagesRef.current,
+        alertSettings: kickAlertSettingsRef.current,
+      });
+    }, 500);
   }, [saveKickMessages]);
 
   useEffect(() => () => {
@@ -562,7 +485,11 @@ export default function AdminPage() {
   }, []);
 
   const handleKickMessageChange = useCallback((key: keyof KickMessageTemplates, value: string) => {
-    setKickMessages((prev) => ({ ...prev, [key]: value }));
+    setKickMessages((prev) => {
+      const next = { ...prev, [key]: value };
+      kickMessagesRef.current = next;
+      return next;
+    });
     scheduleKickMessagesSave();
   }, [scheduleKickMessagesSave]);
 
@@ -1302,10 +1229,6 @@ export default function AdminPage() {
                   </div>
                 )}
                 </div>
-                <details className="kick-toggle-debug" style={{ marginTop: '1rem' }}>
-                  <summary style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0.9 }}>🔍 Toggle debug (if toggles don&apos;t work)</summary>
-                  <ToggleDebug />
-                </details>
               </section>
 
               {/* Stream title */}

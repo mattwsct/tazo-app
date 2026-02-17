@@ -109,6 +109,10 @@ export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: stri
   { toggleKey: 'host', label: 'Host', templateKeys: ['host'] },
 ];
 
+export const KICK_MESSAGES_KEY = 'kick_message_templates';
+export const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
+export const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
+
 /** Maps webhook event type to toggle key */
 export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
   'channel.followed': 'follow',
@@ -120,3 +124,16 @@ export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
   'livestream.status.updated': 'streamStatus',
   'channel.hosted': 'host',
 };
+
+/** Check if an event type is disabled by its toggle. */
+export function isToggleDisabled(
+  toggleKey: KickEventToggleKey | undefined,
+  toggleValue: boolean | undefined
+): boolean {
+  if (!toggleKey) return false;
+  return (
+    toggleValue === false ||
+    (toggleValue as unknown) === 0 ||
+    String(toggleValue).toLowerCase() === 'false'
+  );
+}

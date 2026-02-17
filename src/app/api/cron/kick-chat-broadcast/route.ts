@@ -8,8 +8,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
-import { sendKickChatMessage, refreshKickTokens } from '@/lib/kick-api';
-import type { StoredKickTokens } from '@/lib/kick-api';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import type { LocationDisplayMode } from '@/types/settings';
@@ -18,11 +16,12 @@ import { getCountryFlagEmoji } from '@/utils/chat-utils';
 import { formatLocationForStreamTitle, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 
-const KICK_API_BASE = 'https://api.kick.com';
-const KICK_TOKENS_KEY = 'kick_tokens';
-const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
+import { KICK_API_BASE, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
+
 const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
+const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
 const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
 const KICK_STREAM_TITLE_LAST_PUSHED_KEY = 'kick_stream_title_last_pushed';
@@ -32,29 +31,6 @@ type HeartrateBroadcastState = 'below' | 'high' | 'very_high';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
-
-async function getValidAccessToken(): Promise<string | null> {
-  const stored = await kv.get<StoredKickTokens>(KICK_TOKENS_KEY);
-  if (!stored?.access_token || !stored.refresh_token) return null;
-
-  const now = Date.now();
-  const bufferMs = 60 * 1000;
-  if (stored.expires_at - bufferMs > now) return stored.access_token;
-
-  try {
-    const tokens = await refreshKickTokens(stored.refresh_token);
-    const expiresAt = now + tokens.expires_in * 1000;
-    await kv.set(KICK_TOKENS_KEY, {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expires_at: expiresAt,
-      scope: tokens.scope,
-    });
-    return tokens.access_token;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -70,15 +46,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
-  const [storedAlert, lastLocationSent, hrState, overlaySettings] = await Promise.all([
+  const [storedAlert, lastLocationSent, lastLocationMsg, hrState, overlaySettings] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
+    kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
     kv.get<{ locationDisplay?: string }>(OVERLAY_SETTINGS_KEY),
   ]);
 
   const now = Date.now();
-  const locationIntervalMs = ((storedAlert?.chatBroadcastLocationIntervalMin as number) ?? 5) * 60 * 1000;
   const minBpm = (storedAlert?.chatBroadcastHeartrateMinBpm as number) ?? 100;
   let veryHighBpm = (storedAlert?.chatBroadcastHeartrateVeryHighBpm as number) ?? 120;
   if (veryHighBpm <= minBpm) veryHighBpm = minBpm + 1; // Disable very-high tier if not above high
@@ -86,7 +62,7 @@ export async function GET(request: NextRequest) {
 
   let sent = 0;
 
-  if (storedAlert?.chatBroadcastLocation && (lastLocationSent == null || now - lastLocationSent >= locationIntervalMs)) {
+  if (storedAlert?.chatBroadcastLocation) {
     const persistent = await getPersistentLocation();
     if (persistent?.location) {
       const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) || 'city';
@@ -96,11 +72,13 @@ export async function GET(request: NextRequest) {
         if (formatted.primary?.trim()) parts.push(formatted.primary.trim());
         if (formatted.secondary?.trim()) parts.push(formatted.secondary.trim());
         const flag = persistent.location.countryCode ? getCountryFlagEmoji(persistent.location.countryCode.toUpperCase()) : '';
-        const msg = parts.length > 0 ? `${flag} ${parts.join(', ')}` : null;
-        if (msg) {
+        const locationStr = parts.length > 0 ? `${flag} ${parts.join(', ')}` : null;
+        const msg = locationStr ? `Tazo has moved to ${locationStr}` : null;
+        if (msg && msg !== lastLocationMsg) {
           try {
             await sendKickChatMessage(accessToken, msg);
             await kv.set(KICK_BROADCAST_LAST_LOCATION_KEY, now);
+            await kv.set(KICK_BROADCAST_LAST_LOCATION_MSG_KEY, msg);
             sent++;
           } catch {
             // Ignore send failures

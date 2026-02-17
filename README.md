@@ -760,9 +760,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 - **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.
 - **Not responding**: Ensure you completed OAuth (Connect Kick) and tokens are stored. Check Vercel logs for errors.
-- **Event toggles**: Each event (Follow, New sub, Resub, Channel reward, etc.) can be toggled off. Flow: (1) You toggle off → POST /api/kick-messages saves to KV. (2) Kick sends webhook → POST /api/webhooks/kick loads from KV, checks enabled[toggleKey], skips if false. (3) If messages still appear:
-  - Use **Toggle debug** (Kick Bot tab, under Connection). Click "Check KV & decision log" and check **What would happen now?** — it shows whether the app would SKIP or SEND for `channel.reward.redemption.updated` with current KV state.
-  - Verify **which webhook URL** Kick uses: `https://app.tazo.wtf/api/webhooks/kick` (main) or `/api/kick-webhook`. Both routes now use the same toggle logic and logging.
+- **Event toggles**: Each event (Follow, New sub, Resub, Channel reward, etc.) can be toggled off. Flow: (1) You toggle off → POST /api/kick-messages saves to KV. (2) Kick sends webhook → loads enabled from KV, checks toggle. (3) If toggle is off, the message is set to blank so nothing is sent to chat. When toggle is on, the template response is built and sent normally. Verify **which webhook URL** Kick uses: `https://app.tazo.wtf/api/webhooks/kick` (main) or `/api/kick-webhook`. Both routes use the same logic.
   - Check Vercel logs for `[Kick webhook] Event path`, `[Kick webhook] KV read`, `[Kick webhook] Toggle check`, and `[Kick webhook] Skipping (toggle off)`. If you see `Skipping` but chat still gets a message, another system (e.g. Fossabot, Kick built-in) may be sending it.
   - **Preview vs production**: KV is per-deployment. Toggling on preview does not affect production and vice versa.
 
@@ -770,7 +768,7 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 1. **Vercel Dashboard** → your project → **Logs** tab (filter by "function" or search for `[Kick webhook]`)
 2. **Vercel Dashboard** → Deployments → select a deployment → **Functions** → view logs
 3. **Vercel CLI**: `vercel logs` (or `vercel logs --follow` for real-time)
-4. **In-app**: In Kick Bot tab, expand **Toggle debug**, click **Check KV & decision log**. The **Recent decisions** list shows what happened for each event webhook (skipped_toggle_off, sent, etc.)—this is persisted in KV, not the browser.
+4. The `/api/kick-webhook-log` endpoint (requires auth) returns decision log data if you need to debug toggle behavior.
 
 **Cloudflare caching:** POST requests (webhooks) are normally **not** cached. If you use Cloudflare as a proxy:
 - Add a **Cache Rule** (or Page Rule) to *bypass cache* for `/api/webhooks/*` and `/api/kick-webhook`. Example: URL `*app.tazo.wtf/api/webhooks/*` → Cache Level: Bypass.

@@ -10,12 +10,12 @@ import { cookies } from 'next/headers';
 import { kv } from '@vercel/kv';
 import { getHeartrateStats } from '@/utils/stats-storage';
 import { getPersistentLocation } from '@/utils/location-cache';
+import { KICK_TOKENS_KEY } from '@/lib/kick-api';
+import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 
-const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
 const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
-const KICK_TOKENS_KEY = 'kick_tokens';
 
 function formatAgo(ms: number): string {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;

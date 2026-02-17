@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { kv } from '@vercel/kv';
-import { DEFAULT_KICK_MESSAGE_ENABLED, EVENT_TYPE_TO_TOGGLE } from '@/types/kick-messages';
+import { DEFAULT_KICK_MESSAGE_ENABLED, EVENT_TYPE_TO_TOGGLE, KICK_MESSAGE_ENABLED_KEY, isToggleDisabled } from '@/types/kick-messages';
 
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
-const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,11 +28,7 @@ export async function GET() {
     const channelRewardEvent = 'channel.reward.redemption.updated';
     const toggleKey = EVENT_TYPE_TO_TOGGLE[channelRewardEvent];
     const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
-    const isDisabled = toggleKey && (
-      toggleValue === false ||
-      (toggleValue as unknown) === 0 ||
-      String(toggleValue).toLowerCase() === 'false'
-    );
+    const isDisabled = isToggleDisabled(toggleKey, toggleValue);
     const diagnostic = {
       eventType: channelRewardEvent,
       toggleKey,

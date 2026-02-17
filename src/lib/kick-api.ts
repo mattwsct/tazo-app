@@ -5,10 +5,12 @@
 
 import { createHash, randomBytes, createVerify, createPublicKey } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'http';
+import { kv } from '@vercel/kv';
 
 // --- Constants ---
 
 export const KICK_API_BASE = 'https://api.kick.com';
+export const KICK_TOKENS_KEY = 'kick_tokens';
 export const KICK_OAUTH_BASE = 'https://id.kick.com';
 
 export const KICK_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -169,6 +171,31 @@ export async function refreshKickTokens(refreshToken: string): Promise<KickToken
   }
 
   return res.json();
+}
+
+// --- Token access (shared by webhooks, cron) ---
+
+export async function getValidAccessToken(): Promise<string | null> {
+  const stored = await kv.get<StoredKickTokens>(KICK_TOKENS_KEY);
+  if (!stored?.access_token || !stored.refresh_token) return null;
+
+  const now = Date.now();
+  const bufferMs = 60 * 1000;
+  if (stored.expires_at - bufferMs > now) return stored.access_token;
+
+  try {
+    const tokens = await refreshKickTokens(stored.refresh_token);
+    const expiresAt = now + tokens.expires_in * 1000;
+    await kv.set(KICK_TOKENS_KEY, {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: expiresAt,
+      scope: tokens.scope,
+    });
+    return tokens.access_token;
+  } catch {
+    return null;
+  }
 }
 
 // --- Chat ---

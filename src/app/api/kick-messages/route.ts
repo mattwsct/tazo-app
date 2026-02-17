@@ -3,12 +3,11 @@ import { kv } from '@vercel/kv';
 import {
   DEFAULT_KICK_MESSAGES,
   DEFAULT_KICK_MESSAGE_ENABLED,
+  KICK_MESSAGES_KEY,
+  KICK_MESSAGE_ENABLED_KEY,
+  KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
-
-const KICK_MESSAGES_KEY = 'kick_message_templates';
-const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
-const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 
 export interface KickChatBroadcastSettings {
   chatBroadcastLocation?: boolean;
