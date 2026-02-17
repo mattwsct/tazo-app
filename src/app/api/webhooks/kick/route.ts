@@ -164,9 +164,10 @@ export async function POST(request: NextRequest) {
   };
 
   try {
+    const ev = payload.event as Record<string, unknown> | undefined;
     const rewardInner =
       eventTypeNorm === 'channel.reward.redemption.updated'
-        ? ((payload.data ?? payload.payload ?? payload) as Record<string, unknown>)
+        ? ((payload.data ?? payload.payload ?? ev?.data ?? payload) as Record<string, unknown>)
         : null;
     const debugPayload =
       eventTypeNorm === 'channel.reward.redemption.updated' && rewardInner
@@ -210,17 +211,26 @@ export async function POST(request: NextRequest) {
 
   let message: string | null;
   if (eventTypeNorm === 'channel.reward.redemption.updated') {
-    const inner = (payload.data ?? payload.payload ?? payload) as Record<string, unknown>;
+    const ev = payload.event as Record<string, unknown> | undefined;
+    const inner = (payload.data ?? payload.payload ?? ev?.data ?? payload) as Record<string, unknown>;
     const redemptionId = String(inner.id ?? payload.id ?? '');
     const status = String(inner.status ?? payload.status ?? '').toLowerCase();
     const payloadKeys = Object.keys(payload);
     const innerKeys = Object.keys(inner);
+    const statusFromAllPaths = {
+      inner: inner.status,
+      payload: payload.status,
+      payloadData: (payload.data as Record<string, unknown>)?.status,
+      payloadPayload: (payload.payload as Record<string, unknown>)?.status,
+      payloadEventData: (payload.event as Record<string, unknown>)?.data && ((payload.event as Record<string, unknown>).data as Record<string, unknown>)?.status,
+    };
     console.log(
       '[Kick webhook] REWARD_DEBUG',
       JSON.stringify({
         id: redemptionId,
         status,
-        payloadTopLevel: { id: payload.id, status: payload.status, hasData: !!payload.data, hasPayload: !!payload.payload },
+        statusFromAllPaths,
+        payloadTopLevel: { id: payload.id, status: payload.status, hasData: !!payload.data, hasPayload: !!payload.payload, hasEvent: !!payload.event },
         payloadKeys,
         innerKeys,
       })

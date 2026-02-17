@@ -113,11 +113,13 @@ export interface GetChannelRewardOptions {
   forceApproved?: boolean;
 }
 
-/** Extract reward payload; Kick may send top-level or wrapped in data/payload */
+/** Extract reward payload; Kick may send top-level or wrapped in data/payload/event */
 function getRewardInnerPayload(payload: KickPayload): Record<string, unknown> {
   const d = payload.data as Record<string, unknown> | undefined;
   const p = payload.payload as Record<string, unknown> | undefined;
-  return (d ?? p ?? payload) as Record<string, unknown>;
+  const ev = payload.event as Record<string, unknown> | undefined;
+  const evData = ev?.data as Record<string, unknown> | undefined;
+  return (d ?? p ?? evData ?? payload) as Record<string, unknown>;
 }
 
 export function getChannelRewardResponse(
