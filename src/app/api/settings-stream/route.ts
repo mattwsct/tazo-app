@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { kv } from '@vercel/kv';
 import { addConnection, removeConnection, getConnectionInfo, connections } from '@/lib/settings-broadcast';
+import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
 export async function GET(request: NextRequest): Promise<Response> {
@@ -67,33 +68,27 @@ export async function GET(request: NextRequest): Promise<Response> {
         }
       };
       
-      // Function to check for settings updates
-      // Allow unauthenticated read access for overlay (public read-only access)
+      // Function to check for settings and poll updates
       const checkForUpdates = async () => {
         try {
-          // Get both settings and modification timestamp
-          // Allow unauthenticated access - this is read-only, so it's safe
-          const [settings, modifiedTimestamp] = await Promise.all([
+          const [settings, settingsModified, pollState, pollModified] = await Promise.all([
             kv.get('overlay_settings'),
-            kv.get('overlay_settings_modified')
+            kv.get('overlay_settings_modified'),
+            kv.get(POLL_STATE_KEY),
+            kv.get(POLL_MODIFIED_KEY),
           ]);
-          
-          if (settings && typeof settings === 'object' && modifiedTimestamp) {
-            const currentModified = modifiedTimestamp as number;
-            
-            if (currentModified > lastModified) {
-              lastModified = currentModified;
-              
-              // Send settings with proper format
-              // This is read-only access - unauthenticated users can receive but not modify
-              const settingsUpdate = {
-                ...settings,
-                type: 'settings_update',
-                timestamp: currentModified
-              };
-              
-              sendSSE(JSON.stringify(settingsUpdate));
-            }
+          const settingsTs = (settingsModified as number) ?? 0;
+          const pollTs = (pollModified as number) ?? 0;
+          const maxTs = Math.max(settingsTs, pollTs);
+          if (maxTs > lastModified) {
+            lastModified = maxTs;
+            const settingsUpdate = {
+              ...(settings && typeof settings === 'object' ? settings : {}),
+              pollState: pollState ?? null,
+              type: 'settings_update',
+              timestamp: maxTs,
+            };
+            sendSSE(JSON.stringify(settingsUpdate));
           }
         } catch (error) {
           console.error('Error checking settings:', error);

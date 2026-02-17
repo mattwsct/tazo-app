@@ -128,6 +128,17 @@ function OverlayPage() {
   // Todo completion tracking with localStorage persistence
   const visibleTodos = useTodoCompletion(settings.todos);
 
+  // Force re-render every second when showing poll winner so we hide when winnerDisplayUntil passes
+  const [pollTick, setPollTick] = useState(0);
+  useEffect(() => {
+    const poll = settings.pollState;
+    if (poll?.status === 'winner' && poll.winnerDisplayUntil != null && Date.now() < poll.winnerDisplayUntil) {
+      const id = setInterval(() => setPollTick((n) => n + 1), 1000);
+      return () => clearInterval(id);
+    }
+    return undefined;
+  }, [settings.pollState, pollTick]);
+
   // Rate-gating refs for external API calls
   const lastWeatherTime = useRef(0);
   const lastLocationTime = useRef(0);
@@ -1524,26 +1535,52 @@ function OverlayPage() {
           )}
         </div>
 
-        {/* To-Do List - Bottom Right */}
-        {/* Show todo list when enabled and there are visible todos */}
-        {settings.showTodoList && visibleTodos.length > 0 && (
+        {/* Bottom Right: To-Do List and/or Poll */}
+        {(settings.showTodoList && visibleTodos.length > 0) || settings.pollState ? (
           <div className="bottom-right">
-            <div className="overlay-box todo-list-box">
-              {visibleTodos
-                .sort((a, b) => {
-                  // Incomplete tasks first, then completed tasks
-                  if (a.completed === b.completed) return 0;
-                  return a.completed ? 1 : -1;
-                })
-                .map((todo) => (
-                  <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
-                    <span className="todo-checkbox-icon">{todo.completed ? '✓' : '☐'}</span>
-                    <span className="todo-text">{todo.text}</span>
+            {settings.showTodoList && visibleTodos.length > 0 && (
+              <div className="overlay-box todo-list-box">
+                {visibleTodos
+                  .sort((a, b) => {
+                    if (a.completed === b.completed) return 0;
+                    return a.completed ? 1 : -1;
+                  })
+                  .map((todo) => (
+                    <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
+                      <span className="todo-checkbox-icon">{todo.completed ? '✓' : '☐'}</span>
+                      <span className="todo-text">{todo.text}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+            {settings.pollState && (() => {
+              const poll = settings.pollState;
+              const now = Date.now();
+              const isWinner = poll.status === 'winner';
+              const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
+              if (poll.status === 'active' || showWinner) {
+                return (
+                  <div className="overlay-box poll-box">
+                    <div className="poll-question">{poll.question}</div>
+                    {showWinner ? (
+                      <div className="poll-winner">{poll.winnerMessage ?? 'Poll ended'}</div>
+                    ) : (
+                      <div className="poll-options">
+                        {poll.options.map((opt, i) => (
+                          <div key={i} className="poll-option">
+                            <span className="poll-option-label">{opt.label}</span>
+                            <span className="poll-option-votes">{opt.votes}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
-            </div>
+                );
+              }
+              return null;
+            })()}
           </div>
-        )}
+        ) : null}
       </div>
     </ErrorBoundary>
   );

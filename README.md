@@ -754,6 +754,10 @@ Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each e
 
 Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
 
+### Chat poll
+
+When enabled, broadcaster or mods can start a poll with `!poll Question? Option1, Option2, Option3`. No options after `?` = Yes/No. Chatters vote by typing the option text (e.g. `pizza`, `yes`, `y`). Every message counts. Poll runs for a configurable duration (default 60s), then the winner is posted in chat and shown on the overlay (bottom-right) for 10 seconds. If a new `!poll` is sent while one is running, it queues and starts after the current poll and winner display. Admin settings: enable/disable, duration, and toggles for Mods, VIPs, OGs to start polls (broadcaster can always start). Requires Kick connected and chat webhooks.
+
 ### Future ideas
 
 - **Stream title from location** — now implemented via cron when Auto-push is on

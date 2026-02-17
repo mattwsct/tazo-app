@@ -11,6 +11,8 @@ export interface TodoItem {
   completed: boolean;
 }
 
+import type { PollState } from '@/types/poll';
+
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
   customLocation?: string;
@@ -25,6 +27,8 @@ export interface OverlaySettings {
   speedDisplay: DisplayMode;
   todos?: TodoItem[];
   showTodoList?: boolean;
+  /** Chat poll state (from Kick). Not persisted in settings. */
+  pollState?: PollState | null;
 }
 
 // Default settings (single source of truth)
@@ -45,8 +49,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 };
 
 // Valid settings schema for validation
-// Note: 'todos' is handled separately in the validator as it's an array
-export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos'>, 'boolean' | 'string' | 'number'> = {
+// Note: 'todos' is handled separately; 'pollState' is runtime from SSE, not persisted
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'pollState'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   customLocation: 'string',
   showCountryName: 'boolean',

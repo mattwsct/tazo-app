@@ -6,6 +6,7 @@ import {
   getValidAccessToken,
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
+import { handleChatPoll } from '@/lib/poll-webhook-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
@@ -125,9 +126,13 @@ export async function POST(request: NextRequest) {
   }
   await logWebhookReceived(eventType || '(unknown)');
 
-  // Chat commands — !ping only; reply to the user's message
+  // Chat: poll handling first (if enabled), then !ping
   if (eventNorm === 'chat.message.sent') {
     const content = (payload.content as string) || '';
+    const sender = (payload.sender as { username?: string })?.username ?? '?';
+    const pollResult = await handleChatPoll(content, sender, payload);
+    if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
+
     const parsed = parseKickChatMessage(content);
     if (!parsed) return NextResponse.json({ received: true }, { status: 200 });
     const response = await handleKickChatCommand(parsed.cmd);

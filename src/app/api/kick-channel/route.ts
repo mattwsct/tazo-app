@@ -12,6 +12,7 @@ import type { StoredKickTokens } from '@/lib/kick-api';
 const KICK_API_BASE = 'https://api.kick.com';
 const KICK_TOKENS_KEY = 'kick_tokens';
 const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
+const KICK_BROADCASTER_SLUG_KEY = 'kick_broadcaster_slug';
 
 export type StreamTitleLocationDisplay = 'city' | 'state' | 'country';
 
@@ -103,9 +104,13 @@ export async function GET() {
   const ch = (data.data ?? [])[0];
   const livestream = ch?.livestream;
   const isLive = !!(livestream?.is_live ?? ch?.is_live);
+  const slug = ch?.slug;
+  if (slug && typeof slug === 'string') {
+    try { await kv.set(KICK_BROADCASTER_SLUG_KEY, slug); } catch { /* ignore */ }
+  }
   return NextResponse.json({
     stream_title: ch?.stream_title ?? '',
-    slug: ch?.slug,
+    slug,
     is_live: isLive,
     settings: settingsResponse,
   });

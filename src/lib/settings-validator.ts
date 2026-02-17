@@ -71,7 +71,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
 
   // Log any rejected keys (potential malicious entries)
   for (const key of Object.keys(settings)) {
-    if (!(key in SETTINGS_CONFIG) && key !== 'todos' && key !== 'showTodoList') { // todos and showTodoList are handled separately
+    if (!(key in SETTINGS_CONFIG) && key !== 'todos' && key !== 'showTodoList' && key !== 'pollState') { // todos, showTodoList, pollState (runtime) are valid
       rejectedKeys.push(key);
     }
   }

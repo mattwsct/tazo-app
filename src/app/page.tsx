@@ -95,6 +95,11 @@ export default function AdminPage() {
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
   const [kickDebugLog, setKickDebugLog] = useState<Record<string, unknown> | null>(null);
   const [kickDebugLoading, setKickDebugLoading] = useState(false);
+  const [kickPollEnabled, setKickPollEnabled] = useState(false);
+  const [kickPollDuration, setKickPollDuration] = useState(60);
+  const [kickPollModsCanStart, setKickPollModsCanStart] = useState(true);
+  const [kickPollVipsCanStart, setKickPollVipsCanStart] = useState(false);
+  const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -235,6 +240,16 @@ export default function AdminPage() {
         if (d.alertSettings?.pinMinGiftSubs != null) setKickPinMinGiftSubs(d.alertSettings.pinMinGiftSubs);
         if (d.alertSettings?.pinMinKicks != null) setKickPinMinKicks(d.alertSettings.pinMinKicks);
         if (d.alertSettings?.pinDurationSeconds != null) setKickPinDurationSeconds(d.alertSettings.pinDurationSeconds);
+      })
+      .catch(() => {});
+    fetch('/api/kick-poll-settings', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.enabled !== undefined) setKickPollEnabled(d.enabled);
+        if (d?.durationSeconds != null) setKickPollDuration(d.durationSeconds);
+        if (d?.modsCanStart !== undefined) setKickPollModsCanStart(d.modsCanStart);
+        if (d?.vipsCanStart !== undefined) setKickPollVipsCanStart(d.vipsCanStart);
+        if (d?.ogsCanStart !== undefined) setKickPollOgsCanStart(d.ogsCanStart);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -1573,6 +1588,137 @@ export default function AdminPage() {
                     {kickTestSending ? 'Sending...' : 'Send'}
                   </button>
                 </div>
+                </div>
+              </section>
+
+              {/* Chat Poll */}
+              <section className="settings-section">
+                <div className="section-header">
+                  <h2>🗳️ Chat poll</h2>
+                </div>
+                <div className="setting-group">
+                  <p className="group-label group-description group-description-sm">
+                    Mods/broadcaster start polls with <code>!poll Question? Option1, Option2</code>. No options = Yes/No. Vote by typing option text (e.g. pizza, yes). Winner posts in chat and shows on overlay for 10s.
+                  </p>
+                  <div className="form-stack" style={{ maxWidth: 520 }}>
+                    <label className="checkbox-label-row">
+                      <input
+                        type="checkbox"
+                        checked={kickPollEnabled}
+                        onChange={async (e) => {
+                          const checked = e.target.checked;
+                          setKickPollEnabled(checked);
+                          try {
+                            await authenticatedFetch('/api/kick-poll-settings', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ enabled: checked }),
+                            });
+                            setToast({ type: 'saved', message: 'Saved!' });
+                          } catch {
+                            setKickPollEnabled(!checked);
+                            setToast({ type: 'error', message: 'Failed to save' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                        className="checkbox-input"
+                      />
+                      <span>Enable chat-based poll</span>
+                    </label>
+                    {kickPollEnabled && (
+                      <>
+                        <label className="kick-group-options-item">
+                          <span>Duration (sec):</span>
+                          <input
+                            type="number"
+                            className="text-input number-input kick-group-options-input"
+                            value={kickPollDuration}
+                            onChange={(e) => setKickPollDuration(Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 60)))}
+                            min={5}
+                            max={300}
+                            style={{ width: 72 }}
+                            onBlur={async () => {
+                              try {
+                                await authenticatedFetch('/api/kick-poll-settings', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ durationSeconds: kickPollDuration }),
+                                });
+                                setToast({ type: 'saved', message: 'Saved!' });
+                              } catch { /* ignore */ }
+                              setTimeout(() => setToast(null), 2000);
+                            }}
+                          />
+                        </label>
+                        <div className="kick-group-options" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                          <span className="kick-group-options-label">Who can start polls:</span>
+                          <label className="checkbox-label-row">
+                            <input
+                              type="checkbox"
+                              checked={kickPollModsCanStart}
+                              onChange={async (e) => {
+                                const checked = e.target.checked;
+                                setKickPollModsCanStart(checked);
+                                try {
+                                  await authenticatedFetch('/api/kick-poll-settings', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ modsCanStart: checked }),
+                                  });
+                                  setToast({ type: 'saved', message: 'Saved!' });
+                                } catch { setKickPollModsCanStart(!checked); }
+                                setTimeout(() => setToast(null), 2000);
+                              }}
+                              className="checkbox-input"
+                            />
+                            <span>Mods</span>
+                          </label>
+                          <label className="checkbox-label-row">
+                            <input
+                              type="checkbox"
+                              checked={kickPollVipsCanStart}
+                              onChange={async (e) => {
+                                const checked = e.target.checked;
+                                setKickPollVipsCanStart(checked);
+                                try {
+                                  await authenticatedFetch('/api/kick-poll-settings', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ vipsCanStart: checked }),
+                                  });
+                                  setToast({ type: 'saved', message: 'Saved!' });
+                                } catch { setKickPollVipsCanStart(!checked); }
+                                setTimeout(() => setToast(null), 2000);
+                              }}
+                              className="checkbox-input"
+                            />
+                            <span>VIPs</span>
+                          </label>
+                          <label className="checkbox-label-row">
+                            <input
+                              type="checkbox"
+                              checked={kickPollOgsCanStart}
+                              onChange={async (e) => {
+                                const checked = e.target.checked;
+                                setKickPollOgsCanStart(checked);
+                                try {
+                                  await authenticatedFetch('/api/kick-poll-settings', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ ogsCanStart: checked }),
+                                  });
+                                  setToast({ type: 'saved', message: 'Saved!' });
+                                } catch { setKickPollOgsCanStart(!checked); }
+                                setTimeout(() => setToast(null), 2000);
+                              }}
+                              className="checkbox-input"
+                            />
+                            <span>OGs</span>
+                          </label>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </section>
 

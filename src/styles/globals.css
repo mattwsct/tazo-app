@@ -213,6 +213,49 @@ body.overlay-page {
   max-width: 100%; /* Ensure it respects parent constraints */
 }
 
+/* === POLL STYLES === */
+.poll-box {
+  font-size: var(--font-size-sm);
+}
+
+.poll-question {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-compact);
+  margin-bottom: 4px;
+}
+
+.poll-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.poll-option {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap-md);
+}
+
+.poll-option-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poll-option-votes {
+  font-weight: 700;
+  flex-shrink: 0;
+  color: rgba(34, 197, 94, 0.95);
+}
+
+.poll-winner {
+  font-weight: 700;
+  word-break: break-word;
+  white-space: normal;
+}
+
 /* === TIME DISPLAY STYLES === */
 .time,
 .time-line {
