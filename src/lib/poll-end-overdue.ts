@@ -53,6 +53,12 @@ export async function endOverduePollIfAny(): Promise<boolean> {
     return true;
   }
 
+  // Race guard: another process may have popped a queued poll and set it. Do not overwrite.
+  const currentNow = await getPollState();
+  if (currentNow?.id !== state.id) {
+    return true; // State changed by concurrent process (e.g. new poll started); don't overwrite
+  }
+
   const winnerState: PollState = {
     ...state,
     status: 'winner',

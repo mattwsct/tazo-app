@@ -500,6 +500,11 @@ export async function handleChatPoll(
       }
       return { handled: true };
     }
+    // Race guard: another process (cron, poll-end-trigger) may have popped and started next poll
+    const currentNow = await getPollState();
+    if (currentNow?.id !== currentState.id) {
+      return { handled: true };
+    }
     const winnerState: PollState = {
       ...currentState,
       status: 'winner',

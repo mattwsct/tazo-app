@@ -133,6 +133,7 @@ function OverlayPage() {
   // When active poll countdown ends: show winner immediately from current votes, then sync with server
   const pollCountdownRef = useRef<{ pollId: string } | null>(null);
   const latestPollRef = useRef<typeof settings.pollState>(null);
+  const lastPollIdRef = useRef<string | null>(null);
   if (settings.pollState?.status === 'active') latestPollRef.current = settings.pollState;
 
   useEffect(() => {
@@ -163,11 +164,13 @@ function OverlayPage() {
               winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
             },
           }));
+          setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
         } else {
+          lastPollIdRef.current = null;
           setSettings((prev) => ({ ...prev, pollState: null }));
+          refreshSettings();
         }
       }
-      refreshSettings().then(() => setTimeout(() => refreshSettings(), 2000));
     }, remainingMs);
     return () => clearTimeout(timeout);
   }, [settings.pollState?.id, settings.pollState?.status, settings.pollState?.startedAt, settings.pollState?.durationSeconds, refreshSettings, setSettings]);
@@ -1604,8 +1607,12 @@ function OverlayPage() {
               const isWinner = poll.status === 'winner';
               const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
               if (poll.status === 'active' || (showWinner && totalVotes > 0)) {
+                const isNewPoll = poll.id !== lastPollIdRef.current;
+                if (isNewPoll) lastPollIdRef.current = poll.id;
                 return (
-                  <div className={`overlay-box poll-box ${showWinner ? 'poll-box-winner' : ''}`}>
+                  <div
+                    className={`overlay-box poll-box ${showWinner ? 'poll-box-winner' : ''} ${isNewPoll ? 'poll-fill-instant' : ''}`}
+                  >
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
                     <div className="poll-options">
                       {(() => {
@@ -1615,16 +1622,21 @@ function OverlayPage() {
                             .filter((o) => o.votes === maxVotes && maxVotes > 0)
                             .map((o) => o.label)
                         );
-                        const sorted = [...poll.options].sort((a, b) => b.votes - a.votes);
-                        return sorted.map((opt) => {
-                          const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+                        const optionsToShow = showWinner
+                          ? [...poll.options].sort((a, b) => b.votes - a.votes).filter((o) => winnerLabels.has(o.label))
+                          : poll.options;
+                        return optionsToShow.map((opt) => {
+                          const pct = showWinner
+                            ? 100
+                            : totalVotes > 0
+                              ? Math.round((opt.votes / totalVotes) * 100)
+                              : 0;
                           const displayLabel = filterOptionForDisplay(opt.label);
                           const isLeading = winnerLabels.has(opt.label);
-                          const isWinner = showWinner && isLeading;
                           return (
                             <div
                               key={opt.label}
-                              className={`poll-option ${isWinner ? 'poll-option-winner' : ''} ${showWinner && !isWinner ? 'poll-option-loser' : ''}`}
+                              className={`poll-option ${showWinner ? 'poll-option-winner' : ''}`}
                             >
                               <div className="poll-option-bar">
                                 <div className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`} style={{ width: `${pct}%` }} />

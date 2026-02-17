@@ -252,15 +252,6 @@ body.overlay-page {
   box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
 }
 
-.poll-option-loser {
-  opacity: 0.4;
-}
-
-.poll-option-loser .poll-option-bar,
-.poll-option-loser .poll-option-fill {
-  animation: none;
-}
-
 .poll-option-bar {
   position: relative;
   width: 100%;
@@ -285,8 +276,11 @@ body.overlay-page {
   background-size: 200% 100%;
   background-position: 100% 0;
   border-radius: 999px;
-  transition: width 0.2s ease-out;
-  animation: poll-fill-shimmer 6s ease-in-out infinite;
+  transition: width 2s ease-out;
+}
+
+.poll-fill-instant .poll-option-fill {
+  transition: none;
 }
 
 .poll-option-fill-winner {
