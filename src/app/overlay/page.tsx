@@ -150,6 +150,9 @@ function OverlayPage() {
       pollCountdownRef.current = null;
       const current = latestPollRef.current;
       const totalVotes = current?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
+
+      fetch('/api/poll-end-trigger', { cache: 'no-store' }).catch(() => {});
+
       if (current) {
         if (totalVotes > 0) {
           setSettings((prev) => ({

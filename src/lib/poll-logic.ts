@@ -8,7 +8,7 @@ import { containsBlockedContent } from '@/lib/poll-content-filter';
 const YES_ALIASES = new Set(['yes', 'y']);
 const NO_ALIASES = new Set(['no', 'n']);
 
-/** Parse !poll <question?> [opt1], [opt2], ... — question before ?, options after (or yes/no) */
+/** Parse !poll <question?> [opts] — question before ?, options after. Comma-separated or space-separated (each word if no commas). No options = Yes/No. */
 export function parsePollCommand(content: string): { question: string; options: PollOption[] } | null {
   const trimmed = content.trim();
   if (!trimmed.toLowerCase().startsWith('!poll ')) return null;
@@ -25,7 +25,9 @@ export function parsePollCommand(content: string): { question: string; options: 
       { label: 'No', votes: 0, voters: {} },
     ];
   } else {
-    const parts = after.split(',').map((p) => p.trim()).filter(Boolean);
+    const parts = after.includes(',')
+      ? after.split(',').map((p) => p.trim()).filter(Boolean)
+      : after.split(/\s+/).map((p) => p.trim()).filter(Boolean);
     if (parts.length === 0) return null;
     options = parts.map((label) => ({ label, votes: 0, voters: {} }));
   }

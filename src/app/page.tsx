@@ -1492,7 +1492,7 @@ export default function AdminPage() {
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description group-description-sm">
-                    Mods/broadcaster start polls with <code>!poll Question? Option1, Option2</code>. No options = Yes/No. Vote by typing option text (e.g. pizza, yes). Winner posts in chat and overlay. Mods and broadcaster can use <code>!endpoll</code> to end the current poll early.
+                    Mods/broadcaster start polls with <code>!poll Question? Option1, Option2</code> or <code>!poll Food? Pizza burger chips</code> (space-separated when no commas). No options = Yes/No. Vote by typing option text (e.g. pizza, yes). Winner posts in chat and overlay. Mods and broadcaster can use <code>!endpoll</code> to end the current poll early.
                   </p>
                   <div className="form-stack" style={{ maxWidth: 520 }}>
                     <label className="checkbox-label-row">
