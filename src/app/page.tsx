@@ -17,14 +17,22 @@ import type { LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 
 function ToggleDebug() {
-  const [data, setData] = useState<{ storedEnabledInKv?: Record<string, unknown>; debug?: Record<string, unknown> } | null>(null);
+  const [data, setData] = useState<{
+    storedEnabledInKv?: Record<string, unknown>;
+    debug?: Record<string, unknown>;
+    decisionLog?: { at: string; eventType: string; toggleKey: string | null; toggleValue: unknown; isDisabled: boolean; action: string }[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const fetchDebug = useCallback(async () => {
     setLoading(true);
     try {
       const r = await fetch('/api/kick-webhook-log', { credentials: 'include' });
       const d = await r.json();
-      setData({ storedEnabledInKv: d.storedEnabledInKv ?? null, debug: d.debug ?? null });
+      setData({
+        storedEnabledInKv: d.storedEnabledInKv ?? null,
+        debug: d.debug ?? null,
+        decisionLog: d.decisionLog ?? [],
+      });
     } catch {
       setData(null);
     }
@@ -32,16 +40,30 @@ function ToggleDebug() {
   }, []);
   return (
     <div className="kick-toggle-debug-inner" style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: 8, fontSize: '0.8rem' }}>
+      <p style={{ marginBottom: '0.5rem', opacity: 0.9 }}>
+        Toggles only apply to event webhooks (follow, reward, sub, etc.). <code>chat.message.sent</code> is for commands like !ping and ignores toggles.
+      </p>
       <button type="button" className="btn btn-secondary btn-small" onClick={fetchDebug} disabled={loading}>
-        {loading ? 'Loading...' : 'Check KV & last webhook'}
+        {loading ? 'Loading...' : 'Check KV & decision log'}
       </button>
       {data && (
         <div style={{ marginTop: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
           <div><strong>Stored in KV:</strong> {JSON.stringify(data.storedEnabledInKv, null, 2)}</div>
           {data.debug && (
             <div style={{ marginTop: '0.5rem' }}>
-              <strong>Last webhook saw:</strong>{' '}
-              event: {String(data.debug.eventType)}, toggleKey: {String(data.debug.toggleKey)}, value: {String(data.debug.toggleValue)}, skipped: {String(data.debug.isDisabled)}
+              <strong>Last event webhook:</strong> event={String(data.debug.eventType)} toggleKey={String(data.debug.toggleKey)} value={String(data.debug.toggleValue)} skipped={String(data.debug.isDisabled)}
+            </div>
+          )}
+          {data.decisionLog && data.decisionLog.length > 0 && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <strong>Recent decisions (event webhooks only):</strong>
+              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, listStyle: 'disc' }}>
+                {data.decisionLog.map((entry, i) => (
+                  <li key={i} style={{ marginBottom: '0.25rem' }}>
+                    {entry.at} — {entry.eventType} → {entry.toggleKey ?? 'n/a'} (value={String(entry.toggleValue)}) → <strong>{entry.action}</strong>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

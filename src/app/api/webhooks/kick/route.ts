@@ -34,7 +34,9 @@ const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
 const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
+const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
 const WEBHOOK_LOG_MAX = 20;
+const WEBHOOK_DECISION_LOG_MAX = 15;
 
 async function logWebhookReceived(eventType: string): Promise<void> {
   try {
@@ -177,6 +179,20 @@ export async function POST(request: NextRequest) {
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
   const isDisabled = toggleKey && (toggleValue === false || String(toggleValue) === 'false');
 
+  const pushDecision = async (action: string) => {
+    try {
+      await kv.lpush(KICK_WEBHOOK_DECISION_LOG_KEY, {
+        at: new Date().toISOString(),
+        eventType: eventType || '(none)',
+        toggleKey: toggleKey ?? null,
+        toggleValue: toggleValue ?? null,
+        isDisabled,
+        action,
+      });
+      await kv.ltrim(KICK_WEBHOOK_DECISION_LOG_KEY, 0, WEBHOOK_DECISION_LOG_MAX - 1);
+    } catch { /* ignore */ }
+  };
+
   try {
     await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
       at: new Date().toISOString(),
@@ -195,6 +211,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (isDisabled) {
+    await pushDecision('skipped_toggle_off');
     console.log('[Kick webhook] Skipping (toggle off)', eventType, '|', toggleKey + ':', toggleValue, '| stored:', JSON.stringify(storedEnabled));
     return NextResponse.json({ received: true }, { status: 200 });
   }
@@ -258,18 +275,23 @@ export async function POST(request: NextRequest) {
   }
 
   if (!message) {
+    await pushDecision('skipped_no_message');
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
   const accessToken = await getValidAccessToken();
   if (!accessToken) {
+    await pushDecision('skipped_no_token');
     console.warn('[Kick webhook] No valid token - cannot send chat response');
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
   try {
     await sendKickChatMessage(accessToken, message);
+    await pushDecision('sent');
+    console.log('[Kick webhook] Sent:', eventType, '|', toggleKey, '| message:', message.slice(0, 50) + (message.length > 50 ? '...' : ''));
   } catch (err) {
+    await pushDecision('send_failed');
     console.error('[Kick webhook] Chat send failed:', err);
   }
 
