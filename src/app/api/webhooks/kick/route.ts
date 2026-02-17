@@ -304,6 +304,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  // Last-second re-check: avoid race conditions / stale KV reads
+  const storedEnabledRecheck = await kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY);
+  const enabledRecheck = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabledRecheck ?? {}) };
+  const toggleValueRecheck = toggleKey ? enabledRecheck[toggleKey] : undefined;
+  const isDisabledRecheck = toggleKey && (
+    toggleValueRecheck === false ||
+    toggleValueRecheck === 0 ||
+    String(toggleValueRecheck).toLowerCase() === 'false'
+  );
+  if (isDisabledRecheck) {
+    await pushDecision('skipped_toggle_off_late');
+    console.log('[Kick webhook] Skipping (late re-check): toggle now off', eventType, '|', toggleKey, '|', JSON.stringify(storedEnabledRecheck));
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
   const debugPrefix = process.env.KICK_MESSAGE_DEBUG_PREFIX ?? '';
   const finalMessage = debugPrefix ? `${debugPrefix}${message}` : message;
 
