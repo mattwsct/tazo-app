@@ -13,10 +13,11 @@ import {
   getHostResponse,
 } from '@/lib/kick-event-responses';
 import { getKickSubscriptionLeaderboard } from '@/lib/kick-api';
-import type { KickMessageTemplates } from '@/types/kick-messages';
+import type { KickMessageTemplates, KickMessageTemplateEnabled } from '@/types/kick-messages';
 
 export interface BuildEventMessageOptions {
   templates: KickMessageTemplates;
+  templateEnabled?: KickMessageTemplateEnabled;
   minimumKicks: number;
   giftSubShowLifetimeSubs: boolean;
   getAccessToken: () => Promise<string | null>;
@@ -27,15 +28,15 @@ export async function buildEventMessage(
   payload: Record<string, unknown>,
   options: BuildEventMessageOptions
 ): Promise<string | null> {
-  const { templates, minimumKicks, giftSubShowLifetimeSubs, getAccessToken } = options;
+  const { templates, templateEnabled, minimumKicks, giftSubShowLifetimeSubs, getAccessToken } = options;
 
   switch (eventTypeNorm) {
     case 'channel.followed':
-      return getFollowResponse(payload, templates);
+      return getFollowResponse(payload, templates, templateEnabled);
     case 'channel.subscription.new':
-      return getNewSubResponse(payload, templates);
+      return getNewSubResponse(payload, templates, templateEnabled);
     case 'channel.subscription.renewal':
-      return getResubResponse(payload, templates);
+      return getResubResponse(payload, templates, templateEnabled);
     case 'channel.subscription.gifts': {
       let lifetimeSubs = '';
       if (giftSubShowLifetimeSubs) {
@@ -54,19 +55,19 @@ export async function buildEventMessage(
           }
         }
       }
-      return getGiftSubResponse(payload, templates, { lifetimeSubs });
+      return getGiftSubResponse(payload, templates, { lifetimeSubs }, templateEnabled);
     }
     case 'kicks.gifted': {
       const amount = Number((payload.gift as { amount?: number })?.amount ?? 0);
       if (amount < minimumKicks) return null;
-      return getKicksGiftedResponse(payload, templates);
+      return getKicksGiftedResponse(payload, templates, templateEnabled);
     }
     case 'channel.reward.redemption.updated':
-      return getChannelRewardResponse(payload, templates);
+      return getChannelRewardResponse(payload, templates, undefined, templateEnabled);
     case 'livestream.status.updated':
-      return getStreamStatusResponse(payload, templates);
+      return getStreamStatusResponse(payload, templates, templateEnabled);
     case 'channel.hosted':
-      return getHostResponse(payload, templates);
+      return getHostResponse(payload, templates, templateEnabled);
     default:
       return null;
   }

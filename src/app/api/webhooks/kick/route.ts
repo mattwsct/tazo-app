@@ -14,9 +14,10 @@ import {
   EVENT_TYPE_TO_TOGGLE,
   KICK_MESSAGES_KEY,
   KICK_MESSAGE_ENABLED_KEY,
+  KICK_MESSAGE_TEMPLATE_ENABLED_KEY,
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
-import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-messages';
+import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
@@ -125,16 +126,18 @@ export async function POST(request: NextRequest) {
 
   console.log('[Kick webhook] Event path', eventType);
 
-  const [storedTemplates, storedEnabled, storedAlertSettings] = await Promise.all([
+  const [storedTemplates, storedEnabled, storedTemplateEnabled, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
     kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
+    kv.get<KickMessageTemplateEnabled>(KICK_MESSAGE_TEMPLATE_ENABLED_KEY),
     kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
 
-  console.log('[Kick webhook] KV read', { storedEnabled: JSON.stringify(storedEnabled), key: KICK_MESSAGE_ENABLED_KEY });
+  console.log('[Kick webhook] KV read', { storedEnabled: JSON.stringify(storedEnabled), storedTemplateEnabled: JSON.stringify(storedTemplateEnabled) });
 
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
   const enabled: Record<KickEventToggleKey, boolean> = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabled ?? {}) };
+  const templateEnabled: KickMessageTemplateEnabled = { ...(storedTemplateEnabled ?? {}) };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
@@ -169,11 +172,10 @@ export async function POST(request: NextRequest) {
     const debugPayload =
       eventTypeNorm === 'channel.reward.redemption.updated'
         ? {
-            status: payload.status,
-            dataStatus: (payload.data as Record<string, unknown>)?.status,
-            id: payload.id,
-            dataId: (payload.data as Record<string, unknown>)?.id,
+            id: payload.id ?? (payload.data as Record<string, unknown>)?.id,
+            status: payload.status ?? (payload.data as Record<string, unknown>)?.status,
             keys: Object.keys(payload),
+            payloadSample: { id: payload.id, status: payload.status, redeemer: payload.redeemer, reward: payload.reward },
           }
         : undefined;
     await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
@@ -201,18 +203,18 @@ export async function POST(request: NextRequest) {
   if (eventTypeNorm === 'channel.reward.redemption.updated') {
     const data = payload.data as Record<string, unknown> | undefined;
     const inner = data ?? payload;
-    const redeemer = (inner.redeemer ?? payload.redeemer) as { id?: number; username?: string } | undefined;
-    const reward = (inner.reward ?? payload.reward) as { id?: number; title?: string } | undefined;
-    const redemptionId =
-      String(payload.id ?? data?.id ?? '') ||
-      (redeemer?.id && reward?.id ? `${redeemer.id}_${reward.id}_${inner.created_at ?? ''}` : '');
+    const redemptionId = String(inner.id ?? payload.id ?? '');
+    const status = String(inner.status ?? payload.status ?? '').toLowerCase();
+    console.log('[Kick webhook] channel.reward.redemption.updated', { id: redemptionId, status, hasData: !!data });
     const seenKey = redemptionId ? `${KICK_REWARD_SEEN_PREFIX}${redemptionId}` : null;
     const alreadySeen = seenKey ? await kv.get(seenKey) : null;
     if (alreadySeen) {
-      message = getChannelRewardResponse(payload, templates, { forceApproved: true });
+      message = getChannelRewardResponse(payload, templates, { forceApproved: true }, templateEnabled);
+      console.log('[Kick webhook] channel.reward: approved template (id seen)');
     } else {
       message = await buildEventMessage(eventTypeNorm, payload, {
         templates,
+        templateEnabled,
         minimumKicks,
         giftSubShowLifetimeSubs,
         getAccessToken: getValidAccessToken,
@@ -224,10 +226,12 @@ export async function POST(request: NextRequest) {
           // ignore
         }
       }
+      console.log('[Kick webhook] channel.reward: status=%s template=%s msg=%s', status, message ? 'ok' : 'empty', message?.slice(0, 50) ?? '');
     }
   } else {
     message = await buildEventMessage(eventTypeNorm, payload, {
       templates,
+      templateEnabled,
       minimumKicks,
       giftSubShowLifetimeSubs,
       getAccessToken: getValidAccessToken,

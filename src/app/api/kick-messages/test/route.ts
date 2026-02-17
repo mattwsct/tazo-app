@@ -55,28 +55,28 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
 /** Build response functions for gift sub templates (lifetime subs depends on toggle) */
 function getGiftSubResponseFn(lifetimeSubs: string) {
   return (p: unknown, t: KickMessageTemplates) =>
-    getGiftSubResponse(p as never, t, { lifetimeSubs });
+    getGiftSubResponse(p as never, t, { lifetimeSubs }, undefined);
 }
 
-/** Response functions per template key (giftSub* all use getGiftSubResponse, etc.) */
-function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMessageTemplates, (p: unknown, t: KickMessageTemplates) => string> {
+/** Response functions per template key (giftSub* all use getGiftSubResponse, etc.). Template tests pass undefined for templateEnabled so all are enabled. */
+function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMessageTemplates, (p: unknown, t: KickMessageTemplates) => string | null> {
   const lifetimeSubs = giftSubShowLifetimeSubs ? '(5 lifetime)' : '';
   return {
-  follow: (p, t) => getFollowResponse(p as never, t),
-  newSub: (p, t) => getNewSubResponse(p as never, t),
-  resub: (p, t) => getResubResponse(p as never, t),
+  follow: (p, t) => getFollowResponse(p as never, t, undefined),
+  newSub: (p, t) => getNewSubResponse(p as never, t, undefined),
+  resub: (p, t) => getResubResponse(p as never, t, undefined),
   giftSubSingle: getGiftSubResponseFn(lifetimeSubs),
   giftSubMulti: getGiftSubResponseFn(lifetimeSubs),
   giftSubGeneric: getGiftSubResponseFn(lifetimeSubs),
-  kicksGifted: (p, t) => getKicksGiftedResponse(p as never, t),
-  kicksGiftedWithMessage: (p, t) => getKicksGiftedResponse(p as never, t),
-  channelReward: (p, t) => getChannelRewardResponse(p as never, t),
-  channelRewardWithInput: (p, t) => getChannelRewardResponse(p as never, t),
-  channelRewardApproved: (p, t) => getChannelRewardResponse(p as never, t),
-  channelRewardDeclined: (p, t) => getChannelRewardResponse(p as never, t),
-  streamStarted: (p, t) => getStreamStatusResponse(p as never, t),
-  streamEnded: (p, t) => getStreamStatusResponse(p as never, t),
-  host: (p, t) => getHostResponse(p as never, t),
+  kicksGifted: (p, t) => getKicksGiftedResponse(p as never, t, undefined),
+  kicksGiftedWithMessage: (p, t) => getKicksGiftedResponse(p as never, t, undefined),
+  channelReward: (p, t) => getChannelRewardResponse(p as never, t, undefined, undefined),
+  channelRewardWithInput: (p, t) => getChannelRewardResponse(p as never, t, undefined, undefined),
+  channelRewardApproved: (p, t) => getChannelRewardResponse(p as never, t, undefined, undefined),
+  channelRewardDeclined: (p, t) => getChannelRewardResponse(p as never, t, undefined, undefined),
+  streamStarted: (p, t) => getStreamStatusResponse(p as never, t, undefined),
+  streamEnded: (p, t) => getStreamStatusResponse(p as never, t, undefined),
+  host: (p, t) => getHostResponse(p as never, t, undefined),
   };
 }
 
@@ -106,7 +106,8 @@ export async function POST(request: NextRequest) {
     const fn = responseFns[templateKey];
     const payload = MOCK_PAYLOADS[templateKey];
     if (fn && payload) {
-      content = fn(payload, templates);
+      const result = fn(payload, templates);
+      content = result ?? content;
     }
   }
 

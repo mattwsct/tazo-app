@@ -114,8 +114,12 @@ export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: stri
 
 export const KICK_MESSAGES_KEY = 'kick_message_templates';
 export const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
+export const KICK_MESSAGE_TEMPLATE_ENABLED_KEY = 'kick_message_template_enabled';
 export const KICK_MESSAGE_TEMPLATES_BACKUP_KEY = 'kick_message_templates_backup';
 export const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
+
+/** Per-template toggles: each message type has its own on/off. Default all true. */
+export type KickMessageTemplateEnabled = Partial<Record<keyof KickMessageTemplates, boolean>>;
 
 /** Maps webhook event type to toggle key */
 export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
@@ -128,6 +132,15 @@ export const EVENT_TYPE_TO_TOGGLE: Record<string, KickEventToggleKey> = {
   'livestream.status.updated': 'streamStatus',
   'channel.hosted': 'host',
 };
+
+/** Check if a specific template is disabled by its per-template toggle. */
+export function isTemplateDisabled(
+  templateEnabled: KickMessageTemplateEnabled | undefined,
+  templateKey: keyof KickMessageTemplates
+): boolean {
+  if (!templateEnabled) return false;
+  return templateEnabled[templateKey] === false;
+}
 
 /** Check if an event type is disabled by its toggle. */
 export function isToggleDisabled(

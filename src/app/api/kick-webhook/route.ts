@@ -10,9 +10,10 @@ import {
   DEFAULT_KICK_MESSAGES,
   EVENT_TYPE_TO_TOGGLE,
   KICK_MESSAGES_KEY,
+  KICK_MESSAGE_TEMPLATE_ENABLED_KEY,
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
-import type { KickMessageTemplates } from '@/types/kick-messages';
+import type { KickMessageTemplates, KickMessageTemplateEnabled } from '@/types/kick-messages';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -41,11 +42,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const [storedTemplates, storedAlertSettings] = await Promise.all([
+  const [storedTemplates, storedTemplateEnabled, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
+    kv.get<KickMessageTemplateEnabled>(KICK_MESSAGE_TEMPLATE_ENABLED_KEY),
     kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
+  const templateEnabled: KickMessageTemplateEnabled = { ...(storedTemplateEnabled ?? {}) };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
@@ -57,6 +60,7 @@ export async function POST(request: NextRequest) {
 
   const message = await buildEventMessage(eventTypeNorm, payload, {
     templates,
+    templateEnabled,
     minimumKicks,
     giftSubShowLifetimeSubs,
     getAccessToken: getValidAccessToken,

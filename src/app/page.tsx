@@ -10,7 +10,7 @@ import {
   TEMPLATE_GROUP_ICONS,
   DEFAULT_KICK_MESSAGE_ENABLED,
 } from '@/types/kick-messages';
-import type { KickMessageTemplates, KickMessageEnabled } from '@/types/kick-messages';
+import type { KickMessageTemplates, KickMessageEnabled, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { formatLocationForStreamTitle, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 import type { LocationData } from '@/utils/location-utils';
@@ -48,6 +48,7 @@ export default function AdminPage() {
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
+  const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
 
   // Todo editing state
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
@@ -57,6 +58,15 @@ export default function AdminPage() {
   const [kickStatus, setKickStatus] = useState<{ connected: boolean; subscriptions?: unknown[] } | null>(null);
   const [kickMessages, setKickMessages] = useState<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const [kickMessageEnabled, setKickMessageEnabled] = useState<KickMessageEnabled>(DEFAULT_KICK_MESSAGE_ENABLED);
+  const [kickTemplateEnabled, setKickTemplateEnabled] = useState<KickMessageTemplateEnabled>(() => {
+    const t: KickMessageTemplateEnabled = {};
+    for (const group of TEMPLATE_GROUP_CONFIG) {
+      for (const k of group.templateKeys) {
+        t[k as keyof KickMessageTemplates] = true;
+      }
+    }
+    return t;
+  });
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickGiftSubShowLifetimeSubs, setKickGiftSubShowLifetimeSubs] = useState(true);
   const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
@@ -207,6 +217,7 @@ export default function AdminPage() {
       .then((d) => {
         if (d.messages) setKickMessages({ ...DEFAULT_KICK_MESSAGES, ...d.messages });
         if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
+        if (d.templateEnabled) setKickTemplateEnabled((prev) => ({ ...prev, ...d.templateEnabled }));
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
         if (d.alertSettings?.giftSubShowLifetimeSubs !== undefined) setKickGiftSubShowLifetimeSubs(d.alertSettings.giftSubShowLifetimeSubs);
         if (d.alertSettings?.chatBroadcastLocation !== undefined) setKickChatBroadcastLocation(d.alertSettings.chatBroadcastLocation);
@@ -235,16 +246,16 @@ export default function AdminPage() {
       .catch(() => {});
   }, [isAuthenticated]);
 
-  const handleKickToggleChange = useCallback(
-    async (key: keyof KickMessageEnabled, value: boolean) => {
-      const next = { ...kickMessageEnabled, [key]: value };
-      setKickMessageEnabled(next);
+  const handleKickTemplateToggleChange = useCallback(
+    async (key: keyof KickMessageTemplates, value: boolean) => {
+      const next = { ...kickTemplateEnabled, [key]: value };
+      setKickTemplateEnabled(next);
       setToast({ type: 'saving', message: 'Saving...' });
       try {
         const r = await authenticatedFetch('/api/kick-messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: next }),
+          body: JSON.stringify({ templateEnabled: next }),
         });
         if (r.ok) {
           setToast({ type: 'saved', message: 'Saved!' });
@@ -253,12 +264,12 @@ export default function AdminPage() {
           throw new Error(data.error ?? 'Failed to save');
         }
       } catch (err) {
-        setKickMessageEnabled((prev) => ({ ...prev, [key]: !value }));
+        setKickTemplateEnabled((prev) => ({ ...prev, [key]: !value }));
         setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
       }
       setTimeout(() => setToast(null), 3000);
     },
-    [kickMessageEnabled]
+    [kickTemplateEnabled]
   );
 
   const lastPushedLocationRef = useRef<string | null>(null);
@@ -410,6 +421,7 @@ export default function AdminPage() {
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
     enabled?: KickMessageEnabled;
+    templateEnabled?: KickMessageTemplateEnabled;
     alertSettings?: Partial<{
       minimumKicks: number;
       giftSubShowLifetimeSubs: boolean;
@@ -422,6 +434,7 @@ export default function AdminPage() {
   }) => {
     const messages = overrides?.messages ?? kickMessages;
     const enabled = overrides?.enabled ?? kickMessageEnabled;
+    const templateEnabled = overrides?.templateEnabled ?? kickTemplateEnabled;
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
       giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
@@ -436,7 +449,7 @@ export default function AdminPage() {
       const r = await authenticatedFetch('/api/kick-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, enabled, alertSettings }),
+        body: JSON.stringify({ messages, enabled, templateEnabled, alertSettings }),
       });
       if (r.ok) {
         setToast({ type: 'saved', message: 'Saved!' });
@@ -448,7 +461,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
@@ -469,6 +482,7 @@ export default function AdminPage() {
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
   };
   kickMessagesRef.current = kickMessages;
+  kickTemplateEnabledRef.current = kickTemplateEnabled;
 
   const scheduleKickMessagesSave = useCallback(() => {
     if (kickMessagesSaveTimeoutRef.current) clearTimeout(kickMessagesSaveTimeoutRef.current);
@@ -476,6 +490,7 @@ export default function AdminPage() {
       kickMessagesSaveTimeoutRef.current = null;
       saveKickMessages({
         messages: kickMessagesRef.current,
+        templateEnabled: kickTemplateEnabledRef.current,
         alertSettings: kickAlertSettingsRef.current,
       });
     }, 500);
@@ -1545,110 +1560,84 @@ export default function AdminPage() {
                     Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}, {'{host}'}, {'{viewers}'}.
                   </p>
                 <div className="form-stack">
-                  {TEMPLATE_GROUP_CONFIG.map((group) => {
-                    const isSingleTemplate = group.templateKeys.length === 1;
-                    const toggleControl = (
-                      <label className="checkbox-label-row kick-event-toggle">
-                        <input
-                          type="checkbox"
-                          checked={kickMessageEnabled[group.toggleKey] !== false}
-                          onChange={(e) => handleKickToggleChange(group.toggleKey, e.target.checked)}
-                          className="checkbox-input"
-                        />
-                        <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
-                        <strong className="kick-event-label">{group.label}</strong>
-                      </label>
-                    );
-                    return (
-                      <div key={group.toggleKey} className={`kick-message-group kick-message-card ${kickMessageEnabled[group.toggleKey] === false ? 'kick-message-card-disabled' : ''}`}>
-                        {isSingleTemplate ? (
-                          <div className="kick-message-row kick-message-template-row kick-message-row-with-toggle">
-                            {toggleControl}
+                  {TEMPLATE_GROUP_CONFIG.map((group) => (
+                    <div key={group.toggleKey} className="kick-message-group kick-message-card">
+                      {(group.toggleKey === 'giftSub' || group.toggleKey === 'kicksGifted') && (
+                        <div className="form-row-wrap group-header-row" style={{ marginBottom: 8 }}>
+                          {group.toggleKey === 'giftSub' && (
+                            <label className="checkbox-label-row">
+                              <input
+                                type="checkbox"
+                                checked={kickGiftSubShowLifetimeSubs}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setKickGiftSubShowLifetimeSubs(checked);
+                                  saveKickMessages({ alertSettings: { giftSubShowLifetimeSubs: checked } });
+                                }}
+                                className="checkbox-input"
+                              />
+                              <span>Show lifetime subs</span>
+                            </label>
+                          )}
+                          {group.toggleKey === 'kicksGifted' && (
+                            <label className="checkbox-label-row-tight">
+                              Min kicks:
+                              <input
+                                type="number"
+                                className="text-input number-input"
+                                value={kickMinimumKicks}
+                                onChange={(e) => {
+                                  setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
+                                  scheduleKickMessagesSave();
+                                }}
+                                min={0}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )}
+                      {group.templateKeys.map((key) => (
+                        <div
+                          key={key}
+                          className={`kick-message-row kick-message-template-row kick-message-row-with-toggle ${kickTemplateEnabled[key] === false ? 'kick-message-card-disabled' : ''}`}
+                        >
+                          <label className="checkbox-label-row kick-event-toggle" style={{ minWidth: 140 }}>
                             <input
-                              type="text"
-                              className="text-input"
-                              value={kickMessages[group.templateKeys[0]]}
-                              onChange={(e) => handleKickMessageChange(group.templateKeys[0], e.target.value)}
-                              placeholder={DEFAULT_KICK_MESSAGES[group.templateKeys[0]]}
+                              type="checkbox"
+                              checked={kickTemplateEnabled[key] !== false}
+                              onChange={(e) => handleKickTemplateToggleChange(key, e.target.checked)}
+                              className="checkbox-input"
                             />
-                            <button
-                              type="button"
-                              className="btn btn-secondary kick-test-btn btn-small"
-                              onClick={() => sendKickTemplateTest(group.templateKeys[0])}
-                              disabled={!kickStatus?.connected || kickTemplateTesting === group.templateKeys[0]}
-                              title="Send test to Kick chat"
-                            >
-                              {kickTemplateTesting === group.templateKeys[0] ? '…' : 'Test'}
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="form-row-wrap group-header-row">
-                              {toggleControl}
-                              {group.toggleKey === 'giftSub' && (
-                                <label className="checkbox-label-row">
-                                  <input
-                                    type="checkbox"
-                                    checked={kickGiftSubShowLifetimeSubs}
-                                    onChange={(e) => {
-                                      const checked = e.target.checked;
-                                      setKickGiftSubShowLifetimeSubs(checked);
-                                      saveKickMessages({ alertSettings: { giftSubShowLifetimeSubs: checked } });
-                                    }}
-                                    className="checkbox-input"
-                                  />
-                                  <span>Show lifetime subs</span>
-                                </label>
-                              )}
-                              {group.toggleKey === 'kicksGifted' && (
-                                <label className="checkbox-label-row-tight">
-                                  Min kicks:
-                                  <input
-                                    type="number"
-                                    className="text-input number-input"
-                                    value={kickMinimumKicks}
-                                    onChange={(e) => {
-                                      setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
-                                      scheduleKickMessagesSave();
-                                    }}
-                                    min={0}
-                                  />
-                                </label>
-                              )}
-                            </div>
-                            {group.templateKeys.map((key) => (
-                              <div key={key} className="kick-message-row kick-message-template-row">
-                                <span className="inline-label-muted kick-template-label">{KICK_MESSAGE_LABELS[key]}</span>
-                                <input
-                                  type="text"
-                                  className="text-input"
-                                  value={kickMessages[key]}
-                                  onChange={(e) => handleKickMessageChange(key, e.target.value)}
-                                  placeholder={DEFAULT_KICK_MESSAGES[key]}
-                                />
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary kick-test-btn btn-small"
-                                  onClick={() => sendKickTemplateTest(key)}
-                                  disabled={!kickStatus?.connected || kickTemplateTesting === key}
-                                  title="Send test to Kick chat"
-                                >
-                                  {kickTemplateTesting === key ? '…' : 'Test'}
-                                </button>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                            <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
+                            <span className="kick-template-label">{KICK_MESSAGE_LABELS[key]}</span>
+                          </label>
+                          <input
+                            type="text"
+                            className="text-input"
+                            value={kickMessages[key]}
+                            onChange={(e) => handleKickMessageChange(key, e.target.value)}
+                            placeholder={DEFAULT_KICK_MESSAGES[key]}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary kick-test-btn btn-small"
+                            onClick={() => sendKickTemplateTest(key)}
+                            disabled={!kickStatus?.connected || kickTemplateTesting === key}
+                            title="Send test to Kick chat"
+                          >
+                            {kickTemplateTesting === key ? '…' : 'Test'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
                 <div className="section-actions">
                   <button
                     className="btn btn-secondary"
                     onClick={() => {
                       setKickMessages(DEFAULT_KICK_MESSAGES);
-                      saveKickMessages({ messages: DEFAULT_KICK_MESSAGES });
+                      saveKickMessages({ messages: DEFAULT_KICK_MESSAGES, templateEnabled: kickTemplateEnabled });
                     }}
                   >
                     Reset to defaults
