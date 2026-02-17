@@ -25,7 +25,7 @@ function formatAgo(ms: number): string {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const cookieStore = await cookies();
   const authToken = cookieStore.get('auth-token')?.value;
   if (authToken !== 'authenticated') {
