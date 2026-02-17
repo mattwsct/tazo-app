@@ -14,6 +14,16 @@ function getUsername(obj: { username?: string | null } | null | undefined): stri
 }
 
 const OPTIONAL_PLACEHOLDERS = new Set(['lifetimeSubs']);
+const REWARD_STATUS_DECLINED = new Set(['rejected', 'denied', 'canceled']);
+const REWARD_STATUS_APPROVED = new Set(['accepted', 'fulfilled', 'approved']);
+
+/** Resolve which template key was used for a reward status (for logging) */
+export function getRewardTemplateKey(status: string, alreadySeen: boolean): string {
+  if (alreadySeen) return 'channelRewardApproved (id seen, dedup)';
+  if (REWARD_STATUS_APPROVED.has(status)) return 'channelRewardApproved';
+  if (REWARD_STATUS_DECLINED.has(status)) return 'channelRewardDeclined';
+  return status ? `channelReward/WithInput (status=${status})` : 'channelReward/WithInput (status missing)';
+}
 
 function replace(template: string, replacements: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => {
@@ -113,8 +123,8 @@ export interface GetChannelRewardOptions {
   forceApproved?: boolean;
 }
 
-/** Extract reward payload; Kick may send top-level or wrapped in data/payload/event */
-function getRewardInnerPayload(payload: KickPayload): Record<string, unknown> {
+/** Extract reward payload; Kick may send top-level or wrapped in data/payload/event. Exported for webhook route. */
+export function getRewardInnerPayload(payload: Record<string, unknown>): Record<string, unknown> {
   const d = payload.data as Record<string, unknown> | undefined;
   const p = payload.payload as Record<string, unknown> | undefined;
   const ev = payload.event as Record<string, unknown> | undefined;
@@ -128,7 +138,7 @@ export function getChannelRewardResponse(
   options?: GetChannelRewardOptions,
   templateEnabled?: KickMessageTemplateEnabled
 ): string | null {
-  const inner = getRewardInnerPayload(payload);
+  const inner = getRewardInnerPayload(payload as Record<string, unknown>);
   const redeemer = getUsername((inner.redeemer ?? payload.redeemer) as { username?: string });
   const reward = (inner.reward ?? payload.reward ?? {}) as Record<string, unknown>;
   const title = String(reward.title ?? reward.name ?? 'reward');
@@ -140,11 +150,11 @@ export function getChannelRewardResponse(
   const status = String(
     inner.status ?? payload.status ?? (reward as { status?: string }).status ?? 'pending'
   ).toLowerCase();
-  if (status === 'rejected' || status === 'denied' || status === 'canceled') {
+  if (REWARD_STATUS_DECLINED.has(status)) {
     if (isTemplateDisabled(templateEnabled, 'channelRewardDeclined')) return null;
     return replace(templates.channelRewardDeclined, { redeemer, title });
   }
-  if (status === 'accepted' || status === 'fulfilled' || status === 'approved') {
+  if (REWARD_STATUS_APPROVED.has(status)) {
     if (isTemplateDisabled(templateEnabled, 'channelRewardApproved')) return null;
     return replace(templates.channelRewardApproved, { redeemer, title });
   }

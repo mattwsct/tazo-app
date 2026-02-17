@@ -7,7 +7,7 @@ import {
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
-import { getChannelRewardResponse } from '@/lib/kick-event-responses';
+import { getChannelRewardResponse, getRewardInnerPayload, getRewardTemplateKey } from '@/lib/kick-event-responses';
 import {
   DEFAULT_KICK_MESSAGES,
   DEFAULT_KICK_MESSAGE_ENABLED,
@@ -29,11 +29,25 @@ const WEBHOOK_DECISION_LOG_MAX = 15;
 
 async function logWebhookReceived(eventType: string): Promise<void> {
   try {
-    const entry = { eventType, at: new Date().toISOString() };
-    await kv.lpush(KICK_WEBHOOK_LOG_KEY, entry);
+    await kv.lpush(KICK_WEBHOOK_LOG_KEY, { eventType, at: new Date().toISOString() });
     await kv.ltrim(KICK_WEBHOOK_LOG_KEY, 0, WEBHOOK_LOG_MAX - 1);
   } catch {
     // Ignore log failures
+  }
+}
+
+function getEventPayloadSummary(eventType: string, payload: Record<string, unknown>): Record<string, unknown> {
+  const p = payload as Record<string, unknown>;
+  const get = (key: string) => (p[key] as { username?: string })?.username;
+  switch (eventType) {
+    case 'channel.followed': return { follower: get('follower') };
+    case 'channel.subscription.new': return { subscriber: get('subscriber') };
+    case 'channel.subscription.renewal': return { subscriber: get('subscriber'), duration: p.duration };
+    case 'channel.subscription.gifts': return { gifter: get('gifter'), gifteesCount: (p.giftees as unknown[])?.length };
+    case 'kicks.gifted': return { sender: get('sender'), amount: (p.gift as { amount?: number })?.amount };
+    case 'livestream.status.updated': return { isLive: p.is_live };
+    case 'channel.hosted': return { host: get('host') ?? (p.hoster as { username?: string })?.username, viewers: p.viewers };
+    default: return {};
   }
 }
 
@@ -97,6 +111,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  // Log payload content for debugging (Kick API: payload structure per event-types.md)
+  const eventNorm = (eventType || '').toLowerCase().trim();
+  if (eventNorm === 'chat.message.sent') {
+    const data = payload.data as Record<string, unknown> | undefined;
+    const p = payload.payload as Record<string, unknown> | undefined;
+    const content = String(payload.content ?? data?.content ?? p?.content ?? '').slice(0, 200);
+    const sender = (payload.sender ?? data?.sender ?? p?.sender) as { username?: string } | undefined;
+    console.log('[Kick webhook] PAYLOAD_CONTENT', JSON.stringify({ eventType: 'chat.message.sent', content, sender: sender?.username }));
+  } else if (eventNorm === 'channel.reward.redemption.updated') {
+    const inner = getRewardInnerPayload(payload);
+    const redeemer = (inner.redeemer as { username?: string })?.username ?? (payload.redeemer as { username?: string })?.username;
+    const reward = (inner.reward ?? payload.reward) as { title?: string; name?: string } | undefined;
+    const title = reward?.title ?? reward?.name ?? '?';
+    const status = String(inner.status ?? payload.status ?? '').toLowerCase();
+    console.log('[Kick webhook] PAYLOAD_CONTENT', JSON.stringify({ eventType: 'channel.reward.redemption.updated', status, id: inner.id ?? payload.id, redeemer, rewardTitle: title, userInput: ((inner.user_input ?? payload.user_input) as string)?.slice(0, 50) ?? null }));
+  }
+
   // Chat commands - parse !ping, !location, !weather, !time and respond
   if (eventType === 'chat.message.sent') {
     const content = (payload.content as string) || '';
@@ -118,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
     try {
       await sendKickChatMessage(accessToken, response);
-      console.log('[Kick webhook] CHAT_CMD_SENT', JSON.stringify({ cmd: parsed.cmd, responsePreview: response.slice(0, 80) }));
+      console.log('[Kick webhook] CHAT_CMD_SENT', JSON.stringify({ cmd: parsed.cmd, sent: response }));
     } catch (err) {
       console.error('[Kick webhook] CHAT_CMD_FAIL', JSON.stringify({ cmd: parsed.cmd, error: err instanceof Error ? err.message : String(err) }));
     }
@@ -163,22 +194,17 @@ export async function POST(request: NextRequest) {
     } catch { /* ignore */ }
   };
 
+  const rewardInner = eventTypeNorm === 'channel.reward.redemption.updated' ? getRewardInnerPayload(payload) : null;
+  const debugPayload =
+    rewardInner
+      ? {
+          id: rewardInner.id ?? payload.id,
+          status: rewardInner.status ?? payload.status,
+          keys: Object.keys(payload),
+          innerKeys: Object.keys(rewardInner),
+        }
+      : undefined;
   try {
-    const ev = payload.event as Record<string, unknown> | undefined;
-    const rewardInner =
-      eventTypeNorm === 'channel.reward.redemption.updated'
-        ? ((payload.data ?? payload.payload ?? ev?.data ?? payload) as Record<string, unknown>)
-        : null;
-    const debugPayload =
-      eventTypeNorm === 'channel.reward.redemption.updated' && rewardInner
-        ? {
-            id: rewardInner.id ?? payload.id ?? (payload.data as Record<string, unknown>)?.id ?? (payload.payload as Record<string, unknown>)?.id,
-            status: rewardInner.status ?? payload.status ?? (payload.data as Record<string, unknown>)?.status ?? (payload.payload as Record<string, unknown>)?.status,
-            keys: Object.keys(payload),
-            innerKeys: Object.keys(rewardInner),
-            rawTopLevel: { id: payload.id, status: payload.status, hasData: !!payload.data, hasPayload: !!payload.payload },
-          }
-        : undefined;
     if (debugPayload) {
       try {
         await kv.lpush(KICK_REWARD_PAYLOAD_LOG_KEY, { ...debugPayload, at: new Date().toISOString() });
@@ -209,80 +235,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  const buildOptions = {
+    templates,
+    templateEnabled,
+    minimumKicks,
+    giftSubShowLifetimeSubs,
+    getAccessToken: getValidAccessToken,
+  };
+
   let message: string | null;
-  if (eventTypeNorm === 'channel.reward.redemption.updated') {
-    const ev = payload.event as Record<string, unknown> | undefined;
-    const inner = (payload.data ?? payload.payload ?? ev?.data ?? payload) as Record<string, unknown>;
-    const redemptionId = String(inner.id ?? payload.id ?? '');
-    const status = String(inner.status ?? payload.status ?? '').toLowerCase();
-    const payloadKeys = Object.keys(payload);
-    const innerKeys = Object.keys(inner);
-    const statusFromAllPaths = {
-      inner: inner.status,
-      payload: payload.status,
-      payloadData: (payload.data as Record<string, unknown>)?.status,
-      payloadPayload: (payload.payload as Record<string, unknown>)?.status,
-      payloadEventData: (payload.event as Record<string, unknown>)?.data && ((payload.event as Record<string, unknown>).data as Record<string, unknown>)?.status,
-    };
-    console.log(
-      '[Kick webhook] REWARD_DEBUG',
-      JSON.stringify({
-        id: redemptionId,
-        status,
-        statusFromAllPaths,
-        payloadTopLevel: { id: payload.id, status: payload.status, hasData: !!payload.data, hasPayload: !!payload.payload, hasEvent: !!payload.event },
-        payloadKeys,
-        innerKeys,
-      })
-    );
+  if (eventTypeNorm === 'channel.reward.redemption.updated' && rewardInner) {
+    const redemptionId = String(rewardInner.id ?? payload.id ?? '');
+    const status = String(rewardInner.status ?? payload.status ?? '').toLowerCase();
+    console.log('[Kick webhook] REWARD_DEBUG', JSON.stringify({ id: redemptionId, status, payloadKeys: Object.keys(payload), innerKeys: Object.keys(rewardInner) }));
     const seenKey = redemptionId ? `${KICK_REWARD_SEEN_PREFIX}${redemptionId}` : null;
-    const alreadySeen = seenKey ? await kv.get(seenKey) : null;
-    let templateUsed: string;
+    const alreadySeen = !!seenKey && (await kv.get(seenKey));
     if (alreadySeen) {
       message = getChannelRewardResponse(payload, templates, { forceApproved: true }, templateEnabled);
-      templateUsed = 'channelRewardApproved (id seen, dedup)';
     } else {
-      message = await buildEventMessage(eventTypeNorm, payload, {
-        templates,
-        templateEnabled,
-        minimumKicks,
-        giftSubShowLifetimeSubs,
-        getAccessToken: getValidAccessToken,
-      });
+      message = await buildEventMessage(eventTypeNorm, payload, buildOptions);
       if (message && seenKey) {
         try {
           await kv.set(seenKey, 1);
         } catch {
-          // ignore
+          /* ignore */
         }
       }
-      templateUsed =
-        status === 'accepted' || status === 'fulfilled' || status === 'approved'
-          ? 'channelRewardApproved'
-          : status === 'rejected' || status === 'denied' || status === 'canceled'
-            ? 'channelRewardDeclined'
-            : status
-              ? `channelReward/WithInput (status=${status})`
-              : 'channelReward/WithInput (status missing)';
     }
+    const templateUsed = getRewardTemplateKey(status, !!alreadySeen);
     console.log('[Kick webhook] REWARD_DECISION', JSON.stringify({ id: redemptionId, status, alreadySeen: !!alreadySeen, templateUsed, msgPreview: message?.slice(0, 60) ?? null }));
   } else {
-    message = await buildEventMessage(eventTypeNorm, payload, {
-      templates,
-      templateEnabled,
-      minimumKicks,
-      giftSubShowLifetimeSubs,
-      getAccessToken: getValidAccessToken,
-    });
-    const payloadSummary = eventTypeNorm === 'channel.followed' ? { follower: (payload.follower as { username?: string })?.username }
-      : eventTypeNorm === 'channel.subscription.new' ? { subscriber: (payload.subscriber as { username?: string })?.username }
-      : eventTypeNorm === 'channel.subscription.renewal' ? { subscriber: (payload.subscriber as { username?: string })?.username, duration: payload.duration }
-      : eventTypeNorm === 'channel.subscription.gifts' ? { gifter: (payload.gifter as { username?: string })?.username, gifteesCount: (payload.giftees as unknown[])?.length }
-      : eventTypeNorm === 'kicks.gifted' ? { sender: (payload.sender as { username?: string })?.username, amount: (payload.gift as { amount?: number })?.amount }
-      : eventTypeNorm === 'livestream.status.updated' ? { isLive: payload.is_live }
-      : eventTypeNorm === 'channel.hosted' ? { host: (payload.host as { username?: string })?.username, viewers: payload.viewers }
-      : {};
-    console.log('[Kick webhook] CHAT_RESPONSE', JSON.stringify({ eventType: eventTypeNorm, toggleKey, payloadSummary, hasMessage: !!message, msgPreview: message?.slice(0, 80) ?? null }));
+    message = await buildEventMessage(eventTypeNorm, payload, buildOptions);
+    const summary = getEventPayloadSummary(eventTypeNorm, payload);
+    console.log('[Kick webhook] CHAT_RESPONSE', JSON.stringify({ eventType: eventTypeNorm, toggleKey, summary, hasMessage: !!message, msgPreview: message?.slice(0, 80) ?? null }));
   }
 
   if (!message || !message.trim()) {
@@ -304,7 +289,7 @@ export async function POST(request: NextRequest) {
   try {
     await sendKickChatMessage(accessToken, finalMessage);
     await pushDecision('sent');
-    console.log('[Kick webhook] CHAT_SENT', JSON.stringify({ eventType: eventTypeNorm, toggleKey, msgLen: finalMessage.length, msgPreview: finalMessage.slice(0, 100) }));
+    console.log('[Kick webhook] CHAT_SENT', JSON.stringify({ eventType: eventTypeNorm, toggleKey, sent: finalMessage }));
   } catch (err) {
     await pushDecision('send_failed');
     console.error('[Kick webhook] CHAT_FAIL', JSON.stringify({ eventType: eventTypeNorm, error: err instanceof Error ? err.message : String(err) }));
