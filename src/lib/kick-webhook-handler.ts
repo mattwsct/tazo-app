@@ -13,7 +13,7 @@ import {
   getHostResponse,
 } from '@/lib/kick-event-responses';
 import { getKickSubscriptionLeaderboard } from '@/lib/kick-api';
-import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-messages';
+import type { KickMessageTemplates } from '@/types/kick-messages';
 
 export interface BuildEventMessageOptions {
   templates: KickMessageTemplates;

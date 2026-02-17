@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  let message = await buildEventMessage(eventTypeNorm, payload, {
+  const message = await buildEventMessage(eventTypeNorm, payload, {
     templates,
     minimumKicks,
     giftSubShowLifetimeSubs,

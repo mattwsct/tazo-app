@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
-  const [storedAlert, lastLocationSent, lastLocationMsg, hrState, overlaySettings] = await Promise.all([
+  const [storedAlert, , lastLocationMsg, hrState, overlaySettings] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
