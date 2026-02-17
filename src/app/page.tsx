@@ -27,6 +27,7 @@ const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   kicksGiftedWithMessage: 'Kicks gifted (with message)',
   channelReward: 'Channel reward',
   channelRewardWithInput: 'Channel reward (with input)',
+  channelRewardApproved: 'Channel reward (approved)',
   channelRewardDeclined: 'Channel reward (declined)',
   streamStarted: 'Stream started',
   streamEnded: 'Stream ended',

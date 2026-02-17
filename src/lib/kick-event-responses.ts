@@ -86,9 +86,12 @@ export function getChannelRewardResponse(payload: KickPayload, templates: KickMe
   const reward = payload.reward ?? {};
   const title = reward.title ?? 'reward';
   const userInput = payload.user_input?.trim();
-  const status = payload.status ?? 'accepted';
+  const status = String(payload.status ?? 'pending').toLowerCase();
   if (status === 'rejected') {
     return replace(templates.channelRewardDeclined, { redeemer, title });
+  }
+  if (status === 'accepted' || status === 'fulfilled') {
+    return replace(templates.channelRewardApproved, { redeemer, title });
   }
   if (userInput) {
     return replace(templates.channelRewardWithInput, { redeemer, title, userInput });

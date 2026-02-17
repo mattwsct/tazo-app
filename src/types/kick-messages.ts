@@ -9,6 +9,7 @@ export interface KickMessageTemplates {
   kicksGiftedWithMessage: string;
   channelReward: string;
   channelRewardWithInput: string;
+  channelRewardApproved: string;
   channelRewardDeclined: string;
   streamStarted: string;
   streamEnded: string;
@@ -26,6 +27,7 @@ export const DEFAULT_KICK_MESSAGES: KickMessageTemplates = {
   kicksGiftedWithMessage: '{sender} sent {kickDescription}: "{message}" 💰',
   channelReward: '{redeemer} redeemed {title}! ✨',
   channelRewardWithInput: '{redeemer} redeemed {title}: "{userInput}" ✨',
+  channelRewardApproved: "{redeemer}'s {title} was approved! ✓",
   channelRewardDeclined: "{redeemer}'s {title} redemption was declined.",
   streamStarted: "We're live! 🎬",
   streamEnded: 'Thanks for watching! Stream ended. 🙏',
@@ -43,6 +45,7 @@ export const KICK_MESSAGE_KEYS = [
   'kicksGiftedWithMessage',
   'channelReward',
   'channelRewardWithInput',
+  'channelRewardApproved',
   'channelRewardDeclined',
   'streamStarted',
   'streamEnded',
@@ -104,7 +107,7 @@ export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: stri
   { toggleKey: 'resub', label: 'Resub', templateKeys: ['resub'] },
   { toggleKey: 'giftSub', label: 'Gift subs', templateKeys: ['giftSubSingle', 'giftSubMulti', 'giftSubGeneric'] },
   { toggleKey: 'kicksGifted', label: 'Kicks gifted', templateKeys: ['kicksGifted', 'kicksGiftedWithMessage'] },
-  { toggleKey: 'channelReward', label: 'Channel reward', templateKeys: ['channelReward', 'channelRewardWithInput', 'channelRewardDeclined'] },
+  { toggleKey: 'channelReward', label: 'Channel reward', templateKeys: ['channelReward', 'channelRewardWithInput', 'channelRewardApproved', 'channelRewardDeclined'] },
   { toggleKey: 'streamStatus', label: 'Stream started/ended', templateKeys: ['streamStarted', 'streamEnded'] },
   { toggleKey: 'host', label: 'Host', templateKeys: ['host'] },
 ];

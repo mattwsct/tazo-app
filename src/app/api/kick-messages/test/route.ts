@@ -37,6 +37,11 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
     reward: { title: 'Sample reward' },
     user_input: 'My message',
   },
+  channelRewardApproved: {
+    redeemer: { username: 'TestViewer' },
+    reward: { title: 'Sample reward' },
+    status: 'accepted',
+  },
   channelRewardDeclined: {
     redeemer: { username: 'TestViewer' },
     reward: { title: 'Sample reward' },
@@ -67,6 +72,7 @@ function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMe
   kicksGiftedWithMessage: (p, t) => getKicksGiftedResponse(p as never, t),
   channelReward: (p, t) => getChannelRewardResponse(p as never, t),
   channelRewardWithInput: (p, t) => getChannelRewardResponse(p as never, t),
+  channelRewardApproved: (p, t) => getChannelRewardResponse(p as never, t),
   channelRewardDeclined: (p, t) => getChannelRewardResponse(p as never, t),
   streamStarted: (p, t) => getStreamStatusResponse(p as never, t),
   streamEnded: (p, t) => getStreamStatusResponse(p as never, t),
