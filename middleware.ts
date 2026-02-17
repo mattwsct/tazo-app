@@ -33,6 +33,7 @@ export function middleware(request: NextRequest) {
   // - Overlay APIs: get-settings, settings-stream, health, get-location, update-location, stats/update
   //   (overlay runs in OBS browser source without auth cookies)
   // - Kick webhook: Kick sends server-to-server POSTs without auth cookies
+  // - Cron: Vercel Cron sends GET with no cookies; route checks CRON_SECRET itself
   const publicRoutes = [
     '/login',
     '/api/login',
@@ -47,6 +48,7 @@ export function middleware(request: NextRequest) {
     '/api/kick-oauth/callback',
     '/api/webhooks/kick',
     '/api/kick-webhook',
+    '/api/cron/kick-chat-broadcast',
     '/kick-oauth-complete',
   ];
   

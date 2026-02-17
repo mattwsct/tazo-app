@@ -29,7 +29,11 @@ export async function GET() {
     const channelRewardEvent = 'channel.reward.redemption.updated';
     const toggleKey = EVENT_TYPE_TO_TOGGLE[channelRewardEvent];
     const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
-    const isDisabled = toggleKey && (toggleValue === false || String(toggleValue) === 'false');
+    const isDisabled = toggleKey && (
+      toggleValue === false ||
+      toggleValue === 0 ||
+      String(toggleValue).toLowerCase() === 'false'
+    );
     const diagnostic = {
       eventType: channelRewardEvent,
       toggleKey,
