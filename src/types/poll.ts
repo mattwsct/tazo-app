@@ -24,6 +24,10 @@ export interface PollState {
   winnerMessage?: string;
   /** Username who voted most, if notable */
   topVoter?: { username: string; count: number };
+  /** Our poll-start message ID (for threading winner reply) */
+  startMessageId?: string;
+  /** Whether we sent the halfway reminder */
+  reminderSent?: boolean;
 }
 
 export interface QueuedPoll {
@@ -35,6 +39,7 @@ export interface QueuedPoll {
 export interface PollSettings {
   enabled: boolean;
   durationSeconds: number;
+  everyoneCanStart: boolean;
   modsCanStart: boolean;
   vipsCanStart: boolean;
   ogsCanStart: boolean;
@@ -43,11 +48,14 @@ export interface PollSettings {
   winnerDisplaySeconds: number;
   /** Pin poll start message for duration (when Kick adds API) */
   pinPollStartMessage: boolean;
+  /** Send reminder at halfway through poll (pseudo-pin when no pin API) */
+  sendPollReminder: boolean;
 }
 
 export const DEFAULT_POLL_SETTINGS: PollSettings = {
   enabled: false,
-  durationSeconds: 60,
+  durationSeconds: 30,
+  everyoneCanStart: false,
   modsCanStart: true,
   vipsCanStart: false,
   ogsCanStart: false,
@@ -55,6 +63,7 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   maxQueuedPolls: 5,
   winnerDisplaySeconds: 10,
   pinPollStartMessage: false,
+  sendPollReminder: true,
 };
 
 export const POLL_STATE_KEY = 'overlay_poll_state';

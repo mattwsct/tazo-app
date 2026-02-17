@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     if (typeof body.durationSeconds === 'number' && body.durationSeconds >= 5 && body.durationSeconds <= 300) {
       updates.durationSeconds = body.durationSeconds;
     }
+    if (typeof body.everyoneCanStart === 'boolean') updates.everyoneCanStart = body.everyoneCanStart;
     if (typeof body.modsCanStart === 'boolean') updates.modsCanStart = body.modsCanStart;
     if (typeof body.vipsCanStart === 'boolean') updates.vipsCanStart = body.vipsCanStart;
     if (typeof body.ogsCanStart === 'boolean') updates.ogsCanStart = body.ogsCanStart;
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       updates.maxQueuedPolls = body.maxQueuedPolls;
     }
     if (typeof body.pinPollStartMessage === 'boolean') updates.pinPollStartMessage = body.pinPollStartMessage;
+    if (typeof body.sendPollReminder === 'boolean') updates.sendPollReminder = body.sendPollReminder;
     if (typeof body.winnerDisplaySeconds === 'number' && body.winnerDisplaySeconds >= 1 && body.winnerDisplaySeconds <= 60) {
       updates.winnerDisplaySeconds = body.winnerDisplaySeconds;
     }

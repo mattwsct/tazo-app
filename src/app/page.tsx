@@ -96,13 +96,15 @@ export default function AdminPage() {
   const [kickDebugLog, setKickDebugLog] = useState<Record<string, unknown> | null>(null);
   const [kickDebugLoading, setKickDebugLoading] = useState(false);
   const [kickPollEnabled, setKickPollEnabled] = useState(false);
-  const [kickPollDuration, setKickPollDuration] = useState(60);
+  const [kickPollDuration, setKickPollDuration] = useState(30);
+  const [kickPollEveryoneCanStart, setKickPollEveryoneCanStart] = useState(false);
   const [kickPollModsCanStart, setKickPollModsCanStart] = useState(true);
   const [kickPollVipsCanStart, setKickPollVipsCanStart] = useState(false);
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
   const [kickPollPinStartMessage, setKickPollPinStartMessage] = useState(false);
+  const [kickPollSendReminder, setKickPollSendReminder] = useState(true);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -250,12 +252,14 @@ export default function AdminPage() {
       .then((d) => {
         if (d?.enabled !== undefined) setKickPollEnabled(d.enabled);
         if (d?.durationSeconds != null) setKickPollDuration(d.durationSeconds);
+        if (d?.everyoneCanStart !== undefined) setKickPollEveryoneCanStart(d.everyoneCanStart);
         if (d?.modsCanStart !== undefined) setKickPollModsCanStart(d.modsCanStart);
         if (d?.vipsCanStart !== undefined) setKickPollVipsCanStart(d.vipsCanStart);
         if (d?.ogsCanStart !== undefined) setKickPollOgsCanStart(d.ogsCanStart);
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
         if (d?.pinPollStartMessage !== undefined) setKickPollPinStartMessage(d.pinPollStartMessage);
+        if (d?.sendPollReminder !== undefined) setKickPollSendReminder(d.sendPollReminder);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -1639,7 +1643,7 @@ export default function AdminPage() {
                             type="number"
                             className="text-input number-input kick-group-options-input"
                             value={kickPollDuration}
-                            onChange={(e) => setKickPollDuration(Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 60)))}
+                            onChange={(e) => setKickPollDuration(Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 30)))}
                             min={5}
                             max={300}
                             style={{ width: 72 }}
@@ -1658,6 +1662,27 @@ export default function AdminPage() {
                         </label>
                         <div className="kick-group-options" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
                           <span className="kick-group-options-label">Who can start polls:</span>
+                          <label className="checkbox-label-row">
+                            <input
+                              type="checkbox"
+                              checked={kickPollEveryoneCanStart}
+                              onChange={async (e) => {
+                                const checked = e.target.checked;
+                                setKickPollEveryoneCanStart(checked);
+                                try {
+                                  await authenticatedFetch('/api/kick-poll-settings', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ everyoneCanStart: checked }),
+                                  });
+                                  setToast({ type: 'saved', message: 'Saved!' });
+                                } catch { setKickPollEveryoneCanStart(!checked); }
+                                setTimeout(() => setToast(null), 2000);
+                              }}
+                              className="checkbox-input"
+                            />
+                            <span>Everyone</span>
+                          </label>
                           <label className="checkbox-label-row">
                             <input
                               type="checkbox"
@@ -1786,6 +1811,27 @@ export default function AdminPage() {
                             className="checkbox-input"
                           />
                           <span>Pin poll start message for duration <em>(when Kick adds API)</em></span>
+                        </label>
+                        <label className="checkbox-label-row">
+                          <input
+                            type="checkbox"
+                            checked={kickPollSendReminder}
+                            onChange={async (e) => {
+                              const checked = e.target.checked;
+                              setKickPollSendReminder(checked);
+                              try {
+                                await authenticatedFetch('/api/kick-poll-settings', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ sendPollReminder: checked }),
+                                });
+                                setToast({ type: 'saved', message: 'Saved!' });
+                              } catch { setKickPollSendReminder(!checked); }
+                              setTimeout(() => setToast(null), 2000);
+                            }}
+                            className="checkbox-input"
+                          />
+                          <span>Send poll reminder at halfway (keeps poll visible in chat)</span>
                         </label>
                       </>
                     )}

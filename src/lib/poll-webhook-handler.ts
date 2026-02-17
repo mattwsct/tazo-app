@@ -85,7 +85,7 @@ function formatSecondsEstimate(sec: number): string {
 export function buildPollStartMessage(question: string, options: { label: string }[], durationSeconds: number): string {
   const labels = options.map((o) => `'${o.label.toLowerCase()}'`);
   const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
-  const timeStr = durationSeconds === 60 ? '60 seconds' : `${durationSeconds} seconds`;
+  const timeStr = durationSeconds === 60 ? '60 seconds' : durationSeconds === 30 ? '30 seconds' : `${durationSeconds} seconds`;
   return `Poll started! ${question} Type ${optionStr} in chat to vote. (${timeStr})`;
 }
 
@@ -113,7 +113,33 @@ export async function handleChatPoll(
   if (!settings.enabled) return { handled: false };
 
   const contentTrimmed = content.trim();
-  const isPollCmd = contentTrimmed.toLowerCase().startsWith('!poll ');
+  const contentLower = contentTrimmed.toLowerCase();
+  const isPollCmd = contentLower.startsWith('!poll ');
+  const isPollStatus = contentLower === '!pollstatus' || contentLower === '!poll status';
+
+  // --- !pollstatus: show current poll or "no poll active" ---
+  if (isPollStatus) {
+    const state = await getPollState();
+    const accessToken = await getValidAccessToken();
+    if (!accessToken) return { handled: true };
+    const messageId = (payload.id ?? payload.message_id) as string | undefined;
+    if (state?.status === 'active') {
+      const labels = state.options.map((o) => `'${o.label.toLowerCase()}'`);
+      const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
+      const elapsed = (Date.now() - state.startedAt) / 1000;
+      const remaining = Math.max(0, Math.ceil(state.durationSeconds - elapsed));
+      const timeStr = remaining === 0 ? 'ending soon' : `${remaining}s left`;
+      const msg = `Poll: ${state.question} Type ${optionStr} to vote. (${timeStr})`;
+      try {
+        await sendKickChatMessage(accessToken, msg, messageId ? { replyToMessageId: messageId } : undefined);
+      } catch { /* ignore */ }
+    } else {
+      try {
+        await sendKickChatMessage(accessToken, 'No poll active.', messageId ? { replyToMessageId: messageId } : undefined);
+      } catch { /* ignore */ }
+    }
+    return { handled: true };
+  }
 
   // --- If winner display time passed, clear and start next queued poll ---
   const currentStateBefore = await getPollState();
@@ -209,6 +235,7 @@ export async function handleChatPoll(
     }
 
     // Start new poll
+    const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
     const state: PollState = {
       id: `poll_${Date.now()}`,
       question: parsed.question,
@@ -221,7 +248,16 @@ export async function handleChatPoll(
     const accessToken = await getValidAccessToken();
     if (accessToken) {
       try {
-        await sendKickChatMessage(accessToken, buildPollStartMessage(parsed.question, parsed.options, settings.durationSeconds));
+        const sent = await sendKickChatMessage(
+          accessToken,
+          buildPollStartMessage(parsed.question, parsed.options, settings.durationSeconds),
+          triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
+        );
+        const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
+        if (msgId) {
+          state.startMessageId = String(msgId);
+          await setPollState(state);
+        }
       } catch { /* ignore */ }
     }
     return { handled: true };
@@ -235,13 +271,41 @@ export async function handleChatPoll(
 
   const now = Date.now();
   const elapsed = (now - currentState.startedAt) / 1000;
+
+  // Optional reminder at halfway (pseudo-pin when Kick has no pin API)
+  if (
+    settings.sendPollReminder &&
+    !currentState.reminderSent &&
+    elapsed >= currentState.durationSeconds / 2
+  ) {
+    currentState.reminderSent = true;
+    await setPollState(currentState);
+    const labels = currentState.options.map((o) => `'${o.label.toLowerCase()}'`);
+    const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
+    const remaining = Math.max(0, Math.ceil(currentState.durationSeconds - elapsed));
+    const accessToken = await getValidAccessToken();
+    if (accessToken) {
+      try {
+        await sendKickChatMessage(
+          accessToken,
+          `Poll: ${currentState.question} Type ${optionStr} to vote. (${remaining}s left)`,
+          currentState.startMessageId ? { replyToMessageId: currentState.startMessageId } : undefined
+        );
+      } catch { /* ignore */ }
+    }
+  }
+
   if (elapsed >= currentState.durationSeconds) {
     // Poll ended - compute winner, post to chat, set winner state
     const { winnerMessage } = computePollResult(currentState);
     const accessToken = await getValidAccessToken();
     if (accessToken) {
       try {
-        await sendKickChatMessage(accessToken, winnerMessage);
+        await sendKickChatMessage(
+          accessToken,
+          winnerMessage,
+          currentState.startMessageId ? { replyToMessageId: currentState.startMessageId } : undefined
+        );
       } catch { /* ignore */ }
     }
     const winnerState: PollState = {
