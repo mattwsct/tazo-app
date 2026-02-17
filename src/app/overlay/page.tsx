@@ -120,7 +120,7 @@ function OverlayPage() {
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [currentAltitude, setCurrentAltitude] = useState<number | null>(null);
-  const [settings, , settingsLoadedRef] = useOverlaySettings();
+  const [settings, , settingsLoadedRef, refreshSettings] = useOverlaySettings();
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(1.0); // Fully opaque for better readability
   const [, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
@@ -129,7 +129,30 @@ function OverlayPage() {
   // Todo completion tracking with localStorage persistence
   const visibleTodos = useTodoCompletion(settings.todos);
 
-  // Force re-render every second when showing poll winner so we hide when winnerDisplayUntil passes
+  // Stable countdown duration for CSS animation (set once per poll, no restart on re-render)
+  const pollCountdownDurationRef = useRef<{ pollId: string; seconds: number } | null>(null);
+
+  // When active poll countdown ends, fetch once to get winner (or hide if no votes)
+  const pollCountdownRef = useRef<{ pollId: string } | null>(null);
+  useEffect(() => {
+    const poll = settings.pollState;
+    if (poll?.status !== 'active') {
+      pollCountdownRef.current = null;
+      pollCountdownDurationRef.current = null;
+      return;
+    }
+    const endsAt = poll.startedAt + poll.durationSeconds * 1000;
+    const remainingMs = Math.max(0, endsAt - Date.now());
+    if (pollCountdownRef.current?.pollId === poll.id) return; // already scheduled
+    pollCountdownRef.current = { pollId: poll.id };
+    const timeout = setTimeout(() => {
+      pollCountdownRef.current = null;
+      refreshSettings();
+    }, remainingMs);
+    return () => clearTimeout(timeout);
+  }, [settings.pollState?.id, settings.pollState?.status, settings.pollState?.startedAt, settings.pollState?.durationSeconds, refreshSettings]);
+
+  // Force re-render every second when showing winner so we hide when winnerDisplayUntil passes
   const [pollTick, setPollTick] = useState(0);
   useEffect(() => {
     const poll = settings.pollState;
@@ -1561,6 +1584,15 @@ function OverlayPage() {
               const isWinner = poll.status === 'winner';
               const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
               if (poll.status === 'active' || (showWinner && totalVotes > 0)) {
+                const isActive = poll.status === 'active';
+                let countdownSeconds = 0;
+                if (isActive && poll.durationSeconds > 0) {
+                  const remainingSec = Math.max(0, (poll.startedAt + poll.durationSeconds * 1000 - now) / 1000);
+                  if (pollCountdownDurationRef.current?.pollId !== poll.id) {
+                    pollCountdownDurationRef.current = { pollId: poll.id, seconds: remainingSec };
+                  }
+                  countdownSeconds = pollCountdownDurationRef.current.seconds;
+                }
                 return (
                   <div className="overlay-box poll-box">
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
@@ -1584,7 +1616,9 @@ function OverlayPage() {
                                 <div className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`} style={{ width: `${pct}%` }} />
                                 <div className="poll-option-text">
                                   <span className="poll-option-label">{displayLabel}</span>
-                                  <span className="poll-option-votes">{opt.votes}</span>
+                                  {showWinner && (
+                                    <span className="poll-option-votes">({opt.votes})</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1592,6 +1626,14 @@ function OverlayPage() {
                         });
                       })()}
                     </div>
+                    {isActive && countdownSeconds > 0 && (
+                      <div className="poll-countdown-track">
+                        <div
+                          className="poll-countdown-fill"
+                          style={{ animation: `poll-countdown-shrink ${countdownSeconds}s linear forwards` }}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               }

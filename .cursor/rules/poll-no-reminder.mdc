@@ -1,0 +1,9 @@
+---
+description: Do not add poll reminder feature
+globs: "**/poll*.ts,**/poll*.tsx,**/page.tsx"
+alwaysApply: false
+---
+
+# Poll: No Vote Reminder
+
+Do **not** add any option or feature to remind people to vote during a poll (e.g. "Send poll reminder at halfway"). The poll runs for its duration without mid-poll chat reminders.

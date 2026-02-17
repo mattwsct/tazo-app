@@ -22,7 +22,7 @@ function parseBadges(badges: unknown): { isMod: boolean; isVip: boolean; isOg: b
   const out = { isMod: false, isVip: false, isOg: false, isSub: false };
   if (!badges || !Array.isArray(badges)) return out;
   for (const b of badges) {
-    const v = typeof b === 'string' ? b.toLowerCase() : (b as Record<string, unknown>)?.type ?? (b as Record<string, unknown>)?.slug ?? (b as Record<string, unknown>)?.name;
+    const v = typeof b === 'string' ? b.toLowerCase() : (b as Record<string, unknown>)?.type ?? (b as Record<string, unknown>)?.slug ?? (b as Record<string, unknown>)?.name ?? (b as Record<string, unknown>)?.text;
     const str = String(v ?? '').toLowerCase();
     if (str.includes('mod') || str === 'owner' || str === 'broadcaster') out.isMod = true;
     if (str === 'vip') out.isVip = true;

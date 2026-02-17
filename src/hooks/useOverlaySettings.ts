@@ -10,17 +10,19 @@ import { TIMERS } from '@/utils/overlay-constants';
 
 /**
  * Loads overlay settings, sets up SSE for real-time updates, and polls as fallback.
- * Returns [settings, setSettings, settingsLoadedRef] - ref is true after first successful load.
+ * Returns [settings, setSettings, settingsLoadedRef, refreshSettings] - refreshSettings triggers a one-time fetch.
  */
 export function useOverlaySettings(): [
   OverlaySettings,
   React.Dispatch<React.SetStateAction<OverlaySettings>>,
-  React.MutableRefObject<boolean>
+  React.MutableRefObject<boolean>,
+  () => Promise<void>
 ] {
   const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
   const lastSettingsHash = useRef<string>('');
   const settingsLoadedRef = useRef(false);
   const lastSseUpdateRef = useRef<number>(0);
+  const loadSettingsRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -75,6 +77,7 @@ export function useOverlaySettings(): [
     const startSSE = () => {
       sseDelayId = setTimeout(() => { eventSource = setupSSE(); }, 300);
     };
+    loadSettingsRef.current = loadSettings;
     loadSettings().then(() => {
       if (document.readyState === 'complete') startSSE();
       else window.addEventListener('load', startSSE, { once: true });
@@ -107,5 +110,31 @@ export function useOverlaySettings(): [
     };
   }, []);
 
-  return [settings, setSettings, settingsLoadedRef];
+  // Lightweight vote updates during active poll (1 KV read every 5s vs get-settings 2 reads)
+  useEffect(() => {
+    if (settings.pollState?.status !== 'active') return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/get-poll-state?_t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+        });
+        if (res.ok) {
+          const { pollState } = await res.json();
+          if (pollState?.status === 'active') {
+            setSettings((prev) => ({ ...prev, pollState }));
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }, TIMERS.POLL_VOTE_UPDATE_INTERVAL);
+    return () => clearInterval(interval);
+  }, [settings.pollState?.status, setSettings]);
+
+  const refreshSettings = async () => {
+    await loadSettingsRef.current();
+  };
+
+  return [settings, setSettings, settingsLoadedRef, refreshSettings];
 }

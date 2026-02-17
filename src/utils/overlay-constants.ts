@@ -28,6 +28,7 @@ export const TIMERS = {
   MINIMAP_FADE_DURATION: 1000, // 1 second
   WALKING_PACE_THRESHOLD: 5, // km/h
   SETTINGS_POLLING_INTERVAL: 15000, // 15 seconds (fallback; SSE preferred to stay under KV limits)
+  POLL_VOTE_UPDATE_INTERVAL: 5000, // 5 seconds when active poll (get-poll-state = 1 KV read; ~6/30s poll)
   MINIMAP_STALENESS_CHECK_INTERVAL: 1000, // 1 second
   MINIMAP_SPEED_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when speed drops below threshold
   MINIMAP_GPS_STALE_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when GPS becomes stale
