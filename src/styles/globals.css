@@ -226,21 +226,6 @@ body.overlay-page {
   box-shadow: 0 0 16px rgba(251, 191, 36, 0.25);
 }
 
-.poll-countdown-track {
-  margin-top: 6px;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.poll-countdown-fill {
-  height: 100%;
-  background: linear-gradient(90deg, rgba(251, 191, 36, 0.9), rgba(245, 158, 11, 0.7));
-  border-radius: 999px;
-  transition: width 0.5s linear;
-}
-
 .poll-question {
   font-weight: 800;
   text-transform: uppercase;

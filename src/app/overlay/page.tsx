@@ -172,13 +172,11 @@ function OverlayPage() {
     return () => clearTimeout(timeout);
   }, [settings.pollState?.id, settings.pollState?.status, settings.pollState?.startedAt, settings.pollState?.durationSeconds, refreshSettings, setSettings]);
 
-  // Re-render every second when poll active (countdown bar) or winner (hide when winnerDisplayUntil passes)
+  // Re-render every second when showing winner so we hide when winnerDisplayUntil passes
   const [pollTick, setPollTick] = useState(0);
   useEffect(() => {
     const poll = settings.pollState;
-    const isActive = poll?.status === 'active';
-    const isWinner = poll?.status === 'winner' && poll.winnerDisplayUntil != null && Date.now() < poll.winnerDisplayUntil;
-    if (isActive || isWinner) {
+    if (poll?.status === 'winner' && poll.winnerDisplayUntil != null && Date.now() < poll.winnerDisplayUntil) {
       const id = setInterval(() => setPollTick((n) => n + 1), 1000);
       return () => clearInterval(id);
     }
@@ -1606,11 +1604,6 @@ function OverlayPage() {
               const isWinner = poll.status === 'winner';
               const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
               if (poll.status === 'active' || (showWinner && totalVotes > 0)) {
-                const isActive = poll.status === 'active';
-                const remainingSec = Math.max(0, (poll.startedAt + poll.durationSeconds * 1000 - now) / 1000);
-                const countdownPct = isActive && poll.durationSeconds > 0
-                  ? (remainingSec / poll.durationSeconds) * 100
-                  : 0;
                 return (
                   <div className={`overlay-box poll-box ${showWinner ? 'poll-box-winner' : ''}`}>
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
@@ -1645,11 +1638,6 @@ function OverlayPage() {
                         });
                       })()}
                     </div>
-                    {isActive && countdownPct > 0 && (
-                      <div className="poll-countdown-track">
-                        <div className="poll-countdown-fill" style={{ width: `${countdownPct}%` }} />
-                      </div>
-                    )}
                   </div>
                 );
               }
