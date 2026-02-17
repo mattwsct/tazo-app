@@ -89,6 +89,8 @@ export default function AdminPage() {
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
+  const [kickDebugLog, setKickDebugLog] = useState<Record<string, unknown> | null>(null);
+  const [kickDebugLoading, setKickDebugLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -1643,6 +1645,57 @@ export default function AdminPage() {
                     Reset to defaults
                   </button>
                 </div>
+                </div>
+              </section>
+
+              {/* Debug logs */}
+              <section className="settings-section kick-webhook-log">
+                <div className="section-header">
+                  <h2>🔧 Debug logs</h2>
+                </div>
+                <div className="setting-group">
+                  <p className="group-label group-description group-description-sm">
+                    Webhook events (last 25), reward payloads (last 10), decision log. Copy and paste when reporting issues.
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 12 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={async () => {
+                        setKickDebugLoading(true);
+                        try {
+                          const r = await fetch('/api/kick-webhook-log', { credentials: 'include' });
+                          const data = await r.json();
+                          setKickDebugLog(data);
+                        } catch {
+                          setKickDebugLog({ error: 'Fetch failed' });
+                        } finally {
+                          setKickDebugLoading(false);
+                        }
+                      }}
+                      disabled={kickDebugLoading}
+                    >
+                      {kickDebugLoading ? 'Loading…' : 'Refresh logs'}
+                    </button>
+                    {kickDebugLog && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-small"
+                        onClick={() => {
+                          navigator.clipboard.writeText(JSON.stringify(kickDebugLog, null, 2));
+                          setToast({ type: 'saved', message: 'Copied to clipboard' });
+                          setTimeout(() => setToast(null), 2000);
+                        }}
+                      >
+                        Copy for debugging
+                      </button>
+                    )}
+                  </div>
+                  {kickDebugLog && (
+                    <pre className="kick-webhook-log-pre" style={{ maxHeight: 400, overflow: 'auto', fontSize: 12, padding: 12, background: 'rgba(0,0,0,0.3)', borderRadius: 8, whiteSpace: 'pre-wrap' }}>
+                      {JSON.stringify(kickDebugLog, null, 2)}
+                    </pre>
+                  )}
                 </div>
               </section>
             </>

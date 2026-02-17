@@ -7,7 +7,7 @@ import {
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
-import { getChannelRewardResponse, getRewardInnerPayload, getRewardTemplateKey } from '@/lib/kick-event-responses';
+import { getChannelRewardResponse, getRewardInnerPayload } from '@/lib/kick-event-responses';
 import {
   DEFAULT_KICK_MESSAGES,
   DEFAULT_KICK_MESSAGE_ENABLED,
@@ -22,7 +22,9 @@ const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
 const KICK_REWARD_PAYLOAD_LOG_KEY = 'kick_reward_payload_log';
+const KICK_RECENT_EVENTS_KEY = 'kick_recent_events';
 const REWARD_PAYLOAD_LOG_MAX = 10;
+const RECENT_EVENTS_MAX = 25;
 const KICK_REWARD_SEEN_PREFIX = 'kick_reward_seen:';
 const WEBHOOK_LOG_MAX = 20;
 const WEBHOOK_DECISION_LOG_MAX = 15;
@@ -63,7 +65,6 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const hubMode = url.searchParams.get('hub.mode') ?? url.searchParams.get('hub_mode');
   const hubChallenge = url.searchParams.get('hub.challenge') ?? url.searchParams.get('hub_challenge');
-  console.log('[Kick webhook] GET verification', { hubMode, hasChallenge: !!hubChallenge });
   if (hubMode === 'subscribe' && hubChallenge) {
     return new NextResponse(hubChallenge, { status: 200, headers: { 'Content-Type': 'text/plain' } });
   }
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!verified) {
-    console.warn('[Kick webhook] Rejected', JSON.stringify({ reason: 'bad_signature', eventType: eventType || '(none)' }));
+    console.warn('[Kick webhook] Rejected: bad signature');
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
@@ -108,27 +109,38 @@ export async function POST(request: NextRequest) {
 
   const eventNorm = (eventType || '').toLowerCase().trim();
 
-  // Single concise log: event + key payload (Kick docs: top-level id/status/reward/redeemer for rewards)
+  // Build event summary for KV (persisted for debugging) and console
   let verifiedMsg: string;
+  let eventSummary: Record<string, unknown> = { eventType: eventType || '(none)', at: new Date().toISOString() };
   if (eventNorm === 'chat.message.sent') {
     const data = payload.data as Record<string, unknown> | undefined;
     const p = payload.payload as Record<string, unknown> | undefined;
-    const content = String(payload.content ?? data?.content ?? p?.content ?? '').slice(0, 80);
+    const content = String(payload.content ?? data?.content ?? p?.content ?? '').slice(0, 200);
     const sender = ((payload.sender ?? data?.sender ?? p?.sender) as { username?: string })?.username ?? '?';
-    verifiedMsg = `chat.message.sent content="${content}" sender=${sender}`;
+    verifiedMsg = `chat.message.sent content="${content.slice(0, 80)}" sender=${sender}`;
+    eventSummary = { ...eventSummary, content, sender };
   } else if (eventNorm === 'channel.reward.redemption.updated') {
     const inner = getRewardInnerPayload(payload);
     const status = String(inner.status ?? payload.status ?? '').toLowerCase();
     const redeemer = (inner.redeemer as { username?: string })?.username ?? (payload.redeemer as { username?: string })?.username ?? '?';
     const reward = (inner.reward ?? payload.reward) as { title?: string; name?: string } | undefined;
     const title = reward?.title ?? reward?.name ?? '?';
+    const userInput = ((inner.user_input ?? payload.user_input) as string)?.slice(0, 100) ?? null;
     verifiedMsg = `channel.reward.redemption.updated status=${status} redeemer=${redeemer} reward="${title}"`;
+    eventSummary = { ...eventSummary, status, redeemer, rewardTitle: title, id: inner.id ?? payload.id, userInput };
   } else {
     const summary = getEventPayloadSummary(eventNorm, payload);
     verifiedMsg = `${eventType || '(none)'} ${JSON.stringify(summary)}`;
+    eventSummary = { ...eventSummary, ...summary };
   }
   console.log('[Kick webhook] Verified:', verifiedMsg);
 
+  try {
+    await kv.lpush(KICK_RECENT_EVENTS_KEY, eventSummary);
+    await kv.ltrim(KICK_RECENT_EVENTS_KEY, 0, RECENT_EVENTS_MAX - 1);
+  } catch {
+    /* ignore */
+  }
   await logWebhookReceived(eventType || '(unknown)');
 
   // Chat commands - parse !ping, !location, !weather, !time and respond
@@ -136,30 +148,24 @@ export async function POST(request: NextRequest) {
     const content = (payload.content as string) || '';
     const sender = (payload.sender as { username?: string })?.username ?? '?';
     const parsed = parseKickChatMessage(content);
-    console.log('[Kick webhook] CHAT_CMD_IN', JSON.stringify({ eventType, sender, contentLen: content.length, parsed: parsed ? { cmd: parsed.cmd, args: parsed.args } : null }));
     if (!parsed) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
     const response = await handleKickChatCommand(parsed.cmd, parsed.args);
-    console.log('[Kick webhook] CHAT_CMD_RESPONSE', JSON.stringify({ cmd: parsed.cmd, args: parsed.args, hasResponse: !!response, responsePreview: response?.slice(0, 80) ?? null }));
     if (!response) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
     const accessToken = await getValidAccessToken();
     if (!accessToken) {
-      console.log('[Kick webhook] CHAT_CMD_SKIP', JSON.stringify({ reason: 'no_token', cmd: parsed.cmd }));
       return NextResponse.json({ received: true }, { status: 200 });
     }
     try {
       await sendKickChatMessage(accessToken, response);
-      console.log('[Kick webhook] CHAT_CMD_SENT', JSON.stringify({ cmd: parsed.cmd, sent: response }));
     } catch (err) {
-      console.error('[Kick webhook] CHAT_CMD_FAIL', JSON.stringify({ cmd: parsed.cmd, error: err instanceof Error ? err.message : String(err) }));
+      console.error('[Kick webhook] Chat command failed:', err instanceof Error ? err.message : String(err));
     }
     return NextResponse.json({ received: true }, { status: 200 });
   }
-
-  console.log('[Kick webhook] EVENT_PATH', JSON.stringify({ eventType: eventType || '(none)', eventTypeNorm: (eventType || '').toLowerCase().trim() }));
 
   const [storedTemplates, storedEnabled, storedTemplateEnabled, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
@@ -167,8 +173,6 @@ export async function POST(request: NextRequest) {
     kv.get<KickMessageTemplateEnabled>(KICK_MESSAGE_TEMPLATE_ENABLED_KEY),
     kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
-
-  console.log('[Kick webhook] KV_READ', JSON.stringify({ hasTemplates: !!storedTemplates, hasEnabled: !!storedEnabled, hasTemplateEnabled: !!storedTemplateEnabled, hasAlertSettings: !!storedAlertSettings }));
 
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
   const enabled: Record<KickEventToggleKey, boolean> = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabled ?? {}) };
@@ -180,8 +184,6 @@ export async function POST(request: NextRequest) {
   const eventTypeNorm = (eventType || '').toLowerCase().trim();
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
-
-  console.log('[Kick webhook] TOGGLE_CHECK', JSON.stringify({ eventTypeNorm, toggleKey, toggleValue, enabledSnapshot: enabled }));
 
   const pushDecision = async (action: string) => {
     try {
@@ -200,17 +202,24 @@ export async function POST(request: NextRequest) {
   const rewardInner = eventTypeNorm === 'channel.reward.redemption.updated' ? getRewardInnerPayload(payload) : null;
   const debugPayload =
     rewardInner
-      ? {
-          id: rewardInner.id ?? payload.id,
-          status: rewardInner.status ?? payload.status,
-          keys: Object.keys(payload),
-          innerKeys: Object.keys(rewardInner),
-        }
+      ? (() => {
+          const reward = (rewardInner.reward ?? payload.reward) as { title?: string; name?: string } | undefined;
+          const redeemer = (rewardInner.redeemer as { username?: string })?.username ?? (payload.redeemer as { username?: string })?.username;
+          return {
+            at: new Date().toISOString(),
+            id: rewardInner.id ?? payload.id,
+            status: String(rewardInner.status ?? payload.status ?? '').toLowerCase(),
+            redeemer,
+            rewardTitle: reward?.title ?? reward?.name ?? '?',
+            userInput: ((rewardInner.user_input ?? payload.user_input) as string)?.slice(0, 100) ?? null,
+            payloadKeys: Object.keys(payload),
+          };
+        })()
       : undefined;
   try {
     if (debugPayload) {
       try {
-        await kv.lpush(KICK_REWARD_PAYLOAD_LOG_KEY, { ...debugPayload, at: new Date().toISOString() });
+        await kv.lpush(KICK_REWARD_PAYLOAD_LOG_KEY, debugPayload);
         await kv.ltrim(KICK_REWARD_PAYLOAD_LOG_KEY, 0, REWARD_PAYLOAD_LOG_MAX - 1);
       } catch {
         /* ignore */
@@ -234,7 +243,6 @@ export async function POST(request: NextRequest) {
 
   const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
   if (!isKnownEvent) {
-    console.log('[Kick webhook] CHAT_SKIP', JSON.stringify({ reason: 'unknown_event', eventType: eventType || '(none)', eventTypeNorm }));
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
@@ -250,7 +258,6 @@ export async function POST(request: NextRequest) {
   if (eventTypeNorm === 'channel.reward.redemption.updated' && rewardInner) {
     const redemptionId = String(rewardInner.id ?? payload.id ?? '');
     const status = String(rewardInner.status ?? payload.status ?? '').toLowerCase();
-    console.log('[Kick webhook] REWARD_DEBUG', JSON.stringify({ id: redemptionId, status, payloadKeys: Object.keys(payload), innerKeys: Object.keys(rewardInner) }));
     const seenKey = redemptionId ? `${KICK_REWARD_SEEN_PREFIX}${redemptionId}` : null;
     const alreadySeen = !!seenKey && (await kv.get(seenKey));
     if (alreadySeen) {
@@ -265,23 +272,17 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    const templateUsed = getRewardTemplateKey(status, !!alreadySeen);
-    console.log('[Kick webhook] REWARD_DECISION', JSON.stringify({ id: redemptionId, status, alreadySeen: !!alreadySeen, templateUsed, msgPreview: message?.slice(0, 60) ?? null }));
   } else {
     message = await buildEventMessage(eventTypeNorm, payload, buildOptions);
-    const summary = getEventPayloadSummary(eventTypeNorm, payload);
-    console.log('[Kick webhook] CHAT_RESPONSE', JSON.stringify({ eventType: eventTypeNorm, toggleKey, summary, hasMessage: !!message, msgPreview: message?.slice(0, 80) ?? null }));
   }
 
   if (!message || !message.trim()) {
-    console.log('[Kick webhook] CHAT_SKIP', JSON.stringify({ reason: 'empty_template', eventType: eventTypeNorm, toggleKey }));
     await pushDecision('skipped_empty_template');
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
   const accessToken = await getValidAccessToken();
   if (!accessToken) {
-    console.log('[Kick webhook] CHAT_SKIP', JSON.stringify({ reason: 'no_token', eventType: eventTypeNorm }));
     await pushDecision('skipped_no_token');
     return NextResponse.json({ received: true }, { status: 200 });
   }
@@ -292,10 +293,9 @@ export async function POST(request: NextRequest) {
   try {
     await sendKickChatMessage(accessToken, finalMessage);
     await pushDecision('sent');
-    console.log('[Kick webhook] CHAT_SENT', JSON.stringify({ eventType: eventTypeNorm, toggleKey, sent: finalMessage }));
   } catch (err) {
     await pushDecision('send_failed');
-    console.error('[Kick webhook] CHAT_FAIL', JSON.stringify({ eventType: eventTypeNorm, error: err instanceof Error ? err.message : String(err) }));
+    console.error('[Kick webhook] Chat send failed:', err instanceof Error ? err.message : String(err));
   }
 
   return NextResponse.json({ received: true }, { status: 200 });

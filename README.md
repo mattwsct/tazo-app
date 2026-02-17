@@ -775,18 +775,12 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
   - Check Vercel logs for `[Kick webhook] Event path`, `[Kick webhook] KV read`, `[Kick webhook] Toggle check`, and `[Kick webhook] Skipping (toggle off)`. If you see `Skipping` but chat still gets a message, another system (e.g. Fossabot, Kick built-in) may be sending it.
   - **Preview vs production**: KV is per-deployment. Toggling on preview does not affect production and vice versa.
 
-**Where are the logs?** Server-side logs (`console.log` in API routes) do **not** appear in the browser. They appear in:
-1. **Vercel Dashboard** → your project → **Logs** tab (filter by "function" or search for `[Kick webhook]`)
-2. **Vercel Dashboard** → Deployments → select a deployment → **Functions** → view logs
-3. **Vercel CLI**: `vercel logs` (or `vercel logs --follow` for real-time)
-4. The `/api/kick-webhook-log` endpoint (requires auth) returns decision log, **rewardPayloadLog** (id, status, payload structure for last 10 channel rewards), and debug data.
-5. **Vercel function logs**: Deployments → select deployment → Logs (or Functions → click a request). Search for these prefixes:
-   - `[Kick webhook] Verified:` — single concise log: for chat `content="..." sender=...`, for rewards `status=... redeemer=... reward="..."`
-   - `[Kick webhook] CHAT_CMD_*` — chat commands (!ping, !location, etc.): IN, RESPONSE, SENT, FAIL, SKIP
-   - `[Kick webhook] CHAT_RESPONSE` — event→message (follow, sub, gift, reward, etc.) with payload summary
-   - `[Kick webhook] REWARD_DEBUG` / `REWARD_DECISION` — channel reward payload, status, template chosen
-   - `[Kick webhook] CHAT_SENT` / `CHAT_SKIP` / `CHAT_FAIL` — final send/skip/fail with reason (CHAT_SENT includes full sent message)
-   - `[Cron HR] CRON_*` — cron chat broadcasts (location, heart rate)
+**Where to get logs for debugging (share with AI/support):**
+1. **Admin panel → Kick Bot tab → Debug logs** (recommended): Click **Refresh logs**, then **Copy for debugging**. Paste the JSON when reporting issues. This includes: `recentEvents` (last 25 webhooks with full payload: status, redeemer, rewardTitle, content, sender), `rewardPayloadLog` (last 10 rewards with parsed fields), `decisionLog`, `debug`.
+2. **Vercel Dashboard** → Logs tab: Click a request row to see full console output. Search for `[Kick webhook]`.
+3. **Vercel CLI**: `vercel logs --follow` for real-time; `vercel logs 2>&1 | grep "Kick webhook"` to filter.
+
+**Vercel logs** (minimal): One `[Kick webhook] Verified:` line per webhook; `Rejected` on bad signature; `Chat send failed:` on send errors. Full details are in Admin → Kick Bot → Debug logs.
 
 **Cloudflare caching:** POST requests (webhooks) are normally **not** cached. If you use Cloudflare as a proxy:
 - Add a **Cache Rule** (or Page Rule) to *bypass cache* for `/api/webhooks/*` and `/api/kick-webhook`. Example: URL `*app.tazo.wtf/api/webhooks/*` → Cache Level: Bypass.
