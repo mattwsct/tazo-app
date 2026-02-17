@@ -31,14 +31,7 @@ export interface KickChatBroadcastSettings {
   chatBroadcastHeartrateVeryHighBpm?: number;
 }
 
-export interface KickPinHighValueSettings {
-  pinHighValueEnabled?: boolean;
-  pinMinGiftSubs?: number;
-  pinMinKicks?: number;
-  pinDurationSeconds?: number;
-}
-
-export interface KickAlertSettings extends KickChatBroadcastSettings, KickPinHighValueSettings {
+export interface KickAlertSettings extends KickChatBroadcastSettings {
   minimumKicks?: number;
   giftSubShowLifetimeSubs?: boolean;
 }
@@ -46,10 +39,6 @@ export interface KickAlertSettings extends KickChatBroadcastSettings, KickPinHig
 export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   minimumKicks: 0,
   giftSubShowLifetimeSubs: true,
-  pinHighValueEnabled: false,
-  pinMinGiftSubs: 5,
-  pinMinKicks: 500,
-  pinDurationSeconds: 60,
   chatBroadcastLocation: false,
   chatBroadcastLocationIntervalMin: 5,
   chatBroadcastHeartrate: false,

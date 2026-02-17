@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
     if (typeof body.maxQueuedPolls === 'number' && body.maxQueuedPolls >= 1 && body.maxQueuedPolls <= 20) {
       updates.maxQueuedPolls = body.maxQueuedPolls;
     }
-    if (typeof body.pinPollStartMessage === 'boolean') updates.pinPollStartMessage = body.pinPollStartMessage;
     if (typeof body.sendPollReminder === 'boolean') updates.sendPollReminder = body.sendPollReminder;
     if (typeof body.winnerDisplaySeconds === 'number' && body.winnerDisplaySeconds >= 1 && body.winnerDisplaySeconds <= 60) {
       updates.winnerDisplaySeconds = body.winnerDisplaySeconds;

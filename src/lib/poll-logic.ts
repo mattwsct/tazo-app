@@ -136,7 +136,7 @@ export function computePollResult(state: PollState): { winnerMessage: string; to
   return { winnerMessage, topVoter: topVoter && topVoter.count > 1 ? topVoter : undefined };
 }
 
-/** Compact overlay winner text (no question repetition). */
+/** Compact overlay winner text (no question repetition, no vote count). */
 export function getOverlayWinnerText(state: PollState): string {
   if (state.options.length === 0) return 'No votes';
   let maxVotes = 0;
@@ -152,6 +152,5 @@ export function getOverlayWinnerText(state: PollState): string {
   }
   if (maxVotes === 0) return 'No votes';
   const winner = winners.length === 1 ? winners[0] : winners.join(' & ');
-  const n = maxVotes === 1 ? '1' : String(maxVotes);
-  return `${winner} wins (${n})`;
+  return `${winner} wins`;
 }

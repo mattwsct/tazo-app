@@ -4,19 +4,19 @@
  * Add terms to BLOCKED_TERMS as needed.
  */
 
+/** Worst-of-worst terms only. Mild swears (damn, shit, ass, bitch) allowed for under-18. */
 const BLOCKED_TERMS = new Set([
-  // Profanity + common variations (leetspeak handled by normalizeForCheck)
+  // Strong profanity
   'fuck', 'fucking', 'fucker', 'fucked', 'fck', 'fuk', 'fvck', 'phuck', 'fuc', 'fock',
-  'shit', 'shitty', 'bullshit', 'sht', 'sh1t', 'a55', 'ass', 'asshole', 'ashole',
-  'bitch', 'b1tch', 'btch', 'bastard', 'dumbass', 'dipshit', 'damn',
-  'dick', 'd1ck', 'cock', 'cunt', 'cnt', 'pussy', 'puss', 'whore', 'slut',
-  // Slurs and hate speech - add more to this list as needed
+  'cunt', 'cnt',
+  // Slurs and hate speech
   'nigger', 'nigga', 'niggas', 'n1gger', 'n1gga', 'ni99er', 'ni99a',
   'fag', 'faggot', 'fags', 'f4g', 'f4ggot', 'fggt',
   'retard', 'retarded', 'r3tard', 'r3tarded', 'rtard',
-  'tranny', 'rape', 'rapist', 'raping', 'r4pe', 'pedo', 'pedophile', 'childporn', 'cporn',
-  'kike', 'spic', 'beaner', 'chink', 'gook', 'coon', 'paki', 'raghead', 'towelhead',
+  'tranny', 'kike', 'spic', 'beaner', 'chink', 'gook', 'coon', 'paki', 'raghead', 'towelhead',
   'wetback', 'darkie', 'negro', 'jigaboo', 'jiggaboo', 'jiggerboo',
+  // Sexual violence and CSAM
+  'rape', 'rapist', 'raping', 'r4pe', 'pedo', 'pedophile', 'childporn', 'cporn',
 ]);
 
 const LEET_MAP: Record<string, string> = {

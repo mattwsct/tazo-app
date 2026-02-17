@@ -50,7 +50,6 @@ function getEventPayloadSummary(eventType: string, payload: Record<string, unkno
     case 'channel.subscription.gifts': return { gifter: get('gifter'), gifteesCount: (p.giftees as unknown[])?.length };
     case 'kicks.gifted': return { sender: get('sender'), amount: (p.gift as { amount?: number })?.amount };
     case 'livestream.status.updated': return { isLive: p.is_live };
-    case 'channel.hosted': return { host: get('host') ?? (p.hoster as { username?: string })?.username, viewers: p.viewers };
     default: return {};
   }
 }

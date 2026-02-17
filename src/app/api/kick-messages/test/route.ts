@@ -10,7 +10,6 @@ import {
   getKicksGiftedResponse,
   getChannelRewardResponse,
   getStreamStatusResponse,
-  getHostResponse,
 } from '@/lib/kick-event-responses';
 import type { KickMessageTemplates } from '@/types/kick-messages';
 
@@ -49,7 +48,6 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
   },
   streamStarted: { is_live: true },
   streamEnded: { is_live: false },
-  host: { host: { username: 'HostChannel' }, viewers: 150 },
 };
 
 /** Build response functions for gift sub templates (lifetime subs depends on toggle) */
@@ -76,7 +74,6 @@ function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMe
   channelRewardDeclined: (p, t) => getChannelRewardResponse(p as never, t, undefined, undefined),
   streamStarted: (p, t) => getStreamStatusResponse(p as never, t, undefined),
   streamEnded: (p, t) => getStreamStatusResponse(p as never, t, undefined),
-  host: (p, t) => getHostResponse(p as never, t, undefined),
   };
 }
 

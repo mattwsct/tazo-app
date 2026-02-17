@@ -17,23 +17,43 @@ import type { PollState, PollOption, QueuedPoll } from '@/types/poll';
 
 const KICK_BROADCASTER_SLUG_KEY = 'kick_broadcaster_slug';
 
-/** Kick sender roles from payload. Check common paths: identity.role, roles[], is_moderator, is_vip, is_og, is_subscriber, etc. */
+/** Parse badges array (strings or objects with type/slug/name) into role flags */
+function parseBadges(badges: unknown): { isMod: boolean; isVip: boolean; isOg: boolean; isSub: boolean } {
+  const out = { isMod: false, isVip: false, isOg: false, isSub: false };
+  if (!badges || !Array.isArray(badges)) return out;
+  for (const b of badges) {
+    const v = typeof b === 'string' ? b.toLowerCase() : (b as Record<string, unknown>)?.type ?? (b as Record<string, unknown>)?.slug ?? (b as Record<string, unknown>)?.name;
+    const str = String(v ?? '').toLowerCase();
+    if (str.includes('mod') || str === 'owner' || str === 'broadcaster') out.isMod = true;
+    if (str === 'vip') out.isVip = true;
+    if (str === 'og' || str === 'original') out.isOg = true;
+    if (str.includes('sub') || str === 'subscriber') out.isSub = true;
+  }
+  return out;
+}
+
+/** Kick sender roles from payload. Checks identity.role, roles[], badges[], is_moderator/isModerator, etc. */
 function getSenderRoles(sender: unknown): { isMod: boolean; isVip: boolean; isOg: boolean; isSub: boolean } {
   const out = { isMod: false, isVip: false, isOg: false, isSub: false };
   if (!sender || typeof sender !== 'object') return out;
   const s = sender as Record<string, unknown>;
+
+  // Identity / role
   const identity = s.identity as Record<string, unknown> | undefined;
-  const role = identity?.role ?? s.role;
+  const role = String(identity?.role ?? s.role ?? '').toLowerCase();
   const rolesArr = s.roles as string[] | undefined;
   const rolesLower = Array.isArray(rolesArr)
     ? rolesArr.map((r) => String(r).toLowerCase())
     : [];
 
-  if (role === 'moderator' || role === 'owner' || rolesLower.includes('moderator') || rolesLower.includes('owner'))
+  // Mod: role, roles array, boolean flags (snake_case and camelCase)
+  if (role === 'moderator' || role === 'owner' || role === 'broadcaster' || rolesLower.includes('moderator') || rolesLower.includes('owner') || rolesLower.includes('broadcaster'))
     out.isMod = true;
-  if (s.is_moderator === true || s.moderator === true) out.isMod = true;
-  if (role === 'vip' || rolesLower.includes('vip') || s.is_vip === true || s.vip === true) out.isVip = true;
-  if (role === 'og' || rolesLower.includes('og') || s.is_og === true || s.og === true) out.isOg = true;
+  if (s.is_moderator === true || s.moderator === true || s.isModerator === true) out.isMod = true;
+
+  // VIP, OG, Sub
+  if (role === 'vip' || rolesLower.includes('vip') || s.is_vip === true || s.vip === true || s.isVip === true) out.isVip = true;
+  if (role === 'og' || rolesLower.includes('og') || s.is_og === true || s.og === true || s.isOg === true) out.isOg = true;
   if (
     role === 'subscriber' ||
     role === 'sub' ||
@@ -42,9 +62,21 @@ function getSenderRoles(sender: unknown): { isMod: boolean; isVip: boolean; isOg
     s.is_subscriber === true ||
     s.subscriber === true ||
     s.is_sub === true ||
-    s.sub === true
+    s.sub === true ||
+    s.isSubscriber === true ||
+    s.isSub === true
   )
     out.isSub = true;
+
+  // Badges array (Kick may send roles as badges)
+  const badges = s.badges ?? (identity?.badges as unknown);
+  if (badges) {
+    const fromBadges = parseBadges(badges);
+    if (fromBadges.isMod) out.isMod = true;
+    if (fromBadges.isVip) out.isVip = true;
+    if (fromBadges.isOg) out.isOg = true;
+    if (fromBadges.isSub) out.isSub = true;
+  }
 
   return out;
 }
@@ -116,6 +148,75 @@ export async function handleChatPoll(
   const contentLower = contentTrimmed.toLowerCase();
   const isPollCmd = contentLower.startsWith('!poll ');
   const isPollStatus = contentLower === '!pollstatus' || contentLower === '!poll status';
+  const isEndPoll = contentLower === '!endpoll';
+
+  // --- !endpoll: mods and broadcaster only. End current poll and start next queued. ---
+  if (isEndPoll) {
+    const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+    const roles = getSenderRoles(payload.sender);
+    const senderLower = senderUsername.toLowerCase();
+    const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
+    const isModOrBroadcaster = roles.isMod || senderLower === broadcasterLower;
+    if (!isModOrBroadcaster) {
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            'Only mods and broadcaster can end polls.',
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+    const currentState = await getPollState();
+    if (!currentState || currentState.status !== 'active') {
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            'No poll active.',
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+    await setPollState(null);
+    const accessToken = await getValidAccessToken();
+    const messageId = (payload.id ?? payload.message_id) as string | undefined;
+    if (accessToken) {
+      try {
+        await sendKickChatMessage(
+          accessToken,
+          'Poll ended by mod.',
+          messageId ? { replyToMessageId: messageId } : undefined
+        );
+      } catch { /* ignore */ }
+    }
+    const queued = await popPollQueue();
+    if (queued) {
+      const state: PollState = {
+        id: `poll_${Date.now()}`,
+        question: queued.question,
+        options: queued.options,
+        startedAt: Date.now(),
+        durationSeconds: queued.durationSeconds,
+        status: 'active',
+      };
+      await setPollState(state);
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(accessToken, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
+        } catch { /* ignore */ }
+      }
+    }
+    return { handled: true };
+  }
 
   // --- !pollstatus: show current poll or "no poll active" ---
   if (isPollStatus) {
@@ -205,7 +306,12 @@ export async function handleChatPoll(
     const canStart = canStartPoll(senderUsername, broadcasterSlug, settings, roles);
     if (!canStart) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('[poll] webhook: rejected (no permission)', { sender: senderUsername });
+        console.log('[poll] webhook: rejected (no permission)', {
+          sender: senderUsername,
+          roles: { ...roles },
+          settings: { modsCanStart: settings.modsCanStart, subsCanStart: settings.subsCanStart },
+          rawSender: JSON.stringify(payload.sender).slice(0, 300),
+        });
       }
       const accessToken = await getValidAccessToken();
       const messageId = (payload.id ?? payload.message_id) as string | undefined;

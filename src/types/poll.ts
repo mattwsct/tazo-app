@@ -46,9 +46,7 @@ export interface PollSettings {
   subsCanStart: boolean;
   maxQueuedPolls: number;
   winnerDisplaySeconds: number;
-  /** Pin poll start message for duration (when Kick adds API) */
-  pinPollStartMessage: boolean;
-  /** Send reminder at halfway through poll (pseudo-pin when no pin API) */
+  /** Send reminder at halfway through poll (keeps poll visible in chat) */
   sendPollReminder: boolean;
 }
 
@@ -62,7 +60,6 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   subsCanStart: false,
   maxQueuedPolls: 5,
   winnerDisplaySeconds: 10,
-  pinPollStartMessage: false,
   sendPollReminder: true,
 };
 

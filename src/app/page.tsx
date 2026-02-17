@@ -31,7 +31,6 @@ const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   channelRewardDeclined: 'Channel reward (declined)',
   streamStarted: 'Stream started',
   streamEnded: 'Stream ended',
-  host: 'Host',
 };
 
 
@@ -69,18 +68,11 @@ export default function AdminPage() {
   });
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickGiftSubShowLifetimeSubs, setKickGiftSubShowLifetimeSubs] = useState(true);
-  const [kickPinHighValueEnabled, setKickPinHighValueEnabled] = useState(false);
-  const [kickPinMinGiftSubs, setKickPinMinGiftSubs] = useState(5);
-  const [kickPinMinKicks, setKickPinMinKicks] = useState(500);
-  const [kickPinDurationSeconds, setKickPinDurationSeconds] = useState(60);
   const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
   const [kickChatBroadcastLocationInterval, setKickChatBroadcastLocationInterval] = useState(5);
   const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
   const [kickChatBroadcastHeartrateMinBpm, setKickChatBroadcastHeartrateMinBpm] = useState(100);
   const [kickChatBroadcastHeartrateVeryHighBpm, setKickChatBroadcastHeartrateVeryHighBpm] = useState(120);
-  const [kickTestMessage, setKickTestMessage] = useState('');
-  const [kickTestSending, setKickTestSending] = useState(false);
-  const [kickTemplateTesting, setKickTemplateTesting] = useState<keyof KickMessageTemplates | null>(null);
   const [kickBroadcastStatus, setKickBroadcastStatus] = useState<{
     heartRate?: { currentBpm: number; age: string; hasData: boolean; state: string; reason: string; wouldSendMessage: boolean; lastSentAt: string | null; lastSentAgo: string | null };
     kick?: { hasTokens: boolean };
@@ -93,8 +85,6 @@ export default function AdminPage() {
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
-  const [kickDebugLog, setKickDebugLog] = useState<Record<string, unknown> | null>(null);
-  const [kickDebugLoading, setKickDebugLoading] = useState(false);
   const [kickPollEnabled, setKickPollEnabled] = useState(false);
   const [kickPollDuration, setKickPollDuration] = useState(30);
   const [kickPollEveryoneCanStart, setKickPollEveryoneCanStart] = useState(false);
@@ -103,7 +93,6 @@ export default function AdminPage() {
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
-  const [kickPollPinStartMessage, setKickPollPinStartMessage] = useState(false);
   const [kickPollSendReminder, setKickPollSendReminder] = useState(true);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
@@ -241,10 +230,6 @@ export default function AdminPage() {
         if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
         if (d.alertSettings?.chatBroadcastHeartrateMinBpm != null) setKickChatBroadcastHeartrateMinBpm(d.alertSettings.chatBroadcastHeartrateMinBpm);
         if (d.alertSettings?.chatBroadcastHeartrateVeryHighBpm != null) setKickChatBroadcastHeartrateVeryHighBpm(d.alertSettings.chatBroadcastHeartrateVeryHighBpm);
-        if (d.alertSettings?.pinHighValueEnabled !== undefined) setKickPinHighValueEnabled(d.alertSettings.pinHighValueEnabled);
-        if (d.alertSettings?.pinMinGiftSubs != null) setKickPinMinGiftSubs(d.alertSettings.pinMinGiftSubs);
-        if (d.alertSettings?.pinMinKicks != null) setKickPinMinKicks(d.alertSettings.pinMinKicks);
-        if (d.alertSettings?.pinDurationSeconds != null) setKickPinDurationSeconds(d.alertSettings.pinDurationSeconds);
       })
       .catch(() => {});
     fetch('/api/kick-poll-settings', { credentials: 'include' })
@@ -258,7 +243,6 @@ export default function AdminPage() {
         if (d?.ogsCanStart !== undefined) setKickPollOgsCanStart(d.ogsCanStart);
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
-        if (d?.pinPollStartMessage !== undefined) setKickPollPinStartMessage(d.pinPollStartMessage);
         if (d?.sendPollReminder !== undefined) setKickPollSendReminder(d.sendPollReminder);
       })
       .catch(() => {});
@@ -460,10 +444,6 @@ export default function AdminPage() {
     alertSettings?: Partial<{
       minimumKicks: number;
       giftSubShowLifetimeSubs: boolean;
-      pinHighValueEnabled: boolean;
-      pinMinGiftSubs: number;
-      pinMinKicks: number;
-      pinDurationSeconds: number;
       chatBroadcastLocation: boolean;
       chatBroadcastLocationIntervalMin: number;
       chatBroadcastHeartrate: boolean;
@@ -477,10 +457,6 @@ export default function AdminPage() {
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
       giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
-      pinHighValueEnabled: kickPinHighValueEnabled,
-      pinMinGiftSubs: kickPinMinGiftSubs,
-      pinMinKicks: kickPinMinKicks,
-      pinDurationSeconds: kickPinDurationSeconds,
       chatBroadcastLocation: kickChatBroadcastLocation,
       chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
       chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -504,15 +480,11 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickPinHighValueEnabled, kickPinMinGiftSubs, kickPinMinKicks, kickPinDurationSeconds, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
     giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
-    pinHighValueEnabled: kickPinHighValueEnabled,
-    pinMinGiftSubs: kickPinMinGiftSubs,
-    pinMinKicks: kickPinMinKicks,
-    pinDurationSeconds: kickPinDurationSeconds,
     chatBroadcastLocation: kickChatBroadcastLocation,
     chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -522,10 +494,6 @@ export default function AdminPage() {
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
     giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
-    pinHighValueEnabled: kickPinHighValueEnabled,
-    pinMinGiftSubs: kickPinMinGiftSubs,
-    pinMinKicks: kickPinMinKicks,
-    pinDurationSeconds: kickPinDurationSeconds,
     chatBroadcastLocation: kickChatBroadcastLocation,
     chatBroadcastLocationIntervalMin: kickChatBroadcastLocationInterval,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -559,57 +527,6 @@ export default function AdminPage() {
     });
     scheduleKickMessagesSave();
   }, [scheduleKickMessagesSave]);
-
-  const sendKickTestMessage = useCallback(async () => {
-    if (!kickTestMessage.trim()) return;
-    setKickTestSending(true);
-    try {
-      const r = await authenticatedFetch('/api/kick-messages/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: kickTestMessage.trim() }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok) {
-        setToast({ type: 'saved', message: 'Test sent!' });
-        setKickTestMessage('');
-      } else {
-        throw new Error(data.error ?? 'Failed to send');
-      }
-    } catch (err) {
-      setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to send' });
-    }
-    setTimeout(() => setToast(null), 3000);
-    setKickTestSending(false);
-  }, [kickTestMessage]);
-
-  const sendKickTemplateTest = useCallback(
-    async (key: keyof KickMessageTemplates) => {
-      setKickTemplateTesting(key);
-      try {
-        const r = await authenticatedFetch('/api/kick-messages/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            templateKey: key,
-            templates: kickMessages,
-            alertSettings: { giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs },
-          }),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (r.ok) {
-          setToast({ type: 'saved', message: 'Test sent!' });
-        } else {
-          throw new Error(data.error ?? 'Failed to send');
-        }
-      } catch (err) {
-        setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to send' });
-      }
-      setTimeout(() => setToast(null), 3000);
-      setKickTemplateTesting(null);
-    },
-    [kickMessages, kickGiftSubShowLifetimeSubs]
-  );
 
   const handleKickOAuthConnect = useCallback(() => {
     const popup = window.open('/api/kick-oauth/authorize', 'kick_oauth', 'width=500,height=600');
@@ -1570,37 +1487,6 @@ export default function AdminPage() {
                 </div>
               </section>
 
-              {/* Test Message */}
-              <section className="settings-section">
-                <div className="section-header">
-                  <h2>💬 Test message</h2>
-                </div>
-                <div className="setting-group">
-                  <p className="group-label group-description group-description-sm">
-                    Type <code>!ping</code> in kick.com/tazo chat to test the bot.
-                  </p>
-                <div className="kick-test-row">
-                  <input
-                    type="text"
-                    className="text-input"
-                    placeholder="Type a message..."
-                    value={kickTestMessage}
-                    onChange={(e) => setKickTestMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendKickTestMessage()}
-                    maxLength={500}
-                    disabled={!kickStatus?.connected}
-                  />
-                  <button
-                    className="btn btn-primary"
-                    onClick={sendKickTestMessage}
-                    disabled={!kickStatus?.connected || !kickTestMessage.trim() || kickTestSending}
-                  >
-                    {kickTestSending ? 'Sending...' : 'Send'}
-                  </button>
-                </div>
-                </div>
-              </section>
-
               {/* Chat Poll */}
               <section className="settings-section">
                 <div className="section-header">
@@ -1608,7 +1494,7 @@ export default function AdminPage() {
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description group-description-sm">
-                    Mods/broadcaster start polls with <code>!poll Question? Option1, Option2</code>. No options = Yes/No. Vote by typing option text (e.g. pizza, yes). Winner posts in chat and shows on overlay for 10s.
+                    Mods/broadcaster start polls with <code>!poll Question? Option1, Option2</code>. No options = Yes/No. Vote by typing option text (e.g. pizza, yes). Winner posts in chat and overlay. Mods and broadcaster can use <code>!endpoll</code> to end the current poll early.
                   </p>
                   <div className="form-stack" style={{ maxWidth: 520 }}>
                     <label className="checkbox-label-row">
@@ -1794,27 +1680,6 @@ export default function AdminPage() {
                         <label className="checkbox-label-row">
                           <input
                             type="checkbox"
-                            checked={kickPollPinStartMessage}
-                            onChange={async (e) => {
-                              const checked = e.target.checked;
-                              setKickPollPinStartMessage(checked);
-                              try {
-                                await authenticatedFetch('/api/kick-poll-settings', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ pinPollStartMessage: checked }),
-                                });
-                                setToast({ type: 'saved', message: 'Saved!' });
-                              } catch { setKickPollPinStartMessage(!checked); }
-                              setTimeout(() => setToast(null), 2000);
-                            }}
-                            className="checkbox-input"
-                          />
-                          <span>Pin poll start message for duration <em>(when Kick adds API)</em></span>
-                        </label>
-                        <label className="checkbox-label-row">
-                          <input
-                            type="checkbox"
                             checked={kickPollSendReminder}
                             onChange={async (e) => {
                               const checked = e.target.checked;
@@ -1846,7 +1711,7 @@ export default function AdminPage() {
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description">
-                    Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}, {'{host}'}, {'{viewers}'}.
+                    Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
                   </p>
                 <div className="form-stack">
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
@@ -1886,11 +1751,6 @@ export default function AdminPage() {
                           )}
                         </div>
                       )}
-                      {group.toggleKey === 'host' && (
-                        <p className="group-label group-description group-description-sm" style={{ marginBottom: 8, fontStyle: 'italic', color: 'var(--text-muted, #666)' }}>
-                          Note: Kick has not yet added the channel.hosted webhook event. Host notifications will not trigger until they do.
-                        </p>
-                      )}
                       {group.templateKeys.map((key) => (
                         <div
                           key={key}
@@ -1913,15 +1773,6 @@ export default function AdminPage() {
                             onChange={(e) => handleKickMessageChange(key, e.target.value)}
                             placeholder={DEFAULT_KICK_MESSAGES[key]}
                           />
-                          <button
-                            type="button"
-                            className="btn btn-secondary kick-test-btn btn-small"
-                            onClick={() => sendKickTemplateTest(key)}
-                            disabled={!kickStatus?.connected || kickTemplateTesting === key}
-                            title="Send test to Kick chat"
-                          >
-                            {kickTemplateTesting === key ? '…' : 'Test'}
-                          </button>
                         </div>
                       ))}
                     </div>
@@ -1941,144 +1792,6 @@ export default function AdminPage() {
                 </div>
               </section>
 
-              {/* Pin high-value alerts */}
-              <section className="settings-section">
-                <div className="section-header">
-                  <h2>📌 Pin high-value alerts</h2>
-                </div>
-                <div className="setting-group">
-                  <p className="group-label group-description group-description-sm">
-                    When enabled, announcements for gift subs or kicks above the thresholds would be pinned. Kick does not yet support pinning bot messages; these settings are saved for when the API becomes available.
-                  </p>
-                  <div className="form-stack" style={{ maxWidth: 480 }}>
-                    <label className="checkbox-label-row">
-                      <input
-                        type="checkbox"
-                        checked={kickPinHighValueEnabled}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setKickPinHighValueEnabled(checked);
-                          saveKickMessages({ alertSettings: { pinHighValueEnabled: checked } });
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span>Enable pin for high-value gifts</span>
-                    </label>
-                    {kickPinHighValueEnabled && (
-                      <div className="kick-group-options" style={{ flexWrap: 'wrap', gap: 12 }}>
-                        <label className="kick-group-options-item">
-                          <span>Min gift subs:</span>
-                          <input
-                            type="number"
-                            className="text-input number-input kick-group-options-input"
-                            value={kickPinMinGiftSubs}
-                            onChange={(e) => {
-                              const v = Math.max(0, parseInt(e.target.value, 10) || 0);
-                              setKickPinMinGiftSubs(v);
-                              scheduleKickMessagesSave();
-                            }}
-                            min={0}
-                            style={{ width: 72 }}
-                          />
-                        </label>
-                        <label className="kick-group-options-item">
-                          <span>Min kicks:</span>
-                          <input
-                            type="number"
-                            className="text-input number-input kick-group-options-input"
-                            value={kickPinMinKicks}
-                            onChange={(e) => {
-                              const v = Math.max(0, parseInt(e.target.value, 10) || 0);
-                              setKickPinMinKicks(v);
-                              scheduleKickMessagesSave();
-                            }}
-                            min={0}
-                            style={{ width: 72 }}
-                          />
-                        </label>
-                        <label className="kick-group-options-item">
-                          <span>Duration (sec):</span>
-                          <input
-                            type="number"
-                            className="text-input number-input kick-group-options-input"
-                            value={kickPinDurationSeconds}
-                            onChange={(e) => {
-                              const v = Math.max(1, parseInt(e.target.value, 10) || 60);
-                              setKickPinDurationSeconds(v);
-                              scheduleKickMessagesSave();
-                            }}
-                            min={1}
-                            style={{ width: 72 }}
-                          />
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {/* Debug logs */}
-              <section className="settings-section kick-debug-logs">
-                <div className="section-header">
-                  <h2>🔧 Debug logs</h2>
-                </div>
-                <div className="setting-group">
-                  <p className="group-label group-description group-description-sm">
-                    Webhook events (last 25), reward payloads (last 10), decision log. Copy and paste when reporting issues.
-                  </p>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: 12 }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-small"
-                      onClick={async () => {
-                        setKickDebugLoading(true);
-                        try {
-                          const r = await fetch('/api/kick-webhook-log', { credentials: 'include' });
-                          const data = await r.json();
-                          setKickDebugLog(data);
-                        } catch {
-                          setKickDebugLog({ error: 'Fetch failed' });
-                        } finally {
-                          setKickDebugLoading(false);
-                        }
-                      }}
-                      disabled={kickDebugLoading}
-                    >
-                      {kickDebugLoading ? 'Loading…' : 'Refresh logs'}
-                    </button>
-                    {kickDebugLog && (
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-small"
-                        onClick={() => {
-                          navigator.clipboard.writeText(JSON.stringify(kickDebugLog, null, 2));
-                          setToast({ type: 'saved', message: 'Copied to clipboard' });
-                          setTimeout(() => setToast(null), 2000);
-                        }}
-                      >
-                        Copy for debugging
-                      </button>
-                    )}
-                  </div>
-                  {kickDebugLog && (
-                    <div className="kick-debug-logs-content">
-                      {(() => {
-                        const d = kickDebugLog as Record<string, unknown>;
-                        const re = d.recentEvents;
-                        const rp = d.rewardPayloadLog;
-                        return Array.isArray(re) && re.length === 0 && Array.isArray(rp) && rp.length === 0;
-                      })() && (
-                        <p className="kick-debug-logs-empty" style={{ marginBottom: 12 }}>
-                          recentEvents and rewardPayloadLog are empty — ensure the webhook runs on the same deployment you’re viewing. Check Vercel project settings (KV env vars) and that the webhook URL targets production.
-                        </p>
-                      )}
-                      <pre className="kick-debug-logs-pre">
-                        {JSON.stringify(kickDebugLog, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              </section>
             </>
           )}
           

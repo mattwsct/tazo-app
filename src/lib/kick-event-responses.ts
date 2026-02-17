@@ -146,18 +146,6 @@ export function getChannelRewardResponse(
   return replace(templates.channelReward, { redeemer, title });
 }
 
-/** Payload: channel.hosted - host hosted the channel with viewers */
-export function getHostResponse(
-  payload: KickPayload,
-  templates: KickMessageTemplates,
-  templateEnabled?: KickMessageTemplateEnabled
-): string | null {
-  if (isTemplateDisabled(templateEnabled, 'host')) return null;
-  const host = getUsername(payload.host ?? payload.hoster);
-  const viewers = String(payload.viewers ?? payload.viewer_count ?? 0);
-  return replace(templates.host, { host, viewers });
-}
-
 /** Payload: livestream.status.updated - is_live: true when started, false when ended */
 export function getStreamStatusResponse(
   payload: KickPayload,

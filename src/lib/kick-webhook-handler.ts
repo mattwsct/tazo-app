@@ -10,7 +10,6 @@ import {
   getKicksGiftedResponse,
   getChannelRewardResponse,
   getStreamStatusResponse,
-  getHostResponse,
 } from '@/lib/kick-event-responses';
 import { getKickSubscriptionLeaderboard } from '@/lib/kick-api';
 import type { KickMessageTemplates, KickMessageTemplateEnabled } from '@/types/kick-messages';
@@ -66,8 +65,6 @@ export async function buildEventMessage(
       return getChannelRewardResponse(payload, templates, undefined, templateEnabled);
     case 'livestream.status.updated':
       return getStreamStatusResponse(payload, templates, templateEnabled);
-    case 'channel.hosted':
-      return getHostResponse(payload, templates, templateEnabled);
     default:
       return null;
   }
