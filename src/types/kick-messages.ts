@@ -111,6 +111,7 @@ export const TEMPLATE_GROUP_CONFIG: { toggleKey: KickEventToggleKey; label: stri
 
 export const KICK_MESSAGES_KEY = 'kick_message_templates';
 export const KICK_MESSAGE_ENABLED_KEY = 'kick_message_enabled';
+export const KICK_MESSAGE_TEMPLATES_BACKUP_KEY = 'kick_message_templates_backup';
 export const KICK_ALERT_SETTINGS_KEY = 'kick_alert_settings';
 
 /** Maps webhook event type to toggle key */

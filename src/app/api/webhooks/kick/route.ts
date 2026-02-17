@@ -14,7 +14,6 @@ import {
   KICK_MESSAGES_KEY,
   KICK_MESSAGE_ENABLED_KEY,
   KICK_ALERT_SETTINGS_KEY,
-  isToggleDisabled,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -141,14 +140,12 @@ export async function POST(request: NextRequest) {
   const eventTypeNorm = (eventType || '').toLowerCase().trim();
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
-  const isDisabled = isToggleDisabled(toggleKey, toggleValue);
 
   console.log('[Kick webhook] Toggle check', {
     eventType,
     eventTypeNorm,
     toggleKey,
     toggleValue,
-    isDisabled,
     channelRewardFromEnabled: enabled.channelReward,
   });
 
@@ -159,7 +156,6 @@ export async function POST(request: NextRequest) {
         eventType: eventType || '(none)',
         toggleKey: toggleKey ?? null,
         toggleValue: toggleValue ?? null,
-        isDisabled,
         action,
         storedEnabledRaw: storedEnabled ?? null,
       });
@@ -177,7 +173,6 @@ export async function POST(request: NextRequest) {
       enabledSnapshot: enabled,
       toggleKey: toggleKey ?? null,
       toggleValue: toggleValue ?? null,
-      isDisabled,
       verified: !!verified,
     });
   } catch {
@@ -196,9 +191,8 @@ export async function POST(request: NextRequest) {
     getAccessToken: getValidAccessToken,
   });
 
-  if (isDisabled) message = null;
   if (!message || !message.trim()) {
-    await pushDecision(isDisabled ? 'skipped_toggle_off' : 'skipped_no_message');
+    await pushDecision('skipped_empty_template');
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
