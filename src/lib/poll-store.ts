@@ -17,12 +17,23 @@ export async function setPollState(state: PollState | null): Promise<void> {
   ]);
 }
 
-export async function getPollQueue(): Promise<QueuedPoll | null> {
-  return kv.get<QueuedPoll>(POLL_QUEUE_KEY);
+export async function getPollQueue(): Promise<QueuedPoll[]> {
+  const q = await kv.get<QueuedPoll | QueuedPoll[]>(POLL_QUEUE_KEY);
+  if (!q) return [];
+  return Array.isArray(q) ? q : [q];
 }
 
-export async function setPollQueue(queue: QueuedPoll | null): Promise<void> {
-  await kv.set(POLL_QUEUE_KEY, queue);
+export async function setPollQueue(queue: QueuedPoll[]): Promise<void> {
+  await kv.set(POLL_QUEUE_KEY, queue.length > 0 ? queue : []);
+}
+
+/** Pop and return the first queued poll, or null if empty. */
+export async function popPollQueue(): Promise<QueuedPoll | null> {
+  const queue = await getPollQueue();
+  if (queue.length === 0) return null;
+  const [first, ...rest] = queue;
+  await setPollQueue(rest);
+  return first;
 }
 
 export async function getPollSettings(): Promise<PollSettings> {

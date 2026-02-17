@@ -4,7 +4,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPollState, setPollState, getPollQueue, setPollQueue } from '@/lib/poll-store';
+import { getPollState, setPollState, popPollQueue } from '@/lib/poll-store';
+import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import type { PollState } from '@/types/poll';
 
 export const dynamic = 'force-dynamic';
@@ -28,9 +30,8 @@ export async function GET(request: NextRequest) {
   }
 
   await setPollState(null);
-  const queued = await getPollQueue();
+  const queued = await popPollQueue();
   if (queued) {
-    await setPollQueue(null);
     const newState: PollState = {
       id: `poll_${Date.now()}`,
       question: queued.question,
@@ -40,6 +41,12 @@ export async function GET(request: NextRequest) {
       status: 'active',
     };
     await setPollState(newState);
+    const token = await getValidAccessToken();
+    if (token) {
+      try {
+        await sendKickChatMessage(token, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
+      } catch { /* ignore */ }
+    }
     return NextResponse.json({ ok: true, action: 'started_queued' });
   }
   return NextResponse.json({ ok: true, action: 'cleared' });

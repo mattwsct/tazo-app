@@ -80,7 +80,8 @@ export async function GET(request: NextRequest): Promise<Response> {
           const settingsTs = (settingsModified as number) ?? 0;
           const pollTs = (pollModified as number) ?? 0;
           const maxTs = Math.max(settingsTs, pollTs);
-          if (maxTs > lastModified) {
+          const shouldSend = lastModified === 0 || maxTs > lastModified;
+          if (shouldSend) {
             lastModified = maxTs;
             const settingsUpdate = {
               ...(settings && typeof settings === 'object' ? settings : {}),

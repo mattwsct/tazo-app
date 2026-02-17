@@ -38,7 +38,11 @@ export interface PollSettings {
   modsCanStart: boolean;
   vipsCanStart: boolean;
   ogsCanStart: boolean;
+  subsCanStart: boolean;
+  maxQueuedPolls: number;
   winnerDisplaySeconds: number;
+  /** Pin poll start message for duration (when Kick adds API) */
+  pinPollStartMessage: boolean;
 }
 
 export const DEFAULT_POLL_SETTINGS: PollSettings = {
@@ -47,7 +51,10 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   modsCanStart: true,
   vipsCanStart: false,
   ogsCanStart: false,
+  subsCanStart: false,
+  maxQueuedPolls: 5,
   winnerDisplaySeconds: 10,
+  pinPollStartMessage: false,
 };
 
 export const POLL_STATE_KEY = 'overlay_poll_state';

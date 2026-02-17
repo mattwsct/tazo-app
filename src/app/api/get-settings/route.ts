@@ -4,19 +4,23 @@ import { logKVUsage } from '@/lib/api-auth';
 import { validateEnvironment } from '@/lib/env-validator';
 import { OverlayLogger } from '@/lib/logger';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
+import { POLL_STATE_KEY } from '@/types/poll';
 
 export const dynamic = 'force-dynamic';
 
 async function handleGET() {
   try {
     logKVUsage('read');
-    const settings = await kv.get('overlay_settings');
-    
+    const [settings, pollState] = await Promise.all([
+      kv.get('overlay_settings'),
+      kv.get(POLL_STATE_KEY),
+    ]);
+
     if (process.env.NODE_ENV === 'development') {
       OverlayLogger.settings('Raw settings from KV', settings);
     }
-    
-    const combinedSettings = mergeSettingsWithDefaults(settings || {});
+
+    const combinedSettings = mergeSettingsWithDefaults({ ...(settings || {}), pollState: pollState ?? null });
     
     if (process.env.NODE_ENV === 'development') {
       OverlayLogger.settings('Final combined settings', combinedSettings);

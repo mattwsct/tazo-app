@@ -36,6 +36,11 @@ export async function POST(request: NextRequest) {
     if (typeof body.modsCanStart === 'boolean') updates.modsCanStart = body.modsCanStart;
     if (typeof body.vipsCanStart === 'boolean') updates.vipsCanStart = body.vipsCanStart;
     if (typeof body.ogsCanStart === 'boolean') updates.ogsCanStart = body.ogsCanStart;
+    if (typeof body.subsCanStart === 'boolean') updates.subsCanStart = body.subsCanStart;
+    if (typeof body.maxQueuedPolls === 'number' && body.maxQueuedPolls >= 1 && body.maxQueuedPolls <= 20) {
+      updates.maxQueuedPolls = body.maxQueuedPolls;
+    }
+    if (typeof body.pinPollStartMessage === 'boolean') updates.pinPollStartMessage = body.pinPollStartMessage;
     if (typeof body.winnerDisplaySeconds === 'number' && body.winnerDisplaySeconds >= 1 && body.winnerDisplaySeconds <= 60) {
       updates.winnerDisplaySeconds = body.winnerDisplaySeconds;
     }

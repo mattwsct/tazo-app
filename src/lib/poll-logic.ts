@@ -67,8 +67,8 @@ export function parseVote(
 export function canStartPoll(
   senderUsername: string,
   broadcasterUsername: string | null,
-  settings: { modsCanStart?: boolean; vipsCanStart?: boolean; ogsCanStart?: boolean },
-  roles: { isMod?: boolean; isVip?: boolean; isOg?: boolean }
+  settings: { modsCanStart?: boolean; vipsCanStart?: boolean; ogsCanStart?: boolean; subsCanStart?: boolean },
+  roles: { isMod?: boolean; isVip?: boolean; isOg?: boolean; isSub?: boolean }
 ): boolean {
   const senderLower = senderUsername.toLowerCase();
   const broadcasterLower = broadcasterUsername?.toLowerCase() ?? '';
@@ -77,6 +77,7 @@ export function canStartPoll(
   if (roles.isMod && settings.modsCanStart) return true;
   if (roles.isVip && settings.vipsCanStart) return true;
   if (roles.isOg && settings.ogsCanStart) return true;
+  if (roles.isSub && settings.subsCanStart) return true;
   return false;
 }
 

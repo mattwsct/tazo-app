@@ -10,15 +10,16 @@ import {
   setPollState,
   getPollQueue,
   setPollQueue,
+  popPollQueue,
   getPollSettings,
 } from '@/lib/poll-store';
 import type { PollState, PollOption, QueuedPoll } from '@/types/poll';
 
 const KICK_BROADCASTER_SLUG_KEY = 'kick_broadcaster_slug';
 
-/** Kick sender roles from payload. Check common paths: identity.role, roles[], is_moderator, is_vip, is_og, etc. */
-function getSenderRoles(sender: unknown): { isMod: boolean; isVip: boolean; isOg: boolean } {
-  const out = { isMod: false, isVip: false, isOg: false };
+/** Kick sender roles from payload. Check common paths: identity.role, roles[], is_moderator, is_vip, is_og, is_subscriber, etc. */
+function getSenderRoles(sender: unknown): { isMod: boolean; isVip: boolean; isOg: boolean; isSub: boolean } {
+  const out = { isMod: false, isVip: false, isOg: false, isSub: false };
   if (!sender || typeof sender !== 'object') return out;
   const s = sender as Record<string, unknown>;
   const identity = s.identity as Record<string, unknown> | undefined;
@@ -33,12 +34,55 @@ function getSenderRoles(sender: unknown): { isMod: boolean; isVip: boolean; isOg
   if (s.is_moderator === true || s.moderator === true) out.isMod = true;
   if (role === 'vip' || rolesLower.includes('vip') || s.is_vip === true || s.vip === true) out.isVip = true;
   if (role === 'og' || rolesLower.includes('og') || s.is_og === true || s.og === true) out.isOg = true;
+  if (
+    role === 'subscriber' ||
+    role === 'sub' ||
+    rolesLower.includes('subscriber') ||
+    rolesLower.includes('sub') ||
+    s.is_subscriber === true ||
+    s.subscriber === true ||
+    s.is_sub === true ||
+    s.sub === true
+  )
+    out.isSub = true;
 
   return out;
 }
 
-/** Build chat message for when a poll starts: question + how to vote */
-function buildPollStartMessage(question: string, options: { label: string }[], durationSeconds: number): string {
+/** Estimate seconds until a poll at queue position will start. */
+function estimateSecondsUntilStart(
+  positionInQueue: number,
+  currentState: PollState | null,
+  queue: QueuedPoll[],
+  winnerDisplaySeconds: number,
+  defaultDuration: number
+): number {
+  let seconds = 0;
+  const now = Date.now() / 1000;
+
+  if (currentState?.status === 'active') {
+    const elapsed = now - currentState.startedAt / 1000;
+    seconds += Math.max(0, currentState.durationSeconds - elapsed);
+    seconds += winnerDisplaySeconds;
+  } else if (currentState?.status === 'winner' && currentState.winnerDisplayUntil) {
+    seconds += Math.max(0, (currentState.winnerDisplayUntil - Date.now()) / 1000);
+  }
+
+  for (let i = 0; i < positionInQueue - 1 && i < queue.length; i++) {
+    seconds += (queue[i]?.durationSeconds ?? defaultDuration) + winnerDisplaySeconds;
+  }
+  return Math.round(seconds);
+}
+
+/** Format seconds as human-readable (e.g. "~2 min", "~45 sec") */
+function formatSecondsEstimate(sec: number): string {
+  if (sec < 60) return `~${sec} sec`;
+  const min = Math.ceil(sec / 60);
+  return `~${min} min`;
+}
+
+/** Build chat message for when a poll starts: question + how to vote. Exported for cron. */
+export function buildPollStartMessage(question: string, options: { label: string }[], durationSeconds: number): string {
   const labels = options.map((o) => `'${o.label.toLowerCase()}'`);
   const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
   const timeStr = durationSeconds === 60 ? '60 seconds' : `${durationSeconds} seconds`;
@@ -71,7 +115,7 @@ export async function handleChatPoll(
   const contentTrimmed = content.trim();
   const isPollCmd = contentTrimmed.toLowerCase().startsWith('!poll ');
 
-  // --- If winner display time passed, clear and start queued poll ---
+  // --- If winner display time passed, clear and start next queued poll ---
   const currentStateBefore = await getPollState();
   if (
     !isPollCmd &&
@@ -80,9 +124,8 @@ export async function handleChatPoll(
     Date.now() >= currentStateBefore.winnerDisplayUntil
   ) {
     await setPollState(null);
-    const queued = await getPollQueue();
+    const queued = await popPollQueue();
     if (queued) {
-      await setPollQueue(null);
       const state: PollState = {
         id: `poll_${Date.now()}`,
         question: queued.question,
@@ -117,15 +160,49 @@ export async function handleChatPoll(
     const hasWinner = currentState && currentState.status === 'winner';
 
     if (hasActive || hasWinner) {
-      await setPollQueue({
+      const queue = await getPollQueue();
+      const maxQueued = Math.max(1, settings.maxQueuedPolls ?? 5);
+
+      if (queue.length >= maxQueued) {
+        const accessToken = await getValidAccessToken();
+        const messageId = (payload.id ?? payload.message_id) as string | undefined;
+        if (accessToken) {
+          try {
+            await sendKickChatMessage(
+              accessToken,
+              `Too many polls queued (max ${maxQueued}). Try again later.`,
+              messageId ? { replyToMessageId: messageId } : undefined
+            );
+          } catch { /* ignore */ }
+        }
+        return { handled: true };
+      }
+
+      const newPoll: QueuedPoll = {
         question: parsed.question,
         options: parsed.options.map((o) => ({ ...o, votes: 0, voters: {} })),
         durationSeconds: settings.durationSeconds,
-      });
+      };
+      const newQueue = [...queue, newPoll];
+      await setPollQueue(newQueue);
+
+      const position = newQueue.length;
+      const estSec = estimateSecondsUntilStart(
+        position,
+        currentState,
+        queue,
+        settings.winnerDisplaySeconds,
+        settings.durationSeconds
+      );
       const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
       if (accessToken) {
         try {
-          await sendKickChatMessage(accessToken, 'Poll queued. Will start after the current poll ends.');
+          await sendKickChatMessage(
+            accessToken,
+            `Poll queued (#${position}). Estimated start: ${formatSecondsEstimate(estSec)}.`,
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
         } catch { /* ignore */ }
       }
       return { handled: true };
