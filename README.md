@@ -742,7 +742,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
 | Host | "{host} hosted with {viewers} viewers! 🎉" |
 
-Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. `(5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. **Host** — template ready when Kick adds the webhook event. Until then, use third-party bots (e.g. [Kick.bot](https://kick.bot), [KAOSBOT](https://bot.ka0s.uk), [KickBot](https://kickbot.com)) for raid/host alerts via chat monitoring or Discord integration. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{kickDescription}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`, `{host}`, `{viewers}`.
+Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. When a toggle is off, the bot simply doesn't send a message (template text is kept). **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. `(5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. **Host** — template ready when Kick adds the webhook event. Until then, use third-party bots (e.g. [Kick.bot](https://kick.bot), [KAOSBOT](https://bot.ka0s.uk), [KickBot](https://kickbot.com)) for raid/host alerts via chat monitoring or Discord integration. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{kickDescription}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`, `{host}`, `{viewers}`.
 
 **Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint. The cron path must be in middleware public routes (no auth cookies) since Vercel Cron sends GET with no cookies; the route itself validates `CRON_SECRET` if set. The same cron also auto-updates the Kick stream title with current location when **Auto-push location** is on (every 2 min while live).
 
@@ -781,6 +781,11 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 3. **Vercel CLI**: `vercel logs --follow` for real-time; `vercel logs 2>&1 | grep "Kick webhook"` to filter.
 
 **Vercel logs** (minimal): One `[Kick webhook] Verified:` line per webhook; `Rejected` on bad signature; `Chat send failed:` on send errors. Full details are in Admin → Kick Bot → Debug logs.
+
+**`recentEvents` / `rewardPayloadLog` / `decisionLog` empty but `log` has data:**
+1. **Webhook URL**: Kick Developer tab → app settings → Webhook URL must be `https://app.tazo.wtf/api/webhooks/kick` (not `/api/kick-webhook`). The `/api/kick-webhook` route is legacy and does not write these logs.
+2. **Resubscribe**: Kick [unsubscribes apps](https://github.com/KickEngineering/KickDevDocs/blob/main/events/webhook-security.md) after webhooks fail for over a day. Use **Kick Bot → Re-subscribe** to re-register. If events are arriving (log has entries), this usually isn't the issue.
+3. **KV error**: After a webhook, check Vercel logs for `[Kick webhook] recentEvents push failed:`. If present, KV may be misconfigured or rate-limited.
 
 **Cloudflare caching:** POST requests (webhooks) are normally **not** cached. If you use Cloudflare as a proxy:
 - Add a **Cache Rule** (or Page Rule) to *bypass cache* for `/api/webhooks/*` and `/api/kick-webhook`. Example: URL `*app.tazo.wtf/api/webhooks/*` → Cache Level: Bypass.

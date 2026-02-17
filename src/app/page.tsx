@@ -1649,7 +1649,7 @@ export default function AdminPage() {
               </section>
 
               {/* Debug logs */}
-              <section className="settings-section kick-webhook-log">
+              <section className="settings-section kick-debug-logs">
                 <div className="section-header">
                   <h2>🔧 Debug logs</h2>
                 </div>
@@ -1692,9 +1692,17 @@ export default function AdminPage() {
                     )}
                   </div>
                   {kickDebugLog && (
-                    <pre className="kick-webhook-log-pre" style={{ maxHeight: 400, overflow: 'auto', fontSize: 12, padding: 12, background: 'rgba(0,0,0,0.3)', borderRadius: 8, whiteSpace: 'pre-wrap' }}>
-                      {JSON.stringify(kickDebugLog, null, 2)}
-                    </pre>
+                    <div className="kick-debug-logs-content">
+                      {Array.isArray((kickDebugLog as Record<string, unknown>).recentEvents) && (kickDebugLog as Record<string, unknown>).recentEvents.length === 0 &&
+                       Array.isArray((kickDebugLog as Record<string, unknown>).rewardPayloadLog) && (kickDebugLog as Record<string, unknown>).rewardPayloadLog.length === 0 && (
+                        <p className="kick-debug-logs-empty" style={{ marginBottom: 12 }}>
+                          recentEvents and rewardPayloadLog are empty — ensure the webhook runs on the same deployment you’re viewing. Check Vercel project settings (KV env vars) and that the webhook URL targets production.
+                        </p>
+                      )}
+                      <pre className="kick-debug-logs-pre">
+                        {JSON.stringify(kickDebugLog, null, 2)}
+                      </pre>
+                    </div>
                   )}
                 </div>
               </section>

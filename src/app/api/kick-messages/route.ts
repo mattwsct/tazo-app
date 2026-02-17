@@ -7,9 +7,7 @@ import {
   KICK_MESSAGE_ENABLED_KEY,
   KICK_MESSAGE_TEMPLATE_ENABLED_KEY,
   KICK_ALERT_SETTINGS_KEY,
-  KICK_MESSAGE_TEMPLATES_BACKUP_KEY,
   TEMPLATE_GROUP_CONFIG,
-  KICK_MESSAGE_KEYS,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled, KickMessageTemplateEnabled } from '@/types/kick-messages';
 
@@ -23,37 +21,6 @@ function derivedTemplateEnabled(groupEnabled: KickMessageEnabled): KickMessageTe
     }
   }
   return out;
-}
-
-/** Sync templates with per-template toggles: OFF → blank (and backup); ON → restore from backup or defaults. */
-function syncTemplatesWithToggles(
-  templates: KickMessageTemplates,
-  templateEnabled: KickMessageTemplateEnabled,
-  backup: Partial<KickMessageTemplates>
-): { templates: KickMessageTemplates; backup: Partial<KickMessageTemplates>; changed: boolean } {
-  const out = { ...templates };
-  const outBackup = { ...backup };
-  let changed = false;
-
-  for (const key of KICK_MESSAGE_KEYS) {
-    const isOff = templateEnabled[key] === false;
-    const current = out[key];
-    if (isOff) {
-      if (current != null && current !== '') {
-        outBackup[key] = current;
-        (out as Record<string, string>)[key] = '';
-        changed = true;
-      }
-    } else {
-      if (current === '' || current == null) {
-        const restored = outBackup[key] ?? DEFAULT_KICK_MESSAGES[key];
-        (out as Record<string, string>)[key] = restored;
-        if (key in outBackup) delete outBackup[key];
-        changed = true;
-      }
-    }
-  }
-  return { templates: out, backup: outBackup, changed };
 }
 
 export interface KickChatBroadcastSettings {
@@ -83,12 +50,11 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const [stored, storedEnabled, storedTemplateEnabled, storedAlert, storedBackup] = await Promise.all([
+    const [stored, storedEnabled, storedTemplateEnabled, storedAlert] = await Promise.all([
       kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
       kv.get<Partial<KickMessageEnabled>>(KICK_MESSAGE_ENABLED_KEY),
       kv.get<KickMessageTemplateEnabled>(KICK_MESSAGE_TEMPLATE_ENABLED_KEY),
       kv.get<Partial<KickAlertSettings>>(KICK_ALERT_SETTINGS_KEY),
-      kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGE_TEMPLATES_BACKUP_KEY),
     ]);
     const messages: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...stored };
     const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
@@ -96,19 +62,9 @@ export async function GET() {
       ...derivedTemplateEnabled(enabled),
       ...(storedTemplateEnabled ?? {}),
     };
-    const backup: Partial<KickMessageTemplates> = { ...(storedBackup ?? {}) };
-
-    const { templates, backup: syncedBackup, changed } = syncTemplatesWithToggles(messages, templateEnabled, backup);
-    if (changed) {
-      await Promise.all([
-        kv.set(KICK_MESSAGES_KEY, templates),
-        kv.set(KICK_MESSAGE_TEMPLATES_BACKUP_KEY, syncedBackup),
-      ]);
-    }
-
     const alertSettings = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlert };
     return NextResponse.json({
-      messages: templates,
+      messages,
       enabled,
       templateEnabled,
       alertSettings,
@@ -156,11 +112,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (hasEnabledUpdates || hasTemplateEnabledUpdates) {
-      const [storedEnabled, storedTemplateEnabled, storedTemplates, storedBackup] = await Promise.all([
+      const [storedEnabled, storedTemplateEnabled] = await Promise.all([
         kv.get<Partial<KickMessageEnabled>>(KICK_MESSAGE_ENABLED_KEY),
         kv.get<KickMessageTemplateEnabled>(KICK_MESSAGE_TEMPLATE_ENABLED_KEY),
-        kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
-        kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGE_TEMPLATES_BACKUP_KEY),
       ]);
 
       const mergedEnabled: KickMessageEnabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled, ...(enabledBody ?? {}) };
@@ -176,15 +130,9 @@ export async function POST(request: NextRequest) {
         ...(templateEnabledBody ?? {}),
       };
 
-      const templates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
-      const backup = { ...(storedBackup ?? {}) };
-      const { templates: syncedTemplates, backup: syncedBackup } = syncTemplatesWithToggles(templates, mergedTemplateEnabled, backup);
-
       await Promise.all([
         kv.set(KICK_MESSAGE_ENABLED_KEY, mergedEnabled),
         kv.set(KICK_MESSAGE_TEMPLATE_ENABLED_KEY, mergedTemplateEnabled),
-        kv.set(KICK_MESSAGES_KEY, syncedTemplates),
-        kv.set(KICK_MESSAGE_TEMPLATES_BACKUP_KEY, syncedBackup),
       ]);
     }
 

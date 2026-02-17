@@ -18,6 +18,7 @@ import {
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
+import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
@@ -138,8 +139,8 @@ export async function POST(request: NextRequest) {
   try {
     await kv.lpush(KICK_RECENT_EVENTS_KEY, eventSummary);
     await kv.ltrim(KICK_RECENT_EVENTS_KEY, 0, RECENT_EVENTS_MAX - 1);
-  } catch {
-    /* ignore */
+  } catch (e) {
+    console.warn('[Kick webhook] recentEvents push failed:', e instanceof Error ? e.message : String(e));
   }
   await logWebhookReceived(eventType || '(unknown)');
 
@@ -243,6 +244,11 @@ export async function POST(request: NextRequest) {
 
   const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
   if (!isKnownEvent) {
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  if (isToggleDisabled(toggleKey, toggleValue)) {
+    await pushDecision('skipped_toggle_off');
     return NextResponse.json({ received: true }, { status: 200 });
   }
 

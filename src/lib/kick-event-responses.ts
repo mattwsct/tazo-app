@@ -17,14 +17,6 @@ const OPTIONAL_PLACEHOLDERS = new Set(['lifetimeSubs']);
 const REWARD_STATUS_DECLINED = new Set(['rejected', 'denied', 'canceled']);
 const REWARD_STATUS_APPROVED = new Set(['accepted', 'fulfilled', 'approved']);
 
-/** Resolve which template key was used for a reward status (for logging) */
-export function getRewardTemplateKey(status: string, alreadySeen: boolean): string {
-  if (alreadySeen) return 'channelRewardApproved (id seen, dedup)';
-  if (REWARD_STATUS_APPROVED.has(status)) return 'channelRewardApproved';
-  if (REWARD_STATUS_DECLINED.has(status)) return 'channelRewardDeclined';
-  return status ? `channelReward/WithInput (status=${status})` : 'channelReward/WithInput (status missing)';
-}
-
 function replace(template: string, replacements: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => {
     const val = replacements[key];
