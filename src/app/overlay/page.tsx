@@ -61,6 +61,7 @@ import {
 } from '@/utils/staleness-utils';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
+import { getOverlayWinnerText } from '@/lib/poll-logic';
 
 // Extract constants for cleaner code
 const {
@@ -1564,7 +1565,7 @@ function OverlayPage() {
                   <div className="overlay-box poll-box">
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
                     {showWinner ? (
-                      <div className="poll-winner">{filterTextForDisplay(poll.winnerMessage ?? 'Poll ended')}</div>
+                      <div className="poll-winner">{filterTextForDisplay(getOverlayWinnerText(poll))}</div>
                     ) : (
                       <div className="poll-options">
                         {(() => {
@@ -1578,7 +1579,6 @@ function OverlayPage() {
                                   <div className="poll-option-fill" style={{ width: `${pct}%` }} />
                                   <div className="poll-option-text">
                                     <span className="poll-option-label">{displayLabel}</span>
-                                    <span className="poll-option-votes">{opt.votes}</span>
                                   </div>
                                 </div>
                               </div>

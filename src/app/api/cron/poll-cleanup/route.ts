@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPollState, setPollState, popPollQueue } from '@/lib/poll-store';
+import { getPollState, setPollState, popPollQueue, getPollQueue } from '@/lib/poll-store';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { computePollResult } from '@/lib/poll-logic';
@@ -24,8 +24,21 @@ export async function GET(request: NextRequest) {
   const state = await getPollState();
   const now = Date.now();
 
+  if (process.env.NODE_ENV === 'development') {
+    const queue = await getPollQueue();
+    console.log('[poll-cleanup]', {
+      state: state ? { status: state.status, question: state.question?.slice(0, 30), startedAt: state.startedAt, durationSeconds: state.durationSeconds } : null,
+      winnerDisplayUntil: state?.winnerDisplayUntil,
+      queueLength: queue.length,
+      now,
+    });
+  }
+
   if (state?.status === 'active') {
     const elapsed = (now - state.startedAt) / 1000;
+    if (process.env.NODE_ENV === 'development' && elapsed > 0) {
+      console.log('[poll-cleanup] active poll', { elapsed, duration: state.durationSeconds, expired: elapsed >= state.durationSeconds });
+    }
     if (elapsed >= state.durationSeconds) {
       const settings = await getPollSettings();
       const { winnerMessage } = computePollResult(state);
@@ -47,6 +60,9 @@ export async function GET(request: NextRequest) {
           );
         } catch { /* ignore */ }
       }
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[poll-cleanup] action: ended_active, elapsed', elapsed, 's');
+      }
       return NextResponse.json({ ok: true, action: 'ended_active' });
     }
   }
@@ -57,9 +73,15 @@ export async function GET(request: NextRequest) {
     state.winnerDisplayUntil == null ||
     now < state.winnerDisplayUntil
   ) {
+    if (process.env.NODE_ENV === 'development' && state?.status === 'winner') {
+      console.log('[poll-cleanup] action: none (winner display until', new Date(state.winnerDisplayUntil!).toISOString(), ')');
+    }
     return NextResponse.json({ ok: true, action: 'none' });
   }
 
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[poll-cleanup] action: clearing winner, starting next from queue');
+  }
   await setPollState(null);
   const queued = await popPollQueue();
   if (queued) {
@@ -78,7 +100,13 @@ export async function GET(request: NextRequest) {
         await sendKickChatMessage(token, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
       } catch { /* ignore */ }
     }
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[poll-cleanup] action: started_queued', queued.question?.slice(0, 40));
+    }
     return NextResponse.json({ ok: true, action: 'started_queued' });
+  }
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[poll-cleanup] action: cleared (no queue)');
   }
   return NextResponse.json({ ok: true, action: 'cleared' });
 }

@@ -149,9 +149,15 @@ export async function handleChatPoll(
     currentStateBefore.winnerDisplayUntil != null &&
     Date.now() >= currentStateBefore.winnerDisplayUntil
   ) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[poll] webhook: winner display passed, popping queue');
+    }
     await setPollState(null);
     const queued = await popPollQueue();
     if (queued) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[poll] webhook: started queued poll', queued.question?.slice(0, 40));
+      }
       const state: PollState = {
         id: `poll_${Date.now()}`,
         question: queued.question,
@@ -177,6 +183,9 @@ export async function handleChatPoll(
     if (!parsed) return { handled: true };
 
     if (pollContainsBlockedContent(parsed.question, parsed.options)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[poll] webhook: rejected (content filter)', { question: parsed.question?.slice(0, 60) });
+      }
       const accessToken = await getValidAccessToken();
       const messageId = (payload.id ?? payload.message_id) as string | undefined;
       if (accessToken) {
@@ -194,7 +203,23 @@ export async function handleChatPoll(
     const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
     const roles = getSenderRoles(payload.sender);
     const canStart = canStartPoll(senderUsername, broadcasterSlug, settings, roles);
-    if (!canStart) return { handled: true };
+    if (!canStart) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[poll] webhook: rejected (no permission)', { sender: senderUsername });
+      }
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            "You don't have permission to start polls.",
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
 
     const currentState = await getPollState();
     const hasActive = currentState && currentState.status === 'active';
@@ -204,6 +229,9 @@ export async function handleChatPoll(
       const queue = await getPollQueue();
 
       if (hasWinner && queue.length === 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[poll] webhook: winner+empty queue, starting immediately (skip queue msg)');
+        }
         await setPollState(null);
         const state: PollState = {
           id: `poll_${Date.now()}`,
@@ -266,6 +294,15 @@ export async function handleChatPoll(
         settings.winnerDisplaySeconds,
         settings.durationSeconds
       );
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[poll] webhook: queued poll', {
+          position,
+          question: parsed.question?.slice(0, 40),
+          estSec,
+          hasActive,
+          hasWinner,
+        });
+      }
       const accessToken = await getValidAccessToken();
       const messageId = (payload.id ?? payload.message_id) as string | undefined;
       if (accessToken) {
@@ -280,6 +317,9 @@ export async function handleChatPoll(
       return { handled: true };
     }
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[poll] webhook: starting new poll (no active/winner)', parsed.question?.slice(0, 40));
+    }
     // Start new poll
     const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
     const state: PollState = {
@@ -343,6 +383,9 @@ export async function handleChatPoll(
   }
 
   if (elapsed >= currentState.durationSeconds) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[poll] webhook: ending poll (vote/msg triggered)', { elapsed, duration: currentState.durationSeconds });
+    }
     const { winnerMessage, topVoter } = computePollResult(currentState);
     const winnerState: PollState = {
       ...currentState,

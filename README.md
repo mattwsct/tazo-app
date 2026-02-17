@@ -328,7 +328,9 @@ The overlay automatically prevents caching issues:
 3. Polling fallback → Overlays poll every 15s when SSE hasn't updated recently (skipped when SSE is active to reduce KV usage)
 4. Settings appear in OBS → No manual refresh needed!
 
-**Vercel KV limits** — Free tier is ~30,000 commands/day. The overlay uses SSE (10s) and polling (15s fallback) to stay under limits. Kick chat webhooks read poll state and settings per message; a busy chat adds reads. One overlay + typical Kick usage fits free tier. Multiple overlays or very active chat may need a paid KV plan.
+**Vercel KV limits** — Free tier is ~30,000 commands/day. The overlay uses SSE (10s) and polling (15s fallback) to stay under limits.
+
+**Queued poll timing** — The poll-cleanup cron runs every minute. An active poll ends when a chat message arrives (instant) or when the cron runs (up to 60s delay). Winner display lasts 10s; the next queued poll starts when the cron runs after that. So a queued poll can take up to ~70s to start after the previous one ends (30s poll + 60s cron wait + 10s winner). In development, check console for `[poll-cleanup]` and `[poll] webhook` logs. Kick chat webhooks read poll state and settings per message; a busy chat adds reads. One overlay + typical Kick usage fits free tier. Multiple overlays or very active chat may need a paid KV plan.
 
 **If settings changes don't appear in OBS:**
 1. **Wait 10-15 seconds** - Settings sync via SSE/polling
@@ -770,6 +772,7 @@ When enabled, broadcaster or mods can start a poll with `!poll Question? Option1
 
 ### Troubleshooting
 
+- **Poll didn't get queued after another was rejected**: Each message is a separate webhook; rejecting one poll does not block the next. Common causes: (1) **Permission** — if the sender lacks permission (Everyone/Mods/VIPs/OGs/Subs), the bot now replies "You don't have permission to start polls." Previously it was silent. (2) **Deleted message** — if the message was deleted before Kick delivered the webhook, it never arrives. (3) **Debugging** — in Vercel logs, look for `[poll] webhook: rejected (content filter)` or `rejected (no permission)` to see why a poll was skipped.
 - **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.
 - **Not responding**: Ensure you completed OAuth (Connect Kick) and tokens are stored. Check Vercel logs for errors.
 - **Event toggles**: Each event (Follow, New sub, Resub, Channel reward, etc.) can be toggled off. Flow: (1) You toggle off → POST /api/kick-messages saves to KV. (2) Kick sends webhook → loads enabled from KV, checks toggle. (3) If toggle is off, the message is set to blank so nothing is sent to chat. When toggle is on, the template response is built and sent normally. Verify **which webhook URL** Kick uses: `https://app.tazo.wtf/api/webhooks/kick` (main) or `/api/kick-webhook`. Both routes use the same logic.

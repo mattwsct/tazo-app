@@ -24,23 +24,23 @@ const LEET_MAP: Record<string, string> = {
   '@': 'a', '€': 'e', '$': 's', '+': 't',
 };
 
-/** Normalize for blocklist matching: lowercase, leetspeak, remove non-alphanumeric, collapse repeats */
+/** Normalize for blocklist matching: lowercase, leetspeak, remove non-alphanumeric. */
 function normalizeForCheck(s: string): string {
   let out = s.toLowerCase().replace(/[^a-z0-9]/gi, '');
   for (const [char, repl] of Object.entries(LEET_MAP)) {
     out = out.split(char).join(repl);
   }
-  out = out.replace(/(.)\1+/g, '$1');
   return out;
 }
 
-/** Check if text contains any blocked term (after normalization) */
+/** Check if text contains any blocked term. Word-boundary only (exact match per word) to avoid false positives (e.g. "ass" in "class", "glass", "last"). */
 export function containsBlockedContent(text: string): boolean {
   if (!text || typeof text !== 'string') return false;
-  const norm = normalizeForCheck(text);
-  for (const term of BLOCKED_TERMS) {
-    const termNorm = normalizeForCheck(term);
-    if (termNorm.length >= 2 && norm.includes(termNorm)) return true;
+  const words = text.split(/\W+/).map((w) => w.replace(/[^a-z0-9]/gi, '')).filter((w) => w.length >= 2);
+  const blockedNorm = new Set([...BLOCKED_TERMS].map((t) => normalizeForCheck(t)));
+  for (const word of words) {
+    const wordNorm = normalizeForCheck(word);
+    if (wordNorm.length >= 2 && blockedNorm.has(wordNorm)) return true;
   }
   return false;
 }
