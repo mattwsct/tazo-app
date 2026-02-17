@@ -81,16 +81,32 @@ export function getKicksGiftedResponse(payload: KickPayload, templates: KickMess
   return replace(templates.kicksGifted, replacements);
 }
 
-export function getChannelRewardResponse(payload: KickPayload, templates: KickMessageTemplates): string {
-  const redeemer = getUsername(payload.redeemer);
-  const reward = payload.reward ?? {};
-  const title = reward.title ?? 'reward';
-  const userInput = payload.user_input?.trim();
-  const status = String(payload.status ?? 'pending').toLowerCase();
-  if (status === 'rejected') {
+export interface GetChannelRewardOptions {
+  /** Force approved template (for deduplication: second webhook = approval) */
+  forceApproved?: boolean;
+}
+
+export function getChannelRewardResponse(
+  payload: KickPayload,
+  templates: KickMessageTemplates,
+  options?: GetChannelRewardOptions
+): string {
+  const data = payload.data as Record<string, unknown> | undefined;
+  const inner = data ?? payload;
+  const redeemer = getUsername((inner.redeemer ?? payload.redeemer) as { username?: string });
+  const reward = (inner.reward ?? payload.reward ?? {}) as Record<string, unknown>;
+  const title = String(reward.title ?? reward.name ?? 'reward');
+  const userInput = (inner.user_input ?? payload.user_input)?.toString?.()?.trim?.();
+  if (options?.forceApproved) {
+    return replace(templates.channelRewardApproved, { redeemer, title });
+  }
+  const status = String(
+    inner.status ?? payload.status ?? (reward as { status?: string }).status ?? 'pending'
+  ).toLowerCase();
+  if (status === 'rejected' || status === 'denied' || status === 'canceled') {
     return replace(templates.channelRewardDeclined, { redeemer, title });
   }
-  if (status === 'accepted' || status === 'fulfilled') {
+  if (status === 'accepted' || status === 'fulfilled' || status === 'approved') {
     return replace(templates.channelRewardApproved, { redeemer, title });
   }
   if (userInput) {

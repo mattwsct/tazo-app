@@ -7,6 +7,7 @@ import {
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
+import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
   DEFAULT_KICK_MESSAGES,
   DEFAULT_KICK_MESSAGE_ENABLED,
@@ -19,6 +20,7 @@ import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-mess
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
+const KICK_REWARD_SEEN_PREFIX = 'kick_reward_seen:';
 const WEBHOOK_LOG_MAX = 20;
 const WEBHOOK_DECISION_LOG_MAX = 15;
 
@@ -164,6 +166,16 @@ export async function POST(request: NextRequest) {
   };
 
   try {
+    const debugPayload =
+      eventTypeNorm === 'channel.reward.redemption.updated'
+        ? {
+            status: payload.status,
+            dataStatus: (payload.data as Record<string, unknown>)?.status,
+            id: payload.id,
+            dataId: (payload.data as Record<string, unknown>)?.id,
+            keys: Object.keys(payload),
+          }
+        : undefined;
     await kv.set(KICK_WEBHOOK_DEBUG_KEY, {
       at: new Date().toISOString(),
       eventType: eventType || '(none)',
@@ -174,6 +186,7 @@ export async function POST(request: NextRequest) {
       toggleKey: toggleKey ?? null,
       toggleValue: toggleValue ?? null,
       verified: !!verified,
+      channelRewardPayload: debugPayload,
     });
   } catch {
     // Ignore
@@ -184,12 +197,42 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const message = await buildEventMessage(eventTypeNorm, payload, {
-    templates,
-    minimumKicks,
-    giftSubShowLifetimeSubs,
-    getAccessToken: getValidAccessToken,
-  });
+  let message: string | null;
+  if (eventTypeNorm === 'channel.reward.redemption.updated') {
+    const data = payload.data as Record<string, unknown> | undefined;
+    const inner = data ?? payload;
+    const redeemer = (inner.redeemer ?? payload.redeemer) as { id?: number; username?: string } | undefined;
+    const reward = (inner.reward ?? payload.reward) as { id?: number; title?: string } | undefined;
+    const redemptionId =
+      String(payload.id ?? data?.id ?? '') ||
+      (redeemer?.id && reward?.id ? `${redeemer.id}_${reward.id}_${inner.created_at ?? ''}` : '');
+    const seenKey = redemptionId ? `${KICK_REWARD_SEEN_PREFIX}${redemptionId}` : null;
+    const alreadySeen = seenKey ? await kv.get(seenKey) : null;
+    if (alreadySeen) {
+      message = getChannelRewardResponse(payload, templates, { forceApproved: true });
+    } else {
+      message = await buildEventMessage(eventTypeNorm, payload, {
+        templates,
+        minimumKicks,
+        giftSubShowLifetimeSubs,
+        getAccessToken: getValidAccessToken,
+      });
+      if (message && seenKey) {
+        try {
+          await kv.set(seenKey, 1);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } else {
+    message = await buildEventMessage(eventTypeNorm, payload, {
+      templates,
+      minimumKicks,
+      giftSubShowLifetimeSubs,
+      getAccessToken: getValidAccessToken,
+    });
+  }
 
   if (!message || !message.trim()) {
     await pushDecision('skipped_empty_template');

@@ -1295,7 +1295,7 @@ export default function AdminPage() {
                           onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
                           className="checkbox-input"
                         />
-                        Auto-push when live and location changes (at most every 5 min)
+                        Auto-push stream title when live and location changes (uses interval below)
                       </label>
                     </div>
                   </div>
@@ -1335,7 +1335,7 @@ export default function AdminPage() {
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description">
-                    Location: periodic updates. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
+                    Location: when live, at most every N min (shared with stream title above). Toggle below to also post in chat. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
                   </p>
                 <div className="broadcast-options-list">
                   <div className="broadcast-option-block">
@@ -1353,10 +1353,10 @@ export default function AdminPage() {
                       <span className="radio-icon" aria-hidden="true">📍</span>
                       <span>Location</span>
                     </label>
-                    {kickChatBroadcastLocation && (
+                    {(kickStreamTitleAutoUpdate || kickChatBroadcastLocation) && (
                       <div className="broadcast-option-detail">
                         <label className="checkbox-label-row-sm">
-                          Min interval:
+                          Interval (stream title + chat, when live):
                           <input
                             type="number"
                             className="text-input number-input"
