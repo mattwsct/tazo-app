@@ -8,14 +8,11 @@ import {
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import {
   DEFAULT_KICK_MESSAGES,
-  DEFAULT_KICK_MESSAGE_ENABLED,
   EVENT_TYPE_TO_TOGGLE,
   KICK_MESSAGES_KEY,
-  KICK_MESSAGE_ENABLED_KEY,
   KICK_ALERT_SETTINGS_KEY,
-  isToggleDisabled,
 } from '@/types/kick-messages';
-import type { KickMessageTemplates, KickEventToggleKey } from '@/types/kick-messages';
+import type { KickMessageTemplates } from '@/types/kick-messages';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -44,34 +41,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  const [storedTemplates, storedEnabled, storedAlertSettings] = await Promise.all([
+  const [storedTemplates, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
-    kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
     kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
-  const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabled ?? {}) };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
   const eventTypeNorm = (eventType || '').toLowerCase().trim();
-  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
-  const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
-  const isDisabled = isToggleDisabled(toggleKey, toggleValue);
-
   const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
   if (!isKnownEvent) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  let message = await buildEventMessage(eventTypeNorm, payload, {
+  const message = await buildEventMessage(eventTypeNorm, payload, {
     templates,
     minimumKicks,
     giftSubShowLifetimeSubs,
     getAccessToken: getValidAccessToken,
   });
 
-  if (isDisabled) message = null;
   if (!message || !message.trim()) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
