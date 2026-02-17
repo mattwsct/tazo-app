@@ -46,12 +46,13 @@ export function middleware(request: NextRequest) {
     '/api/kick-oauth/authorize',
     '/api/kick-oauth/callback',
     '/api/webhooks/kick',
+    '/api/kick-webhook',
     '/kick-oauth-complete',
   ];
   
   if (publicRoutes.includes(pathname)) {
-    if (pathname === '/api/webhooks/kick') {
-      console.log('[Kick webhook] Request reached middleware', request.method);
+    if (pathname === '/api/webhooks/kick' || pathname === '/api/kick-webhook') {
+      console.log('[Kick webhook] Request reached middleware', pathname, request.method);
     }
     return NextResponse.next();
   }

@@ -169,8 +169,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  const debugPrefix = process.env.KICK_MESSAGE_DEBUG_PREFIX ?? '';
+  const finalMessage = debugPrefix ? `${debugPrefix}${message}` : message;
+
   try {
-    await sendKickChatMessage(accessToken, message);
+    await sendKickChatMessage(accessToken, finalMessage);
   } catch (err) {
     console.error('[Kick webhook] Chat send failed:', err);
   }

@@ -766,6 +766,19 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
   - Check Vercel logs for `[Kick webhook] Event path`, `[Kick webhook] KV read`, `[Kick webhook] Toggle check`, and `[Kick webhook] Skipping (toggle off)`. If you see `Skipping` but chat still gets a message, another system (e.g. Fossabot, Kick built-in) may be sending it.
   - **Preview vs production**: KV is per-deployment. Toggling on preview does not affect production and vice versa.
 
+**Where are the logs?** Server-side logs (`console.log` in API routes) do **not** appear in the browser. They appear in:
+1. **Vercel Dashboard** → your project → **Logs** tab (filter by "function" or search for `[Kick webhook]`)
+2. **Vercel Dashboard** → Deployments → select a deployment → **Functions** → view logs
+3. **Vercel CLI**: `vercel logs` (or `vercel logs --follow` for real-time)
+4. **In-app**: In Kick Bot tab, expand **Toggle debug**, click **Check KV & decision log**. The **Recent decisions** list shows what happened for each event webhook (skipped_toggle_off, sent, etc.)—this is persisted in KV, not the browser.
+
+**Cloudflare caching:** POST requests (webhooks) are normally **not** cached. If you use Cloudflare as a proxy:
+- Add a **Cache Rule** (or Page Rule) to *bypass cache* for `/api/webhooks/*` and `/api/kick-webhook`. Example: URL `*app.tazo.wtf/api/webhooks/*` → Cache Level: Bypass.
+- If the webhook response is cached, later redemptions might get a cached 200 without your server processing them—you wouldn't send, but stale behavior is possible.
+- Check **Firewall** / **Security** settings: Bot Fight Mode or challenge pages can block Kick's webhook delivery.
+
+**Verify who's sending:** Kick may show a native notification when someone redeems a channel reward. To confirm our app is sending: set `KICK_MESSAGE_DEBUG_PREFIX=[bot] ` (with trailing space) in Vercel env vars, deploy, then redeem. If you see `[bot] Tazo redeemed Gift sub!` in chat, it's from us. If not, it's Kick native or another integration (e.g. Fossabot).
+
 **Webhooks never arriving (no POST /api/webhooks/kick in logs):**
 
 1. **Vercel Deployment Protection** (most likely): If enabled, it blocks unauthenticated requests (including Kick's webhooks).

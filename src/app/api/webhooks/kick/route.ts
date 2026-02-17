@@ -300,10 +300,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  const debugPrefix = process.env.KICK_MESSAGE_DEBUG_PREFIX ?? '';
+  const finalMessage = debugPrefix ? `${debugPrefix}${message}` : message;
+
   try {
-    await sendKickChatMessage(accessToken, message);
+    await sendKickChatMessage(accessToken, finalMessage);
     await pushDecision('sent');
-    console.log('[Kick webhook] Sent:', eventType, '|', toggleKey, '| message:', message.slice(0, 50) + (message.length > 50 ? '...' : ''));
+    console.log('[Kick webhook] Sent:', eventType, '|', toggleKey, '| message:', finalMessage.slice(0, 50) + (finalMessage.length > 50 ? '...' : ''));
   } catch (err) {
     await pushDecision('send_failed');
     console.error('[Kick webhook] Chat send failed:', err);

@@ -18,6 +18,7 @@ import '@/styles/admin.css';
 
 function ToggleDebug() {
   const [data, setData] = useState<{
+    log?: { eventType: string; at: string }[];
     storedEnabledInKv?: Record<string, unknown>;
     debug?: Record<string, unknown>;
     decisionLog?: { at: string; eventType: string; toggleKey: string | null; toggleValue: unknown; isDisabled: boolean; action: string; storedEnabledRaw?: unknown }[];
@@ -30,6 +31,7 @@ function ToggleDebug() {
       const r = await fetch('/api/kick-webhook-log', { credentials: 'include' });
       const d = await r.json();
       setData({
+        log: d.log ?? [],
         storedEnabledInKv: d.storedEnabledInKv ?? null,
         debug: d.debug ?? null,
         decisionLog: d.decisionLog ?? [],
@@ -43,13 +45,26 @@ function ToggleDebug() {
   return (
     <div className="kick-toggle-debug-inner" style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: 8, fontSize: '0.8rem' }}>
       <p style={{ marginBottom: '0.5rem', opacity: 0.9 }}>
-        Toggles only apply to event webhooks (follow, reward, sub, etc.). <code>chat.message.sent</code> is for commands like !ping and ignores toggles.
+        Toggles only apply to event webhooks (follow, reward, sub, etc.). <code>chat.message.sent</code> is for commands like !ping and ignores toggles. <strong>Vercel logs</strong> (Dashboard → Logs) show <code>[Kick webhook]</code> — not the browser.
       </p>
       <button type="button" className="btn btn-secondary btn-small" onClick={fetchDebug} disabled={loading}>
         {loading ? 'Loading...' : 'Check KV & decision log'}
       </button>
       {data && (
         <div style={{ marginTop: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          {data.log && data.log.length > 0 && (
+            <div style={{ marginBottom: '0.5rem' }}>
+              <strong>Recent webhooks received:</strong>
+              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, listStyle: 'disc', fontSize: '0.75rem' }}>
+                {data.log.slice(0, 8).map((e, i) => (
+                  <li key={i}>{e.at} — <code>{e.eventType}</code></li>
+                ))}
+              </ul>
+              {!data.log.some(e => e.eventType?.toLowerCase().includes('reward')) && (
+                <em style={{ fontSize: '0.7rem', opacity: 0.8 }}>No reward events—if you just redeemed, webhook may not be reaching the app (check Vercel/Cloudflare).</em>
+              )}
+            </div>
+          )}
           {data.diagnostic && (
             <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 4 }}>
               <strong>What would happen now?</strong> {data.diagnostic.summary}
