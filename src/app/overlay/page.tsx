@@ -120,7 +120,7 @@ function OverlayPage() {
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [currentAltitude, setCurrentAltitude] = useState<number | null>(null);
-  const [settings, , settingsLoadedRef, refreshSettings] = useOverlaySettings();
+  const [settings, setSettings, settingsLoadedRef, refreshSettings] = useOverlaySettings();
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(1.0); // Fully opaque for better readability
   const [, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
@@ -129,34 +129,53 @@ function OverlayPage() {
   // Todo completion tracking with localStorage persistence
   const visibleTodos = useTodoCompletion(settings.todos);
 
-  // Stable countdown duration for CSS animation (set once per poll, no restart on re-render)
-  const pollCountdownDurationRef = useRef<{ pollId: string; seconds: number } | null>(null);
 
-  // When active poll countdown ends, fetch once to get winner (or hide if no votes)
+  // When active poll countdown ends: show winner immediately from current votes, then sync with server
   const pollCountdownRef = useRef<{ pollId: string } | null>(null);
+  const latestPollRef = useRef<typeof settings.pollState>(null);
+  if (settings.pollState?.status === 'active') latestPollRef.current = settings.pollState;
+
   useEffect(() => {
     const poll = settings.pollState;
     if (poll?.status !== 'active') {
       pollCountdownRef.current = null;
-      pollCountdownDurationRef.current = null;
       return;
     }
     const endsAt = poll.startedAt + poll.durationSeconds * 1000;
     const remainingMs = Math.max(0, endsAt - Date.now());
     if (pollCountdownRef.current?.pollId === poll.id) return; // already scheduled
     pollCountdownRef.current = { pollId: poll.id };
+    const winnerDisplaySeconds = 10;
     const timeout = setTimeout(() => {
       pollCountdownRef.current = null;
-      refreshSettings();
+      const current = latestPollRef.current;
+      const totalVotes = current?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
+      if (current) {
+        if (totalVotes > 0) {
+          setSettings((prev) => ({
+            ...prev,
+            pollState: {
+              ...current,
+              status: 'winner',
+              winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
+            },
+          }));
+        } else {
+          setSettings((prev) => ({ ...prev, pollState: null }));
+        }
+      }
+      refreshSettings().then(() => setTimeout(() => refreshSettings(), 2000));
     }, remainingMs);
     return () => clearTimeout(timeout);
-  }, [settings.pollState?.id, settings.pollState?.status, settings.pollState?.startedAt, settings.pollState?.durationSeconds, refreshSettings]);
+  }, [settings.pollState?.id, settings.pollState?.status, settings.pollState?.startedAt, settings.pollState?.durationSeconds, refreshSettings, setSettings]);
 
-  // Force re-render every second when showing winner so we hide when winnerDisplayUntil passes
+  // Re-render every second when poll active (countdown bar) or winner (hide when winnerDisplayUntil passes)
   const [pollTick, setPollTick] = useState(0);
   useEffect(() => {
     const poll = settings.pollState;
-    if (poll?.status === 'winner' && poll.winnerDisplayUntil != null && Date.now() < poll.winnerDisplayUntil) {
+    const isActive = poll?.status === 'active';
+    const isWinner = poll?.status === 'winner' && poll.winnerDisplayUntil != null && Date.now() < poll.winnerDisplayUntil;
+    if (isActive || isWinner) {
       const id = setInterval(() => setPollTick((n) => n + 1), 1000);
       return () => clearInterval(id);
     }
@@ -1585,16 +1604,12 @@ function OverlayPage() {
               const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
               if (poll.status === 'active' || (showWinner && totalVotes > 0)) {
                 const isActive = poll.status === 'active';
-                let countdownSeconds = 0;
-                if (isActive && poll.durationSeconds > 0) {
-                  const remainingSec = Math.max(0, (poll.startedAt + poll.durationSeconds * 1000 - now) / 1000);
-                  if (pollCountdownDurationRef.current?.pollId !== poll.id) {
-                    pollCountdownDurationRef.current = { pollId: poll.id, seconds: remainingSec };
-                  }
-                  countdownSeconds = pollCountdownDurationRef.current.seconds;
-                }
+                const remainingSec = Math.max(0, (poll.startedAt + poll.durationSeconds * 1000 - now) / 1000);
+                const countdownPct = isActive && poll.durationSeconds > 0
+                  ? (remainingSec / poll.durationSeconds) * 100
+                  : 0;
                 return (
-                  <div className="overlay-box poll-box">
+                  <div className={`overlay-box poll-box ${showWinner ? 'poll-box-winner' : ''}`}>
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
                     <div className="poll-options">
                       {(() => {
@@ -1611,14 +1626,15 @@ function OverlayPage() {
                           const isLeading = winnerLabels.has(opt.label);
                           const isWinner = showWinner && isLeading;
                           return (
-                            <div key={opt.label} className={`poll-option ${isWinner ? 'poll-option-winner' : ''}`}>
+                            <div
+                              key={opt.label}
+                              className={`poll-option ${isWinner ? 'poll-option-winner' : ''} ${showWinner && !isWinner ? 'poll-option-loser' : ''}`}
+                            >
                               <div className="poll-option-bar">
                                 <div className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`} style={{ width: `${pct}%` }} />
                                 <div className="poll-option-text">
                                   <span className="poll-option-label">{displayLabel}</span>
-                                  {showWinner && (
-                                    <span className="poll-option-votes">({opt.votes})</span>
-                                  )}
+                                  {showWinner && <span className="poll-option-votes">({opt.votes})</span>}
                                 </div>
                               </div>
                             </div>
@@ -1626,12 +1642,9 @@ function OverlayPage() {
                         });
                       })()}
                     </div>
-                    {isActive && countdownSeconds > 0 && (
+                    {isActive && countdownPct > 0 && (
                       <div className="poll-countdown-track">
-                        <div
-                          className="poll-countdown-fill"
-                          style={{ animation: `poll-countdown-shrink ${countdownSeconds}s linear forwards` }}
-                        />
+                        <div className="poll-countdown-fill" style={{ width: `${countdownPct}%` }} />
                       </div>
                     )}
                   </div>

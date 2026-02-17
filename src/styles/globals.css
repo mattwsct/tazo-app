@@ -221,6 +221,11 @@ body.overlay-page {
   overflow: visible;
 }
 
+.poll-box-winner {
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.25);
+}
+
 .poll-countdown-track {
   margin-top: 6px;
   height: 3px;
@@ -231,14 +236,9 @@ body.overlay-page {
 
 .poll-countdown-fill {
   height: 100%;
-  width: 100%;
   background: linear-gradient(90deg, rgba(251, 191, 36, 0.9), rgba(245, 158, 11, 0.7));
   border-radius: 999px;
-}
-
-@keyframes poll-countdown-shrink {
-  from { width: 100%; }
-  to { width: 0%; }
+  transition: width 0.5s linear;
 }
 
 .poll-question {
@@ -261,6 +261,19 @@ body.overlay-page {
 
 .poll-option {
   display: flex;
+}
+
+.poll-option-winner .poll-option-bar {
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+}
+
+.poll-option-loser {
+  opacity: 0.4;
+}
+
+.poll-option-loser .poll-option-bar,
+.poll-option-loser .poll-option-fill {
+  animation: none;
 }
 
 .poll-option-bar {
