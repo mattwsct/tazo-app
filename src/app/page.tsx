@@ -86,7 +86,7 @@ export default function AdminPage() {
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
   const [kickPollEnabled, setKickPollEnabled] = useState(false);
-  const [kickPollDuration, setKickPollDuration] = useState(30);
+  const [kickPollDuration, setKickPollDuration] = useState(60);
   const [kickPollEveryoneCanStart, setKickPollEveryoneCanStart] = useState(false);
   const [kickPollModsCanStart, setKickPollModsCanStart] = useState(true);
   const [kickPollVipsCanStart, setKickPollVipsCanStart] = useState(false);
@@ -1527,7 +1527,7 @@ export default function AdminPage() {
                             type="number"
                             className="text-input number-input kick-group-options-input"
                             value={kickPollDuration}
-                            onChange={(e) => setKickPollDuration(Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 30)))}
+                            onChange={(e) => setKickPollDuration(Math.max(5, Math.min(300, parseInt(e.target.value, 10) || 60)))}
                             min={5}
                             max={300}
                             style={{ width: 72 }}
