@@ -93,7 +93,6 @@ export default function AdminPage() {
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
-  const [kickPollSendReminder, setKickPollSendReminder] = useState(true);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -243,7 +242,6 @@ export default function AdminPage() {
         if (d?.ogsCanStart !== undefined) setKickPollOgsCanStart(d.ogsCanStart);
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
-        if (d?.sendPollReminder !== undefined) setKickPollSendReminder(d.sendPollReminder);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -1676,27 +1674,6 @@ export default function AdminPage() {
                               setTimeout(() => setToast(null), 2000);
                             }}
                           />
-                        </label>
-                        <label className="checkbox-label-row">
-                          <input
-                            type="checkbox"
-                            checked={kickPollSendReminder}
-                            onChange={async (e) => {
-                              const checked = e.target.checked;
-                              setKickPollSendReminder(checked);
-                              try {
-                                await authenticatedFetch('/api/kick-poll-settings', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ sendPollReminder: checked }),
-                                });
-                                setToast({ type: 'saved', message: 'Saved!' });
-                              } catch { setKickPollSendReminder(!checked); }
-                              setTimeout(() => setToast(null), 2000);
-                            }}
-                            className="checkbox-input"
-                          />
-                          <span>Send poll reminder at halfway (keeps poll visible in chat)</span>
                         </label>
                       </>
                     )}

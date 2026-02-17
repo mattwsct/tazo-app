@@ -26,8 +26,6 @@ export interface PollState {
   topVoter?: { username: string; count: number };
   /** Our poll-start message ID (for threading winner reply) */
   startMessageId?: string;
-  /** Whether we sent the halfway reminder */
-  reminderSent?: boolean;
 }
 
 export interface QueuedPoll {
@@ -46,8 +44,6 @@ export interface PollSettings {
   subsCanStart: boolean;
   maxQueuedPolls: number;
   winnerDisplaySeconds: number;
-  /** Send reminder at halfway through poll (keeps poll visible in chat) */
-  sendPollReminder: boolean;
 }
 
 export const DEFAULT_POLL_SETTINGS: PollSettings = {
@@ -60,7 +56,6 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   subsCanStart: false,
   maxQueuedPolls: 5,
   winnerDisplaySeconds: 10,
-  sendPollReminder: true,
 };
 
 export const POLL_STATE_KEY = 'overlay_poll_state';

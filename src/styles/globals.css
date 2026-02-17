@@ -216,6 +216,7 @@ body.overlay-page {
 /* === POLL STYLES === */
 .poll-box {
   font-size: var(--font-size-sm);
+  min-width: 180px;
   max-width: 33.333vw;
   overflow: visible;
 }
@@ -224,7 +225,7 @@ body.overlay-page {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   padding-top: 2px;
   line-height: 1.2;
   white-space: normal;
@@ -235,7 +236,7 @@ body.overlay-page {
 .poll-options {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .poll-option {
@@ -245,20 +246,53 @@ body.overlay-page {
 .poll-option-bar {
   position: relative;
   width: 100%;
-  min-height: 24px;
-  background: rgba(255, 255, 255, 0.15);
+  min-width: 0; /* Allow flex shrink; parent min-width enforces size */
+  min-height: 26px;
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   overflow: hidden;
 }
 
 .poll-option-fill {
   position: absolute;
-  left: 0;
+  right: 0;
   top: 0;
   bottom: 0;
-  background: rgba(34, 197, 94, 0.7);
+  background: linear-gradient(
+    90deg,
+    rgba(99, 102, 241, 0.5) 0%,
+    rgba(129, 140, 248, 0.7) 50%,
+    rgba(96, 165, 250, 0.6) 100%
+  );
+  background-size: 200% 100%;
+  background-position: 100% 0;
   border-radius: 999px;
   transition: width 0.2s ease-out;
+  animation: poll-fill-shimmer 3s ease-in-out infinite;
+}
+
+.poll-option-fill-winner {
+  background: linear-gradient(
+    90deg,
+    rgba(245, 158, 11, 0.9) 0%,
+    rgba(251, 191, 36, 1) 25%,
+    rgba(34, 197, 94, 0.95) 75%,
+    rgba(16, 185, 129, 0.9) 100%
+  );
+  background-size: 300% 100%;
+  background-position: 0 0;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.5), 0 0 24px rgba(34, 197, 94, 0.3);
+  animation: poll-fill-winner-shimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes poll-fill-shimmer {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0 0; }
+}
+
+@keyframes poll-fill-winner-shimmer {
+  0%, 100% { background-position: 0 0; }
+  50% { background-position: 100% 0; }
 }
 
 .poll-option-text {
@@ -283,10 +317,16 @@ body.overlay-page {
   color: rgba(255, 255, 255, 0.95);
 }
 
-.poll-winner {
+.poll-winner,
+.poll-no-winner {
   font-weight: 700;
   word-break: break-word;
   white-space: normal;
+}
+
+.poll-no-winner {
+  margin-bottom: 6px;
+  opacity: 0.9;
 }
 
 /* === TIME DISPLAY STYLES === */

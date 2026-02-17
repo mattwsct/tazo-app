@@ -464,43 +464,11 @@ export async function handleChatPoll(
   const now = Date.now();
   const elapsed = (now - currentState.startedAt) / 1000;
 
-  // Optional reminder at halfway (pseudo-pin when Kick has no pin API). Skip if already past duration.
-  const remaining = Math.max(0, Math.ceil(currentState.durationSeconds - elapsed));
-  if (
-    remaining > 0 &&
-    settings.sendPollReminder &&
-    !currentState.reminderSent &&
-    elapsed >= currentState.durationSeconds / 2
-  ) {
-    currentState.reminderSent = true;
-    await setPollState(currentState);
-    const labels = currentState.options.map((o) => `'${o.label.toLowerCase()}'`);
-    const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
-    const accessToken = await getValidAccessToken();
-    if (accessToken) {
-      try {
-        await sendKickChatMessage(
-          accessToken,
-          `Poll: ${currentState.question} Type ${optionStr} to vote. (${remaining}s left)`,
-          currentState.startMessageId ? { replyToMessageId: currentState.startMessageId } : undefined
-        );
-      } catch { /* ignore */ }
-    }
-  }
-
   if (elapsed >= currentState.durationSeconds) {
     if (process.env.NODE_ENV === 'development') {
       console.log('[poll] webhook: ending poll (vote/msg triggered)', { elapsed, duration: currentState.durationSeconds });
     }
     const { winnerMessage, topVoter } = computePollResult(currentState);
-    const winnerState: PollState = {
-      ...currentState,
-      status: 'winner',
-      winnerMessage,
-      winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
-      topVoter,
-    };
-    await setPollState(winnerState);
     const accessToken = await getValidAccessToken();
     if (accessToken) {
       try {
@@ -511,6 +479,35 @@ export async function handleChatPoll(
         );
       } catch { /* ignore */ }
     }
+    const queued = await popPollQueue();
+    if (queued) {
+      const newState: PollState = {
+        id: `poll_${Date.now()}`,
+        question: queued.question,
+        options: queued.options,
+        startedAt: Date.now(),
+        durationSeconds: queued.durationSeconds,
+        status: 'active',
+      };
+      await setPollState(newState);
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            buildPollStartMessage(queued.question, queued.options, queued.durationSeconds)
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+    const winnerState: PollState = {
+      ...currentState,
+      status: 'winner',
+      winnerMessage,
+      winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
+      topVoter,
+    };
+    await setPollState(winnerState);
     return { handled: true };
   }
 

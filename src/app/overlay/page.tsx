@@ -61,7 +61,6 @@ import {
 } from '@/utils/staleness-utils';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
-import { getOverlayWinnerText } from '@/lib/poll-logic';
 
 // Extract constants for cleaner code
 const {
@@ -1558,35 +1557,41 @@ function OverlayPage() {
             {settings.pollState && (() => {
               const poll = settings.pollState;
               const now = Date.now();
+              const totalVotes = poll.options.reduce((s, o) => s + o.votes, 0);
               const isWinner = poll.status === 'winner';
               const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
-              if (poll.status === 'active' || showWinner) {
+              if (poll.status === 'active' || (showWinner && totalVotes > 0)) {
                 return (
                   <div className="overlay-box poll-box">
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
-                    {showWinner ? (
-                      <div className="poll-winner">{filterTextForDisplay(getOverlayWinnerText(poll))}</div>
-                    ) : (
-                      <div className="poll-options">
-                        {(() => {
-                          const totalVotes = poll.options.reduce((s, o) => s + o.votes, 0);
-                          return poll.options.map((opt, i) => {
-                            const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
-                            const displayLabel = filterOptionForDisplay(opt.label);
-                            return (
-                              <div key={i} className="poll-option">
-                                <div className="poll-option-bar">
-                                  <div className="poll-option-fill" style={{ width: `${pct}%` }} />
-                                  <div className="poll-option-text">
-                                    <span className="poll-option-label">{displayLabel}</span>
-                                  </div>
+                    <div className="poll-options">
+                      {(() => {
+                        const maxVotes = Math.max(0, ...poll.options.map((o) => o.votes));
+                        const winnerLabels = new Set(
+                          poll.options
+                            .filter((o) => o.votes === maxVotes && maxVotes > 0)
+                            .map((o) => o.label)
+                        );
+                        const sorted = [...poll.options].sort((a, b) => b.votes - a.votes);
+                        return sorted.map((opt) => {
+                          const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+                          const displayLabel = filterOptionForDisplay(opt.label);
+                          const isLeading = winnerLabels.has(opt.label);
+                          const isWinner = showWinner && isLeading;
+                          return (
+                            <div key={opt.label} className={`poll-option ${isWinner ? 'poll-option-winner' : ''}`}>
+                              <div className="poll-option-bar">
+                                <div className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`} style={{ width: `${pct}%` }} />
+                                <div className="poll-option-text">
+                                  <span className="poll-option-label">{displayLabel}</span>
+                                  <span className="poll-option-votes">{opt.votes}</span>
                                 </div>
                               </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    )}
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 );
               }

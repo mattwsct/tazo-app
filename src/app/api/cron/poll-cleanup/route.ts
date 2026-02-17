@@ -41,15 +41,7 @@ export async function GET(request: NextRequest) {
     }
     if (elapsed >= state.durationSeconds) {
       const settings = await getPollSettings();
-      const { winnerMessage } = computePollResult(state);
-      const winnerState: PollState = {
-        ...state,
-        status: 'winner',
-        winnerMessage,
-        winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
-        topVoter: computePollResult(state).topVoter,
-      };
-      await setPollState(winnerState);
+      const { winnerMessage, topVoter } = computePollResult(state);
       const token = await getValidAccessToken();
       if (token) {
         try {
@@ -60,6 +52,35 @@ export async function GET(request: NextRequest) {
           );
         } catch { /* ignore */ }
       }
+      const queued = await popPollQueue();
+      if (queued) {
+        const newState: PollState = {
+          id: `poll_${Date.now()}`,
+          question: queued.question,
+          options: queued.options,
+          startedAt: Date.now(),
+          durationSeconds: queued.durationSeconds,
+          status: 'active',
+        };
+        await setPollState(newState);
+        if (token) {
+          try {
+            await sendKickChatMessage(token, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
+          } catch { /* ignore */ }
+        }
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[poll-cleanup] action: ended_active_started_queued', queued.question?.slice(0, 40));
+        }
+        return NextResponse.json({ ok: true, action: 'ended_active_started_queued' });
+      }
+      const winnerState: PollState = {
+        ...state,
+        status: 'winner',
+        winnerMessage,
+        winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
+        topVoter,
+      };
+      await setPollState(winnerState);
       if (process.env.NODE_ENV === 'development') {
         console.log('[poll-cleanup] action: ended_active, elapsed', elapsed, 's');
       }
