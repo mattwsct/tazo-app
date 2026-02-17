@@ -60,12 +60,13 @@ async function getValidAccessToken(): Promise<string | null> {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const headers = Object.fromEntries(request.headers.entries());
+  const eventType = headers['kick-event-type'] ?? headers['Kick-Event-Type'] ?? '';
+  console.log('[Kick webhook /api/kick-webhook] Received', eventType || '(no event type)');
 
   if (!verifyKickWebhookSignature(rawBody, headers)) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
-  const eventType = headers['kick-event-type'] ?? headers['Kick-Event-Type'] ?? '';
   let payload: Record<string, unknown> = {};
   try {
     payload = rawBody ? JSON.parse(rawBody) : {};
@@ -86,19 +87,24 @@ export async function POST(request: NextRequest) {
     kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
-  const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...storedEnabled };
+  const enabled = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabled ?? {}) };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
   const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
-  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventType];
+  const eventTypeNorm = (eventType || '').toLowerCase().trim();
+  const toggleKey = EVENT_TYPE_TO_TOGGLE[eventTypeNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
   const isDisabled = toggleKey && (toggleValue === false || String(toggleValue) === 'false');
+
+  console.log('[Kick webhook] Toggle check', { eventType, eventTypeNorm, toggleKey, toggleValue, isDisabled, storedEnabled: JSON.stringify(storedEnabled) });
+
   if (isDisabled) {
+    console.log('[Kick webhook] Skipping (toggle off)', eventType, toggleKey);
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
   let message: string | null = null;
-  switch (eventType) {
+  switch (eventTypeNorm) {
     case 'channel.followed':
       message = getFollowResponse(payload, templates);
       break;

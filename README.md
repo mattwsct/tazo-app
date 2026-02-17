@@ -760,7 +760,11 @@ Uses the same data as the overlay (RTIRL GPS → LocationIQ → OpenWeatherMap) 
 
 - **Webhooks stop working**: Kick unsubscribes after ~24h of failed deliveries. Use **Re-subscribe** in the admin panel.
 - **Not responding**: Ensure you completed OAuth (Connect Kick) and tokens are stored. Check Vercel logs for errors.
-- **Event toggles**: Each event (Follow, New sub, Resub, Channel reward, etc.) can be toggled off. Flow: (1) You toggle off → POST /api/kick-messages saves to KV. (2) Kick sends webhook → POST /api/webhooks/kick loads from KV, checks enabled[toggleKey], skips if false. (3) If messages still appear, use **Toggle debug** (under Connection) and click "Check KV & last webhook" to see what's stored and what the last webhook read. Check Vercel logs for `[Kick webhook] Skipping (toggle off)` when events are disabled.
+- **Event toggles**: Each event (Follow, New sub, Resub, Channel reward, etc.) can be toggled off. Flow: (1) You toggle off → POST /api/kick-messages saves to KV. (2) Kick sends webhook → POST /api/webhooks/kick loads from KV, checks enabled[toggleKey], skips if false. (3) If messages still appear:
+  - Use **Toggle debug** (Kick Bot tab, under Connection). Click "Check KV & decision log" and check **What would happen now?** — it shows whether the app would SKIP or SEND for `channel.reward.redemption.updated` with current KV state.
+  - Verify **which webhook URL** Kick uses: `https://app.tazo.wtf/api/webhooks/kick` (main) or `/api/kick-webhook`. Both routes now use the same toggle logic and logging.
+  - Check Vercel logs for `[Kick webhook] Event path`, `[Kick webhook] KV read`, `[Kick webhook] Toggle check`, and `[Kick webhook] Skipping (toggle off)`. If you see `Skipping` but chat still gets a message, another system (e.g. Fossabot, Kick built-in) may be sending it.
+  - **Preview vs production**: KV is per-deployment. Toggling on preview does not affect production and vice versa.
 
 **Webhooks never arriving (no POST /api/webhooks/kick in logs):**
 

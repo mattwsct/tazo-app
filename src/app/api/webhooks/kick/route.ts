@@ -162,11 +162,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  console.log('[Kick webhook] Event path', eventType);
+
   const [storedTemplates, storedEnabled, storedAlertSettings] = await Promise.all([
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
     kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
     kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
   ]);
+
+  console.log('[Kick webhook] KV read', { storedEnabled: JSON.stringify(storedEnabled), key: KICK_MESSAGE_ENABLED_KEY });
 
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
   const enabled: Record<KickEventToggleKey, boolean> = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabled ?? {}) };
@@ -179,6 +183,15 @@ export async function POST(request: NextRequest) {
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
   const isDisabled = toggleKey && (toggleValue === false || String(toggleValue) === 'false');
 
+  console.log('[Kick webhook] Toggle check', {
+    eventType,
+    eventTypeNorm,
+    toggleKey,
+    toggleValue,
+    isDisabled,
+    channelRewardFromEnabled: enabled.channelReward,
+  });
+
   const pushDecision = async (action: string) => {
     try {
       await kv.lpush(KICK_WEBHOOK_DECISION_LOG_KEY, {
@@ -188,6 +201,7 @@ export async function POST(request: NextRequest) {
         toggleValue: toggleValue ?? null,
         isDisabled,
         action,
+        storedEnabledRaw: storedEnabled ?? null,
       });
       await kv.ltrim(KICK_WEBHOOK_DECISION_LOG_KEY, 0, WEBHOOK_DECISION_LOG_MAX - 1);
     } catch { /* ignore */ }

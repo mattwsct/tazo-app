@@ -20,7 +20,8 @@ function ToggleDebug() {
   const [data, setData] = useState<{
     storedEnabledInKv?: Record<string, unknown>;
     debug?: Record<string, unknown>;
-    decisionLog?: { at: string; eventType: string; toggleKey: string | null; toggleValue: unknown; isDisabled: boolean; action: string }[];
+    decisionLog?: { at: string; eventType: string; toggleKey: string | null; toggleValue: unknown; isDisabled: boolean; action: string; storedEnabledRaw?: unknown }[];
+    diagnostic?: { summary: string; toggleKey: string; toggleValue: unknown; storedEnabledRaw: unknown };
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const fetchDebug = useCallback(async () => {
@@ -32,6 +33,7 @@ function ToggleDebug() {
         storedEnabledInKv: d.storedEnabledInKv ?? null,
         debug: d.debug ?? null,
         decisionLog: d.decisionLog ?? [],
+        diagnostic: d.diagnostic ?? null,
       });
     } catch {
       setData(null);
@@ -48,6 +50,14 @@ function ToggleDebug() {
       </button>
       {data && (
         <div style={{ marginTop: '0.75rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          {data.diagnostic && (
+            <div style={{ marginBottom: '0.75rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 4 }}>
+              <strong>What would happen now?</strong> {data.diagnostic.summary}
+              <div style={{ marginTop: '0.25rem', fontSize: '0.75rem', opacity: 0.9 }}>
+                (channelReward toggle: {String(data.diagnostic.toggleValue)}, raw KV: {JSON.stringify(data.diagnostic.storedEnabledRaw)})
+              </div>
+            </div>
+          )}
           <div><strong>Stored in KV:</strong> {JSON.stringify(data.storedEnabledInKv, null, 2)}</div>
           {data.debug && (
             <div style={{ marginTop: '0.5rem' }}>
@@ -61,6 +71,7 @@ function ToggleDebug() {
                 {data.decisionLog.map((entry, i) => (
                   <li key={i} style={{ marginBottom: '0.25rem' }}>
                     {entry.at} — {entry.eventType} → {entry.toggleKey ?? 'n/a'} (value={String(entry.toggleValue)}) → <strong>{entry.action}</strong>
+                    {entry.storedEnabledRaw != null && <span style={{ opacity: 0.8 }}> [KV: {JSON.stringify(entry.storedEnabledRaw)}]</span>}
                   </li>
                 ))}
               </ul>
