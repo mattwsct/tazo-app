@@ -369,6 +369,17 @@ npm run test     # Run tests (Vitest)
 npm run test:watch  # Run tests in watch mode
 ```
 
+## ⚡ Build Performance
+
+**Local builds:** `turbopackFileSystemCacheForBuild` caches compiler artifacts (compile ~1500ms → ~170ms when cached).
+
+**Vercel builds (targeting ~57s → ~30–40s):**
+
+- **`npm ci`** — Uses `npm ci` for install (faster, deterministic). Ensure `package-lock.json` is committed.
+- **Build cache** — Vercel caches `.next/cache` and `node_modules` between deployments; cache hits are much faster.
+- **Heavy file** — `src/utils/travel-data.ts` (~5.4k lines) is parsed by TypeScript on every build. Moving the data to a JSON file and importing it would reduce type-check time (optional refactor).
+- **Clean locally** — `npm run clean` then `npm run build` resets cache; first build after clean is slower
+
 ## 🐛 Troubleshooting
 
 **GPS not updating?**

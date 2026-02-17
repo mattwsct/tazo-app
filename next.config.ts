@@ -26,8 +26,10 @@ const nextConfig: NextConfig = {
     // Optimize package imports to reduce bundle size
     optimizePackageImports: ['@vercel/kv'],
     // Note: maplibre-gl excluded - already dynamically imported
+    // Cache compiler artifacts between builds (speeds up repeated builds significantly)
+    turbopackFileSystemCacheForBuild: true,
   },
-  
+
   // Compression
   compress: true,
   
