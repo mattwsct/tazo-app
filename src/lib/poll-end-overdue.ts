@@ -2,7 +2,7 @@
  * Shared logic to end an overdue poll. Used by cron and poll-end-trigger (overlay).
  */
 
-import { getPollState, setPollState, popPollQueue, getPollSettings } from '@/lib/poll-store';
+import { getPollState, setPollState, popPollQueue, getPollSettings, tryAcquirePollEndLock } from '@/lib/poll-store';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { computePollResult } from '@/lib/poll-logic';
@@ -19,6 +19,8 @@ export async function endOverduePollIfAny(): Promise<boolean> {
   const now = Date.now();
   const elapsed = (now - state.startedAt) / 1000;
   if (elapsed < state.durationSeconds) return false;
+
+  if (!(await tryAcquirePollEndLock())) return false; // Another process is ending this poll
 
   const settings = await getPollSettings();
   const { winnerMessage, topVoter } = computePollResult(state);
@@ -39,7 +41,7 @@ export async function endOverduePollIfAny(): Promise<boolean> {
     const newState: PollState = {
       id: `poll_${Date.now()}`,
       question: queued.question,
-      options: queued.options,
+      options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
       startedAt: Date.now(),
       durationSeconds: queued.durationSeconds,
       status: 'active',

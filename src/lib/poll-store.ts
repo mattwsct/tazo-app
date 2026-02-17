@@ -6,6 +6,18 @@ import { kv } from '@vercel/kv';
 import type { PollState, QueuedPoll, PollSettings } from '@/types/poll';
 import { POLL_STATE_KEY, POLL_MODIFIED_KEY, POLL_QUEUE_KEY, POLL_SETTINGS_KEY, DEFAULT_POLL_SETTINGS } from '@/types/poll';
 
+const POLL_END_LOCK_KEY = 'poll_end_lock';
+
+/** Try to acquire lock for ending a poll. Only one process can end+pop+start. Returns true if acquired. */
+export async function tryAcquirePollEndLock(): Promise<boolean> {
+  try {
+    const result = await kv.set(POLL_END_LOCK_KEY, Date.now().toString(), { nx: true, ex: 10 });
+    return result !== null && result !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 export async function getPollState(): Promise<PollState | null> {
   return kv.get<PollState>(POLL_STATE_KEY);
 }

@@ -12,6 +12,7 @@ import {
   setPollQueue,
   popPollQueue,
   getPollSettings,
+  tryAcquirePollEndLock,
 } from '@/lib/poll-store';
 import type { PollState, PollOption, QueuedPoll } from '@/types/poll';
 
@@ -203,7 +204,7 @@ export async function handleChatPoll(
       const state: PollState = {
         id: `poll_${Date.now()}`,
         question: queued.question,
-        options: queued.options,
+        options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
         startedAt: Date.now(),
         durationSeconds: queued.durationSeconds,
         status: 'active',
@@ -250,6 +251,7 @@ export async function handleChatPoll(
     currentStateBefore.winnerDisplayUntil != null &&
     Date.now() >= currentStateBefore.winnerDisplayUntil
   ) {
+    if (!(await tryAcquirePollEndLock())) return { handled: true };
     if (process.env.NODE_ENV === 'development') {
       console.log('[poll] webhook: winner display passed, popping queue');
     }
@@ -262,7 +264,7 @@ export async function handleChatPoll(
       const state: PollState = {
         id: `poll_${Date.now()}`,
         question: queued.question,
-        options: queued.options,
+        options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
         startedAt: Date.now(),
         durationSeconds: queued.durationSeconds,
         status: 'active',
@@ -465,6 +467,8 @@ export async function handleChatPoll(
   const elapsed = (now - currentState.startedAt) / 1000;
 
   if (elapsed >= currentState.durationSeconds) {
+    if (!(await tryAcquirePollEndLock())) return { handled: true }; // Another process is ending this poll
+
     if (process.env.NODE_ENV === 'development') {
       console.log('[poll] webhook: ending poll (vote/msg triggered)', { elapsed, duration: currentState.durationSeconds });
     }
@@ -484,7 +488,7 @@ export async function handleChatPoll(
       const newState: PollState = {
         id: `poll_${Date.now()}`,
         question: queued.question,
-        options: queued.options,
+        options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
         startedAt: Date.now(),
         durationSeconds: queued.durationSeconds,
         status: 'active',
@@ -520,6 +524,9 @@ export async function handleChatPoll(
   const vote = parseVote(contentTrimmed, currentState.options, senderUsername);
   if (vote) {
     applyVote(currentState, vote.optionIndex, senderUsername);
+    // Guard: poll may have ended and been replaced; don't overwrite new poll with stale voted state
+    const stateNow = await getPollState();
+    if (stateNow?.id !== currentState.id) return { handled: true };
     await setPollState(currentState);
     return { handled: true };
   }

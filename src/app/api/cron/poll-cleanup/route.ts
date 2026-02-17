@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPollState, setPollState, popPollQueue, getPollQueue } from '@/lib/poll-store';
+import { getPollState, setPollState, popPollQueue, getPollQueue, tryAcquirePollEndLock } from '@/lib/poll-store';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { endOverduePollIfAny } from '@/lib/poll-end-overdue';
@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, action: 'none' });
   }
 
+  if (!(await tryAcquirePollEndLock())) {
+    return NextResponse.json({ ok: true, action: 'none' });
+  }
   if (process.env.NODE_ENV === 'development') {
     console.log('[poll-cleanup] action: clearing winner, starting next from queue');
   }
@@ -58,7 +61,7 @@ export async function GET(request: NextRequest) {
     const newState: PollState = {
       id: `poll_${Date.now()}`,
       question: queued.question,
-      options: queued.options,
+      options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
       startedAt: Date.now(),
       durationSeconds: queued.durationSeconds,
       status: 'active',
