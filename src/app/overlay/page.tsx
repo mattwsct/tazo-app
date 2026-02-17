@@ -1624,7 +1624,7 @@ function OverlayPage() {
                         );
                         const optionsToShow = showWinner
                           ? [...poll.options].sort((a, b) => b.votes - a.votes).filter((o) => winnerLabels.has(o.label))
-                          : poll.options;
+                          : [...poll.options].sort((a, b) => b.votes - a.votes);
                         return optionsToShow.map((opt) => {
                           const pct = showWinner
                             ? 100
