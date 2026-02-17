@@ -1693,8 +1693,12 @@ export default function AdminPage() {
                   </div>
                   {kickDebugLog && (
                     <div className="kick-debug-logs-content">
-                      {Array.isArray((kickDebugLog as Record<string, unknown>).recentEvents) && (kickDebugLog as Record<string, unknown>).recentEvents.length === 0 &&
-                       Array.isArray((kickDebugLog as Record<string, unknown>).rewardPayloadLog) && (kickDebugLog as Record<string, unknown>).rewardPayloadLog.length === 0 && (
+                      {(() => {
+                        const d = kickDebugLog as Record<string, unknown>;
+                        const re = d.recentEvents;
+                        const rp = d.rewardPayloadLog;
+                        return Array.isArray(re) && re.length === 0 && Array.isArray(rp) && rp.length === 0;
+                      })() && (
                         <p className="kick-debug-logs-empty" style={{ marginBottom: 12 }}>
                           recentEvents and rewardPayloadLog are empty — ensure the webhook runs on the same deployment you’re viewing. Check Vercel project settings (KV env vars) and that the webhook URL targets production.
                         </p>
