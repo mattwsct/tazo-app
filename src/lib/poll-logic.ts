@@ -124,11 +124,10 @@ export function computePollResult(state: PollState): { winnerMessage: string; to
   }
 
   const winnerLabel = winners.length === 1 ? winners[0] : winners.join(' and ');
-  const countStr = maxVotes === 1 ? '1 vote' : `${maxVotes} votes`;
   const winnerMessage =
     winners.length === 0
       ? `Poll "${state.question}" ended with no votes.`
-      : `Poll "${state.question}" — ${winnerLabel} wins! (${countStr})`;
+      : `Poll "${state.question}" — ${winnerLabel} wins!`;
 
   return { winnerMessage };
 }
