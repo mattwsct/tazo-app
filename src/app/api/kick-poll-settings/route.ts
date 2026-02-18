@@ -44,6 +44,10 @@ export async function POST(request: NextRequest) {
     if (typeof body.winnerDisplaySeconds === 'number' && body.winnerDisplaySeconds >= 1 && body.winnerDisplaySeconds <= 60) {
       updates.winnerDisplaySeconds = body.winnerDisplaySeconds;
     }
+    if (typeof body.autoStartPollsEnabled === 'boolean') updates.autoStartPollsEnabled = body.autoStartPollsEnabled;
+    if (typeof body.chatIdleMinutes === 'number' && body.chatIdleMinutes >= 1 && body.chatIdleMinutes <= 30) {
+      updates.chatIdleMinutes = body.chatIdleMinutes;
+    }
     await setPollSettings(updates);
     const settings = await getPollSettings();
     return NextResponse.json(settings);

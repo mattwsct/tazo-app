@@ -8,6 +8,7 @@ import { getPollState, setPollState, popPollQueue, getPollQueue, tryAcquirePollE
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { endOverduePollIfAny } from '@/lib/poll-end-overdue';
+import { tryAutoStartPoll } from '@/lib/poll-auto-start';
 import type { PollState } from '@/types/poll';
 
 export const dynamic = 'force-dynamic';
@@ -37,14 +38,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, action: 'ended_active' });
   }
 
+  const stateAfter = await getPollState();
+  if (!stateAfter) {
+    if (await tryAutoStartPoll()) {
+      return NextResponse.json({ ok: true, action: 'started_auto' });
+    }
+    return NextResponse.json({ ok: true, action: 'none' });
+  }
+
   if (
-    !state ||
-    state.status !== 'winner' ||
-    state.winnerDisplayUntil == null ||
-    now < state.winnerDisplayUntil
+    !stateAfter ||
+    stateAfter.status !== 'winner' ||
+    stateAfter.winnerDisplayUntil == null ||
+    now < stateAfter.winnerDisplayUntil
   ) {
-    if (process.env.NODE_ENV === 'development' && state?.status === 'winner') {
-      console.log('[poll-cleanup] action: none (winner display until', new Date(state.winnerDisplayUntil!).toISOString(), ')');
+    if (process.env.NODE_ENV === 'development' && stateAfter?.status === 'winner') {
+      console.log('[poll-cleanup] action: none (winner display until', new Date(stateAfter.winnerDisplayUntil!).toISOString(), ')');
     }
     return NextResponse.json({ ok: true, action: 'none' });
   }
@@ -77,6 +86,9 @@ export async function GET(request: NextRequest) {
       console.log('[poll-cleanup] action: started_queued', queued.question?.slice(0, 40));
     }
     return NextResponse.json({ ok: true, action: 'started_queued' });
+  }
+  if (await tryAutoStartPoll()) {
+    return NextResponse.json({ ok: true, action: 'started_auto' });
   }
   if (process.env.NODE_ENV === 'development') {
     console.log('[poll-cleanup] action: cleared (no queue)');

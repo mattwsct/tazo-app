@@ -44,6 +44,10 @@ export interface PollSettings {
   subsCanStart: boolean;
   maxQueuedPolls: number;
   winnerDisplaySeconds: number;
+  /** Auto-start location-based polls when stream is live and chat idle */
+  autoStartPollsEnabled?: boolean;
+  /** Minutes of chat inactivity before auto-starting a poll (1–30) */
+  chatIdleMinutes?: number;
 }
 
 export const DEFAULT_POLL_SETTINGS: PollSettings = {
@@ -56,9 +60,12 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   subsCanStart: false,
   maxQueuedPolls: 5,
   winnerDisplaySeconds: 10,
+  autoStartPollsEnabled: false,
+  chatIdleMinutes: 5,
 };
 
 export const POLL_STATE_KEY = 'overlay_poll_state';
 export const POLL_MODIFIED_KEY = 'overlay_poll_modified';
 export const POLL_QUEUE_KEY = 'overlay_poll_queue';
 export const POLL_SETTINGS_KEY = 'kick_poll_settings';
+export const KICK_LAST_CHAT_MESSAGE_AT_KEY = 'kick_last_chat_message_at';

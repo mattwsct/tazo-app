@@ -18,6 +18,7 @@ import {
   KICK_MESSAGE_TEMPLATE_ENABLED_KEY,
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
+import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -129,6 +130,9 @@ export async function POST(request: NextRequest) {
   if (eventNorm === 'chat.message.sent') {
     const content = (payload.content as string) || '';
     const sender = (payload.sender as { username?: string })?.username ?? '?';
+    try {
+      await kv.set(KICK_LAST_CHAT_MESSAGE_AT_KEY, Date.now());
+    } catch { /* ignore */ }
     const pollResult = await handleChatPoll(content, sender, payload);
     if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
 

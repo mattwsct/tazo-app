@@ -5,6 +5,7 @@
 import { kv } from '@vercel/kv';
 import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { parsePollCommand, parseVote, canStartPoll, computePollResult, pollContainsBlockedContent } from '@/lib/poll-logic';
+import { buildRandomPoll } from '@/lib/poll-auto-start';
 import {
   getPollState,
   setPollState,
@@ -148,6 +149,7 @@ export async function handleChatPoll(
   const contentTrimmed = content.trim();
   const contentLower = contentTrimmed.toLowerCase();
   const isPollCmd = contentLower.startsWith('!poll ');
+  const isBarePoll = contentLower === '!poll' || /^!poll\s*$/.test(contentLower);
   const isPollStatus = contentLower === '!pollstatus' || contentLower === '!poll status';
   const isEndPoll = contentLower === '!endpoll';
 
@@ -278,6 +280,95 @@ export async function handleChatPoll(
       }
     }
     return { handled: true };
+  }
+
+  // --- !poll with no args: start random location poll (mod/broadcaster only) ---
+  if (isBarePoll) {
+    const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+    const roles = getSenderRoles(payload.sender);
+    const senderLower = senderUsername.toLowerCase();
+    const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
+    const isModOrBroadcaster = roles.isMod || senderLower === broadcasterLower;
+    if (isModOrBroadcaster) {
+      const built = await buildRandomPoll();
+      if (built) {
+        const { question, options } = built;
+        const currentState = await getPollState();
+        const hasActive = currentState && currentState.status === 'active';
+        const hasWinner = currentState && currentState.status === 'winner';
+        const pollOptions = options.map((o) => ({ ...o, voters: {} }));
+        if (!hasActive && !hasWinner) {
+          const state: PollState = {
+            id: `poll_${Date.now()}`,
+            question,
+            options: pollOptions,
+            startedAt: Date.now(),
+            durationSeconds: settings.durationSeconds,
+            status: 'active',
+          };
+          await setPollState(state);
+          const accessToken = await getValidAccessToken();
+          const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
+          if (accessToken) {
+            try {
+              const sent = await sendKickChatMessage(
+                accessToken,
+                buildPollStartMessage(question, pollOptions, settings.durationSeconds),
+                triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
+              );
+              const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
+              if (msgId) {
+                state.startMessageId = String(msgId);
+                await setPollState(state);
+              }
+            } catch { /* ignore */ }
+          }
+          return { handled: true };
+        }
+        const queue = await getPollQueue();
+        const maxQueued = Math.max(1, settings.maxQueuedPolls ?? 5);
+        if (queue.length < maxQueued) {
+          const queuedPoll = { question, options: pollOptions, durationSeconds: settings.durationSeconds };
+          await setPollQueue([...queue, queuedPoll]);
+          const accessToken = await getValidAccessToken();
+          const messageId = (payload.id ?? payload.message_id) as string | undefined;
+          if (accessToken) {
+            try {
+              await sendKickChatMessage(
+                accessToken,
+                `Poll queued (#${queue.length + 1}). Estimated start: after current poll.`,
+                messageId ? { replyToMessageId: messageId } : undefined
+              );
+            } catch { /* ignore */ }
+          }
+          return { handled: true };
+        }
+        const accessToken = await getValidAccessToken();
+        const messageId = (payload.id ?? payload.message_id) as string | undefined;
+        if (accessToken) {
+          try {
+            await sendKickChatMessage(
+              accessToken,
+              `Too many polls queued (max ${maxQueued}). Try again later.`,
+              messageId ? { replyToMessageId: messageId } : undefined
+            );
+          } catch { /* ignore */ }
+        }
+        return { handled: true };
+      }
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            'Could not build a random poll — try again.',
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
   }
 
   // --- !poll command: start or queue ---

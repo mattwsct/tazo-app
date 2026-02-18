@@ -1641,8 +1641,7 @@ function OverlayPage() {
                               <div className="poll-option-bar">
                                 <div className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`} style={{ width: `${pct}%` }} />
                                 <div className="poll-option-text">
-                                  <span className="poll-option-label">{displayLabel}</span>
-                                  {showWinner && <span className="poll-option-votes">({opt.votes})</span>}
+                                  <span className="poll-option-label">{showWinner ? `Winner - ${displayLabel}` : displayLabel}</span>
                                 </div>
                               </div>
                             </div>

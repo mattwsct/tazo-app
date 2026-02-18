@@ -94,13 +94,12 @@ export function canStartPoll(
   return false;
 }
 
-/** Build winner message and top voter. */
+/** Build winner message for chat. */
 export function computePollResult(state: PollState): { winnerMessage: string; topVoter?: { username: string; count: number } } {
   if (state.options.length === 0) return { winnerMessage: '' };
 
   let maxVotes = 0;
   const winners: string[] = [];
-  const voterTotals: Record<string, number> = {};
 
   for (const opt of state.options) {
     if (opt.votes > maxVotes) {
@@ -110,32 +109,16 @@ export function computePollResult(state: PollState): { winnerMessage: string; to
     } else if (opt.votes === maxVotes && maxVotes > 0) {
       winners.push(opt.label);
     }
-    if (opt.voters) {
-      for (const [u, c] of Object.entries(opt.voters)) {
-        voterTotals[u] = (voterTotals[u] ?? 0) + c;
-      }
-    }
   }
 
   const winnerLabel = winners.length === 1 ? winners[0] : winners.join(' and ');
   const countStr = maxVotes === 1 ? '1 vote' : `${maxVotes} votes`;
-  let winnerMessage =
+  const winnerMessage =
     winners.length === 0
       ? `Poll "${state.question}" ended with no votes.`
       : `Poll "${state.question}" — ${winnerLabel} wins! (${countStr})`;
 
-  let topVoter: { username: string; count: number } | undefined;
-  let topCount = 0;
-  for (const [u, c] of Object.entries(voterTotals)) {
-    if (c > topCount) {
-      topCount = c;
-      topVoter = { username: u, count: c };
-    }
-  }
-  if (topVoter && topVoter.count > 1) {
-    winnerMessage += ` Top voter: ${topVoter.username} (${topVoter.count} votes).`;
-  }
-  return { winnerMessage, topVoter: topVoter && topVoter.count > 1 ? topVoter : undefined };
+  return { winnerMessage };
 }
 
 /** Compact overlay winner text (no question repetition, no vote count). */

@@ -93,6 +93,8 @@ export default function AdminPage() {
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
+  const [kickPollAutoStart, setKickPollAutoStart] = useState(false);
+  const [kickPollChatIdleMinutes, setKickPollChatIdleMinutes] = useState(5);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -242,6 +244,8 @@ export default function AdminPage() {
         if (d?.ogsCanStart !== undefined) setKickPollOgsCanStart(d.ogsCanStart);
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
+        if (d?.autoStartPollsEnabled !== undefined) setKickPollAutoStart(d.autoStartPollsEnabled);
+        if (d?.chatIdleMinutes != null) setKickPollChatIdleMinutes(d.chatIdleMinutes);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -1675,6 +1679,52 @@ export default function AdminPage() {
                             }}
                           />
                         </label>
+                        <label className="checkbox-label-row">
+                          <input
+                            type="checkbox"
+                            checked={kickPollAutoStart}
+                            onChange={async (e) => {
+                              const checked = e.target.checked;
+                              setKickPollAutoStart(checked);
+                              try {
+                                await authenticatedFetch('/api/kick-poll-settings', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ autoStartPollsEnabled: checked }),
+                                });
+                                setToast({ type: 'saved', message: 'Saved!' });
+                              } catch { setKickPollAutoStart(!checked); }
+                              setTimeout(() => setToast(null), 2000);
+                            }}
+                            className="checkbox-input"
+                          />
+                          <span>Auto-start polls when stream live + chat idle</span>
+                        </label>
+                        {kickPollAutoStart && (
+                          <label className="kick-group-options-item">
+                            <span>Chat idle (min) before auto-start:</span>
+                            <input
+                              type="number"
+                              className="text-input number-input kick-group-options-input"
+                              value={kickPollChatIdleMinutes}
+                              onChange={(e) => setKickPollChatIdleMinutes(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 5)))}
+                              min={1}
+                              max={30}
+                              style={{ width: 52 }}
+                              onBlur={async () => {
+                                try {
+                                  await authenticatedFetch('/api/kick-poll-settings', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ chatIdleMinutes: kickPollChatIdleMinutes }),
+                                  });
+                                  setToast({ type: 'saved', message: 'Saved!' });
+                                } catch { /* ignore */ }
+                                setTimeout(() => setToast(null), 2000);
+                              }}
+                            />
+                          </label>
+                        )}
                       </>
                     )}
                   </div>
