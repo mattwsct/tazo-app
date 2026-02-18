@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     if (typeof body.chatIdleMinutes === 'number' && body.chatIdleMinutes >= 1 && body.chatIdleMinutes <= 30) {
       updates.chatIdleMinutes = body.chatIdleMinutes;
     }
+    if (typeof body.oneVotePerPerson === 'boolean') updates.oneVotePerPerson = body.oneVotePerPerson;
     await setPollSettings(updates);
     const settings = await getPollSettings();
     return NextResponse.json(settings);

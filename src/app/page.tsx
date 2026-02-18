@@ -95,6 +95,7 @@ export default function AdminPage() {
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
   const [kickPollAutoStart, setKickPollAutoStart] = useState(false);
   const [kickPollChatIdleMinutes, setKickPollChatIdleMinutes] = useState(5);
+  const [kickPollOneVotePerPerson, setKickPollOneVotePerPerson] = useState(false);
   const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
 
   
@@ -246,6 +247,7 @@ export default function AdminPage() {
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
         if (d?.autoStartPollsEnabled !== undefined) setKickPollAutoStart(d.autoStartPollsEnabled);
         if (d?.chatIdleMinutes != null) setKickPollChatIdleMinutes(d.chatIdleMinutes);
+        if (d?.oneVotePerPerson !== undefined) setKickPollOneVotePerPerson(d.oneVotePerPerson);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -1656,6 +1658,30 @@ export default function AdminPage() {
                             <span>Subs</span>
                           </label>
                         </div>
+                        <label className="checkbox-label-row">
+                          <input
+                            type="checkbox"
+                            checked={kickPollOneVotePerPerson}
+                            onChange={async (e) => {
+                              const checked = e.target.checked;
+                              setKickPollOneVotePerPerson(checked);
+                              try {
+                                await authenticatedFetch('/api/kick-poll-settings', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ oneVotePerPerson: checked }),
+                                });
+                                setToast({ type: 'saved', message: 'Saved!' });
+                              } catch {
+                                setKickPollOneVotePerPerson(!checked);
+                                setToast({ type: 'error', message: 'Failed to save' });
+                              }
+                              setTimeout(() => setToast(null), 2000);
+                            }}
+                            className="checkbox-input"
+                          />
+                          <span>One vote per person</span>
+                        </label>
                         <label className="kick-group-options-item">
                           <span>Max queued polls:</span>
                           <input

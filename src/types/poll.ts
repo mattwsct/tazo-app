@@ -48,6 +48,8 @@ export interface PollSettings {
   autoStartPollsEnabled?: boolean;
   /** Minutes of chat inactivity before auto-starting a poll (1–30) */
   chatIdleMinutes?: number;
+  /** One vote per person (else unlimited votes per message) */
+  oneVotePerPerson?: boolean;
 }
 
 export const DEFAULT_POLL_SETTINGS: PollSettings = {
@@ -62,6 +64,7 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   winnerDisplaySeconds: 10,
   autoStartPollsEnabled: false,
   chatIdleMinutes: 5,
+  oneVotePerPerson: false,
 };
 
 export const POLL_STATE_KEY = 'overlay_poll_state';

@@ -124,11 +124,40 @@ export function buildPollStartMessage(question: string, options: { label: string
 }
 
 /** Apply a vote to poll state. Mutates options. */
-function applyVote(state: PollState, optionIndex: number, username: string): void {
+function applyVote(
+  state: PollState,
+  optionIndex: number,
+  username: string,
+  oneVotePerPerson: boolean
+): void {
   const opt = state.options[optionIndex];
   if (!opt) return;
-  opt.votes += 1;
   if (!opt.voters) opt.voters = {};
+
+  if (oneVotePerPerson) {
+    // Find existing vote (if any)
+    let prevOptIndex = -1;
+    for (let i = 0; i < state.options.length; i++) {
+      const count = state.options[i]?.voters?.[username] ?? 0;
+      if (count > 0) {
+        prevOptIndex = i;
+        break;
+      }
+    }
+    if (prevOptIndex >= 0 && prevOptIndex !== optionIndex) {
+      // Move vote from old option to new
+      const prevOpt = state.options[prevOptIndex];
+      if (prevOpt?.voters) {
+        prevOpt.votes -= prevOpt.voters[username] ?? 0;
+        delete prevOpt.voters[username];
+      }
+    } else if (prevOptIndex === optionIndex) {
+      // Already voted for this option; no-op
+      return;
+    }
+  }
+
+  opt.votes += 1;
   opt.voters[username] = (opt.voters[username] ?? 0) + 1;
 }
 
@@ -634,7 +663,7 @@ export async function handleChatPoll(
   // Try to parse as vote
   const vote = parseVote(contentTrimmed, currentState.options, senderUsername);
   if (vote) {
-    applyVote(currentState, vote.optionIndex, senderUsername);
+    applyVote(currentState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? false);
     // Guard: poll may have ended and been replaced; don't overwrite new poll with stale voted state
     const stateNow = await getPollState();
     if (stateNow?.id !== currentState.id) return { handled: true };
