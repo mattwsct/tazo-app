@@ -376,6 +376,21 @@ export async function handleChatPoll(
     const parsed = parsePollCommand(contentTrimmed);
     if (!parsed) return { handled: true };
 
+    if (parsed.options.length > 5) {
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            'Maximum 5 options allowed.',
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+
     if (pollContainsBlockedContent(parsed.question, parsed.options)) {
       if (process.env.NODE_ENV === 'development') {
         console.log('[poll] webhook: rejected (content filter)', { question: parsed.question?.slice(0, 60) });
