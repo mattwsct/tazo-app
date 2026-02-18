@@ -8,6 +8,18 @@ import { containsBlockedContent } from '@/lib/poll-content-filter';
 const YES_ALIASES = new Set(['yes', 'y']);
 const NO_ALIASES = new Set(['no', 'n']);
 
+/** Allowed duration variants: !poll15, !poll30, !poll60, !poll120 */
+export const POLL_DURATION_VARIANTS = [15, 30, 60, 120] as const;
+
+/** Match !poll15, !poll30, !poll60, !poll120 — returns { duration, rest } or null. */
+export function parsePollDurationVariant(content: string): { duration: number; rest: string } | null {
+  const match = content.trim().match(/^!poll(15|30|60|120)(\s|$)/i);
+  if (!match) return null;
+  const duration = parseInt(match[1]!, 10);
+  const rest = content.trim().slice(match[0]!.length).trim();
+  return { duration, rest };
+}
+
 /** Parse !poll <question?> [opts] — question before ?, options after. Comma-separated or space-separated (each word if no commas). No options = Yes/No. */
 export function parsePollCommand(content: string): { question: string; options: PollOption[] } | null {
   const trimmed = content.trim();

@@ -4,7 +4,7 @@
 
 import { kv } from '@vercel/kv';
 import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
-import { parsePollCommand, parseVote, canStartPoll, computePollResult, pollContainsBlockedContent } from '@/lib/poll-logic';
+import { parsePollCommand, parsePollDurationVariant, parseVote, canStartPoll, computePollResult, pollContainsBlockedContent } from '@/lib/poll-logic';
 import { buildRandomPoll } from '@/lib/poll-auto-start';
 import {
   getPollState,
@@ -148,8 +148,9 @@ export async function handleChatPoll(
 
   const contentTrimmed = content.trim();
   const contentLower = contentTrimmed.toLowerCase();
-  const isPollCmd = contentLower.startsWith('!poll ');
-  const isBarePoll = contentLower === '!poll' || /^!poll\s*$/.test(contentLower);
+  const durationVariant = parsePollDurationVariant(contentTrimmed);
+  const isPollCmd = contentLower.startsWith('!poll ') || (durationVariant !== null && durationVariant.rest.length > 0);
+  const isBarePoll = contentLower === '!poll' || /^!poll\s*$/.test(contentLower) || (durationVariant !== null && durationVariant.rest.length === 0);
   const isPollStatus = contentLower === '!pollstatus' || contentLower === '!poll status';
   const isEndPoll = contentLower === '!endpoll';
 
@@ -289,6 +290,7 @@ export async function handleChatPoll(
     const senderLower = senderUsername.toLowerCase();
     const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
     const isModOrBroadcaster = roles.isMod || senderLower === broadcasterLower;
+    const effectiveDuration = durationVariant?.duration ?? settings.durationSeconds;
     if (isModOrBroadcaster) {
       const built = await buildRandomPoll();
       if (built) {
@@ -303,7 +305,7 @@ export async function handleChatPoll(
             question,
             options: pollOptions,
             startedAt: Date.now(),
-            durationSeconds: settings.durationSeconds,
+            durationSeconds: effectiveDuration,
             status: 'active',
           };
           await setPollState(state);
@@ -313,7 +315,7 @@ export async function handleChatPoll(
             try {
               const sent = await sendKickChatMessage(
                 accessToken,
-                buildPollStartMessage(question, pollOptions, settings.durationSeconds),
+                buildPollStartMessage(question, pollOptions, effectiveDuration),
                 triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
               );
               const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
@@ -328,7 +330,7 @@ export async function handleChatPoll(
         const queue = await getPollQueue();
         const maxQueued = Math.max(1, settings.maxQueuedPolls ?? 5);
         if (queue.length < maxQueued) {
-          const queuedPoll = { question, options: pollOptions, durationSeconds: settings.durationSeconds };
+          const queuedPoll = { question, options: pollOptions, durationSeconds: effectiveDuration };
           await setPollQueue([...queue, queuedPoll]);
           const accessToken = await getValidAccessToken();
           const messageId = (payload.id ?? payload.message_id) as string | undefined;
@@ -373,8 +375,11 @@ export async function handleChatPoll(
 
   // --- !poll command: start or queue ---
   if (isPollCmd) {
-    const parsed = parsePollCommand(contentTrimmed);
+    const inputToParse = durationVariant ? `!poll ${durationVariant.rest}` : contentTrimmed;
+    const parsed = parsePollCommand(inputToParse);
     if (!parsed) return { handled: true };
+
+    const effectiveDuration = durationVariant?.duration ?? settings.durationSeconds;
 
     if (parsed.options.length > 5) {
       const accessToken = await getValidAccessToken();
@@ -452,7 +457,7 @@ export async function handleChatPoll(
           question: parsed.question,
           options: parsed.options.map((o) => ({ ...o, votes: 0, voters: {} })),
           startedAt: Date.now(),
-          durationSeconds: settings.durationSeconds,
+          durationSeconds: effectiveDuration,
           status: 'active',
         };
         await setPollState(state);
@@ -462,7 +467,7 @@ export async function handleChatPoll(
           try {
             const sent = await sendKickChatMessage(
               accessToken,
-              buildPollStartMessage(parsed.question, parsed.options, settings.durationSeconds),
+              buildPollStartMessage(parsed.question, parsed.options, effectiveDuration),
               triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
             );
             const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
@@ -495,7 +500,7 @@ export async function handleChatPoll(
       const newPoll: QueuedPoll = {
         question: parsed.question,
         options: parsed.options.map((o) => ({ ...o, votes: 0, voters: {} })),
-        durationSeconds: settings.durationSeconds,
+        durationSeconds: effectiveDuration,
       };
       const newQueue = [...queue, newPoll];
       await setPollQueue(newQueue);
@@ -506,7 +511,7 @@ export async function handleChatPoll(
         currentState,
         queue,
         settings.winnerDisplaySeconds,
-        settings.durationSeconds
+        effectiveDuration
       );
       if (process.env.NODE_ENV === 'development') {
         console.log('[poll] webhook: queued poll', {
@@ -541,7 +546,7 @@ export async function handleChatPoll(
       question: parsed.question,
       options: parsed.options.map((o) => ({ ...o, votes: 0, voters: {} })),
       startedAt: Date.now(),
-      durationSeconds: settings.durationSeconds,
+      durationSeconds: effectiveDuration,
       status: 'active',
     };
     await setPollState(state);
@@ -550,7 +555,7 @@ export async function handleChatPoll(
       try {
         const sent = await sendKickChatMessage(
           accessToken,
-          buildPollStartMessage(parsed.question, parsed.options, settings.durationSeconds),
+          buildPollStartMessage(parsed.question, parsed.options, effectiveDuration),
           triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
         );
         const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
