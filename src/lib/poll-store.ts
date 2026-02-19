@@ -22,6 +22,16 @@ export async function getPollState(): Promise<PollState | null> {
   return kv.get<PollState>(POLL_STATE_KEY);
 }
 
+/** Batch read settings + state in 1 KV command. Use in hot paths (webhook) to reduce ops. */
+export async function getPollStateAndSettings(): Promise<{ state: PollState | null; settings: PollSettings }> {
+  const [storedSettings, state] = await kv.mget<[Partial<PollSettings> | null, PollState | null]>(
+    POLL_SETTINGS_KEY,
+    POLL_STATE_KEY
+  );
+  const settings: PollSettings = { ...DEFAULT_POLL_SETTINGS, ...(storedSettings ?? {}) };
+  return { state: state ?? null, settings };
+}
+
 export async function setPollState(state: PollState | null): Promise<void> {
   await Promise.all([
     kv.set(POLL_STATE_KEY, state),

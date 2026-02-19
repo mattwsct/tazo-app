@@ -793,6 +793,8 @@ When enabled, broadcaster or mods can start a poll with `!poll Question? Option1
 
 **Verify who's sending:** Kick may show a native notification when someone redeems a channel reward. To confirm our app is sending: set `KICK_MESSAGE_DEBUG_PREFIX=[bot] ` (with trailing space) in Vercel env vars, deploy, then redeem. If you see `[bot] Tazo redeemed Gift sub!` in chat, it's from us. If not, it's Kick native or another integration (e.g. Fossabot).
 
+**KV / Upstash optimization:** Webhook logging (recent events, debug key) uses ~5–6 KV ops per webhook. To reduce Upstash usage, keep `KICK_WEBHOOK_LOGGING` unset (default). Set `KICK_WEBHOOK_LOGGING=true` only if you need the webhook log for debugging.
+
 **Webhooks never arriving (no POST /api/webhooks/kick in logs):**
 
 1. **Vercel Deployment Protection** (most likely): If enabled, it blocks unauthenticated requests (including Kick's webhooks).

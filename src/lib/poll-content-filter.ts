@@ -1,46 +1,27 @@
 /**
  * Content filter for poll options and messages displayed on the overlay.
- * Blocks slurs, profanity, and variations (leetspeak, special chars).
- * Add terms to BLOCKED_TERMS as needed.
+ * Simple whole-word match only — no leetspeak normalization to avoid false positives.
  */
 
-/** Worst-of-worst terms only. Mild swears (damn, shit, ass, bitch) allowed for under-18. */
+/** Slurs and severe profanity only. Whole-word match, case-insensitive. */
 const BLOCKED_TERMS = new Set([
-  // Strong profanity
-  'fuck', 'fucking', 'fucker', 'fucked', 'fck', 'fuk', 'fvck', 'phuck', 'fuc', 'fock',
-  'cunt', 'cnt',
-  // Slurs and hate speech
-  'nigger', 'nigga', 'niggas', 'n1gger', 'n1gga', 'ni99er', 'ni99a',
-  'fag', 'faggot', 'fags', 'f4g', 'f4ggot', 'fggt',
-  'retard', 'retarded', 'r3tard', 'r3tarded', 'rtard',
-  'tranny', 'kike', 'spic', 'beaner', 'chink', 'gook', 'coon', 'paki', 'raghead', 'towelhead',
+  'fuck', 'fucking', 'fucker', 'fucked',
+  'cunt',
+  'nigger', 'nigga', 'niggas',
+  'faggot', 'fags',
+  'retard', 'retarded',
+  'tranny', 'kike', 'spic', 'beaner', 'chink', 'gook', 'coon', 'raghead', 'towelhead',
   'wetback', 'darkie', 'negro', 'jigaboo', 'jiggaboo', 'jiggerboo',
-  // Sexual violence and CSAM
-  'rape', 'rapist', 'raping', 'r4pe', 'pedo', 'pedophile', 'childporn', 'cporn',
+  'rape', 'rapist', 'raping',
+  'pedo', 'pedophile', 'childporn', 'cporn',
 ]);
 
-const LEET_MAP: Record<string, string> = {
-  '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b',
-  '@': 'a', '€': 'e', '$': 's', '+': 't',
-};
-
-/** Normalize for blocklist matching: lowercase, leetspeak, remove non-alphanumeric. */
-function normalizeForCheck(s: string): string {
-  let out = s.toLowerCase().replace(/[^a-z0-9]/gi, '');
-  for (const [char, repl] of Object.entries(LEET_MAP)) {
-    out = out.split(char).join(repl);
-  }
-  return out;
-}
-
-/** Check if text contains any blocked term. Word-boundary only (exact match per word) to avoid false positives (e.g. "ass" in "class", "glass", "last"). */
+/** Check if text contains any blocked term. Whole words only (e.g. "ass" in "class" does NOT match). */
 export function containsBlockedContent(text: string): boolean {
   if (!text || typeof text !== 'string') return false;
-  const words = text.split(/\W+/).map((w) => w.replace(/[^a-z0-9]/gi, '')).filter((w) => w.length >= 2);
-  const blockedNorm = new Set([...BLOCKED_TERMS].map((t) => normalizeForCheck(t)));
+  const words = text.toLowerCase().split(/\W+/).filter((w) => w.length >= 2);
   for (const word of words) {
-    const wordNorm = normalizeForCheck(word);
-    if (wordNorm.length >= 2 && blockedNorm.has(wordNorm)) return true;
+    if (BLOCKED_TERMS.has(word)) return true;
   }
   return false;
 }

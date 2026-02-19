@@ -117,14 +117,17 @@ export async function POST(request: NextRequest) {
   }
   console.log('[Kick webhook] Verified:', verifiedMsg);
 
-  try {
-    await kv.lpush(KICK_RECENT_EVENTS_KEY, eventSummary);
-    await kv.ltrim(KICK_RECENT_EVENTS_KEY, 0, RECENT_EVENTS_MAX - 1);
-    await kv.set(KICK_WEBHOOK_DEBUG_KEY, { at: new Date().toISOString(), eventType: eventType || '(none)', verified: true });
-  } catch {
-    /* ignore */
+  const enableWebhookLogging = process.env.KICK_WEBHOOK_LOGGING === 'true';
+  if (enableWebhookLogging) {
+    try {
+      await kv.lpush(KICK_RECENT_EVENTS_KEY, eventSummary);
+      await kv.ltrim(KICK_RECENT_EVENTS_KEY, 0, RECENT_EVENTS_MAX - 1);
+      await kv.set(KICK_WEBHOOK_DEBUG_KEY, { at: new Date().toISOString(), eventType: eventType || '(none)', verified: true });
+    } catch {
+      /* ignore */
+    }
+    await logWebhookReceived(eventType || '(unknown)');
   }
-  await logWebhookReceived(eventType || '(unknown)');
 
   // Chat: poll handling first (if enabled), then !ping
   if (eventNorm === 'chat.message.sent') {

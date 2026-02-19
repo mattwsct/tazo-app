@@ -110,10 +110,11 @@ export function useOverlaySettings(): [
     };
   }, []);
 
-  // Lightweight vote updates during active poll (1 KV read every 5s vs get-settings 2 reads)
+  // Vote updates during active poll — adaptive: 6s normally, 3s in final 20s for smoother finish
   useEffect(() => {
     if (settings.pollState?.status !== 'active') return;
-    const interval = setInterval(async () => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const poll = async () => {
       try {
         const res = await fetch(`/api/get-poll-state?_t=${Date.now()}`, {
           cache: 'no-store',
@@ -123,13 +124,23 @@ export function useOverlaySettings(): [
           const { pollState } = await res.json();
           if (pollState?.status === 'active') {
             setSettings((prev) => ({ ...prev, pollState }));
+            const elapsed = (Date.now() - pollState.startedAt) / 1000;
+            const remaining = pollState.durationSeconds - elapsed;
+            const delay =
+              remaining <= TIMERS.POLL_VOTE_UPDATE_FAST_SECONDS
+                ? TIMERS.POLL_VOTE_UPDATE_INTERVAL_FAST
+                : TIMERS.POLL_VOTE_UPDATE_INTERVAL;
+            timeoutId = setTimeout(poll, delay);
           }
+        } else {
+          timeoutId = setTimeout(poll, TIMERS.POLL_VOTE_UPDATE_INTERVAL);
         }
       } catch {
-        /* ignore */
+        timeoutId = setTimeout(poll, TIMERS.POLL_VOTE_UPDATE_INTERVAL);
       }
-    }, TIMERS.POLL_VOTE_UPDATE_INTERVAL);
-    return () => clearInterval(interval);
+    };
+    timeoutId = setTimeout(poll, TIMERS.POLL_VOTE_UPDATE_INTERVAL);
+    return () => clearTimeout(timeoutId);
   }, [settings.pollState?.status, setSettings]);
 
   const refreshSettings = async () => {

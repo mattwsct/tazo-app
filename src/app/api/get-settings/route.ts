@@ -11,10 +11,10 @@ export const dynamic = 'force-dynamic';
 async function handleGET() {
   try {
     logKVUsage('read');
-    const [settings, rawPollState] = await Promise.all([
-      kv.get('overlay_settings'),
-      kv.get<PollState | null>(POLL_STATE_KEY),
-    ]);
+    const [settings, rawPollState] = await kv.mget<[Record<string, unknown> | null, PollState | null]>(
+      'overlay_settings',
+      POLL_STATE_KEY
+    );
     const pollState: PollState | null = rawPollState ?? null;
     const combinedSettings = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
 

@@ -4,15 +4,27 @@
 
 import { kv } from '@vercel/kv';
 import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
-import { parsePollCommand, parsePollDurationVariant, parseVote, canStartPoll, computePollResult, pollContainsBlockedContent } from '@/lib/poll-logic';
+import {
+  parsePollCommand,
+  parsePollDurationVariant,
+  parseVote,
+  canStartPoll,
+  computePollResult,
+  pollContainsBlockedContent,
+  hasDuplicateOptions,
+  pollExceedsLength,
+  pollContainsInvalidChars,
+  POLL_QUESTION_MAX_LENGTH,
+  POLL_OPTION_MAX_LENGTH,
+} from '@/lib/poll-logic';
 import { buildRandomPoll } from '@/lib/poll-auto-start';
 import {
   getPollState,
+  getPollStateAndSettings,
   setPollState,
   getPollQueue,
   setPollQueue,
   popPollQueue,
-  getPollSettings,
   tryAcquirePollEndLock,
 } from '@/lib/poll-store';
 import type { PollState, PollOption, QueuedPoll } from '@/types/poll';
@@ -172,7 +184,7 @@ export async function handleChatPoll(
   senderUsername: string,
   payload: Record<string, unknown>
 ): Promise<HandleChatPollResult> {
-  const settings = await getPollSettings();
+  const { state: initialState, settings } = await getPollStateAndSettings();
   if (!settings.enabled) return { handled: false };
 
   const contentTrimmed = content.trim();
@@ -204,7 +216,7 @@ export async function handleChatPoll(
       }
       return { handled: true };
     }
-    const currentState = await getPollState();
+    const currentState = initialState;
     if (!currentState || currentState.status !== 'active') {
       const accessToken = await getValidAccessToken();
       const messageId = (payload.id ?? payload.message_id) as string | undefined;
@@ -253,7 +265,7 @@ export async function handleChatPoll(
 
   // --- !pollstatus: show current poll or "no poll active" ---
   if (isPollStatus) {
-    const state = await getPollState();
+    const state = initialState;
     const accessToken = await getValidAccessToken();
     if (!accessToken) return { handled: true };
     const messageId = (payload.id ?? payload.message_id) as string | undefined;
@@ -276,7 +288,7 @@ export async function handleChatPoll(
   }
 
   // --- If winner display time passed, clear and start next queued poll ---
-  const currentStateBefore = await getPollState();
+  const currentStateBefore = initialState;
   if (
     !isPollCmd &&
     currentStateBefore?.status === 'winner' &&
@@ -324,7 +336,7 @@ export async function handleChatPoll(
       const built = await buildRandomPoll();
       if (built) {
         const { question, options } = built;
-        const currentState = await getPollState();
+        const currentState = initialState;
         const hasActive = currentState && currentState.status === 'active';
         const hasWinner = currentState && currentState.status === 'winner';
         const pollOptions = options.map((o) => ({ ...o, voters: {} }));
@@ -425,6 +437,51 @@ export async function handleChatPoll(
       return { handled: true };
     }
 
+    if (hasDuplicateOptions(parsed.options)) {
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            'Duplicate options are not allowed (e.g. "yes, yes"). Use distinct options.',
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+
+    if (pollExceedsLength(parsed.question, parsed.options)) {
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            `Question max ${POLL_QUESTION_MAX_LENGTH} chars, each option max ${POLL_OPTION_MAX_LENGTH} chars.`,
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+
+    if (pollContainsInvalidChars(parsed.question, parsed.options)) {
+      const accessToken = await getValidAccessToken();
+      const messageId = (payload.id ?? payload.message_id) as string | undefined;
+      if (accessToken) {
+        try {
+          await sendKickChatMessage(
+            accessToken,
+            'Question and options cannot contain control characters or invisible/special Unicode.',
+            messageId ? { replyToMessageId: messageId } : undefined
+          );
+        } catch { /* ignore */ }
+      }
+      return { handled: true };
+    }
+
     if (pollContainsBlockedContent(parsed.question, parsed.options)) {
       if (process.env.NODE_ENV === 'development') {
         console.log('[poll] webhook: rejected (content filter)', { question: parsed.question?.slice(0, 60) });
@@ -469,7 +526,7 @@ export async function handleChatPoll(
       return { handled: true };
     }
 
-    const currentState = await getPollState();
+    const currentState = initialState;
     const hasActive = currentState && currentState.status === 'active';
     const hasWinner = currentState && currentState.status === 'winner';
 
@@ -598,7 +655,7 @@ export async function handleChatPoll(
   }
 
   // --- Vote or check poll end ---
-  const currentState = await getPollState();
+  const currentState = initialState;
   if (!currentState || currentState.status !== 'active') {
     return { handled: false };
   }

@@ -46,6 +46,42 @@ export function parsePollCommand(content: string): { question: string; options: 
   return { question, options };
 }
 
+/** Max lengths for poll content (chars). */
+export const POLL_QUESTION_MAX_LENGTH = 200;
+export const POLL_OPTION_MAX_LENGTH = 50;
+
+/** Returns true if question or any option exceeds max length. */
+export function pollExceedsLength(question: string, options: { label: string }[]): boolean {
+  if (question.length > POLL_QUESTION_MAX_LENGTH) return true;
+  for (const opt of options) {
+    if (opt.label.length > POLL_OPTION_MAX_LENGTH) return true;
+  }
+  return false;
+}
+
+/** Control chars, zero-width, RTL override — often used to break display or bypass filters. */
+const INVALID_CHAR_REGEX = /[\x00-\x1f\x7f\u200b-\u200d\ufeff\u202e\u202d]/;
+
+/** Returns true if question or any option contains invalid/exploit chars. */
+export function pollContainsInvalidChars(question: string, options: { label: string }[]): boolean {
+  if (INVALID_CHAR_REGEX.test(question)) return true;
+  for (const opt of options) {
+    if (INVALID_CHAR_REGEX.test(opt.label)) return true;
+  }
+  return false;
+}
+
+/** Returns true if options contain duplicate labels (case-insensitive). */
+export function hasDuplicateOptions(options: { label: string }[]): boolean {
+  const seen = new Set<string>();
+  for (const opt of options) {
+    const key = opt.label.toLowerCase().trim();
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
+}
+
 /** Returns true if poll question or any option contains blocked content. */
 export function pollContainsBlockedContent(question: string, options: { label: string }[]): boolean {
   if (containsBlockedContent(question)) return true;
@@ -106,6 +142,23 @@ export function canStartPoll(
   return false;
 }
 
+/** Find top voter across winning options (only meaningful when count > 1, e.g. not one-vote-per-person). */
+function findTopVoter(
+  state: PollState,
+  winnerLabels: Set<string>
+): { username: string; count: number } | undefined {
+  let top: { username: string; count: number } | undefined;
+  for (const opt of state.options) {
+    if (!winnerLabels.has(opt.label) || !opt.voters) continue;
+    for (const [username, count] of Object.entries(opt.voters)) {
+      if (count > 0 && (!top || count > top.count)) {
+        top = { username, count };
+      }
+    }
+  }
+  return top && top.count > 1 ? top : undefined;
+}
+
 /** Build winner message for chat. */
 export function computePollResult(state: PollState): { winnerMessage: string; topVoter?: { username: string; count: number } } {
   if (state.options.length === 0) return { winnerMessage: '' };
@@ -123,16 +176,25 @@ export function computePollResult(state: PollState): { winnerMessage: string; to
     }
   }
 
+  const winnerLabels = new Set(winners);
+  const topVoter = findTopVoter(state, winnerLabels);
+  const countStr = maxVotes === 1 ? '1 vote' : `${maxVotes} votes`;
   const winnerLabel = winners.length === 1 ? winners[0] : winners.join(' and ');
-  const winnerMessage =
-    winners.length === 0
-      ? `Poll "${state.question}" ended with no votes.`
-      : `Poll "${state.question}" — ${winnerLabel} wins!`;
+  let winnerMessage: string;
+  if (winners.length === 0) {
+    winnerMessage = `Poll "${state.question}" ended with no votes.`;
+  } else {
+    winnerMessage = `Poll "${state.question}" — ${winnerLabel} wins! (${countStr})`;
+    if (topVoter) {
+      const voterStr = topVoter.count === 1 ? '1 vote' : `${topVoter.count} votes`;
+      winnerMessage += ` Top voter: ${topVoter.username} (${voterStr}).`;
+    }
+  }
 
-  return { winnerMessage };
+  return { winnerMessage, topVoter };
 }
 
-/** Compact overlay winner text (no question repetition, no vote count). */
+/** Compact overlay winner text with vote count. */
 export function getOverlayWinnerText(state: PollState): string {
   if (state.options.length === 0) return 'No votes';
   let maxVotes = 0;
@@ -148,5 +210,6 @@ export function getOverlayWinnerText(state: PollState): string {
   }
   if (maxVotes === 0) return 'No votes';
   const winner = winners.length === 1 ? winners[0] : winners.join(' & ');
-  return `${winner} wins`;
+  const countStr = maxVotes === 1 ? '1 vote' : `${maxVotes} votes`;
+  return `${winner} wins (${countStr})`;
 }

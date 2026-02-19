@@ -71,11 +71,11 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Function to check for settings and poll updates
       const checkForUpdates = async () => {
         try {
-          const [settings, settingsModified, pollState, pollModified] = await Promise.all([
-            kv.get('overlay_settings'),
-            kv.get('overlay_settings_modified'),
-            kv.get(POLL_STATE_KEY),
-            kv.get(POLL_MODIFIED_KEY),
+          const [settings, settingsModified, pollState, pollModified] = await kv.mget([
+            'overlay_settings',
+            'overlay_settings_modified',
+            POLL_STATE_KEY,
+            POLL_MODIFIED_KEY,
           ]);
           const settingsTs = (settingsModified as number) ?? 0;
           const pollTs = (pollModified as number) ?? 0;
@@ -105,8 +105,8 @@ export async function GET(request: NextRequest): Promise<Response> {
           checkForUpdates();
         }, 100);
       
-      // Check every 10s to balance responsiveness with KV limits (Vercel free tier ~30k/day)
-      const interval = setInterval(checkForUpdates, 10000);
+      // Check every 15s to reduce KV ops (was 10s; 1 mget per check)
+      const interval = setInterval(checkForUpdates, 15000);
       
       // Cleanup on close
       request.signal.addEventListener('abort', () => {

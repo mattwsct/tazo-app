@@ -46,6 +46,18 @@ const MOOD_POLL_QUESTIONS = [
   'Vibe check?',
 ] as const;
 
+const ENERGY_POLL_QUESTIONS = ["Stream energy?", "Chat vibe?", "Energy level?"] as const;
+const ENERGY_OPTIONS = ['High', 'Medium', 'Low', 'Chaotic', 'Chill'];
+
+const SNACK_POLL_QUESTIONS = ["Best stream snack?", "What to munch?", "Snack vote?"] as const;
+const SNACK_OPTIONS = ['Chips', 'Candy', 'Fruit', 'Pizza', 'Nothing'];
+
+const MUSIC_POLL_QUESTIONS = ["Music vibe?", "Background music?", "Genre tonight?"] as const;
+const MUSIC_OPTIONS = ['Chill', 'Hype', 'Lo-fi', 'Metal', 'Silence'];
+
+const DRINK_POLL_QUESTIONS = ["What to drink?", "Drink vote?", "Beverage of choice?"] as const;
+const DRINK_OPTIONS = ['Water', 'Coffee', 'Energy drink', 'Soda', 'Tea'];
+
 /**
  * Build a random mood poll (no location needed). Five random simple mood words.
  * Takes at least one from each category (positive, neutral, negative).
@@ -103,9 +115,21 @@ export async function buildRandomLocationPoll(): Promise<
   return { question, options };
 }
 
+function buildSimplePoll(
+  questions: readonly string[],
+  options: string[]
+): { question: string; options: { label: string; votes: number; voters: Record<string, number> }[] } {
+  const question = questions[Math.floor(Math.random() * questions.length)]!;
+  const picked = shuffle([...options]).slice(0, Math.min(5, options.length));
+  return {
+    question,
+    options: picked.map((label) => ({ label, votes: 0, voters: {} as Record<string, number> })),
+  };
+}
+
 /**
- * Build a random poll (mood or food). Mood always works; food needs location.
- * 50/50 between mood and food when location exists.
+ * Build a random poll (mood, food, hot take, snack, music, drink). Mood always works; food needs location.
+ * Weighted mix for variety.
  */
 export async function buildRandomPoll(): Promise<{
   question: string;
@@ -113,9 +137,30 @@ export async function buildRandomPoll(): Promise<{
 } | null> {
   const persistent = await getPersistentLocation();
   const hasLocation = !!persistent?.location?.countryCode;
-  const useFood = hasLocation && Math.random() < 0.5;
-  if (useFood) {
+  const roll = Math.random();
+
+  if (hasLocation && roll < 0.25) {
     return buildRandomLocationPoll();
+  }
+  if (roll < 0.45) {
+    return buildRandomMoodPoll();
+  }
+  if (roll < 0.6) {
+    return buildSimplePoll(ENERGY_POLL_QUESTIONS, ENERGY_OPTIONS);
+  }
+  if (roll < 0.75) {
+    return buildSimplePoll(SNACK_POLL_QUESTIONS, SNACK_OPTIONS);
+  }
+  if (roll < 0.85) {
+    return buildSimplePoll(MUSIC_POLL_QUESTIONS, MUSIC_OPTIONS);
+  }
+  if (roll < 0.95) {
+    return buildSimplePoll(DRINK_POLL_QUESTIONS, DRINK_OPTIONS);
+  }
+  // Fallback: mood or food
+  if (hasLocation) {
+    const food = await buildRandomLocationPoll();
+    if (food) return food;
   }
   return buildRandomMoodPoll();
 }

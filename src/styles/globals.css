@@ -238,6 +238,12 @@ body.overlay-page {
   overflow: visible;
 }
 
+.poll-top-voter {
+  font-size: 0.85em;
+  opacity: 0.9;
+  margin-bottom: 6px;
+}
+
 .poll-options {
   display: flex;
   flex-direction: column;

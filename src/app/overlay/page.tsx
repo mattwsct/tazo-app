@@ -1614,6 +1614,11 @@ function OverlayPage() {
                     className={`overlay-box poll-box ${showWinner ? 'poll-box-winner' : ''} ${isNewPoll ? 'poll-fill-instant' : ''}`}
                   >
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
+                    {showWinner && poll.topVoter && poll.topVoter.count > 1 && (
+                      <div className="poll-top-voter">
+                        Top voter: {filterTextForDisplay(poll.topVoter.username)} ({poll.topVoter.count} votes)
+                      </div>
+                    )}
                     <div className="poll-options">
                       {(() => {
                         const maxVotes = Math.max(0, ...poll.options.map((o) => o.votes));
@@ -1633,6 +1638,7 @@ function OverlayPage() {
                               : 0;
                           const displayLabel = filterOptionForDisplay(opt.label);
                           const isLeading = winnerLabels.has(opt.label);
+                          const voteStr = opt.votes === 1 ? '1 vote' : `${opt.votes} votes`;
                           return (
                             <div
                               key={opt.label}
@@ -1641,7 +1647,9 @@ function OverlayPage() {
                               <div className="poll-option-bar">
                                 <div className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`} style={{ width: `${pct}%` }} />
                                 <div className="poll-option-text">
-                                  <span className="poll-option-label">{showWinner ? `Winner - ${displayLabel}` : displayLabel}</span>
+                                  <span className="poll-option-label">
+                                    {showWinner ? `Winner - ${displayLabel} (${voteStr})` : displayLabel}
+                                  </span>
                                 </div>
                               </div>
                             </div>
