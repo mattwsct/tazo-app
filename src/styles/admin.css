@@ -768,6 +768,81 @@ body {
 /* Show only one set of actions depending on viewport */
 @media (max-width: 768px) {
   .header-actions { display: none; }
+
+  /* Message templates - stack rows vertically, left-align everything */
+  .kick-message-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .kick-message-template-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .kick-message-row-with-toggle .kick-event-toggle {
+    min-width: 0;
+    width: 100%;
+    align-self: flex-start;
+  }
+
+  .kick-message-template-row .kick-template-label {
+    width: auto;
+  }
+
+  .kick-message-template-row .text-input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Options section - stack vertically */
+  .kick-group-options {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .kick-group-options-item span {
+    white-space: normal;
+  }
+
+  /* Left-aligned on mobile: checkbox first, label after */
+  .checkbox-label-row .checkbox-input,
+  .checkbox-label-row-sm .checkbox-input,
+  .checkbox-label-row-tight .checkbox-input {
+    margin-left: 0;
+  }
+
+  .checkbox-label-row,
+  .checkbox-label-row-sm,
+  .checkbox-label-row-tight {
+    justify-content: flex-start;
+  }
+
+  .kick-group-options-item {
+    justify-content: flex-start;
+  }
+
+  /* Force left alignment in message templates - no centering */
+  .form-stack,
+  .kick-message-card,
+  .kick-message-group,
+  .kick-group-options-label {
+    text-align: left;
+  }
+
+  .kick-event-toggle {
+    justify-content: flex-start !important;
+    text-align: left;
+  }
+
+  /* Prevent any flex centering on form-stack children */
+  .form-stack {
+    align-items: stretch;
+  }
 }
 @media (min-width: 768px) {
   .admin-sticky-actions { display: none; }
@@ -1091,19 +1166,14 @@ body {
     margin-bottom: 0.125rem;
   }
 
-  /* Message templates - stack label above input on narrow screens */
-  .kick-message-template-row {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .kick-message-template-row .kick-template-label {
-    flex-basis: 100%;
-  }
-
+  /* Touch targets for template toggles */
   .kick-event-toggle {
     min-height: 44px;
     padding: 0.5rem 0;
+  }
+
+  .kick-group-options-item {
+    flex-wrap: wrap;
   }
 }
 
@@ -1622,29 +1692,57 @@ body {
   margin-bottom: 6px;
 }
 
+/* Checkbox/toggle rows: label left, control right — consistent, mobile-friendly */
 .checkbox-label-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   cursor: pointer;
   font-size: 0.9rem;
   opacity: 0.9;
 }
 
+.checkbox-label-row .checkbox-input {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.checkbox-label-row span:not(.radio-icon) {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkbox-label-row .radio-icon {
+  flex-shrink: 0;
+}
+
 .checkbox-label-row-sm {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 0.9rem;
   opacity: 0.95;
 }
 
+.checkbox-label-row-sm .checkbox-input {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 .checkbox-label-row-tight {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 0.9rem;
   opacity: 0.9;
+}
+
+.checkbox-label-row-tight .checkbox-input {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .inline-label-muted {
@@ -1703,9 +1801,21 @@ body {
 .kick-group-options-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   font-size: 0.9rem;
   cursor: pointer;
+  width: 100%;
+}
+
+.kick-group-options-item span {
+  flex: 1;
+  min-width: 0;
+}
+
+.kick-group-options-item .kick-group-options-input,
+.kick-group-options-item .checkbox-input {
+  flex-shrink: 0;
 }
 
 .kick-group-options-input {

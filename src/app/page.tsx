@@ -1809,7 +1809,7 @@ export default function AdminPage() {
                           key={key}
                           className={`kick-message-row kick-message-template-row kick-message-row-with-toggle ${kickTemplateEnabled[key] === false ? 'kick-message-card-disabled' : ''}`}
                         >
-                          <label className="checkbox-label-row kick-event-toggle" style={{ minWidth: 140 }}>
+                          <label className="checkbox-label-row kick-event-toggle">
                             <input
                               type="checkbox"
                               checked={kickTemplateEnabled[key] !== false}
