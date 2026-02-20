@@ -30,8 +30,9 @@ export function middleware(request: NextRequest) {
   // Skip authentication for public routes
   // - Login page and login API
   // - Overlay page (public, used by OBS)
-  // - Overlay APIs: get-settings, settings-stream, health, get-location, update-location, stats/update
+  // - Overlay APIs: get-settings, settings-stream, health, location, wellness, stats/update
   //   (overlay runs in OBS browser source without auth cookies)
+  // - wellness/import: Health Auto Export sends POST with X-Wellness-Secret (no cookies)
   // - Kick webhook: Kick sends server-to-server POSTs without auth cookies
   // - Cron: Vercel Cron sends GET with no cookies; route checks CRON_SECRET itself
   const publicRoutes = [
@@ -41,8 +42,9 @@ export function middleware(request: NextRequest) {
     '/api/get-settings',
     '/api/settings-stream',
     '/api/health',
-    '/api/get-location',
-    '/api/update-location',
+    '/api/location',
+    '/api/wellness',
+    '/api/wellness/import',
     '/api/stats/update',
     '/api/kick-oauth/authorize',
     '/api/kick-oauth/callback',

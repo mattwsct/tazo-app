@@ -324,7 +324,7 @@ export default function AdminPage() {
 
   const fetchLocationData = useCallback(async () => {
     try {
-      const locRes = await fetch('/api/get-location', { credentials: 'include' });
+      const locRes = await fetch('/api/location', { credentials: 'include' });
       const locData = await locRes.json();
       const raw = locData?.rawLocation ?? locData?.location;
       if (raw) {
@@ -362,7 +362,7 @@ export default function AdminPage() {
         kickStreamTitleCustomRef.current = parsedCustom;
         setKickStreamTitleCustom(parsedCustom);
       }
-      const locRes = await fetch('/api/get-location', { credentials: 'include' });
+      const locRes = await fetch('/api/location', { credentials: 'include' });
       const locData = await locRes.json();
       const raw = locData?.rawLocation ?? locData?.location;
       if (!raw) return;
@@ -704,7 +704,7 @@ export default function AdminPage() {
       });
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
-      const res = await authenticatedFetch('/api/set-location-from-browser', {
+      const res = await authenticatedFetch('/api/location/browser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lat, lon }),

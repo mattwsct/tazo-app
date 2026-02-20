@@ -83,6 +83,11 @@ const HeartRateMonitor = dynamic(() => import('@/components/HeartRateMonitor'), 
   loading: () => null
 });
 
+const StepCounter = dynamic(() => import('@/components/StepCounter'), {
+  ssr: false,
+  loading: () => null
+});
+
 // Flag component - simple SVG only, hidden until loaded to prevent alt text flash
 const LocationFlag = ({ countryCode }: { countryCode: string }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -618,7 +623,7 @@ function OverlayPage() {
       }
       try {
         OverlayLogger.location('Loading from persistent storage (RTIRL fallback)', { reason: 'no RTIRL data received' });
-        const res = await fetch('/api/get-location', { cache: 'no-store' });
+        const res = await fetch('/api/location', { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (data.location && data.rawLocation) {
@@ -664,7 +669,7 @@ function OverlayPage() {
     const PERSISTENT_CHECK_INTERVAL = 90000; // 90s
     const checkPersistent = async () => {
       try {
-        const res = await fetch('/api/get-location', { cache: 'no-store' });
+        const res = await fetch('/api/location', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         if (!data.location?.primary && !data.rawLocation) return;
@@ -1056,7 +1061,7 @@ function OverlayPage() {
                       } : null;
                       if (persistentPayload) {
                         const doUpdate = (retryCount = 0) => {
-                          fetch('/api/update-location', {
+                          fetch('/api/location', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(persistentPayload),
@@ -1159,7 +1164,7 @@ function OverlayPage() {
                             updatedAt: Date.now(),
                           };
                           const doCountryUpdate = (retryCount = 0) => {
-                            fetch('/api/update-location', {
+                            fetch('/api/location', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify(countryPayload),
@@ -1581,6 +1586,9 @@ function OverlayPage() {
                 />
               </ErrorBoundary>
             )}
+            <ErrorBoundary fallback={null}>
+              <StepCounter />
+            </ErrorBoundary>
           </div>
         </div>
 

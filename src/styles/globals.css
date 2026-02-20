@@ -456,6 +456,35 @@ body.overlay-page {
   line-height: 1; /* Ensure consistent line height */
 }
 
+/* === STEP COUNTER (since stream start) === */
+.step-counter-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  color: white;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.step-counter-wrapper:empty { display: none; }
+
+.step-counter-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.step-counter-value {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.step-counter-label {
+  opacity: 0.85;
+  text-transform: lowercase;
+}
+
 /* === LOCATION DISPLAY STYLES === */
 .location-line {
   display: flex;

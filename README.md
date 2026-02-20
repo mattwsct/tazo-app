@@ -276,10 +276,11 @@ Settings changes propagate to overlay in real-time via:
 - **Public (overlay runs in OBS without auth cookies)**
   - `/api/get-settings` - GET only, read-only
   - `/api/settings-stream` - GET only (SSE), read-only
-  - `/api/get-location` - GET only, persistent location fallback
-  - `/api/update-location` - POST only, overlay persists location for chat commands
-  - `/api/set-location-from-browser` - POST only, admin sets location from browser geolocation (requires auth)
-  - `/api/stats/update` - POST only, overlay sends speed/altitude for chat commands
+  - `/api/location` - GET/POST, persistent location (overlay reads and updates)
+  - `/api/location/browser` - POST only, admin sets location from browser geolocation (requires auth)
+  - `/api/wellness` - GET only, wellness data (steps, calories, sleep) for overlay
+  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header)
+  - `/api/stats/update` - POST only, overlay sends speed/altitude/heart rate for chat commands
 - **Authenticated only (admin panel)**
   - `/api/save-settings` - POST only
   - `/api/admin-login`, `/api/logout`, `/api/refresh-session`
