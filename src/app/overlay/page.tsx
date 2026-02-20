@@ -152,25 +152,41 @@ function OverlayPage() {
       const current = latestPollRef.current;
       const totalVotes = current?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
 
-      fetch('/api/poll-end-trigger', { cache: 'no-store' }).catch(() => {});
-
-      if (current) {
-        if (totalVotes > 0) {
-          setSettings((prev) => ({
-            ...prev,
-            pollState: {
-              ...current,
-              status: 'winner',
-              winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
-            },
-          }));
-          setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
-        } else {
-          lastPollIdRef.current = null;
-          setSettings((prev) => ({ ...prev, pollState: null }));
-          refreshSettings();
-        }
-      }
+      fetch('/api/poll-end-trigger', { cache: 'no-store' })
+        .then((res) => res.ok ? res.json() : { acted: false })
+        .then((data) => {
+          if (!data?.acted && current) return; // Server didn't end (e.g. clock skew) - don't overwrite, wait for SSE
+          if (current) {
+            if (totalVotes > 0) {
+              setSettings((prev) => ({
+                ...prev,
+                pollState: {
+                  ...current,
+                  status: 'winner',
+                  winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
+                },
+              }));
+              setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
+            } else {
+              lastPollIdRef.current = null;
+              setSettings((prev) => ({ ...prev, pollState: null }));
+              refreshSettings();
+            }
+          }
+        })
+        .catch(() => {
+          if (current && totalVotes > 0) {
+            setSettings((prev) => ({
+              ...prev,
+              pollState: {
+                ...current,
+                status: 'winner',
+                winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
+              },
+            }));
+            setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
+          }
+        });
     }, remainingMs);
     return () => clearTimeout(timeout);
   }, [settings.pollState?.id, settings.pollState?.status, settings.pollState?.startedAt, settings.pollState?.durationSeconds, refreshSettings, setSettings]);
@@ -969,29 +985,38 @@ function OverlayPage() {
                         updatedAt: Date.now(),
                       } : null;
                       if (persistentPayload) {
-                        fetch('/api/update-location', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(persistentPayload),
-                        })
-                          .then(res => {
-                            if (res.ok && process.env.NODE_ENV !== 'production' && persistentPayload) {
-                              const loc = persistentPayload.location;
-                              OverlayLogger.location('Persistent location saved for chat commands', {
-                                stored: {
-                                  neighbourhood: loc.neighbourhood || '–',
-                                  city: loc.city || '–',
-                                  state: loc.state || '–',
-                                  country: loc.country || '–'
-                                }
-                              });
-                            } else if (!res.ok) {
-                              OverlayLogger.warn('Persistent location save failed', { status: res.status });
-                            }
+                        const doUpdate = (retryCount = 0) => {
+                          fetch('/api/update-location', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(persistentPayload),
                           })
-                          .catch(() => {
-                            // Silently fail - persistent storage is optional
-                          });
+                            .then(res => {
+                              if (res.ok && process.env.NODE_ENV !== 'production' && persistentPayload) {
+                                const loc = persistentPayload.location;
+                                OverlayLogger.location('Persistent location saved for chat commands', {
+                                  stored: {
+                                    neighbourhood: loc.neighbourhood || '–',
+                                    city: loc.city || '–',
+                                    state: loc.state || '–',
+                                    country: loc.country || '–'
+                                  }
+                                });
+                              } else if (!res.ok && retryCount < 1) {
+                                OverlayLogger.warn('Persistent location save failed, retrying', { status: res.status });
+                                setTimeout(() => doUpdate(retryCount + 1), 2000);
+                              } else if (!res.ok) {
+                                OverlayLogger.warn('Persistent location save failed', { status: res.status });
+                              }
+                            })
+                            .catch(err => {
+                              if (retryCount < 1) {
+                                OverlayLogger.warn('Persistent location save error, retrying', { error: err });
+                                setTimeout(() => doUpdate(retryCount + 1), 2000);
+                              }
+                            });
+                        };
+                        doUpdate();
                       }
                       
                       // Only update if we have something meaningful to display
@@ -1058,15 +1083,23 @@ function OverlayPage() {
                         const countryOnlyLocation = getLocationForPersistence({ country: rawCountryName, countryCode, timezone: loc!.timezone });
                         if (countryOnlyLocation) {
                           const payloadTimestamp = extractGpsTimestamp(payload);
-                          fetch('/api/update-location', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              location: countryOnlyLocation,
-                              rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: payloadTimestamp || Date.now() },
-                              updatedAt: Date.now(),
-                            }),
-                          }).catch(() => {});
+                          const countryPayload = {
+                            location: countryOnlyLocation,
+                            rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: payloadTimestamp || Date.now() },
+                            updatedAt: Date.now(),
+                          };
+                          const doCountryUpdate = (retryCount = 0) => {
+                            fetch('/api/update-location', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(countryPayload),
+                            })
+                              .then(res => {
+                                if (!res.ok && retryCount < 1) setTimeout(() => doCountryUpdate(retryCount + 1), 2000);
+                              })
+                              .catch(() => { if (retryCount < 1) setTimeout(() => doCountryUpdate(retryCount + 1), 2000); });
+                          };
+                          doCountryUpdate();
                         }
                       }
                       

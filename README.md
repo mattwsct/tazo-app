@@ -89,6 +89,8 @@ The overlay supports 6 location display modes, each showing different levels of 
   - Weather and minimap still function independently
   - Best for: Weather-only or minimap-only overlays
 
+**Manual location update** (admin page, Location section): **Get from browser** uses browser geolocation → reverse geocodes via LocationIQ → updates persistent location (overlay, stream title, chat commands). **Hide location in stream title** removes location from the stream title only (overlay and chat keep location; toggle back on in Kick Bot tab).
+
 ### Location Formatting Logic
 
 The location display system uses a hierarchical fallback system with duplicate name detection to ensure clean, non-redundant location displays.
@@ -273,6 +275,7 @@ Settings changes propagate to overlay in real-time via:
   - `/api/settings-stream` - GET only (SSE), read-only
   - `/api/get-location` - GET only, persistent location fallback
   - `/api/update-location` - POST only, overlay persists location for chat commands
+  - `/api/set-location-from-browser` - POST only, admin sets location from browser geolocation (requires auth)
   - `/api/stats/update` - POST only, overlay sends speed/altitude for chat commands
 - **Authenticated only (admin panel)**
   - `/api/save-settings` - POST only
@@ -324,13 +327,16 @@ The overlay automatically prevents caching issues:
 
 **Settings Update Flow**
 1. Admin panel saves settings → Settings stored in KV database
-2. Server-Sent Events (SSE) broadcasts update → All connected overlays receive update (checks every 10s)
-3. Polling fallback → Overlays poll every 15s when SSE hasn't updated recently (skipped when SSE is active to reduce KV usage)
-4. Settings appear in OBS → No manual refresh needed!
+2. Immediate broadcast → When settings or poll state changes, all SSE clients receive the update instantly (no polling delay)
+3. SSE polling fallback → If no broadcast (e.g. no overlay connected during save), SSE checks KV every 15s
+4. Polling fallback → Overlays poll every 20s when SSE hasn't updated recently (skipped for 20s after SSE to reduce KV usage)
+5. Settings appear in OBS → No manual refresh needed!
 
-**Vercel KV limits** — Free tier is ~30,000 commands/day. The overlay uses SSE (10s) and polling (15s fallback) to stay under limits.
+**Vercel KV limits** — Free tier is ~30,000 commands/day. The overlay uses immediate broadcast on write (no extra KV reads) and polling fallback to stay under limits.
 
-**Queued poll timing** — When a poll ends and a winner is announced, the next queued poll starts immediately. The poll-cleanup cron runs every minute and ends active polls when duration expires (up to 60s delay if no chat activity). If there is no queued poll when one ends, the winner displays for 10s before the overlay clears. In development, check console for `[poll-cleanup]` and `[poll] webhook` logs. Kick chat webhooks read poll state and settings per message; a busy chat adds reads. One overlay + typical Kick usage fits free tier. Multiple overlays or very active chat may need a paid KV plan.
+**Faster updates without higher cost** — The app uses **broadcast-on-write**: when you save settings or poll state changes, the server immediately pushes to all connected SSE overlays. No additional KV reads. Poll state changes (votes, winner) also trigger instant broadcast. For even faster poll-end timing (winner in chat as soon as poll ends with zero delay), consider **Upstash QStash** to schedule an HTTP call at exactly poll end time — eliminates reliance on overlay countdown or 1-min cron. Upstash KV remains sufficient for most use cases; no need to switch storage.
+
+**Queued poll timing** — When a poll ends and a winner is announced, the next queued poll starts immediately. The overlay calls poll-end-trigger when its countdown reaches zero (winner in chat within seconds). The poll-cleanup cron runs every minute as backup (ends overdue polls if overlay wasn't open). Winner displays for 10s (configurable). Poll state changes broadcast instantly to overlays. Kick chat webhooks read poll state per message; a busy chat adds reads. One overlay + typical Kick usage fits free tier. Multiple overlays or very active chat may need a paid KV plan.
 
 **If settings changes don't appear in OBS:**
 1. **Wait 10-15 seconds** - Settings sync via SSE/polling
@@ -747,7 +753,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. When a toggle is off, the bot simply doesn't send a message (template text is kept). **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. `(5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{kickDescription}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
-**Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint. The cron path must be in middleware public routes (no auth cookies) since Vercel Cron sends GET with no cookies; the route itself validates `CRON_SECRET` if set. The same cron also auto-updates the Kick stream title with current location when **Auto-push location** is on (every 2 min while live).
+**Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). When both stream title and chat location update together, the chat message shows the new title: e.g. `Stream title updated to "Tokyo Trip 🇯🇵 Tokyo, Japan" with new location` instead of only the location name. Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint. The cron path must be in middleware public routes (no auth cookies) since Vercel Cron sends GET with no cookies; the route itself validates `CRON_SECRET` if set. The same cron also auto-updates the Kick stream title with current location when **Auto-push location** is on (every 2 min while live). Overlay retries `update-location` once on failure to improve reliability when LocationIQ is transiently unavailable.
 
 ### Chat commands
 

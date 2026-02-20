@@ -8,6 +8,11 @@ import { containsBlockedContent } from '@/lib/poll-content-filter';
 const YES_ALIASES = new Set(['yes', 'y']);
 const NO_ALIASES = new Set(['no', 'n']);
 
+/** Single-word options to filter out — conjunctions etc. that slip in from "Yes or no" or "Pizza and burgers". */
+const BANNED_OPTION_WORDS = new Set([
+  'and', 'or', 'but', 'the', 'a', 'an', 'to', 'for', 'of', 'in', 'on', 'at',
+]);
+
 /** Allowed duration variants: !poll15, !poll30, !poll60, !poll120 */
 export const POLL_DURATION_VARIANTS = [15, 30, 60, 120] as const;
 
@@ -41,7 +46,10 @@ export function parsePollCommand(content: string): { question: string; options: 
       ? after.split(',').map((p) => p.trim()).filter(Boolean)
       : after.split(/\s+/).map((p) => p.trim()).filter(Boolean);
     if (parts.length === 0) return null;
-    options = parts.map((label) => ({ label, votes: 0, voters: {} }));
+    // Filter out conjunctions etc. ("Yes or no" → "or" shouldn't be an option)
+    const filtered = parts.filter((p) => !BANNED_OPTION_WORDS.has(p.toLowerCase()));
+    if (filtered.length < 2) return null; // Need at least 2 options
+    options = filtered.map((label) => ({ label, votes: 0, voters: {} }));
   }
   return { question, options };
 }

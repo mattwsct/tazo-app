@@ -81,6 +81,7 @@ export default function AdminPage() {
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('state');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
+  const [kickStreamTitleIncludeLocation, setKickStreamTitleIncludeLocation] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
@@ -298,8 +299,10 @@ export default function AdminPage() {
   const lastPushedLocationRef = useRef<string | null>(null);
   const kickStreamTitleCustomRef = useRef(kickStreamTitleCustom);
   const kickStreamTitleLocationDisplayRef = useRef(kickStreamTitleLocationDisplay);
+  const kickStreamTitleIncludeLocationRef = useRef(kickStreamTitleIncludeLocation);
   kickStreamTitleCustomRef.current = kickStreamTitleCustom;
   kickStreamTitleLocationDisplayRef.current = kickStreamTitleLocationDisplay;
+  kickStreamTitleIncludeLocationRef.current = kickStreamTitleIncludeLocation;
 
   const fetchLocationForStreamTitle = useCallback(async () => {
     try {
@@ -341,7 +344,9 @@ export default function AdminPage() {
       setKickStreamTitleRawLocation(raw);
       setKickStreamTitleLocation(formatted);
       const custom = kickStreamTitleCustomRef.current.trim();
-      const newFullTitle = buildStreamTitle(custom, formatted);
+      const includeLocation = kickStreamTitleIncludeLocationRef.current;
+      const locationPart = includeLocation ? formatted : '';
+      const newFullTitle = buildStreamTitle(custom, locationPart);
       if (newFullTitle === currentKickTitle.trim()) return;
       const r = await authenticatedFetch('/api/kick-channel', {
         method: 'PATCH',
@@ -352,6 +357,7 @@ export default function AdminPage() {
               customTitle: custom,
               locationDisplay: display,
               autoUpdateLocation: true,
+              includeLocationInTitle: includeLocation,
             },
         }),
       });
@@ -389,6 +395,7 @@ export default function AdminPage() {
       if (data.settings) {
         setKickStreamTitleLocationDisplay((data.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state');
         setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
+        setKickStreamTitleIncludeLocation((data.settings as { includeLocationInTitle?: boolean }).includeLocationInTitle !== false);
       }
       if (data.stream_title != null) {
         if (data.stream_title === '' && !data.error) {
@@ -413,7 +420,8 @@ export default function AdminPage() {
   const updateKickStreamTitle = useCallback(async () => {
     if (!kickStatus?.connected) return;
     setKickStreamTitleSaving(true);
-    const fullTitle = buildStreamTitle(kickStreamTitleCustom, kickStreamTitleLocation || '');
+    const locationPart = kickStreamTitleIncludeLocation ? (kickStreamTitleLocation || '') : '';
+    const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart);
     try {
       const r = await authenticatedFetch('/api/kick-channel', {
         method: 'PATCH',
@@ -424,6 +432,7 @@ export default function AdminPage() {
             customTitle: kickStreamTitleCustom,
             locationDisplay: kickStreamTitleLocationDisplay,
             autoUpdateLocation: kickStreamTitleAutoUpdate,
+            includeLocationInTitle: kickStreamTitleIncludeLocation,
           },
         }),
       });
@@ -439,7 +448,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleAutoUpdate]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleAutoUpdate, kickStreamTitleIncludeLocation]);
 
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
@@ -622,6 +631,73 @@ export default function AdminPage() {
     setCustomLocationInput(settings.customLocation || '');
   }, [settings.customLocation]);
 
+  // Manual location update (browser geolocation, clear)
+  const [locationFromBrowserLoading, setLocationFromBrowserLoading] = useState(false);
+  const [locationClearLoading, setLocationClearLoading] = useState(false);
+
+  const handleGetLocationFromBrowser = useCallback(async () => {
+    if (!navigator?.geolocation) {
+      setToast({ type: 'error', message: 'Geolocation not supported by browser' });
+      setTimeout(() => setToast(null), 4000);
+      return;
+    }
+    setLocationFromBrowserLoading(true);
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 15000, maximumAge: 0 });
+      });
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const res = await authenticatedFetch('/api/set-location-from-browser', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lon }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      await fetchLocationForStreamTitle();
+      setToast({ type: 'saved', message: 'Location updated from browser' });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to get location';
+      setToast({ type: 'error', message: msg });
+      setTimeout(() => setToast(null), 5000);
+    } finally {
+      setLocationFromBrowserLoading(false);
+    }
+  }, [fetchLocationForStreamTitle]);
+
+  const handleHideLocationInStreamTitle = useCallback(async () => {
+    setLocationClearLoading(true);
+    try {
+      const custom = kickStreamTitleCustom.trim();
+      const r = await authenticatedFetch('/api/kick-channel', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stream_title: custom || '',
+          settings: { includeLocationInTitle: false },
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+      }
+      setKickStreamTitleIncludeLocation(false);
+      setKickStreamTitleLocation('');
+      setKickStreamTitleRawLocation(null);
+      setToast({ type: 'saved', message: "Stream title won't show location — turn it back on in Kick Bot tab" });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update';
+      setToast({ type: 'error', message: msg });
+      setTimeout(() => setToast(null), 5000);
+    } finally {
+      setLocationClearLoading(false);
+    }
+  }, [kickStreamTitleCustom]);
 
   const openPreview = () => {
     window.open('/overlay', '_blank');
@@ -823,6 +899,32 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
+
+              {/* Manual location update */}
+              <div className="setting-group" style={{ marginTop: '16px' }}>
+                <label className="group-label">Manual Location Update</label>
+                <p className="input-hint" style={{ marginBottom: '8px' }}>
+                  Get from browser overrides overlay/stream title until RTIRL provides new data. Hide in title removes location from stream title only (overlay and chat keep location).
+                </p>
+                <div className="button-row" style={{ gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleGetLocationFromBrowser}
+                    disabled={locationFromBrowserLoading}
+                  >
+                    {locationFromBrowserLoading ? 'Getting location…' : '📍 Get from browser'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleHideLocationInStreamTitle}
+                    disabled={locationClearLoading}
+                  >
+                    {locationClearLoading ? 'Updating…' : 'Hide location in stream title'}
+                  </button>
+                </div>
+              </div>
               
             </div>
           </section>
@@ -1283,6 +1385,15 @@ export default function AdminPage() {
                           className="checkbox-input"
                         />
                         Auto-push stream title when live and location changes (uses interval below)
+                      </label>
+                      <label className="checkbox-label-row">
+                        <input
+                          type="checkbox"
+                          checked={kickStreamTitleIncludeLocation}
+                          onChange={(e) => setKickStreamTitleIncludeLocation(e.target.checked)}
+                          className="checkbox-input"
+                        />
+                        Include location in stream title (uncheck to hide location in title only; overlay and chat keep location)
                       </label>
                     </div>
                   </div>

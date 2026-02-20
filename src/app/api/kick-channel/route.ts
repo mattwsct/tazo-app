@@ -20,12 +20,15 @@ export interface StreamTitleSettings {
   customTitle: string;
   locationDisplay: StreamTitleLocationDisplay;
   autoUpdateLocation: boolean;
+  /** When false, stream title shows no location (overlay/chat still use location). */
+  includeLocationInTitle?: boolean;
 }
 
 export const DEFAULT_STREAM_TITLE_SETTINGS: StreamTitleSettings = {
   customTitle: '',
   locationDisplay: 'state',
   autoUpdateLocation: true,
+  includeLocationInTitle: true,
 };
 
 export const dynamic = 'force-dynamic';

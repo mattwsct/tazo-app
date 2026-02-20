@@ -5,6 +5,7 @@
 import { kv } from '@vercel/kv';
 import type { PollState, QueuedPoll, PollSettings } from '@/types/poll';
 import { POLL_STATE_KEY, POLL_MODIFIED_KEY, POLL_QUEUE_KEY, POLL_SETTINGS_KEY, DEFAULT_POLL_SETTINGS } from '@/types/poll';
+import { broadcastPollAndSettings } from '@/lib/poll-broadcast';
 
 const POLL_END_LOCK_KEY = 'poll_end_lock';
 
@@ -37,6 +38,8 @@ export async function setPollState(state: PollState | null): Promise<void> {
     kv.set(POLL_STATE_KEY, state),
     kv.set(POLL_MODIFIED_KEY, Date.now()),
   ]);
+  // Fire-and-forget broadcast so overlays get instant updates (no await to avoid adding latency)
+  void broadcastPollAndSettings();
 }
 
 export async function getPollQueue(): Promise<QueuedPoll[]> {

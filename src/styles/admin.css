@@ -582,6 +582,18 @@ body {
   letter-spacing: 0.01em;
 }
 
+.input-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .group-label-with-action {
   display: flex;
   align-items: center;

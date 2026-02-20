@@ -29,8 +29,8 @@ export const TIMERS = {
   WALKING_PACE_THRESHOLD: 5, // km/h
   SETTINGS_POLLING_INTERVAL: 20000, // 20 seconds (fallback; SSE preferred to reduce KV ops)
   POLL_VOTE_UPDATE_INTERVAL: 6000, // 6 seconds when active poll — balance of smoothness vs KV ops
-  POLL_VOTE_UPDATE_FAST_SECONDS: 20, // When <20s left, poll every 3s for smoother finish
-  POLL_VOTE_UPDATE_INTERVAL_FAST: 3000, // 3 seconds in final stretch
+  POLL_VOTE_UPDATE_FAST_SECONDS: 20, // When <20s left, poll every 2s for smoother finish and accurate countdown
+  POLL_VOTE_UPDATE_INTERVAL_FAST: 2000, // 2 seconds in final stretch — ensures poll-end-trigger fires close to actual end
   MINIMAP_STALENESS_CHECK_INTERVAL: 1000, // 1 second
   MINIMAP_SPEED_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when speed drops below threshold
   MINIMAP_GPS_STALE_GRACE_PERIOD: 60 * 1000, // 1 minute - grace period before hiding when GPS becomes stale

@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
     kv.get<{ locationDisplay?: string }>(OVERLAY_SETTINGS_KEY),
-    kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; locationDisplay?: StreamTitleLocationDisplay }>(KICK_STREAM_TITLE_SETTINGS_KEY),
+    kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; locationDisplay?: StreamTitleLocationDisplay; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
   ]);
 
   const now = Date.now();
@@ -97,8 +97,9 @@ export async function GET(request: NextRequest) {
       const intervalOk = now - lastAt >= intervalMs;
 
       if (persistent?.location && intervalOk) {
+        const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
         const displayForTitle = (streamTitleSettings?.locationDisplay as StreamTitleLocationDisplay) ?? 'state';
-        const formattedForTitle = formatLocationForStreamTitle(persistent.location, displayForTitle);
+        const formattedForTitle = includeLocationInTitle ? formatLocationForStreamTitle(persistent.location, displayForTitle) : '';
         const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) || 'city';
         let formattedForChat: string | null = null;
         if (displayMode !== 'hidden') {
@@ -111,18 +112,15 @@ export async function GET(request: NextRequest) {
           formattedForChat = locationStr ? `Tazo has moved to ${locationStr}` : null;
         }
 
-        const titleChanged = formattedForTitle && (() => {
-          const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
-          const newFullTitle = buildStreamTitle(customTitle, formattedForTitle);
-          return newFullTitle !== currentTitle;
-        })();
-        const chatChanged = formattedForChat && formattedForChat !== lastLocationMsg;
-        const locationChanged = titleChanged || chatChanged;
+        const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
+        const newFullTitle = formattedForTitle ? buildStreamTitle(customTitle, formattedForTitle) : '';
+        const titleChanged = formattedForTitle && newFullTitle !== currentTitle;
+        // Use formattedForTitle as dedup key so we don't re-send when location unchanged
+        const locationAnnouncedChanged = formattedForTitle && formattedForTitle !== lastLocationMsg;
+        const locationChanged = titleChanged || locationAnnouncedChanged;
 
         if (locationChanged) {
-          if (autoUpdateLocation && titleChanged && formattedForTitle) {
-            const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
-            const newFullTitle = buildStreamTitle(customTitle, formattedForTitle);
+          if (autoUpdateLocation && titleChanged && formattedForTitle && newFullTitle) {
             try {
               const patchRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
                 method: 'PATCH',
@@ -137,17 +135,25 @@ export async function GET(request: NextRequest) {
               // ignore
             }
           }
-          if (chatBroadcastLocation && chatChanged && formattedForChat) {
-            try {
-              await sendKickChatMessage(accessToken, formattedForChat);
-              sent++;
-              console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'location', msgPreview: formattedForChat.slice(0, 80) }));
-            } catch (err) {
-              console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'location', error: err instanceof Error ? err.message : String(err) }));
+          let lastMsgToStore = formattedForTitle ?? '';
+          if (chatBroadcastLocation && locationChanged) {
+            // When title updates with location, combine into one chat message so viewers see the new title
+            const chatMsg = titleChanged && newFullTitle
+              ? `Stream title updated to "${newFullTitle}" with new location`
+              : formattedForChat;
+            if (chatMsg) {
+              try {
+                await sendKickChatMessage(accessToken, chatMsg);
+                sent++;
+                lastMsgToStore = chatMsg;
+                console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'location', msgPreview: chatMsg.slice(0, 80) }));
+              } catch (err) {
+                console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'location', error: err instanceof Error ? err.message : String(err) }));
+              }
             }
           }
           await kv.set(KICK_BROADCAST_LAST_LOCATION_KEY, now);
-          await kv.set(KICK_BROADCAST_LAST_LOCATION_MSG_KEY, formattedForChat ?? formattedForTitle ?? '');
+          await kv.set(KICK_BROADCAST_LAST_LOCATION_MSG_KEY, lastMsgToStore);
         }
       }
     }
