@@ -32,6 +32,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    if (process.env.NODE_ENV === 'development' || process.env.VERCEL_ENV === 'preview') {
+      console.log('[Wellness import] Body keys:', Object.keys(body), 'sample:', JSON.stringify(body).slice(0, 500));
+    }
     const updates: Partial<WellnessData> = {};
 
     if (body.steps !== undefined) updates.steps = Math.max(0, Math.floor(parseNumber(body.steps) ?? 0));
@@ -49,6 +52,7 @@ export async function POST(request: NextRequest) {
     if (body.hrv !== undefined) updates.hrv = Math.max(0, parseNumber(body.hrv) ?? 0);
 
     if (Object.keys(updates).length === 0) {
+      console.warn('[Wellness import] No valid fields. Received:', JSON.stringify(body));
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
     }
 
