@@ -16,6 +16,14 @@ import { getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import type { LocationDisplayMode } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
+import {
+  getWellnessData,
+  getStepsSinceStreamStart,
+  getDistanceSinceStreamStart,
+  getHandwashingSinceStreamStart,
+  getWellnessMilestonesLastSent,
+  setWellnessMilestoneLastSent,
+} from '@/utils/wellness-storage';
 import { getCountryFlagEmoji } from '@/utils/chat-utils';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
@@ -34,6 +42,14 @@ const KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY = 'kick_chat_broadcast_altitude_last
 const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_top';
 const KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY = 'kick_chat_broadcast_weather_last_condition';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
+
+// Milestones for 48h+ streams — steps/distance can exceed limits
+const WELLNESS_MILESTONES = {
+  steps: [1000, 2000, 5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 75000, 100000],
+  distanceKm: [1, 2, 5, 10, 15, 20, 25, 30, 50, 75, 100],
+  standHours: [1, 2, 4, 6, 8, 10, 12, 14, 16, 18],
+  activeCalories: [100, 250, 500, 1000, 1500, 2000, 3000, 5000],
+} as const;
 
 type HeartrateBroadcastState = 'below' | 'high' | 'very_high';
 
@@ -267,6 +283,108 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+  }
+
+  // Wellness milestones: steps, distance, stand hours, active calories, handwashing (only when live)
+  const hasWellnessToggles =
+    storedAlert?.chatBroadcastWellnessSteps ||
+    storedAlert?.chatBroadcastWellnessDistance ||
+    storedAlert?.chatBroadcastWellnessStandHours ||
+    storedAlert?.chatBroadcastWellnessActiveCalories ||
+    storedAlert?.chatBroadcastWellnessHandwashing;
+  if (hasWellnessToggles && speedAltitudeLive) {
+    const [wellness, stepsSince, distanceSince, handwashingSince, milestonesLast] = await Promise.all([
+      getWellnessData(),
+      getStepsSinceStreamStart(),
+      getDistanceSinceStreamStart(),
+      getHandwashingSinceStreamStart(),
+      getWellnessMilestonesLastSent(),
+    ]);
+
+    const checkAndSend = async (
+      toggle: boolean | undefined,
+      current: number,
+      milestones: readonly number[],
+      lastSent: number | undefined,
+      metric: 'steps' | 'distanceKm' | 'standHours' | 'activeCalories',
+      emoji: string,
+      unit: string,
+      fmt: (n: number) => string
+    ) => {
+      if (!toggle || current <= 0) return;
+      const crossed = milestones.filter((m) => current >= m && (lastSent == null || m > lastSent));
+      const highest = crossed.length > 0 ? Math.max(...crossed) : null;
+      if (highest != null) {
+        const msg = `${emoji} ${fmt(highest)} ${unit} this stream!`;
+        try {
+          await sendKickChatMessage(accessToken, msg);
+          sent++;
+          await setWellnessMilestoneLastSent(metric, highest);
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: `wellness_${metric}`, value: highest, msgPreview: msg.slice(0, 50) }));
+        } catch (err) {
+          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: `wellness_${metric}`, error: err instanceof Error ? err.message : String(err) }));
+        }
+      }
+    };
+
+    // Handwashing: notify each time completed (every wash), not at milestones
+    const handwashingToggle = storedAlert?.chatBroadcastWellnessHandwashing === true;
+    if (handwashingToggle && handwashingSince > 0) {
+      const lastHandwashing = milestonesLast.handwashing ?? 0;
+      if (handwashingSince > lastHandwashing) {
+        const n = handwashingSince;
+        const msg = `🧼 ${n} hand wash${n === 1 ? '' : 'es'} completed this stream!`;
+        try {
+          await sendKickChatMessage(accessToken, msg);
+          sent++;
+          await setWellnessMilestoneLastSent('handwashing', n);
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'wellness_handwashing', value: n, msgPreview: msg.slice(0, 50) }));
+        } catch (err) {
+          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'wellness_handwashing', error: err instanceof Error ? err.message : String(err) }));
+        }
+      }
+    }
+
+    await checkAndSend(
+      storedAlert?.chatBroadcastWellnessSteps === true,
+      stepsSince,
+      WELLNESS_MILESTONES.steps,
+      milestonesLast.steps,
+      'steps',
+      '👟',
+      'steps',
+      (n) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n)
+    );
+    await checkAndSend(
+      storedAlert?.chatBroadcastWellnessDistance === true,
+      distanceSince,
+      WELLNESS_MILESTONES.distanceKm,
+      milestonesLast.distanceKm,
+      'distanceKm',
+      '🚶',
+      'km',
+      (n) => (n % 1 === 0 ? String(n) : n.toFixed(1))
+    );
+    await checkAndSend(
+      storedAlert?.chatBroadcastWellnessStandHours === true,
+      wellness?.standHours ?? 0,
+      WELLNESS_MILESTONES.standHours,
+      milestonesLast.standHours,
+      'standHours',
+      '🧍',
+      'stand hours',
+      String
+    );
+    await checkAndSend(
+      storedAlert?.chatBroadcastWellnessActiveCalories === true,
+      wellness?.activeCalories ?? 0,
+      WELLNESS_MILESTONES.activeCalories,
+      milestonesLast.activeCalories,
+      'activeCalories',
+      '🔥',
+      'active calories',
+      String
+    );
   }
 
   if (!storedAlert?.chatBroadcastHeartrate) {

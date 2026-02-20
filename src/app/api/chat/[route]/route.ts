@@ -249,6 +249,25 @@ export async function GET(
     return txtResponse(parts.join(' | '));
   }
 
+  // Wellness routes (no RTIRL required)
+  const {
+    getWellnessStepsResponse,
+    getWellnessDistanceResponse,
+    getWellnessStandResponse,
+    getWellnessCaloriesResponse,
+    getWellnessHandwashingResponse,
+    getWellnessWeightResponse,
+    getWellnessSummaryResponse,
+  } = await import('@/utils/wellness-chat');
+
+  if (route === 'steps') return txtResponse(await getWellnessStepsResponse());
+  if (route === 'distance' || route === 'dist') return txtResponse(await getWellnessDistanceResponse());
+  if (route === 'stand') return txtResponse(await getWellnessStandResponse());
+  if (route === 'calories' || route === 'cal') return txtResponse(await getWellnessCaloriesResponse());
+  if (route === 'handwashing' || route === 'handwash') return txtResponse(await getWellnessHandwashingResponse());
+  if (route === 'weight' || route === 'wt') return txtResponse(await getWellnessWeightResponse());
+  if (route === 'wellness') return txtResponse(await getWellnessSummaryResponse());
+
   // Routes that require location data
   try {
     // Get settings from KV (same as overlay) - needed for location/map commands

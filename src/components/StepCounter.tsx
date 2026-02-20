@@ -6,37 +6,58 @@ const POLL_INTERVAL_MS = 10000; // 10s — wellness data updates from Health Aut
 
 export default function StepCounter() {
   const [steps, setSteps] = useState<number | null>(null);
+  const [distance, setDistance] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    const fetchSteps = async () => {
+    const fetchWellness = async () => {
       try {
         const res = await fetch('/api/wellness');
         if (!res.ok || !mounted) return;
         const data = await res.json();
-        if (typeof data.stepsSinceStreamStart === 'number' && mounted) {
-          setSteps(data.stepsSinceStreamStart);
+        if (mounted) {
+          if (typeof data.stepsSinceStreamStart === 'number') {
+            setSteps(data.stepsSinceStreamStart);
+          }
+          if (typeof data.distanceSinceStreamStart === 'number') {
+            setDistance(data.distanceSinceStreamStart);
+          }
         }
       } catch {
         // Ignore fetch errors
       }
     };
 
-    fetchSteps();
-    const id = setInterval(fetchSteps, POLL_INTERVAL_MS);
+    fetchWellness();
+    const id = setInterval(fetchWellness, POLL_INTERVAL_MS);
     return () => {
       mounted = false;
       clearInterval(id);
     };
   }, []);
 
-  if (steps === null || steps < 0) return null;
+  const hasSteps = steps !== null && steps >= 0;
+  const hasDistance = distance !== null && distance > 0;
+  if (!hasSteps && !hasDistance) return null;
 
   return (
     <div className="step-counter-wrapper">
-      <span className="step-counter-icon">👟</span>
-      <span className="step-counter-value">{steps.toLocaleString()}</span>
-      <span className="step-counter-label">steps</span>
+      {hasSteps && (
+        <div className="step-counter-row">
+          <span className="step-counter-icon">👟</span>
+          <span className="step-counter-value">{steps!.toLocaleString()}</span>
+          <span className="step-counter-label">steps</span>
+        </div>
+      )}
+      {hasDistance && (
+        <div className="step-counter-row">
+          <span className="step-counter-icon">🚶</span>
+          <span className="step-counter-value">
+            {distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)}
+          </span>
+          <span className="step-counter-label">km</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,10 +10,22 @@ import { kv } from '@vercel/kv';
 
 const WELLNESS_KEY = 'wellness_data';
 const WELLNESS_STEPS_SESSION_KEY = 'wellness_steps_session';
+const WELLNESS_DISTANCE_SESSION_KEY = 'wellness_distance_session';
+const WELLNESS_HANDWASHING_SESSION_KEY = 'wellness_handwashing_session';
 
 export interface StepsSession {
   accumulated: number;  // steps since stream start (survives midnight)
   lastKnown: number;     // last raw steps from API (for delta calc / daily-reset detection)
+}
+
+export interface DistanceSession {
+  accumulated: number;  // km since stream start (survives midnight)
+  lastKnown: number;     // last raw distance from API (for delta calc / daily-reset detection)
+}
+
+export interface HandwashingSession {
+  accumulated: number;  // handwashing events since stream start (survives midnight)
+  lastKnown: number;
 }
 
 export interface WellnessData {
@@ -27,6 +39,8 @@ export interface WellnessData {
   distanceKm?: number;
   flightsClimbed?: number;
   standHours?: number;
+  handwashingCount?: number;  // Handwashing events (from Health Auto Export)
+  weightKg?: number;         // Body mass in kg (from Health Auto Export)
   heartRate?: number;        // From Apple Health (resting etc) — live BPM stays in stats from Pulsoid
   restingHeartRate?: number;
   hrv?: number;              // Heart rate variability (ms)
@@ -115,5 +129,159 @@ export async function updateStepsSession(newSteps: number): Promise<void> {
   } catch (error) {
     console.error('Failed to update steps session:', error);
     throw error;
+  }
+}
+
+// === Distance since stream start (handles daily midnight reset) ===
+
+export async function getDistanceSession(): Promise<DistanceSession | null> {
+  try {
+    const data = await kv.get<DistanceSession>(WELLNESS_DISTANCE_SESSION_KEY);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function getDistanceSinceStreamStart(): Promise<number> {
+  const session = await getDistanceSession();
+  return session?.accumulated ?? 0;
+}
+
+/** Call when stream goes live. Resets distance accumulator. */
+export async function resetDistanceSession(currentDistanceKm: number): Promise<void> {
+  try {
+    const session: DistanceSession = {
+      accumulated: 0,
+      lastKnown: Math.max(0, currentDistanceKm),
+    };
+    await kv.set(WELLNESS_DISTANCE_SESSION_KEY, session);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Wellness] Distance session reset at stream start, baseline:', session.lastKnown, 'km');
+    }
+  } catch (error) {
+    console.error('Failed to reset distance session:', error);
+    throw error;
+  }
+}
+
+/** Call on each wellness import when distance is present. Accumulates delta; treats newKm < lastKnown as daily reset. */
+export async function updateDistanceSession(newDistanceKm: number): Promise<void> {
+  try {
+    const km = Math.max(0, newDistanceKm);
+    const existing = await getDistanceSession();
+    const lastKnown = existing?.lastKnown ?? 0;
+    const accumulated = existing?.accumulated ?? 0;
+
+    let delta: number;
+    if (km >= lastKnown) {
+      delta = km - lastKnown;
+    } else {
+      delta = km;  // Daily reset: new distance is today's count
+    }
+
+    const session: DistanceSession = {
+      accumulated: Math.round((accumulated + delta) * 1000) / 1000,
+      lastKnown: km,
+    };
+    await kv.set(WELLNESS_DISTANCE_SESSION_KEY, session);
+  } catch (error) {
+    console.error('Failed to update distance session:', error);
+    throw error;
+  }
+}
+
+// === Handwashing since stream start (handles daily midnight reset) ===
+
+export async function getHandwashingSession(): Promise<HandwashingSession | null> {
+  try {
+    const data = await kv.get<HandwashingSession>(WELLNESS_HANDWASHING_SESSION_KEY);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function getHandwashingSinceStreamStart(): Promise<number> {
+  const session = await getHandwashingSession();
+  return session?.accumulated ?? 0;
+}
+
+export async function resetHandwashingSession(currentCount: number): Promise<void> {
+  try {
+    const session: HandwashingSession = {
+      accumulated: 0,
+      lastKnown: Math.max(0, Math.floor(currentCount)),
+    };
+    await kv.set(WELLNESS_HANDWASHING_SESSION_KEY, session);
+  } catch (error) {
+    console.error('Failed to reset handwashing session:', error);
+    throw error;
+  }
+}
+
+export async function updateHandwashingSession(newCount: number): Promise<void> {
+  try {
+    const count = Math.max(0, Math.floor(newCount));
+    const existing = await getHandwashingSession();
+    const lastKnown = existing?.lastKnown ?? 0;
+    const accumulated = existing?.accumulated ?? 0;
+
+    let delta: number;
+    if (count >= lastKnown) {
+      delta = count - lastKnown;
+    } else {
+      delta = count;
+    }
+
+    const session: HandwashingSession = {
+      accumulated: accumulated + delta,
+      lastKnown: count,
+    };
+    await kv.set(WELLNESS_HANDWASHING_SESSION_KEY, session);
+  } catch (error) {
+    console.error('Failed to update handwashing session:', error);
+    throw error;
+  }
+}
+
+// === Wellness milestones (reset on stream start) ===
+
+const WELLNESS_MILESTONES_LAST_SENT_KEY = 'wellness_milestones_last_sent';
+
+export interface WellnessMilestonesLastSent {
+  steps?: number;
+  distanceKm?: number;
+  standHours?: number;
+  activeCalories?: number;
+  handwashing?: number;
+}
+
+export async function getWellnessMilestonesLastSent(): Promise<WellnessMilestonesLastSent> {
+  try {
+    const data = await kv.get<WellnessMilestonesLastSent>(WELLNESS_MILESTONES_LAST_SENT_KEY);
+    return data ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export async function resetWellnessMilestonesOnStreamStart(): Promise<void> {
+  try {
+    await kv.del(WELLNESS_MILESTONES_LAST_SENT_KEY);
+  } catch (error) {
+    console.error('Failed to reset wellness milestones:', error);
+  }
+}
+
+export async function setWellnessMilestoneLastSent(
+  metric: keyof WellnessMilestonesLastSent,
+  value: number
+): Promise<void> {
+  try {
+    const current = await getWellnessMilestonesLastSent();
+    await kv.set(WELLNESS_MILESTONES_LAST_SENT_KEY, { ...current, [metric]: value });
+  } catch (error) {
+    console.error('Failed to set wellness milestone last sent:', error);
   }
 }

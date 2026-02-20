@@ -284,6 +284,31 @@ Returns current altitude, highest, and lowest this stream.
 
 Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago)`
 
+## Wellness Commands (Health Auto Export)
+
+These commands use wellness data imported from Health Auto Export (steps, distance, stand hours, calories, handwashing, weight). Steps and distance are "since stream start"; others use today's data.
+
+```
+!steps → $(customapi https://app.tazo.wtf/api/chat/steps)
+!distance → $(customapi https://app.tazo.wtf/api/chat/distance)
+!stand → $(customapi https://app.tazo.wtf/api/chat/stand)
+!calories → $(customapi https://app.tazo.wtf/api/chat/calories)
+!handwashing → $(customapi https://app.tazo.wtf/api/chat/handwashing)
+!weight → $(customapi https://app.tazo.wtf/api/chat/weight)
+!wellness → $(customapi https://app.tazo.wtf/api/chat/wellness)
+```
+
+**Aliases:** `!dist` for distance, `!cal` for calories, `!handwash` for handwashing, `!wt` for weight.
+
+Example outputs:
+- `👟 12,450 steps this stream`
+- `🚶 8.2 km walked/run this stream`
+- `🧍 4 stand hours today`
+- `🔥 450 active, 1,200 resting cal today`
+- `🧼 3 hand washes this stream`
+- `⚖️ 75.2 kg (165.8 lbs)`
+- `📊 12,450 steps · 8.2 km · 3 washes · 4 stand hr · 450 active cal · 75.2 kg`
+
 ## Fun Commands
 
 ### Dice / Roll

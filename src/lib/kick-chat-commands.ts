@@ -1,10 +1,30 @@
 /**
- * Kick chat command handlers: !ping, !heartrate / !hr
+ * Kick chat command handlers: !ping, !heartrate / !hr, wellness commands
  */
 
 import { getHeartrateStats } from '@/utils/stats-storage';
+import {
+  getWellnessStepsResponse,
+  getWellnessDistanceResponse,
+  getWellnessStandResponse,
+  getWellnessCaloriesResponse,
+  getWellnessHandwashingResponse,
+  getWellnessWeightResponse,
+  getWellnessSummaryResponse,
+} from '@/utils/wellness-chat';
 
-export const KICK_CHAT_COMMANDS = ['ping', 'heartrate', 'hr'] as const;
+export const KICK_CHAT_COMMANDS = [
+  'ping',
+  'heartrate',
+  'hr',
+  'steps',
+  'distance',
+  'stand',
+  'calories',
+  'handwashing',
+  'weight',
+  'wellness',
+] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
 export function parseKickChatMessage(content: string): { cmd: KickChatCommand } | null {
@@ -13,6 +33,13 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand } 
   const cmd = trimmed.slice(1).trim().split(/\s/)[0]?.toLowerCase();
   if (cmd === 'ping') return { cmd: 'ping' };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
+  if (cmd === 'steps') return { cmd: 'steps' };
+  if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
+  if (cmd === 'stand') return { cmd: 'stand' };
+  if (cmd === 'calories' || cmd === 'cal') return { cmd: 'calories' };
+  if (cmd === 'handwashing' || cmd === 'handwash') return { cmd: 'handwashing' };
+  if (cmd === 'weight' || cmd === 'wt') return { cmd: 'weight' };
+  if (cmd === 'wellness') return { cmd: 'wellness' };
   return null;
 }
 
@@ -30,5 +57,12 @@ export async function handleKickChatCommand(cmd: KickChatCommand): Promise<strin
     }
     return `💓 ${parts.join(' | ')}`;
   }
+  if (cmd === 'steps') return getWellnessStepsResponse();
+  if (cmd === 'distance') return getWellnessDistanceResponse();
+  if (cmd === 'stand') return getWellnessStandResponse();
+  if (cmd === 'calories') return getWellnessCaloriesResponse();
+  if (cmd === 'handwashing') return getWellnessHandwashingResponse();
+  if (cmd === 'weight') return getWellnessWeightResponse();
+  if (cmd === 'wellness') return getWellnessSummaryResponse();
   return null;
 }

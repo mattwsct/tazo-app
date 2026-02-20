@@ -278,8 +278,8 @@ Settings changes propagate to overlay in real-time via:
   - `/api/settings-stream` - GET only (SSE), read-only
   - `/api/location` - GET/POST, persistent location (overlay reads and updates)
   - `/api/location/browser` - POST only, admin sets location from browser geolocation (requires auth)
-  - `/api/wellness` - GET only, wellness data (steps, calories, sleep) for overlay
-  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header)
+  - `/api/wellness` - GET only, wellness data (steps, calories, sleep, distance, handwashing) for overlay, plus stepsSinceStreamStart, distanceSinceStreamStart, handwashingSinceStreamStart
+  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header). Chat broadcast milestones (steps, distance, stand hours, active calories, hand washing) when enabled in admin.
   - `/api/stats/update` - POST only, overlay sends speed/altitude/heart rate for chat commands
 - **Authenticated only (admin panel)**
   - `/api/save-settings` - POST only
@@ -762,7 +762,7 @@ Edit templates in the admin panel **Message templates** section. Use the toggles
 
 ### Chat commands
 
-Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
+Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. **Wellness commands** (from Health Auto Export): `!steps`, `!distance` (since stream start), `!stand`, `!calories`, `!handwashing`, `!weight`, `!wellness` (summary). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
 
 ### Chat poll
 
@@ -839,6 +839,7 @@ The overlay app also provides chat command APIs for Fossabot integration. All co
 - **Social Media**: `/api/chat/instagram`, `/api/chat/twitter`, `/api/chat/kick`, etc.
 - **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
 - **Weather**: `/api/chat/forecast`, `/api/chat/sun`
+- **Wellness** (Health Auto Export): `/api/chat/steps`, `/api/chat/distance`, `/api/chat/stand`, `/api/chat/calories`, `/api/chat/handwashing`, `/api/chat/weight`, `/api/chat/wellness`
 - **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/tips`, `/api/chat/emergency`, `/api/chat/flirt`, `/api/chat/sex`, `/api/chat/insults` (optionally specify country code: `?q=JP`, `?q=AU`, etc.)
 - **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`
 - **Utility**: `/api/chat/status`

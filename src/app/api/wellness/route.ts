@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getWellnessData, getStepsSinceStreamStart } from '@/utils/wellness-storage';
+import { getWellnessData, getStepsSinceStreamStart, getDistanceSinceStreamStart, getHandwashingSinceStreamStart } from '@/utils/wellness-storage';
 import { checkApiRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -15,13 +15,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
   try {
-    const [data, stepsSinceStreamStart] = await Promise.all([
+    const [data, stepsSinceStreamStart, distanceSinceStreamStart, handwashingSinceStreamStart] = await Promise.all([
       getWellnessData(),
       getStepsSinceStreamStart(),
+      getDistanceSinceStreamStart(),
+      getHandwashingSinceStreamStart(),
     ]);
     return NextResponse.json({
       ...(data || { updatedAt: 0 }),
       stepsSinceStreamStart,
+      distanceSinceStreamStart,
+      handwashingSinceStreamStart,
     });
   } catch {
     return NextResponse.json({ error: 'Failed to load wellness data' }, { status: 500 });
