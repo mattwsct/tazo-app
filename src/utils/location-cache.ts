@@ -4,9 +4,8 @@
 
 import { kv } from '@vercel/kv';
 import { fetchRTIRLData, type RTIRLData } from './rtirl-utils';
-import { fetchLocationFromLocationIQ } from './api-utils';
-import { fetchWeatherAndTimezoneFromOpenWeatherMap } from './api-utils';
-import { fetchCurrentWeather, fetchForecast, parseWeatherData, extractPrecipitationForecast } from './weather-chat';
+import { fetchLocationFromLocationIQ, getTimezoneFromOwmOffset } from './api-utils';
+import { fetchCurrentWeather, fetchForecast, parseWeatherData, extractPrecipitationForecast, fetchAirPollution, fetchUVIndex } from './weather-chat';
 import { getCityLocationForChat } from './chat-utils';
 import type { LocationData } from './location-utils';
 
@@ -31,6 +30,8 @@ export interface CachedLocationData {
     windKmh: number;
     humidity: number;
     visibility: number | null;
+    uvIndex?: number | null;
+    aqi?: number | null;
   } | null;
   timezone: string | null;
   sunriseSunset: {
@@ -47,24 +48,23 @@ export interface CachedLocationData {
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes - weather/location can change
 const CACHE_KEY = 'location_data_cache';
 const PERSISTENT_LOCATION_KEY = 'last_known_location'; // Persistent storage (no TTL)
+const LOCATION_CACHE_LAST_FETCH_KEY = 'location_cache_last_fetch'; // Cooldown to avoid burst API usage
+const MIN_FETCH_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes minimum between fetches (OpenWeatherMap: 60/min, we do ~4 calls per fetch)
 
 /**
- * Get cached location data if fresh, otherwise return null
+ * Get cached location data if fresh, otherwise return null.
+ * @param allowStale - If true, return cache even if expired (e.g. when rate limited)
  */
-export async function getCachedLocationData(): Promise<CachedLocationData | null> {
+export async function getCachedLocationData(allowStale = false): Promise<CachedLocationData | null> {
   try {
     const cached = await kv.get<CachedLocationData>(CACHE_KEY);
     if (!cached) return null;
 
     const age = Date.now() - cached.cachedAt;
-    if (age > CACHE_TTL) {
-      // Cache expired
-      return null;
-    }
+    if (age > CACHE_TTL && !allowStale) return null;
 
     return cached;
   } catch {
-    // KV not available or error - return null to trigger fresh fetch
     return null;
   }
 }
@@ -86,6 +86,14 @@ export async function updateLocationCache(data: CachedLocationData): Promise<voi
  */
 export async function fetchAndCacheLocationData(): Promise<CachedLocationData | null> {
   try {
+    // 0. Cooldown: avoid burst API usage (OpenWeatherMap free: 60/min; we make ~4 calls per fetch)
+    const lastFetch = await kv.get<number>(LOCATION_CACHE_LAST_FETCH_KEY);
+    const now = Date.now();
+    if (typeof lastFetch === 'number' && now - lastFetch < MIN_FETCH_INTERVAL_MS) {
+      const cached = await getCachedLocationData(true); // Allow stale when cooldown active
+      if (cached) return cached;
+    }
+
     // 1. Fetch RTIRL data
     const rtirlData = await fetchRTIRLData();
     const { lat, lon } = rtirlData;
@@ -97,14 +105,12 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
     const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
     const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
 
-    // 2. Fetch location (parallel with weather)
-    const [locationResult, weatherResult] = await Promise.allSettled([
+    // 2. Fetch location and current weather in parallel (single OWM call instead of two)
+    const [locationResult, currentWeather] = await Promise.allSettled([
       locationiqKey
         ? fetchLocationFromLocationIQ(lat, lon, locationiqKey)
         : Promise.resolve({ location: null, was404: false }),
-      openweatherKey
-        ? fetchWeatherAndTimezoneFromOpenWeatherMap(lat, lon, openweatherKey)
-        : Promise.resolve(null),
+      openweatherKey ? fetchCurrentWeather(lat, lon, openweatherKey) : Promise.resolve(null),
     ]);
 
     // 3. Parse location
@@ -125,40 +131,34 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
       };
     }
 
-    // 4. Parse weather and timezone
+    // 4. Parse weather, timezone, sunrise/sunset from current weather
     let weather: CachedLocationData['weather'] = null;
     let timezone: string | null = null;
     let sunriseSunset: CachedLocationData['sunriseSunset'] = null;
     let forecast: CachedLocationData['forecast'] = null;
 
-    // 5. Fetch current weather for detailed data (includes sunrise/sunset timestamps)
-    if (openweatherKey) {
-      const currentWeather = await fetchCurrentWeather(lat, lon, openweatherKey);
-      if (currentWeather) {
-        const parsed = parseWeatherData(currentWeather);
-        if (parsed) {
-          weather = parsed;
-        }
-
-        // Extract sunrise/sunset timestamps from OpenWeatherMap response
-        if (currentWeather.sys?.sunrise && currentWeather.sys?.sunset) {
-          sunriseSunset = {
-            sunrise: currentWeather.sys.sunrise, // Unix timestamp
-            sunset: currentWeather.sys.sunset,   // Unix timestamp
-          };
-        }
-
-        // Fetch forecast for precipitation
-        const fc = await fetchForecast(lat, lon, openweatherKey);
-        if (fc) {
-          forecast = extractPrecipitationForecast(fc);
-        }
+    const ow = currentWeather.status === 'fulfilled' ? currentWeather.value : null;
+    if (ow) {
+      const parsed = parseWeatherData(ow);
+      if (parsed) weather = parsed;
+      if (ow.sys?.sunrise && ow.sys?.sunset) {
+        sunriseSunset = { sunrise: ow.sys.sunrise, sunset: ow.sys.sunset };
+      }
+      if (typeof ow.timezone === 'number') {
+        timezone = getTimezoneFromOwmOffset(ow.timezone, lat, lon);
       }
     }
 
-    // Get timezone from weather API
-    if (weatherResult.status === 'fulfilled' && weatherResult.value) {
-      timezone = weatherResult.value.timezone || null;
+    // 5. Fetch forecast, UV, and air quality (2–3 additional OWM calls; staggered to avoid burst)
+    if (openweatherKey && weather) {
+      const fc = await fetchForecast(lat, lon, openweatherKey);
+      if (fc) forecast = extractPrecipitationForecast(fc);
+      const [uvRes, aqiRes] = await Promise.allSettled([
+        fetchUVIndex(lat, lon, openweatherKey),
+        fetchAirPollution(lat, lon, openweatherKey),
+      ]);
+      weather.uvIndex = uvRes.status === 'fulfilled' ? uvRes.value : null;
+      weather.aqi = aqiRes.status === 'fulfilled' ? aqiRes.value : null;
     }
 
     const cachedData: CachedLocationData = {
@@ -173,7 +173,8 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
 
     // Update cache (5min TTL for performance)
     await updateLocationCache(cachedData);
-    
+    await kv.set(LOCATION_CACHE_LAST_FETCH_KEY, Date.now());
+
     // Also update persistent storage (no TTL - always available for chat commands)
     if (location && location.rawLocationData) {
       await updatePersistentLocation({

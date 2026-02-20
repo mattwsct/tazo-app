@@ -17,6 +17,8 @@ import { formatLocation } from '@/utils/location-utils';
 import type { LocationDisplayMode } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
 import { getCountryFlagEmoji } from '@/utils/chat-utils';
+import { getLocationData } from '@/utils/location-cache';
+import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { formatLocationForStreamTitle, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 
@@ -30,6 +32,7 @@ const KICK_BROADCAST_SPEED_LAST_SENT_KEY = 'kick_chat_broadcast_speed_last_sent'
 const KICK_BROADCAST_SPEED_LAST_TOP_KEY = 'kick_chat_broadcast_speed_last_top';
 const KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY = 'kick_chat_broadcast_altitude_last_sent';
 const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_top';
+const KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY = 'kick_chat_broadcast_weather_last_condition';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
 type HeartrateBroadcastState = 'below' | 'high' | 'very_high';
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
-  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop] = await Promise.all([
+  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
@@ -63,6 +66,7 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
     kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
+    kv.get<string>(KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY),
   ]);
 
   const now = Date.now();
@@ -226,6 +230,41 @@ export async function GET(request: NextRequest) {
         console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'altitude', topAltitude, msgPreview: msg.slice(0, 50) }));
       } catch (err) {
         console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'altitude', error: err instanceof Error ? err.message : String(err) }));
+      }
+    }
+  }
+
+  // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
+  const chatBroadcastWeather = storedAlert?.chatBroadcastWeather === true;
+  if (chatBroadcastWeather && speedAltitudeLive) {
+    const locationData = await getLocationData(false);
+    if (locationData?.weather) {
+      const { condition, desc, tempC, uvIndex, aqi } = locationData.weather;
+      const condKey = `${condition}|${desc}|uv:${uvIndex ?? 'n'}|aqi:${aqi ?? 'n'}`;
+      const lastCond = typeof weatherLastCondition === 'string' ? weatherLastCondition : null;
+      const weatherNotable = isNotableWeatherCondition(desc);
+      const uvNotable = isHighUV(uvIndex);
+      const aqiNotable = isPoorAirQuality(aqi);
+      const isNotable = weatherNotable || uvNotable || aqiNotable;
+      const isNewNotableChange = isNotable && condKey !== lastCond;
+      if (isNewNotableChange) {
+        const parts: string[] = [];
+        if (weatherNotable) {
+          const emoji = getWeatherEmoji(condition, isNightTime());
+          parts.push(`${emoji} ${desc}`);
+        }
+        if (uvNotable) parts.push(`high UV (${uvIndex})`);
+        if (aqiNotable) parts.push(`poor air quality (AQI ${aqi})`);
+        const mainPart = parts.length > 0 ? parts.join(', ') : 'conditions';
+        const msg = `🌤️ Weather update: ${mainPart}, ${formatTemperature(tempC)}`;
+        try {
+          await sendKickChatMessage(accessToken, msg);
+          sent++;
+          await kv.set(KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY, condKey);
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'weather', cond: desc, uv: uvIndex, aqi, msgPreview: msg.slice(0, 60) }));
+        } catch (err) {
+          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'weather', error: err instanceof Error ? err.message : String(err) }));
+        }
       }
     }
   }

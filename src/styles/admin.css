@@ -1544,6 +1544,118 @@ body {
   margin-left: 4px;
 }
 
+/* ClampedNumberInput — validate on blur, presets for quick selection */
+.clamped-number-input-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.clamped-number-input-wrap input {
+  min-width: 64px;
+  width: 72px;
+}
+
+.clamped-number-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.clamped-number-preset-btn {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.clamped-number-preset-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* Big dropdown selects — mobile-friendly, large tap targets */
+.admin-select-wrap {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.admin-select-wrap label {
+  display: block;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 6px;
+}
+
+.admin-select-big {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 40px 12px 14px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.admin-select-big:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+/* Collapsible section groups — mobile-friendly (kept for potential reuse) */
+.section-group-collapsible {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.section-group-collapsible summary {
+  padding: 14px 18px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.04);
+  user-select: none;
+}
+
+.section-group-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.section-group-collapsible summary::after {
+  content: '▼';
+  font-size: 0.75rem;
+  opacity: 0.6;
+  transition: transform 0.2s;
+}
+
+.section-group-collapsible[open] summary::after {
+  transform: rotate(-180deg);
+}
+
+.section-group-collapsible > .section-group-inner {
+  padding: 0 18px 18px;
+}
+
 /* Stream title location preview - readable */
 .stream-title-location-preview {
   color: #ffffff !important;

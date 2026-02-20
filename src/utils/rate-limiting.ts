@@ -13,7 +13,7 @@ interface RateLimit {
 
 export const RATE_LIMITS: Record<string, RateLimit> = {
   openweathermap: { 
-    calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 50, // 50 per minute (well under 60/min free tier limit)
+    calls: 0, lastReset: Date.now(), resetInterval: 60000, max: 30, // 30/min (free: 60/min; location-cache does ~4 calls per fetch)
     lastCallTime: 0,
     // Monthly limit: 1,000,000 calls/month - no daily tracking needed (very conservative usage)
   },

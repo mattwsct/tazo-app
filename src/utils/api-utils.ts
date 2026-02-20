@@ -449,6 +449,31 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
   }
 }
 
+/**
+ * Converts OpenWeatherMap timezone offset (seconds) to IANA timezone string.
+ * Used when we have raw OWM response without LocationIQ.
+ */
+export function getTimezoneFromOwmOffset(offsetSeconds: number, lat?: number, lon?: number): string {
+  const offsetHours = Math.round(offsetSeconds / 3600);
+  const timezoneMap: Record<number, string> = {
+    9: 'Asia/Tokyo', 8: 'Asia/Shanghai', 7: 'Asia/Bangkok', 6: 'Asia/Dhaka', 5: 'Asia/Karachi',
+    4: 'Asia/Dubai', 3: 'Europe/Moscow', 2: 'Europe/Athens', 1: 'Europe/Paris', 0: 'UTC',
+    [-1]: 'Atlantic/Azores', [-2]: 'Atlantic/South_Georgia', [-3]: 'America/Sao_Paulo',
+    [-4]: 'America/New_York', [-5]: 'America/Chicago', [-6]: 'America/Chicago', [-7]: 'America/Denver',
+    [-8]: 'America/Los_Angeles', [-9]: 'Pacific/Gambier', [-10]: 'Pacific/Honolulu',
+    [-11]: 'Pacific/Midway', [-12]: 'Pacific/Baker',
+  };
+  let tz = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || 'UTC';
+  if (lat != null && lon != null && lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66) {
+    if (offsetHours === -5 && lon >= -87) tz = 'America/New_York';
+    else if (offsetHours === -4 && lon >= -87) tz = 'America/New_York';
+    else if (offsetHours === -6 && lon >= -106 && lon <= -85) tz = 'America/Chicago';
+    else if (offsetHours === -7 && lon >= -124 && lon <= -102) tz = 'America/Denver';
+    else if (offsetHours === -8 && lon >= -124 && lon <= -102) tz = 'America/Los_Angeles';
+  }
+  return tz;
+}
+
 // Helper function to format duration in HH:MM:SS format
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);

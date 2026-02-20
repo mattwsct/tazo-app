@@ -38,6 +38,48 @@ export function formatTemperature(tempC: number): string {
   return `${tempC}°C/${tempF}°F`;
 }
 
+/** UV index thresholds: 6+ high, 8+ very high, 11+ extreme */
+export const UV_HIGH_THRESHOLD = 6;
+
+/** AQI 4 = Poor, 5 = Very Poor — notable for IRL streaming */
+export const AQI_POOR_THRESHOLD = 4;
+
+export function isHighUV(uvIndex: number | null | undefined): boolean {
+  return typeof uvIndex === 'number' && uvIndex >= UV_HIGH_THRESHOLD;
+}
+
+export function isPoorAirQuality(aqi: number | null | undefined): boolean {
+  return typeof aqi === 'number' && aqi >= AQI_POOR_THRESHOLD;
+}
+
+/**
+ * Checks if weather condition description is notable (affects IRL streaming).
+ * Used for overlay auto-display and chat broadcast — we only broadcast on notable changes, not when clearing.
+ */
+export function isNotableWeatherCondition(desc: string): boolean {
+  const d = desc.toLowerCase();
+  return (
+    d.includes('rain') ||
+    d.includes('drizzle') ||
+    d.includes('storm') ||
+    d.includes('thunder') ||
+    d.includes('snow') ||
+    d.includes('sleet') ||
+    d.includes('hail') ||
+    d.includes('fog') ||
+    d.includes('mist') ||
+    d.includes('haze') ||
+    d.includes('wind') ||
+    d.includes('gale') ||
+    d.includes('hurricane') ||
+    d.includes('typhoon') ||
+    d.includes('tornado') ||
+    d.includes('blizzard') ||
+    d.includes('freezing') ||
+    d.includes('extreme')
+  );
+}
+
 /**
  * Gets notable weather conditions for chat display
  */
@@ -130,6 +172,47 @@ export async function fetchForecast(lat: number, lon: number, apiKey: string) {
   );
   if (!response.ok) return null;
   return await response.json();
+}
+
+/** Air Pollution API response shape */
+interface AirPollutionResponse {
+  list?: Array<{ main?: { aqi?: number } }>;
+}
+
+/**
+ * Fetches current air pollution from OpenWeatherMap (same API key as weather)
+ * AQI 1–5: Good, Fair, Moderate, Poor, Very Poor
+ */
+export async function fetchAirPollution(lat: number, lon: number, apiKey: string): Promise<number | null> {
+  try {
+    const response = await fetch(
+      `https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${apiKey}`
+    );
+    if (!response.ok) return null;
+    const data: AirPollutionResponse = await response.json();
+    const aqi = data.list?.[0]?.main?.aqi;
+    return typeof aqi === 'number' && aqi >= 1 && aqi <= 5 ? aqi : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches UV index from OpenWeatherMap One Call API (requires One Call subscription for some keys).
+ * Single API call only to stay within rate limits. Returns 0–11+; 6+ is high.
+ */
+export async function fetchUVIndex(lat: number, lon: number, apiKey: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly,daily,alerts&appid=${apiKey}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const val = data?.current?.uvi;
+    return typeof val === 'number' && val >= 0 ? Math.round(val * 10) / 10 : null;
+  } catch {
+    return null;
+  }
 }
 
 /** OpenWeatherMap current weather API response shape */
