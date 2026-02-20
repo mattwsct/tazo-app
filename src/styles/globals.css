@@ -440,11 +440,6 @@ body.overlay-page {
   animation: heartbeat 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-.heart-rate-fallback-prefix {
-  opacity: 0.9;
-  margin-right: 1px;
-}
-
 .heart-rate-text {
   display: flex;
   flex-direction: row;

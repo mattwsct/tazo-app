@@ -12,6 +12,7 @@ const WELLNESS_KEY = 'wellness_data';
 const WELLNESS_STEPS_SESSION_KEY = 'wellness_steps_session';
 const WELLNESS_DISTANCE_SESSION_KEY = 'wellness_distance_session';
 const WELLNESS_HANDWASHING_SESSION_KEY = 'wellness_handwashing_session';
+const WELLNESS_FLIGHTS_SESSION_KEY = 'wellness_flights_session';
 
 export interface StepsSession {
   accumulated: number;  // steps since stream start (survives midnight)
@@ -25,6 +26,11 @@ export interface DistanceSession {
 
 export interface HandwashingSession {
   accumulated: number;  // handwashing events since stream start (survives midnight)
+  lastKnown: number;
+}
+
+export interface FlightsSession {
+  accumulated: number;  // flights climbed since stream start (survives midnight)
   lastKnown: number;
 }
 
@@ -245,6 +251,50 @@ export async function updateHandwashingSession(newCount: number): Promise<void> 
   }
 }
 
+// === Flights climbed since stream start (handles daily midnight reset) ===
+
+export async function getFlightsSession(): Promise<FlightsSession | null> {
+  try {
+    const data = await kv.get<FlightsSession>(WELLNESS_FLIGHTS_SESSION_KEY);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function getFlightsSinceStreamStart(): Promise<number> {
+  const session = await getFlightsSession();
+  return session?.accumulated ?? 0;
+}
+
+export async function resetFlightsSession(currentFlights: number): Promise<void> {
+  try {
+    const session: FlightsSession = {
+      accumulated: 0,
+      lastKnown: Math.max(0, Math.floor(currentFlights)),
+    };
+    await kv.set(WELLNESS_FLIGHTS_SESSION_KEY, session);
+  } catch (error) {
+    console.error('Failed to reset flights session:', error);
+    throw error;
+  }
+}
+
+export async function updateFlightsSession(newFlights: number): Promise<void> {
+  try {
+    const count = Math.max(0, Math.floor(newFlights));
+    const existing = await getFlightsSession();
+    const lastKnown = existing?.lastKnown ?? 0;
+    const accumulated = existing?.accumulated ?? 0;
+    const delta = count >= lastKnown ? count - lastKnown : count;
+    const session: FlightsSession = { accumulated: accumulated + delta, lastKnown: count };
+    await kv.set(WELLNESS_FLIGHTS_SESSION_KEY, session);
+  } catch (error) {
+    console.error('Failed to update flights session:', error);
+    throw error;
+  }
+}
+
 // === Wellness milestones (reset on stream start) ===
 
 const WELLNESS_MILESTONES_LAST_SENT_KEY = 'wellness_milestones_last_sent';
@@ -252,6 +302,7 @@ const WELLNESS_MILESTONES_LAST_SENT_KEY = 'wellness_milestones_last_sent';
 export interface WellnessMilestonesLastSent {
   steps?: number;
   distanceKm?: number;
+  flightsClimbed?: number;
   standHours?: number;
   activeCalories?: number;
   handwashing?: number;

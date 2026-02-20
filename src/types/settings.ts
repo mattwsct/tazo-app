@@ -31,6 +31,9 @@ export interface OverlaySettings {
   mapZoomLevel: MapZoomLevel;
   altitudeDisplay: DisplayMode;
   speedDisplay: DisplayMode;
+  showSteps: boolean;
+  showDistance: boolean;
+  showDistanceMiles: boolean;
   todos?: TodoItem[];
   showTodoList?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
@@ -52,6 +55,9 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   mapZoomLevel: 'city',
   altitudeDisplay: 'auto',
   speedDisplay: 'auto',
+  showSteps: true,
+  showDistance: true,
+  showDistanceMiles: true,
   todos: [],
   showTodoList: false,
 };
@@ -72,6 +78,9 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'p
   mapZoomLevel: 'string',
   altitudeDisplay: 'string',
   speedDisplay: 'string',
+  showSteps: 'boolean',
+  showDistance: 'boolean',
+  showDistanceMiles: 'boolean',
   showTodoList: 'boolean'
 };
 

@@ -38,6 +38,7 @@ export interface KickChatBroadcastSettings {
   chatBroadcastAltitudeTimeoutMin?: number;
   chatBroadcastWellnessSteps?: boolean;
   chatBroadcastWellnessDistance?: boolean;
+  chatBroadcastWellnessFlights?: boolean;
   chatBroadcastWellnessStandHours?: boolean;
   chatBroadcastWellnessActiveCalories?: boolean;
   chatBroadcastWellnessHandwashing?: boolean;
@@ -65,6 +66,7 @@ export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   chatBroadcastAltitudeTimeoutMin: 5,
   chatBroadcastWellnessSteps: false,
   chatBroadcastWellnessDistance: false,
+  chatBroadcastWellnessFlights: false,
   chatBroadcastWellnessStandHours: false,
   chatBroadcastWellnessActiveCalories: false,
   chatBroadcastWellnessHandwashing: false,

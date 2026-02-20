@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateWellnessData, updateStepsSession, updateDistanceSession, updateHandwashingSession } from '@/utils/wellness-storage';
+import { updateWellnessData, updateStepsSession, updateDistanceSession, updateHandwashingSession, updateFlightsSession } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 
 export const dynamic = 'force-dynamic';
@@ -88,6 +88,12 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
 
   const handwashing = byName.get('handwashing');
   if (handwashing) updates.handwashingCount = Math.max(0, Math.round(sumQty(handwashing)));
+
+  const flights = byName.get('flights_climbed');
+  if (flights) {
+    const total = Math.max(0, Math.round(sumQty(flights)));
+    updates.flightsClimbed = total;
+  }
 
   // Body mass: HealthKit uses body_mass; some exporters use mass or weight.
   // Assume kg (Apple Health standard). If units are 'lb', convert: qty * 0.453592
@@ -184,6 +190,9 @@ export async function POST(request: NextRequest) {
     }
     if (updates.handwashingCount !== undefined) {
       await updateHandwashingSession(updates.handwashingCount);
+    }
+    if (updates.flightsClimbed !== undefined) {
+      await updateFlightsSession(updates.flightsClimbed);
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

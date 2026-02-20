@@ -7,6 +7,7 @@ import {
   getStepsSinceStreamStart,
   getDistanceSinceStreamStart,
   getHandwashingSinceStreamStart,
+  getFlightsSinceStreamStart,
 } from '@/utils/wellness-storage';
 import { kmToMiles } from '@/utils/unit-conversions';
 
@@ -48,6 +49,12 @@ export async function getWellnessCaloriesResponse(): Promise<string> {
   return `🔥 ${parts.join(', ')} cal today`;
 }
 
+export async function getWellnessFlightsResponse(): Promise<string> {
+  const flights = await getFlightsSinceStreamStart();
+  if (flights <= 0) return '🪜 No flights climbed this stream yet.';
+  return `🪜 ${flights} flight${flights === 1 ? '' : 's'} climbed this stream`;
+}
+
 export async function getWellnessHandwashingResponse(): Promise<string> {
   const n = await getHandwashingSinceStreamStart();
   if (n <= 0) return '🧼 No hand washes recorded this stream yet.';
@@ -71,16 +78,18 @@ export async function getWellnessWeightResponse(): Promise<string> {
 }
 
 export async function getWellnessSummaryResponse(): Promise<string> {
-  const [wellness, steps, distance, handwashing] = await Promise.all([
+  const [wellness, steps, distance, handwashing, flights] = await Promise.all([
     getWellnessData(),
     getStepsSinceStreamStart(),
     getDistanceSinceStreamStart(),
     getHandwashingSinceStreamStart(),
+    getFlightsSinceStreamStart(),
   ]);
 
   const parts: string[] = [];
   if (steps > 0) parts.push(`👟 ${steps.toLocaleString()} steps`);
   if (distance > 0) parts.push(`🚶 ${formatDistance(distance)}`);
+  if (flights > 0) parts.push(`🪜 ${flights} flight${flights === 1 ? '' : 's'}`);
   if (handwashing > 0) parts.push(`🧼 ${handwashing} wash${handwashing === 1 ? '' : 'es'}`);
   if ((wellness?.standHours ?? 0) > 0) parts.push(`🧍 ${wellness!.standHours} stand hr`);
   if ((wellness?.activeCalories ?? 0) > 0) parts.push(`🔥 ${wellness!.activeCalories} active cal`);

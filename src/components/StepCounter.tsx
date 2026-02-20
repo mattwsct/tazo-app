@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { kmToMiles } from '@/utils/unit-conversions';
+import type { OverlaySettings } from '@/types/settings';
 
 const POLL_INTERVAL_MS = 10000; // 10s — wellness data updates from Health Auto Export
 
-export default function StepCounter() {
+interface StepCounterProps {
+  settings?: Pick<OverlaySettings, 'showSteps' | 'showDistance' | 'showDistanceMiles'>;
+}
+
+export default function StepCounter({ settings }: StepCounterProps) {
   const [steps, setSteps] = useState<number | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
 
@@ -37,9 +42,19 @@ export default function StepCounter() {
     };
   }, []);
 
-  const hasSteps = steps !== null && steps >= 0;
-  const hasDistance = distance !== null && distance > 0;
+  const showStepsSetting = settings?.showSteps ?? true;
+  const showDistanceSetting = settings?.showDistance ?? true;
+  const showMiles = settings?.showDistanceMiles ?? true;
+
+  const hasSteps = showStepsSetting && steps !== null && steps >= 0;
+  const hasDistance = showDistanceSetting && distance !== null && distance > 0;
   if (!hasSteps && !hasDistance) return null;
+
+  const distanceFormatted = hasDistance
+    ? showMiles
+      ? `${distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)} km (${kmToMiles(distance!).toFixed(1)} mi)`
+      : `${distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)} km`
+    : '';
 
   return (
     <div className="step-counter-wrapper">
@@ -53,9 +68,7 @@ export default function StepCounter() {
       {hasDistance && (
         <div className="step-counter-row">
           <span className="step-counter-icon">🚶</span>
-          <span className="step-counter-value">
-            {distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)} km ({kmToMiles(distance!).toFixed(1)} mi)
-          </span>
+          <span className="step-counter-value">{distanceFormatted}</span>
         </div>
       )}
     </div>

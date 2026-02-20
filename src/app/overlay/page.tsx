@@ -1583,7 +1583,7 @@ function OverlayPage() {
               <HeartRateMonitor pulsoidToken={API_KEYS.PULSOID} />
             </ErrorBoundary>
             <ErrorBoundary fallback={null}>
-              <StepCounter />
+              <StepCounter settings={settings} />
             </ErrorBoundary>
           </div>
         </div>

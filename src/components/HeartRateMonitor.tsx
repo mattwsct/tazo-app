@@ -451,7 +451,6 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
             </div>
             {/* Numbers - color changes based on BPM */}
             <div className="heart-rate-text">
-              {hasFallbackData && <span className="heart-rate-fallback-prefix">~</span>}
               <span 
                 className="heart-rate-value"
                 style={{

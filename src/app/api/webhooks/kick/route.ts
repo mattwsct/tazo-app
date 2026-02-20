@@ -20,7 +20,7 @@ import {
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
-import { getWellnessData, resetStepsSession, resetDistanceSession, resetHandwashingSession, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
+import { getWellnessData, resetStepsSession, resetDistanceSession, resetHandwashingSession, resetFlightsSession, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -140,6 +140,7 @@ export async function POST(request: NextRequest) {
         await resetStepsSession(wellness?.steps ?? 0);
         await resetDistanceSession(wellness?.distanceKm ?? 0);
         await resetHandwashingSession(wellness?.handwashingCount ?? 0);
+        await resetFlightsSession(wellness?.flightsClimbed ?? 0);
         await resetWellnessMilestonesOnStreamStart();
       } catch (e) {
         console.warn('Failed to reset wellness session on stream start:', e);

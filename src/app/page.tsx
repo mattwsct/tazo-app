@@ -88,6 +88,7 @@ export default function AdminPage() {
   const [kickChatBroadcastAltitudeMinM, setKickChatBroadcastAltitudeMinM] = useState(50);
   const [kickChatBroadcastWellnessSteps, setKickChatBroadcastWellnessSteps] = useState(false);
   const [kickChatBroadcastWellnessDistance, setKickChatBroadcastWellnessDistance] = useState(false);
+  const [kickChatBroadcastWellnessFlights, setKickChatBroadcastWellnessFlights] = useState(false);
   const [kickChatBroadcastWellnessStandHours, setKickChatBroadcastWellnessStandHours] = useState(false);
   const [kickChatBroadcastWellnessActiveCalories, setKickChatBroadcastWellnessActiveCalories] = useState(false);
   const [kickChatBroadcastWellnessHandwashing, setKickChatBroadcastWellnessHandwashing] = useState(false);
@@ -257,6 +258,7 @@ export default function AdminPage() {
         if (d.alertSettings?.chatBroadcastAltitudeMinM != null) setKickChatBroadcastAltitudeMinM(d.alertSettings.chatBroadcastAltitudeMinM);
         if (d.alertSettings?.chatBroadcastWellnessSteps !== undefined) setKickChatBroadcastWellnessSteps(d.alertSettings.chatBroadcastWellnessSteps);
         if (d.alertSettings?.chatBroadcastWellnessDistance !== undefined) setKickChatBroadcastWellnessDistance(d.alertSettings.chatBroadcastWellnessDistance);
+        if (d.alertSettings?.chatBroadcastWellnessFlights !== undefined) setKickChatBroadcastWellnessFlights(d.alertSettings.chatBroadcastWellnessFlights);
         if (d.alertSettings?.chatBroadcastWellnessStandHours !== undefined) setKickChatBroadcastWellnessStandHours(d.alertSettings.chatBroadcastWellnessStandHours);
         if (d.alertSettings?.chatBroadcastWellnessActiveCalories !== undefined) setKickChatBroadcastWellnessActiveCalories(d.alertSettings.chatBroadcastWellnessActiveCalories);
         if (d.alertSettings?.chatBroadcastWellnessHandwashing !== undefined) setKickChatBroadcastWellnessHandwashing(d.alertSettings.chatBroadcastWellnessHandwashing);
@@ -508,6 +510,7 @@ export default function AdminPage() {
       chatBroadcastAltitudeTimeoutMin: number;
       chatBroadcastWellnessSteps: boolean;
       chatBroadcastWellnessDistance: boolean;
+      chatBroadcastWellnessFlights: boolean;
       chatBroadcastWellnessStandHours: boolean;
       chatBroadcastWellnessActiveCalories: boolean;
       chatBroadcastWellnessHandwashing: boolean;
@@ -533,6 +536,7 @@ export default function AdminPage() {
       chatBroadcastAltitudeTimeoutMin: 5,
       chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
       chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
+      chatBroadcastWellnessFlights: kickChatBroadcastWellnessFlights,
       chatBroadcastWellnessStandHours: kickChatBroadcastWellnessStandHours,
       chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
       chatBroadcastWellnessHandwashing: kickChatBroadcastWellnessHandwashing,
@@ -554,7 +558,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessStandHours, kickChatBroadcastWellnessActiveCalories, kickChatBroadcastWellnessHandwashing]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessStandHours, kickChatBroadcastWellnessActiveCalories, kickChatBroadcastWellnessHandwashing]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
@@ -1323,6 +1327,11 @@ export default function AdminPage() {
                     <span>Distance (km)</span>
                   </label>
                   <label className="checkbox-label-row broadcast-checkbox-item">
+                    <input type="checkbox" checked={kickChatBroadcastWellnessFlights} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessFlights(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessFlights: c } }); }} className="checkbox-input" />
+                    <span className="radio-icon">🪜</span>
+                    <span>Flights climbed</span>
+                  </label>
+                  <label className="checkbox-label-row broadcast-checkbox-item">
                     <input type="checkbox" checked={kickChatBroadcastWellnessStandHours} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessStandHours(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessStandHours: c } }); }} className="checkbox-input" />
                     <span className="radio-icon">🧍</span>
                     <span>Stand hours</span>
@@ -1400,6 +1409,42 @@ export default function AdminPage() {
                 <option value="auto">🏃 Auto (≥10 km/h)</option>
                 <option value="hidden">🚫 Hidden</option>
               </select>
+            </div>
+          </section>
+
+          {/* Steps & distance (Health Auto Export) */}
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>👟 Steps & distance</h2>
+            </div>
+            <div className="setting-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={settings.showSteps ?? true}
+                  onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })}
+                  className="checkbox-input"
+                />
+                <span className="checkbox-text">Show steps</span>
+              </label>
+              <label className="checkbox-label" style={{ marginTop: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={settings.showDistance ?? true}
+                  onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })}
+                  className="checkbox-input"
+                />
+                <span className="checkbox-text">Show distance</span>
+              </label>
+              <label className="checkbox-label" style={{ marginTop: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={settings.showDistanceMiles ?? true}
+                  onChange={(e) => handleSettingsChange({ showDistanceMiles: e.target.checked })}
+                  className="checkbox-input"
+                />
+                <span className="checkbox-text">Show miles (km + mi)</span>
+              </label>
             </div>
           </section>
 

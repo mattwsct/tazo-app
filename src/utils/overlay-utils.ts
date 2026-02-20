@@ -19,6 +19,9 @@ export function mergeSettingsWithDefaults(settingsData: Partial<OverlaySettings>
     weatherConditionDisplay: settingsData.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
     altitudeDisplay: settingsData.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
     speedDisplay: settingsData.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
+    showSteps: settingsData.showSteps ?? DEFAULT_OVERLAY_SETTINGS.showSteps,
+    showDistance: settingsData.showDistance ?? DEFAULT_OVERLAY_SETTINGS.showDistance,
+    showDistanceMiles: settingsData.showDistanceMiles ?? DEFAULT_OVERLAY_SETTINGS.showDistanceMiles,
     minimapTheme: settingsData.minimapTheme || DEFAULT_OVERLAY_SETTINGS.minimapTheme,
   };
 }
