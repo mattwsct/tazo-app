@@ -12,6 +12,8 @@ import { kv } from '@vercel/kv';
 export const KICK_API_BASE = 'https://api.kick.com';
 export const KICK_TOKENS_KEY = 'kick_tokens';
 export const KICK_OAUTH_BASE = 'https://id.kick.com';
+export const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
+export const KICK_BROADCASTER_SLUG_KEY = 'kick_broadcaster_slug';
 
 export const KICK_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq/+l1WnlRrGSolDMA+A8

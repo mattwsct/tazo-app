@@ -50,9 +50,11 @@ export async function POST(request: NextRequest) {
     }
 
     const now = Date.now();
+    // Store timestamp in RTIRL-style format so staleness logic works the same (browser data can become stale)
+    const rtirlRaw = { reportedAt: now, updatedAt: now, timestamp: now };
     await updatePersistentLocation({
       location: locationToStore,
-      rtirl: { lat, lon, raw: {}, updatedAt: now },
+      rtirl: { lat, lon, raw: rtirlRaw, updatedAt: now },
       updatedAt: now,
     });
 

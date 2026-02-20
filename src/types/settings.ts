@@ -1,6 +1,8 @@
 // Centralized settings types and constants
 
 export type LocationDisplayMode = 'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden';
+/** Max level when broadening stale GPS: city = never go beyond city; state = never country-only; country = allow country-only */
+export type LocationStaleMaxFallback = 'city' | 'state' | 'country';
 export type MapZoomLevel = 'neighbourhood' | 'city' | 'state' | 'country' | 'ocean' | 'continental';
 export type DisplayMode = 'always' | 'auto' | 'hidden';
 export type MinimapTheme = 'auto' | 'light' | 'dark';
@@ -15,6 +17,10 @@ import type { PollState } from '@/types/poll';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
+  /** When true (default), broaden location when GPS is stale. When false, always use selected display mode. */
+  broadenLocationWhenStale?: boolean;
+  /** When broadening, never go beyond this level. State = always show state+country; country = allow country-only. */
+  locationStaleMaxFallback?: LocationStaleMaxFallback;
   customLocation?: string;
   showCountryName: boolean;
   showWeather: boolean;
@@ -34,6 +40,8 @@ export interface OverlaySettings {
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   locationDisplay: 'neighbourhood',
+  broadenLocationWhenStale: true,
+  locationStaleMaxFallback: 'country',
   customLocation: '',
   showCountryName: true,
   showWeather: true,
@@ -52,6 +60,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 // Note: 'todos' is handled separately; 'pollState' is runtime from SSE, not persisted
 export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'pollState'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
+  broadenLocationWhenStale: 'boolean',
+  locationStaleMaxFallback: 'string',
   customLocation: 'string',
   showCountryName: 'boolean',
   showWeather: 'boolean',

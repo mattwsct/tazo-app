@@ -4,10 +4,22 @@
 
 import { kv } from '@vercel/kv';
 import type { PollState, QueuedPoll, PollSettings } from '@/types/poll';
-import { POLL_STATE_KEY, POLL_MODIFIED_KEY, POLL_QUEUE_KEY, POLL_SETTINGS_KEY, DEFAULT_POLL_SETTINGS } from '@/types/poll';
+import {
+  POLL_STATE_KEY,
+  POLL_MODIFIED_KEY,
+  POLL_QUEUE_KEY,
+  POLL_SETTINGS_KEY,
+  LAST_POLL_ENDED_AT_KEY,
+  DEFAULT_POLL_SETTINGS,
+} from '@/types/poll';
 import { broadcastPollAndSettings } from '@/lib/poll-broadcast';
 
 const POLL_END_LOCK_KEY = 'poll_end_lock';
+
+/** Record that a poll ended (for auto-start: no poll run in X min). */
+export async function setLastPollEndedAt(): Promise<void> {
+  await kv.set(LAST_POLL_ENDED_AT_KEY, Date.now());
+}
 
 /** Try to acquire lock for ending a poll. Only one process can end+pop+start. Returns true if acquired. */
 export async function tryAcquirePollEndLock(): Promise<boolean> {
@@ -34,10 +46,15 @@ export async function getPollStateAndSettings(): Promise<{ state: PollState | nu
 }
 
 export async function setPollState(state: PollState | null): Promise<void> {
-  await Promise.all([
+  const updates: Promise<unknown>[] = [
     kv.set(POLL_STATE_KEY, state),
     kv.set(POLL_MODIFIED_KEY, Date.now()),
-  ]);
+  ];
+  // Track when poll ends for auto-start (no poll run in X min)
+  if (state === null || state.status === 'winner') {
+    updates.push(kv.set(LAST_POLL_ENDED_AT_KEY, Date.now()));
+  }
+  await Promise.all(updates);
   // Fire-and-forget broadcast so overlays get instant updates (no await to avoid adding latency)
   void broadcastPollAndSettings();
 }
@@ -62,8 +79,13 @@ export async function popPollQueue(): Promise<QueuedPoll | null> {
 }
 
 export async function getPollSettings(): Promise<PollSettings> {
-  const stored = await kv.get<Partial<PollSettings>>(POLL_SETTINGS_KEY);
-  return { ...DEFAULT_POLL_SETTINGS, ...stored };
+  const stored = await kv.get<Partial<PollSettings> & { chatIdleMinutes?: number }>(POLL_SETTINGS_KEY);
+  const merged = { ...DEFAULT_POLL_SETTINGS, ...stored };
+  // Migrate legacy chatIdleMinutes -> minutesSinceLastPoll
+  if (merged.minutesSinceLastPoll == null && typeof stored?.chatIdleMinutes === 'number') {
+    merged.minutesSinceLastPoll = stored.chatIdleMinutes;
+  }
+  return merged;
 }
 
 export async function setPollSettings(settings: Partial<PollSettings>): Promise<void> {

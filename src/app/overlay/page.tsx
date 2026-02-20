@@ -68,6 +68,8 @@ const {
   MINIMAP_STALENESS_CHECK_INTERVAL,
   MINIMAP_HIDE_DELAY,
   GPS_STALE_TIMEOUT,
+  ALTITUDE_CHANGE_THRESHOLD_M,
+  ALTITUDE_DISPLAY_DURATION_MS,
 } = TIMERS;
 
 // MapLibreMinimap component - WebGL-based map rendering
@@ -221,6 +223,7 @@ function OverlayPage() {
   const lastCoordsTime = useRef(0);
   const lastRawLocation = useRef<LocationData | null>(null);
   const locationReceivedFromRtirlRef = useRef(false); // Prevents persistent fallback from overwriting RTIRL data
+  const lastLocationSourceTimestampRef = useRef(0); // updatedAt of current display (RTIRL or persistent) — used to prefer newer data
   const persistentFallbackTimerRef = useRef<NodeJS.Timeout | null>(null); // Cleared when RTIRL provides data
   const lastSuccessfulWeatherFetch = useRef(0); // Track when weather was last successfully fetched
   const lastSuccessfulLocationFetch = useRef(0); // Track when location was last successfully fetched
@@ -241,6 +244,11 @@ function OverlayPage() {
   const [speedUpdateTimestamp, setSpeedUpdateTimestamp] = useState(0); // State to trigger re-renders
   const [altitudeUpdateTimestamp, setAltitudeUpdateTimestamp] = useState(0); // State to trigger re-renders
   const [gpsTimestampForDisplay, setGpsTimestampForDisplay] = useState(0); // Triggers locationDisplay recalc when GPS freshness changes (ref alone doesn't re-render)
+  // Altitude auto-display: baseline = first altitude this session; show when change >= threshold for duration
+  const altitudeBaselineRef = useRef<number | null>(null);
+  const currentAltitudeRef = useRef<number | null>(null); // Latest altitude for timeout callback
+  const [altitudeShowUntil, setAltitudeShowUntil] = useState(0); // Timestamp until we show (0 = hidden)
+  const altitudeShowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Ref to track current speed for minimap visibility (prevents infinite loops)
   const currentSpeedRef = useRef(0);
@@ -358,9 +366,18 @@ function OverlayPage() {
     const hasCompleteData = hasCompleteLocationData(lastRawLocation.current);
     
     // Re-format location when locationDisplay changes if we have complete location data
+    // Use effective mode (staleness broadening) so fallback matches useMemo behavior
     if (hasCompleteData && settings.locationDisplay !== 'hidden') {
       try {
-        const formatted = formatLocation(lastRawLocation.current!, settings.locationDisplay);
+        const sourceTimestamp = lastLocationSourceTimestampRef.current > 0 ? lastLocationSourceTimestampRef.current : lastGpsTimestamp.current;
+        const gpsAgeMs = sourceTimestamp > 0 ? Date.now() - sourceTimestamp : Number.MAX_SAFE_INTEGER;
+        const effectiveMode = getEffectiveDisplayModeForStaleGps(
+          settings.locationDisplay,
+          gpsAgeMs,
+          settings.broadenLocationWhenStale !== false,
+          settings.locationStaleMaxFallback ?? 'country'
+        );
+        const formatted = formatLocation(lastRawLocation.current!, effectiveMode);
         // Log only when locationDisplay actually changes (reduced verbosity)
         // Force update location state to trigger re-render with new format
         setLocation({
@@ -608,6 +625,8 @@ function OverlayPage() {
             if (locationReceivedFromRtirlRef.current) return;
             setLocation(data.location);
             lastRawLocation.current = data.rawLocation;
+            // Use 0 when updatedAt missing — treat as very old so staleness broadening triggers (old browser-set data may lack timestamp)
+            lastLocationSourceTimestampRef.current = (typeof data.updatedAt === 'number' && data.updatedAt > 0) ? data.updatedAt : 0;
             setHasIncompleteLocationData(false);
             if (process.env.NODE_ENV !== 'production') {
               OverlayLogger.location('Location from persistent storage (RTIRL unavailable)', {
@@ -633,6 +652,36 @@ function OverlayPage() {
         persistentFallbackTimerRef.current = null;
       }
     };
+  }, []);
+
+  // Cleanup altitude show timeout on unmount
+  useEffect(() => () => {
+    clearTimer(altitudeShowTimeoutRef);
+  }, []);
+
+  // Periodic check for browser-set location — use persistent when newer than our current display (e.g. admin clicked Get from browser)
+  useEffect(() => {
+    const PERSISTENT_CHECK_INTERVAL = 90000; // 90s
+    const checkPersistent = async () => {
+      try {
+        const res = await fetch('/api/get-location', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.location?.primary && !data.rawLocation) return;
+        const persistentUpdatedAt = data.updatedAt as number | undefined;
+        if (persistentUpdatedAt && persistentUpdatedAt > lastLocationSourceTimestampRef.current) {
+          lastLocationSourceTimestampRef.current = persistentUpdatedAt;
+          lastRawLocation.current = data.rawLocation ?? lastRawLocation.current;
+          setLocation(data.location);
+          setHasIncompleteLocationData(false);
+          if (process.env.NODE_ENV !== 'production') {
+            OverlayLogger.location('Using persistent (newer than RTIRL)', { updatedAt: persistentUpdatedAt });
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    const id = setInterval(checkPersistent, PERSISTENT_CHECK_INTERVAL);
+    return () => clearInterval(id);
   }, []);
 
   // RTIRL connection - use refs to avoid re-running on timezone/settings changes
@@ -735,8 +784,27 @@ function OverlayPage() {
               const roundedAltitude = processAltitude(payload);
               if (roundedAltitude !== null) {
                 setCurrentAltitude(roundedAltitude);
+                currentAltitudeRef.current = roundedAltitude;
                 lastAltitudeGpsTimestamp.current = payloadTimestamp;
                 setAltitudeUpdateTimestamp(now);
+                // Auto mode: track baseline and show when notable change from baseline
+                if (altitudeBaselineRef.current === null) {
+                  altitudeBaselineRef.current = roundedAltitude;
+                } else if (settingsRef.current.altitudeDisplay === 'auto') {
+                  const change = Math.abs(roundedAltitude - altitudeBaselineRef.current);
+                  if (change >= ALTITUDE_CHANGE_THRESHOLD_M) {
+                    const showUntil = now + ALTITUDE_DISPLAY_DURATION_MS;
+                    setAltitudeShowUntil(showUntil);
+                    altitudeBaselineRef.current = roundedAltitude; // Reset baseline so next trigger is from here
+                    clearTimer(altitudeShowTimeoutRef);
+                    altitudeShowTimeoutRef.current = setTimeout(() => {
+                      altitudeShowTimeoutRef.current = null;
+                      setAltitudeShowUntil(0);
+                      altitudeBaselineRef.current = currentAltitudeRef.current ?? roundedAltitude; // New baseline = current when we hide
+                      setAltitudeUpdateTimestamp(Date.now());
+                    }, ALTITUDE_DISPLAY_DURATION_MS);
+                  }
+                }
               }
 
               // Send stats updates (throttled)
@@ -978,11 +1046,13 @@ function OverlayPage() {
                       // Update persistent location storage (for chat commands) via API - KV vars are server-only
                       // Store neighbourhood, city, state, country etc. so admin display mode (state/city/neighbourhood) works
                       const payloadTimestamp = extractGpsTimestamp(payload);
+                      const rtirlUpdatedAt = payloadTimestamp || Date.now();
+                      lastLocationSourceTimestampRef.current = rtirlUpdatedAt;
                       const locationToStore = getLocationForPersistence(loc);
                       const persistentPayload = locationToStore ? {
                         location: locationToStore,
-                        rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: payloadTimestamp || Date.now() },
-                        updatedAt: Date.now(),
+                        rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: rtirlUpdatedAt },
+                        updatedAt: rtirlUpdatedAt, // Use GPS timestamp so we don't overwrite newer browser-set data
                       } : null;
                       if (persistentPayload) {
                         const doUpdate = (retryCount = 0) => {
@@ -1224,10 +1294,18 @@ function OverlayPage() {
     
     // If we have raw location data, re-format it with current settings to ensure display mode changes are reflected immediately
     // Broaden display when GPS is stale (e.g. underground train through many neighbourhoods)
+    // Use lastLocationSourceTimestampRef (updated by both RTIRL and browser/persistent) so browser-set location is treated as fresh
     if (hasCompleteLocationData(lastRawLocation.current)) {
       try {
-        const gpsAgeMs = lastGpsTimestamp.current > 0 ? Date.now() - lastGpsTimestamp.current : 0;
-        const effectiveMode = getEffectiveDisplayModeForStaleGps(settings.locationDisplay, gpsAgeMs);
+        const sourceTimestamp = lastLocationSourceTimestampRef.current > 0 ? lastLocationSourceTimestampRef.current : lastGpsTimestamp.current;
+        // When timestamp is 0 (missing), treat as very old so staleness broadening triggers
+        const gpsAgeMs = sourceTimestamp > 0 ? Date.now() - sourceTimestamp : Number.MAX_SAFE_INTEGER;
+        const effectiveMode = getEffectiveDisplayModeForStaleGps(
+          settings.locationDisplay,
+          gpsAgeMs,
+          settings.broadenLocationWhenStale !== false,
+          settings.locationStaleMaxFallback ?? 'country'
+        );
         const formatted = formatLocation(lastRawLocation.current, effectiveMode);
         return {
           primary: formatted.primary || '',
@@ -1252,7 +1330,7 @@ function OverlayPage() {
     
     // No location data yet - return null so UI stays blank
     return null;
-  }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
+  }, [location, settings.locationDisplay, settings.customLocation, settings.broadenLocationWhenStale, settings.locationStaleMaxFallback, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
 
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
   // Recalculates when sunriseSunset, timezone, or staleCheckTime changes
@@ -1404,7 +1482,7 @@ function OverlayPage() {
     allowNull: true,
   });
 
-  // Altitude display logic - hybrid change + rate detection for notable elevation
+  // Altitude display logic - auto shows when altitude changes notably from baseline for a set duration
   const altitudeDisplay = useMemo(() => {
     // Hide if no altitude data
     if (currentAltitude === null || displayedAltitude === null) {
@@ -1423,23 +1501,21 @@ function OverlayPage() {
       return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
     }
     
-    // "Auto" mode: show only when above notable elevation threshold (e.g., mountains/hills)
+    // "Auto" mode: show when altitude changed notably from baseline, for ALTITUDE_DISPLAY_DURATION_MS
     if (settings.altitudeDisplay === 'auto') {
-      const altitudeIsStale = isAltitudeStale(lastAltitudeGpsTimestamp.current);
-      const ELEVATION_THRESHOLD = 500; // meters
-      const meetsElevationThreshold = currentAltitude >= ELEVATION_THRESHOLD;
-      
-      if (!shouldShowDisplayMode('auto', altitudeIsStale, meetsElevationThreshold)) {
+      const now = Date.now();
+      const isInShowWindow = altitudeShowUntil > 0 && now < altitudeShowUntil;
+      if (!isInShowWindow) {
         return null;
       }
     }
     
-    // Show altitude (auto mode with notable change detected)
+    // Show altitude (always, or auto within show window)
     const altitudeM = displayedAltitude;
     const altitudeFt = metersToFeet(altitudeM);
     return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- altitudeUpdateTimestamp forces re-run when altitude changes
-  }, [currentAltitude, displayedAltitude, settings.altitudeDisplay, altitudeUpdateTimestamp]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- altitudeUpdateTimestamp + altitudeShowUntil
+  }, [currentAltitude, displayedAltitude, settings.altitudeDisplay, altitudeUpdateTimestamp, altitudeShowUntil]);
 
   // Speed display logic
   const speedDisplay = useMemo(() => {

@@ -1,6 +1,7 @@
 // === 📊 STATS STORAGE UTILITIES ===
-// Timestamp-based rolling 24-hour window for stats tracking
-// Avoids timezone issues by using Unix timestamps (UTC)
+// Stream-session based stats: from stream start until stream end
+// stream_started_at is set when livestream.status.updated fires with is_live: true
+// Stats (HR, altitude, speed, distance, countries, cities) filter by timestamp >= stream_started_at
 //
 // SMART SAMPLING STRATEGY:
 // To prevent excessive storage from high-frequency updates (RTIRL spam, frequent heartrate):
@@ -54,23 +55,53 @@ const HEARTRATE_KEY = 'heartrate_history';
 const SPEED_KEY = 'speed_history';
 const ALTITUDE_KEY = 'altitude_history';
 const LOCATION_KEY = 'location_history';
-const COUNTRIES_KEY = 'countries_visited';
-const CITIES_KEY = 'cities_visited';
+export const STREAM_STARTED_AT_KEY = 'stream_started_at';
 
 /**
- * Filters entries to only those within the last 24 hours
+ * Filters entries to only those since stream started
  */
-function filter24h<T extends { timestamp: number }>(entries: T[]): T[] {
+function filterSinceStreamStart<T extends { timestamp: number }>(
+  entries: T[],
+  streamStartedAt: number | null
+): T[] {
+  if (streamStartedAt == null) return [];
+  return entries.filter(entry => entry.timestamp >= streamStartedAt);
+}
+
+/**
+ * Cleans old entries (older than 24h) from array - for storage size limit only
+ */
+function cleanOldEntries<T extends { timestamp: number }>(entries: T[]): T[] {
   const now = Date.now();
   const cutoff = now - TWENTY_FOUR_HOURS_MS;
   return entries.filter(entry => entry.timestamp > cutoff);
 }
 
 /**
- * Cleans old entries (older than 24h) from array
+ * Called when stream goes live. Sets stream_started_at for session-based stats.
  */
-function cleanOldEntries<T extends { timestamp: number }>(entries: T[]): T[] {
-  return filter24h(entries);
+export async function onStreamStarted(): Promise<void> {
+  try {
+    const now = Date.now();
+    await kv.set(STREAM_STARTED_AT_KEY, now);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Stats] Stream started, session reset at', new Date(now).toISOString());
+    }
+  } catch (error) {
+    console.warn('Failed to set stream started:', error);
+  }
+}
+
+/**
+ * Gets stream_started_at timestamp (ms) or null if never set
+ */
+export async function getStreamStartedAt(): Promise<number | null> {
+  try {
+    const val = await kv.get<number>(STREAM_STARTED_AT_KEY);
+    return typeof val === 'number' ? val : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -155,7 +186,7 @@ export async function storeHeartrate(bpm: number, timestamp?: number): Promise<v
 }
 
 /**
- * Gets heartrate stats (current, min, max, avg) for last 24h
+ * Gets heartrate stats (current, min, max, avg) for current stream session
  */
 export async function getHeartrateStats(): Promise<{
   current: { bpm: number; age: string } | null;
@@ -165,22 +196,18 @@ export async function getHeartrateStats(): Promise<{
   hasData: boolean;
 }> {
   try {
-    const history = await kv.get<HeartrateEntry[]>(HEARTRATE_KEY) || [];
-    const recent24h = filter24h(history);
+    const [history, streamStartedAt] = await Promise.all([
+      kv.get<HeartrateEntry[]>(HEARTRATE_KEY),
+      getStreamStartedAt(),
+    ]);
+    const entries = history || [];
+    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
 
-    // Debug logging (can be removed later)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Heartrate Stats] Total entries:', history.length, 'Recent 24h:', recent24h.length);
-      if (history.length > 0) {
-        const oldest = history[0];
-        const newest = history[history.length - 1];
-        const now = Date.now();
-        console.log('[Heartrate Stats] Oldest entry age:', Math.round((now - oldest.timestamp) / 1000 / 60), 'minutes');
-        console.log('[Heartrate Stats] Newest entry age:', Math.round((now - newest.timestamp) / 1000), 'seconds');
-      }
+    if (process.env.NODE_ENV === 'development' && sessionEntries.length > 0) {
+      console.log('[Heartrate Stats] Session entries:', sessionEntries.length, 'since stream start');
     }
 
-    if (recent24h.length === 0) {
+    if (sessionEntries.length === 0) {
       return {
         current: null,
         min: null,
@@ -191,7 +218,7 @@ export async function getHeartrateStats(): Promise<{
     }
 
     // Most recent entry (current)
-    const mostRecent = recent24h[recent24h.length - 1];
+    const mostRecent = sessionEntries[sessionEntries.length - 1];
     const now = Date.now();
     const ageMs = now - mostRecent.timestamp;
     const isCurrent = ageMs <= STALE_THRESHOLD_MS;
@@ -201,12 +228,12 @@ export async function getHeartrateStats(): Promise<{
       : { bpm: mostRecent.bpm, age: formatAge(ageMs) };
 
     // Min/Max
-    const bpmValues = recent24h.map(e => e.bpm);
+    const bpmValues = sessionEntries.map(e => e.bpm);
     const minBpm = Math.min(...bpmValues);
     const maxBpm = Math.max(...bpmValues);
     
-    const minEntry = recent24h.find(e => e.bpm === minBpm)!;
-    const maxEntry = recent24h.find(e => e.bpm === maxBpm)!;
+    const minEntry = sessionEntries.find(e => e.bpm === minBpm)!;
+    const maxEntry = sessionEntries.find(e => e.bpm === maxBpm)!;
     
     const min = {
       bpm: minBpm,
@@ -276,7 +303,7 @@ export async function storeSpeed(speed: number, timestamp?: number): Promise<voi
 }
 
 /**
- * Gets speed stats (current, max) for last 24h
+ * Gets speed stats (current, max) for current stream session
  */
 export async function getSpeedStats(): Promise<{
   current: { speed: number; age: string } | null;
@@ -284,10 +311,14 @@ export async function getSpeedStats(): Promise<{
   hasData: boolean;
 }> {
   try {
-    const history = await kv.get<SpeedEntry[]>(SPEED_KEY) || [];
-    const recent24h = filter24h(history);
+    const [history, streamStartedAt] = await Promise.all([
+      kv.get<SpeedEntry[]>(SPEED_KEY),
+      getStreamStartedAt(),
+    ]);
+    const entries = history || [];
+    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
 
-    if (recent24h.length === 0) {
+    if (sessionEntries.length === 0) {
       return {
         current: null,
         max: null,
@@ -295,7 +326,7 @@ export async function getSpeedStats(): Promise<{
       };
     }
 
-    const mostRecent = recent24h[recent24h.length - 1];
+    const mostRecent = sessionEntries[sessionEntries.length - 1];
     const now = Date.now();
     const ageMs = now - mostRecent.timestamp;
     const isCurrent = ageMs <= STALE_THRESHOLD_MS;
@@ -304,9 +335,9 @@ export async function getSpeedStats(): Promise<{
       ? { speed: mostRecent.speed, age: 'current' }
       : { speed: mostRecent.speed, age: formatAge(ageMs) };
 
-    const speeds = recent24h.map(e => e.speed);
+    const speeds = sessionEntries.map(e => e.speed);
     const maxSpeed = Math.max(...speeds);
-    const maxEntry = recent24h.find(e => e.speed === maxSpeed)!;
+    const maxEntry = sessionEntries.find(e => e.speed === maxSpeed)!;
 
     const max = {
       speed: maxSpeed,
@@ -364,7 +395,7 @@ export async function storeAltitude(altitude: number, timestamp?: number): Promi
 }
 
 /**
- * Gets altitude stats (current, highest, lowest) for last 24h
+ * Gets altitude stats (current, highest, lowest) for current stream session
  */
 export async function getAltitudeStats(): Promise<{
   current: { altitude: number; age: string } | null;
@@ -373,10 +404,14 @@ export async function getAltitudeStats(): Promise<{
   hasData: boolean;
 }> {
   try {
-    const history = await kv.get<AltitudeEntry[]>(ALTITUDE_KEY) || [];
-    const recent24h = filter24h(history);
+    const [history, streamStartedAt] = await Promise.all([
+      kv.get<AltitudeEntry[]>(ALTITUDE_KEY),
+      getStreamStartedAt(),
+    ]);
+    const entries = history || [];
+    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
 
-    if (recent24h.length === 0) {
+    if (sessionEntries.length === 0) {
       return {
         current: null,
         highest: null,
@@ -385,7 +420,7 @@ export async function getAltitudeStats(): Promise<{
       };
     }
 
-    const mostRecent = recent24h[recent24h.length - 1];
+    const mostRecent = sessionEntries[sessionEntries.length - 1];
     const now = Date.now();
     const ageMs = now - mostRecent.timestamp;
     const isCurrent = ageMs <= STALE_THRESHOLD_MS;
@@ -394,12 +429,12 @@ export async function getAltitudeStats(): Promise<{
       ? { altitude: mostRecent.altitude, age: 'current' }
       : { altitude: mostRecent.altitude, age: formatAge(ageMs) };
 
-    const altitudes = recent24h.map(e => e.altitude);
+    const altitudes = sessionEntries.map(e => e.altitude);
     const highestAlt = Math.max(...altitudes);
     const lowestAlt = Math.min(...altitudes);
     
-    const highestEntry = recent24h.find(e => e.altitude === highestAlt)!;
-    const lowestEntry = recent24h.find(e => e.altitude === lowestAlt)!;
+    const highestEntry = sessionEntries.find(e => e.altitude === highestAlt)!;
+    const lowestEntry = sessionEntries.find(e => e.altitude === lowestAlt)!;
 
     const highest = {
       altitude: highestAlt,
@@ -474,22 +509,26 @@ export async function storeLocation(lat: number, lon: number, timestamp?: number
 }
 
 /**
- * Calculates distance traveled in last 24h (in km)
+ * Calculates distance traveled in current stream session (in km)
  */
 export async function getDistanceTraveled(): Promise<number | null> {
   try {
-    const history = await kv.get<LocationEntry[]>(LOCATION_KEY) || [];
-    const recent24h = filter24h(history);
+    const [history, streamStartedAt] = await Promise.all([
+      kv.get<LocationEntry[]>(LOCATION_KEY),
+      getStreamStartedAt(),
+    ]);
+    const entries = history || [];
+    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
 
-    if (recent24h.length < 2) {
+    if (sessionEntries.length < 2) {
       return null;
     }
 
     // Calculate total distance by summing distances between consecutive points
     let totalDistance = 0;
-    for (let i = 1; i < recent24h.length; i++) {
-      const prev = recent24h[i - 1];
-      const curr = recent24h[i];
+    for (let i = 1; i < sessionEntries.length; i++) {
+      const prev = sessionEntries[i - 1];
+      const curr = sessionEntries[i];
       
       // Haversine formula for distance between two points
       const R = 6371; // Earth's radius in km
@@ -509,60 +548,5 @@ export async function getDistanceTraveled(): Promise<number | null> {
   } catch (error) {
     console.warn('Failed to calculate distance:', error);
     return null;
-  }
-}
-
-/**
- * Adds a country to visited countries (last 24h)
- */
-export async function addCountry(countryCode: string): Promise<void> {
-  try {
-    const countries = await kv.get<Set<string>>(COUNTRIES_KEY) || new Set<string>();
-    countries.add(countryCode);
-    
-    // Clean old entries - we'll just keep the set, no timestamp needed
-    // Countries don't change frequently, so this is fine
-    await kv.set(COUNTRIES_KEY, countries);
-  } catch (error) {
-    console.warn('Failed to add country:', error);
-  }
-}
-
-/**
- * Gets countries visited in last 24h
- */
-export async function getCountriesVisited(): Promise<string[]> {
-  try {
-    const countries = await kv.get<Set<string>>(COUNTRIES_KEY) || new Set<string>();
-    return Array.from(countries);
-  } catch (error) {
-    console.warn('Failed to get countries:', error);
-    return [];
-  }
-}
-
-/**
- * Adds a city to visited cities (last 24h)
- */
-export async function addCity(cityName: string): Promise<void> {
-  try {
-    const cities = await kv.get<Set<string>>(CITIES_KEY) || new Set<string>();
-    cities.add(cityName);
-    await kv.set(CITIES_KEY, cities);
-  } catch (error) {
-    console.warn('Failed to add city:', error);
-  }
-}
-
-/**
- * Gets cities visited in last 24h
- */
-export async function getCitiesVisited(): Promise<string[]> {
-  try {
-    const cities = await kv.get<Set<string>>(CITIES_KEY) || new Set<string>();
-    return Array.from(cities);
-  } catch (error) {
-    console.warn('Failed to get cities:', error);
-    return [];
   }
 }

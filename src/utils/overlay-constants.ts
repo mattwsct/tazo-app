@@ -19,8 +19,9 @@ export const TIMERS = {
   GPS_FRESHNESS_TIMEOUT: 15 * 60 * 1000, // 15 minutes
   GPS_STALE_TIMEOUT: 10000, // 10 seconds
   // Stale GPS → broader location display. Balance: cafe (stationary) vs train (moving)
-  STALE_NEIGHBOURHOOD_MS: 5 * 60 * 1000,  // 5 min: neighbourhood→city
-  STALE_CITY_MS: 10 * 60 * 1000,         // 10 min: city→state (stop there, not country)
+  STALE_NEIGHBOURHOOD_MS: 5 * 60 * 1000,   // 5 min: neighbourhood→city
+  STALE_CITY_MS: 10 * 60 * 1000,          // 10 min: city→state
+  STALE_STATE_MS: 15 * 60 * 1000,         // 15 min: state→country (final fallback)
   WEATHER_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
   LOCATION_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
   
@@ -39,6 +40,10 @@ export const TIMERS = {
   MIN_TIME_SECONDS: 0.5, // Minimum time difference for speed calculation
   SPEED_STALE_DISTANCE_THRESHOLD: 50, // meters - if moved <50m over >10s, consider speed stale
   SPEED_STALE_TIME_THRESHOLD: 10, // seconds - time threshold for stale speed detection
+
+  // Altitude auto-display: show when altitude changes notably from baseline
+  ALTITUDE_CHANGE_THRESHOLD_M: 50,   // meters - notable change from baseline to trigger display
+  ALTITUDE_DISPLAY_DURATION_MS: 60 * 1000, // 1 minute - how long to show after notable change
 } as const;
 
 // Animation configurations for integer counting - different speeds for different metrics
@@ -70,9 +75,6 @@ export const ELEVATION_ANIMATION = {
   maxDuration: 4000, // 4 seconds max (for 20+ meter jumps like elevators)
   precision: 0,
 } as const;
-
-// Legacy: Keep for backwards compatibility (defaults to heart rate speed)
-export const INTEGER_COUNTING_ANIMATION = HEART_RATE_ANIMATION;
 
 export const API_KEYS = {
   RTIRL: process.env.NEXT_PUBLIC_RTIRL_PULL_KEY,

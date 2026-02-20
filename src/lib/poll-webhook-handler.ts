@@ -3,7 +3,7 @@
  */
 
 import { kv } from '@vercel/kv';
-import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
+import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import {
   parsePollCommand,
   parsePollDurationVariant,
@@ -29,7 +29,6 @@ import {
 } from '@/lib/poll-store';
 import type { PollState, PollOption, QueuedPoll } from '@/types/poll';
 
-const KICK_BROADCASTER_SLUG_KEY = 'kick_broadcaster_slug';
 
 /** Parse badges array (strings or objects with type/slug/name) into role flags */
 function parseBadges(badges: unknown): { isMod: boolean; isVip: boolean; isOg: boolean; isSub: boolean } {

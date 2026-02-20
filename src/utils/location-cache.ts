@@ -208,6 +208,20 @@ export async function updatePersistentLocation(data: PersistentLocationData): Pr
 }
 
 /**
+ * Update persistent location only if incoming data is newer than stored.
+ * Used when overlay sends RTIRL-derived data: don't overwrite browser-set data with stale RTIRL.
+ * @returns true if updated, false if skipped (stored was newer)
+ */
+export async function updatePersistentLocationIfNewer(data: PersistentLocationData): Promise<boolean> {
+  const stored = await getPersistentLocation();
+  if (stored && stored.updatedAt > data.updatedAt) {
+    return false; // Stored is newer (e.g. browser set recently)
+  }
+  await updatePersistentLocation(data);
+  return true;
+}
+
+/**
  * Get persistent location data (always available, even if stale)
  */
 export async function getPersistentLocation(): Promise<PersistentLocationData | null> {

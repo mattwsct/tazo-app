@@ -84,15 +84,16 @@ type LocationCategory = 'neighbourhood' | 'city' | 'county' | 'state' | 'country
 // === 🔍 SIMPLE FILTERING ===
 
 /**
- * Checks if a string contains only Latin script (including accented characters)
- * Allows: A-Z, a-z, accented characters (é, ñ, ü, etc.), spaces, hyphens, apostrophes
+ * Checks if a string contains only Latin script (including accented and extended characters)
+ * Allows: Basic Latin, Latin-1 Supplement (é, ñ, ü), Latin Extended-A (Đ, ğ, Polish ąęć, etc.),
+ * Latin Extended-B (Romanian ș ț, ẞ, etc.), Latin Extended Additional (Vietnamese ủ, ứ, ơ, etc.)
  * Rejects: Non-Latin alphabets (Japanese, Chinese, Arabic, Cyrillic, etc.)
  */
 function isLatinScript(name: string): boolean {
   if (!name) return false;
-  
+
   const trimmed = name.trim();
-  
+
   // Check for common non-Latin script ranges:
   // - Japanese: Hiragana (3040-309F), Katakana (30A0-30FF), Kanji (4E00-9FAF)
   // - Chinese: CJK Unified Ideographs (4E00-9FFF)
@@ -101,17 +102,20 @@ function isLatinScript(name: string): boolean {
   // - Korean: Hangul (AC00-D7AF)
   // - Thai: Thai (0E00-0E7F)
   // - Hebrew: Hebrew (0590-05FF)
-  // - Greek: Greek (0370-03FF) - might want to allow this, but keeping strict for now
   const nonLatinPattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u0600-\u06FF\u0400-\u04FF\uAC00-\uD7AF\u0E00-\u0E7F\u0590-\u05FF]/;
-  
+
   if (nonLatinPattern.test(trimmed)) {
     return false;
   }
-  
-  // Allow Latin characters (A-Z, a-z), accented Latin (À-ÿ), spaces, hyphens, apostrophes, periods, numbers
-  // This covers: Basic Latin, Latin-1 Supplement (accents), and common punctuation
-  const latinPattern = /^[A-Za-zÀ-ÿ\s\-'.,0-9]+$/;
-  
+
+  // Allow Latin blocks used in place names:
+  // - 0020-007F: Basic Latin (printable ASCII)
+  // - 00A0-00FF: Latin-1 Supplement (à, é, ñ, ü, etc.)
+  // - 0100-017F: Latin Extended-A (Đ, ğ, ş, Polish ąęćłń, Czech ř, Hungarian őű, etc.)
+  // - 0180-024F: Latin Extended-B (Romanian ș ț, ẞ, African orthographies, etc.)
+  // - 1E00-1EFF: Latin Extended Additional (Vietnamese ủ ứ ơ, etc.)
+  const latinPattern = /^[\u0020-\u007F\u00A0-\u00FF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\s\-'.,0-9]+$/;
+
   return latinPattern.test(trimmed);
 }
 
@@ -449,19 +453,21 @@ export function formatLocation(
   // For state mode, show state on line 1 and country on line 2
   if (displayMode === 'state') {
     const primaryResult = getLocationByPrecision(location, 'state');
-    const primary = primaryResult.name;
+    let primary = primaryResult.name;
     const countryInfo = getCountry(location);
+    const secondaryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
     
-    // If no state found, fallback to showing country only
+    // If no state found (e.g. Vietnam has no state/province in LocationIQ), fall back to neighbourhood or city
+    // so we show useful data instead of jumping straight to country-only
     if (!primary) {
+      const neighbourhoodResult = getLocationByPrecision(location, 'neighbourhood');
+      const cityResult = getLocationByPrecision(location, 'city');
+      primary = neighbourhoodResult.name || cityResult.name;
+      if (primary && secondaryDisplay) {
+        return { primary, secondary: secondaryDisplay, countryCode: location.countryCode || '' };
+      }
       if (countryInfo) {
-        // When state mode is selected, second line should only show country
-        const secondaryDisplay = formatCountryName(countryInfo.country, location.countryCode || '');
-        return { 
-          primary: '', // Line 1 stays blank
-          secondary: secondaryDisplay, // Line 2 shows country with flag
-          countryCode: location.countryCode || ''
-        };
+        return { primary: '', secondary: secondaryDisplay, countryCode: location.countryCode || '' };
       }
       return { primary: '', secondary: undefined };
     }
@@ -469,7 +475,6 @@ export function formatLocation(
     // Show state on line 1, country ONLY on line 2 (exclude state from second line)
     // When state mode is selected, second line should only show country, not state or other broader options
     // Check for duplicate names (e.g., if state name overlaps with country name like "Singapore" state vs "Singapore" country)
-    const secondaryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
     // If state and country names overlap, hide the duplicate country
     if (secondaryDisplay && hasOverlappingNames(primary, secondaryDisplay)) {
       return {

@@ -1,5 +1,5 @@
 /**
- * Auto-start location-based polls when stream is live and chat has been idle.
+ * Auto-start location-based polls when stream is live and no poll run in X minutes.
  * Used by poll-cleanup cron.
  */
 
@@ -8,8 +8,9 @@ import { getPollState, setPollState, getPollSettings } from '@/lib/poll-store';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { getPersistentLocation } from '@/utils/location-cache';
+import { pickOne } from '@/utils/chat-utils';
 import { getTravelData } from '@/utils/travel-data';
-import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
+import { LAST_POLL_ENDED_AT_KEY } from '@/types/poll';
 import { KICK_API_BASE } from '@/lib/kick-api';
 import type { PollState } from '@/types/poll';
 
@@ -69,13 +70,12 @@ export async function buildRandomMoodPoll(): Promise<{
   const categories = [MOOD_POSITIVE, MOOD_NEUTRAL, MOOD_NEGATIVE];
   if (categories.some((c) => c.length < 1)) return null;
 
-  const pickOne = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)]!;
   const picked: string[] = [];
 
   for (const cat of categories) {
-    let w = pickOne(cat);
+    let w = pickOne(cat) ?? cat[0]!;
     while (picked.includes(w) && cat.length > 1) {
-      w = pickOne(cat);
+      w = pickOne(cat) ?? cat[0]!;
     }
     picked.push(w);
   }
@@ -166,19 +166,19 @@ export async function buildRandomPoll(): Promise<{
 }
 
 /**
- * If auto-start is enabled, stream is live, no poll active, and chat idle for X min,
+ * If auto-start is enabled, stream is live, no poll active, and no poll run in X min,
  * start a random poll (mood or food). Returns true if a poll was started.
  */
 export async function tryAutoStartPoll(): Promise<boolean> {
   const settings = await getPollSettings();
   if (!settings.autoStartPollsEnabled || !settings.enabled) return false;
 
-  const idleMinutes = Math.max(1, Math.min(30, settings.chatIdleMinutes ?? 5));
-  const idleMs = idleMinutes * 60 * 1000;
+  const minutesSinceLast = Math.max(1, Math.min(30, settings.minutesSinceLastPoll ?? 5));
+  const minGapMs = minutesSinceLast * 60 * 1000;
 
-  const [pollState, lastChatAt, accessToken] = await Promise.all([
+  const [pollState, lastPollEndedAt, accessToken] = await Promise.all([
     getPollState(),
-    kv.get<number>(KICK_LAST_CHAT_MESSAGE_AT_KEY),
+    kv.get<number>(LAST_POLL_ENDED_AT_KEY),
     getValidAccessToken(),
   ]);
 
@@ -189,8 +189,8 @@ export async function tryAutoStartPoll(): Promise<boolean> {
   }
 
   const now = Date.now();
-  const lastAt = typeof lastChatAt === 'number' ? lastChatAt : 0;
-  if (now - lastAt < idleMs) return false;
+  const lastAt = typeof lastPollEndedAt === 'number' ? lastPollEndedAt : 0;
+  if (lastAt > 0 && now - lastAt < minGapMs) return false;
 
   let isLive = false;
   try {

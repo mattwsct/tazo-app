@@ -269,7 +269,7 @@ Returns a list of all available country codes and names for use with other trave
 !speed → $(customapi https://app.tazo.wtf/api/chat/speed)
 ```
 
-Returns current speed and max speed over last 24h.
+Returns current speed and max speed this stream.
 
 Example output: `Current: 25 km/h | Max: 120 km/h (1h ago)`
 
@@ -280,7 +280,7 @@ Example output: `Current: 25 km/h | Max: 120 km/h (1h ago)`
 !elevation → $(customapi https://app.tazo.wtf/api/chat/altitude)
 ```
 
-Returns current altitude, highest, and lowest over last 24h.
+Returns current altitude, highest, and lowest this stream.
 
 Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago)`
 

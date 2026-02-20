@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, LocationStaleMaxFallback, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
   TEMPLATE_GROUP_CONFIG,
@@ -13,8 +13,17 @@ import {
 import type { KickMessageTemplates, KickMessageEnabled, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { formatLocationForStreamTitle, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
-import type { LocationData } from '@/utils/location-utils';
+import { formatLocation, type LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
+
+function formatLocationAge(ms: number): string {
+  const seconds = Math.floor((Date.now() - ms) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h`;
+}
 
 const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   follow: 'Follow',
@@ -73,17 +82,23 @@ export default function AdminPage() {
   const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
   const [kickChatBroadcastHeartrateMinBpm, setKickChatBroadcastHeartrateMinBpm] = useState(100);
   const [kickChatBroadcastHeartrateVeryHighBpm, setKickChatBroadcastHeartrateVeryHighBpm] = useState(120);
-  const [kickBroadcastStatus, setKickBroadcastStatus] = useState<{
-    heartRate?: { currentBpm: number; age: string; hasData: boolean; state: string; reason: string; wouldSendMessage: boolean; lastSentAt: string | null; lastSentAgo: string | null };
-    kick?: { hasTokens: boolean };
-    cron?: { runsEvery: string; note: string };
-  } | null>(null);
+  const [kickChatBroadcastSpeed, setKickChatBroadcastSpeed] = useState(false);
+  const [kickChatBroadcastSpeedMinKmh, setKickChatBroadcastSpeedMinKmh] = useState(20);
+  const [kickChatBroadcastSpeedTimeoutMin, setKickChatBroadcastSpeedTimeoutMin] = useState(5);
+  const [kickChatBroadcastAltitude, setKickChatBroadcastAltitude] = useState(false);
+  const [kickChatBroadcastAltitudeMinM, setKickChatBroadcastAltitudeMinM] = useState(50);
+  const [kickChatBroadcastAltitudeTimeoutMin, setKickChatBroadcastAltitudeTimeoutMin] = useState(5);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('state');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleIncludeLocation, setKickStreamTitleIncludeLocation] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
+  const [storedLocation, setStoredLocation] = useState<{
+    primary: string;
+    secondary?: string;
+    updatedAt?: number;
+  } | null>(null);
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
   const [kickPollEnabled, setKickPollEnabled] = useState(false);
@@ -95,9 +110,9 @@ export default function AdminPage() {
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
   const [kickPollAutoStart, setKickPollAutoStart] = useState(false);
-  const [kickPollChatIdleMinutes, setKickPollChatIdleMinutes] = useState(5);
+  const [kickPollMinutesSinceLastPoll, setKickPollMinutesSinceLastPoll] = useState(5);
   const [kickPollOneVotePerPerson, setKickPollOneVotePerPerson] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overlay' | 'kick'>('overlay');
+  // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
   
 
@@ -233,6 +248,12 @@ export default function AdminPage() {
         if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
         if (d.alertSettings?.chatBroadcastHeartrateMinBpm != null) setKickChatBroadcastHeartrateMinBpm(d.alertSettings.chatBroadcastHeartrateMinBpm);
         if (d.alertSettings?.chatBroadcastHeartrateVeryHighBpm != null) setKickChatBroadcastHeartrateVeryHighBpm(d.alertSettings.chatBroadcastHeartrateVeryHighBpm);
+        if (d.alertSettings?.chatBroadcastSpeed !== undefined) setKickChatBroadcastSpeed(d.alertSettings.chatBroadcastSpeed);
+        if (d.alertSettings?.chatBroadcastSpeedMinKmh != null) setKickChatBroadcastSpeedMinKmh(d.alertSettings.chatBroadcastSpeedMinKmh);
+        if (d.alertSettings?.chatBroadcastSpeedTimeoutMin != null) setKickChatBroadcastSpeedTimeoutMin(d.alertSettings.chatBroadcastSpeedTimeoutMin);
+        if (d.alertSettings?.chatBroadcastAltitude !== undefined) setKickChatBroadcastAltitude(d.alertSettings.chatBroadcastAltitude);
+        if (d.alertSettings?.chatBroadcastAltitudeMinM != null) setKickChatBroadcastAltitudeMinM(d.alertSettings.chatBroadcastAltitudeMinM);
+        if (d.alertSettings?.chatBroadcastAltitudeTimeoutMin != null) setKickChatBroadcastAltitudeTimeoutMin(d.alertSettings.chatBroadcastAltitudeTimeoutMin);
       })
       .catch(() => {});
     fetch('/api/kick-poll-settings', { credentials: 'include' })
@@ -247,7 +268,8 @@ export default function AdminPage() {
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
         if (d?.autoStartPollsEnabled !== undefined) setKickPollAutoStart(d.autoStartPollsEnabled);
-        if (d?.chatIdleMinutes != null) setKickPollChatIdleMinutes(d.chatIdleMinutes);
+        if (d?.minutesSinceLastPoll != null) setKickPollMinutesSinceLastPoll(d.minutesSinceLastPoll);
+        else if (d?.chatIdleMinutes != null) setKickPollMinutesSinceLastPoll(d.chatIdleMinutes);
         if (d?.oneVotePerPerson !== undefined) setKickPollOneVotePerPerson(d.oneVotePerPerson);
       })
       .catch(() => {});
@@ -304,7 +326,7 @@ export default function AdminPage() {
   kickStreamTitleLocationDisplayRef.current = kickStreamTitleLocationDisplay;
   kickStreamTitleIncludeLocationRef.current = kickStreamTitleIncludeLocation;
 
-  const fetchLocationForStreamTitle = useCallback(async () => {
+  const fetchLocationData = useCallback(async () => {
     try {
       const locRes = await fetch('/api/get-location', { credentials: 'include' });
       const locData = await locRes.json();
@@ -313,13 +335,22 @@ export default function AdminPage() {
         setKickStreamTitleRawLocation(raw);
         const display = kickStreamTitleLocationDisplayRef.current;
         setKickStreamTitleLocation(formatLocationForStreamTitle(raw, display));
+        if (locData?.location?.primary !== undefined) {
+          setStoredLocation({
+            primary: locData.location.primary,
+            secondary: locData.location.secondary,
+            updatedAt: locData.updatedAt,
+          });
+        }
       } else {
         setKickStreamTitleLocation('');
         setKickStreamTitleRawLocation(null);
+        setStoredLocation(null);
       }
     } catch {
       setKickStreamTitleLocation('');
       setKickStreamTitleRawLocation(null);
+      setStoredLocation(null);
     }
   }, []);
 
@@ -372,8 +403,8 @@ export default function AdminPage() {
   }, [kickStatus?.connected, kickStreamTitleAutoUpdate]);
 
   useEffect(() => {
-    fetchLocationForStreamTitle();
-  }, [fetchLocationForStreamTitle]);
+    fetchLocationData();
+  }, [fetchLocationData]);
 
   useEffect(() => {
     if (!kickStreamTitleAutoUpdate) return;
@@ -462,6 +493,12 @@ export default function AdminPage() {
       chatBroadcastHeartrate: boolean;
       chatBroadcastHeartrateMinBpm: number;
       chatBroadcastHeartrateVeryHighBpm: number;
+      chatBroadcastSpeed: boolean;
+      chatBroadcastSpeedMinKmh: number;
+      chatBroadcastSpeedTimeoutMin: number;
+      chatBroadcastAltitude: boolean;
+      chatBroadcastAltitudeMinM: number;
+      chatBroadcastAltitudeTimeoutMin: number;
     }>;
   }) => {
     const messages = overrides?.messages ?? kickMessages;
@@ -475,6 +512,12 @@ export default function AdminPage() {
       chatBroadcastHeartrate: kickChatBroadcastHeartrate,
       chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
       chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
+      chatBroadcastSpeed: kickChatBroadcastSpeed,
+      chatBroadcastSpeedMinKmh: kickChatBroadcastSpeedMinKmh,
+      chatBroadcastSpeedTimeoutMin: kickChatBroadcastSpeedTimeoutMin,
+      chatBroadcastAltitude: kickChatBroadcastAltitude,
+      chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
+      chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
     };
     setToast({ type: 'saving', message: 'Saving...' });
     try {
@@ -493,7 +536,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastLocationInterval, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
@@ -503,6 +546,12 @@ export default function AdminPage() {
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
+    chatBroadcastSpeed: kickChatBroadcastSpeed,
+    chatBroadcastSpeedMinKmh: kickChatBroadcastSpeedMinKmh,
+    chatBroadcastSpeedTimeoutMin: kickChatBroadcastSpeedTimeoutMin,
+    chatBroadcastAltitude: kickChatBroadcastAltitude,
+    chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
+    chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
   });
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
@@ -512,6 +561,12 @@ export default function AdminPage() {
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
+    chatBroadcastSpeed: kickChatBroadcastSpeed,
+    chatBroadcastSpeedMinKmh: kickChatBroadcastSpeedMinKmh,
+    chatBroadcastSpeedTimeoutMin: kickChatBroadcastSpeedTimeoutMin,
+    chatBroadcastAltitude: kickChatBroadcastAltitude,
+    chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
+    chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
   };
   kickMessagesRef.current = kickMessages;
   kickTemplateEnabledRef.current = kickTemplateEnabled;
@@ -633,7 +688,10 @@ export default function AdminPage() {
 
   // Manual location update (browser geolocation, clear)
   const [locationFromBrowserLoading, setLocationFromBrowserLoading] = useState(false);
-  const [locationClearLoading, setLocationClearLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated) fetchLocationData();
+  }, [isAuthenticated, settings.locationDisplay, fetchLocationData]); // Fetch on auth and when overlay display mode changes
 
   const handleGetLocationFromBrowser = useCallback(async () => {
     if (!navigator?.geolocation) {
@@ -657,7 +715,7 @@ export default function AdminPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
-      await fetchLocationForStreamTitle();
+      await fetchLocationData();
       setToast({ type: 'saved', message: 'Location updated from browser' });
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
@@ -667,37 +725,7 @@ export default function AdminPage() {
     } finally {
       setLocationFromBrowserLoading(false);
     }
-  }, [fetchLocationForStreamTitle]);
-
-  const handleHideLocationInStreamTitle = useCallback(async () => {
-    setLocationClearLoading(true);
-    try {
-      const custom = kickStreamTitleCustom.trim();
-      const r = await authenticatedFetch('/api/kick-channel', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stream_title: custom || '',
-          settings: { includeLocationInTitle: false },
-        }),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${r.status}`);
-      }
-      setKickStreamTitleIncludeLocation(false);
-      setKickStreamTitleLocation('');
-      setKickStreamTitleRawLocation(null);
-      setToast({ type: 'saved', message: "Stream title won't show location — turn it back on in Kick Bot tab" });
-      setTimeout(() => setToast(null), 3000);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to update';
-      setToast({ type: 'error', message: msg });
-      setTimeout(() => setToast(null), 5000);
-    } finally {
-      setLocationClearLoading(false);
-    }
-  }, [kickStreamTitleCustom]);
+  }, [fetchLocationData]);
 
   const openPreview = () => {
     window.open('/overlay', '_blank');
@@ -804,77 +832,110 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Tab Bar */}
-      <div className="admin-tabs">
-        <button
-          className={`admin-tab ${activeTab === 'overlay' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overlay')}
-          type="button"
-        >
-          🎮 Overlay
-        </button>
-        <button
-          className={`admin-tab ${activeTab === 'kick' ? 'active' : ''}`}
-          onClick={() => setActiveTab('kick')}
-          type="button"
-        >
-          🤖 Kick Bot
-        </button>
-      </div>
-
-      {/* Main Content */}
+      {/* Main Content — single scrollable page with shared and tab-specific sections */}
       <main className="main-content">
         <div className="settings-container">
-          {activeTab === 'overlay' && (
-            <>
-          {/* Location Section */}
+          {/* Location & map — at top for overlay display, stored location, map */}
           <section className="settings-section">
             <div className="section-header">
-              <h2>📍 Location</h2>
+              <h2>📍 Location & map</h2>
             </div>
-            
             <div className="setting-group">
-              <label className="group-label">Location Mode</label>
+              {/* Current location — prominent at top for quick visibility */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '20px',
+                padding: '16px 18px',
+                background: 'rgba(255,255,255,0.06)',
+                borderRadius: 10,
+                border: '1px solid rgba(255,255,255,0.1)',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ flex: 1, minWidth: 140 }}>
+                  {storedLocation ? (
+                    <>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>
+                        {(() => {
+                          // Format from raw + current overlay settings so granularity changes apply instantly (no wait for save)
+                          const loc = kickStreamTitleRawLocation && settings.locationDisplay !== 'hidden'
+                            ? formatLocation(kickStreamTitleRawLocation, settings.locationDisplay)
+                            : { primary: storedLocation.primary, secondary: storedLocation.secondary };
+                          const showPrimary = loc.primary || '';
+                          const showSecondary = loc.secondary || '';
+                          return showPrimary ? (showSecondary ? `${showPrimary} · ${showSecondary}` : showPrimary) : showSecondary;
+                        })()}
+                      </div>
+                      {storedLocation.updatedAt && (
+                        <span style={{ opacity: 0.7, fontSize: '0.8em', marginTop: 2, display: 'block' }}>
+                          Updated {formatLocationAge(storedLocation.updatedAt)} ago
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span style={{ opacity: 0.6, fontSize: '0.95rem' }}>No location yet</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  onClick={handleGetLocationFromBrowser}
+                  disabled={locationFromBrowserLoading}
+                  title="Get from browser or refresh"
+                  style={{ flexShrink: 0 }}
+                >
+                  {locationFromBrowserLoading ? '…' : 'Update'}
+                </button>
+              </div>
+
+              <label className="group-label">Overlay display</label>
+              <p className="input-hint" style={{ marginBottom: '8px', fontSize: '0.85em' }}>
+                Granularity for overlay and chat (!location)
+              </p>
               <RadioGroup
                 value={settings.locationDisplay}
                 onChange={(value) => handleSettingsChange({ locationDisplay: value as LocationDisplayMode })}
                 options={[
-                  { 
-                    value: 'neighbourhood', 
-                    label: 'Neighbourhood', 
-                    icon: '🏘️'
-                  },
-                  { 
-                    value: 'city', 
-                    label: 'City', 
-                    icon: '🏙️'
-                  },
-                  { 
-                    value: 'state', 
-                    label: 'State', 
-                    icon: '🗺️'
-                  },
-                  { 
-                    value: 'country', 
-                    label: 'Country', 
-                    icon: '🌍'
-                  },
-                  { 
-                    value: 'custom', 
-                    label: 'Custom', 
-                    icon: '✏️'
-                  },
-                  { 
-                    value: 'hidden', 
-                    label: 'Hidden', 
-                    icon: '🚫'
-                  }
+                  { value: 'neighbourhood', label: 'Neighbourhood', icon: '🏘️' },
+                  { value: 'city', label: 'City', icon: '🏙️' },
+                  { value: 'state', label: 'State', icon: '🗺️' },
+                  { value: 'country', label: 'Country', icon: '🌍' },
+                  { value: 'custom', label: 'Custom', icon: '✏️' },
+                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />
-              
-              {/* Custom location input */}
+              <label className="checkbox-label" style={{ marginTop: '12px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={settings.broadenLocationWhenStale !== false}
+                  onChange={(e) => handleSettingsChange({ broadenLocationWhenStale: e.target.checked })}
+                  className="checkbox-input"
+                  style={{ marginTop: 3 }}
+                />
+                <span className="checkbox-text">
+                  Broaden when GPS stale (neighbourhood→city→state→country) — when off, always use selected display mode
+                </span>
+              </label>
+              {settings.broadenLocationWhenStale !== false && (
+                <div className="form-row-wrap" style={{ marginTop: '8px', marginLeft: 24 }}>
+                  <label className="checkbox-label-row-sm">
+                    Max fallback when very stale:
+                    <select
+                      value={settings.locationStaleMaxFallback ?? 'country'}
+                      onChange={(e) => handleSettingsChange({ locationStaleMaxFallback: e.target.value as LocationStaleMaxFallback })}
+                      className="text-input"
+                      style={{ marginLeft: 8 }}
+                    >
+                      <option value="city">City (never beyond city)</option>
+                      <option value="state">State (always state+country)</option>
+                      <option value="country">Country (allow country-only)</option>
+                    </select>
+                  </label>
+                </div>
+              )}
               {settings.locationDisplay === 'custom' && (
-                <div className="custom-location-input">
+                <div className="custom-location-input" style={{ marginTop: '12px' }}>
                   <label className="input-label">Custom Location Text</label>
                   <input
                     type="text"
@@ -884,8 +945,6 @@ export default function AdminPage() {
                     className="text-input"
                     maxLength={50}
                   />
-                  
-                  {/* Country name toggle for custom location */}
                   <div className="checkbox-group" style={{ marginTop: '12px' }}>
                     <label className="checkbox-label">
                       <input
@@ -899,102 +958,409 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
-
-              {/* Manual location update */}
-              <div className="setting-group" style={{ marginTop: '16px' }}>
-                <label className="group-label">Manual Location Update</label>
-                <p className="input-hint" style={{ marginBottom: '8px' }}>
-                  Get from browser overrides overlay/stream title until RTIRL provides new data. Hide in title removes location from stream title only (overlay and chat keep location).
-                </p>
-                <div className="button-row" style={{ gap: '8px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleGetLocationFromBrowser}
-                    disabled={locationFromBrowserLoading}
-                  >
-                    {locationFromBrowserLoading ? 'Getting location…' : '📍 Get from browser'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleHideLocationInStreamTitle}
-                    disabled={locationClearLoading}
-                  >
-                    {locationClearLoading ? 'Updating…' : 'Hide location in stream title'}
-                  </button>
-                </div>
+              <p className="input-hint" style={{ marginTop: '12px', fontSize: '0.85em' }}>
+                Update uses browser location; RTIRL overwrites when it provides newer data.
+              </p>
+            </div>
+            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <label className="group-label">Map</label>
+              <div className="setting-group" style={{ marginTop: '8px' }}>
+                <span className="group-label" style={{ fontSize: '0.9em', display: 'block', marginBottom: '6px' }}>Display</span>
+                <RadioGroup
+                  value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
+                  onChange={(value) => {
+                    if (value === 'always') handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
+                    else if (value === 'speed') handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
+                    else handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
+                  }}
+                  options={[
+                    { value: 'always', label: 'Always Show', icon: '👁️' },
+                    { value: 'speed', label: 'Auto on Movement', icon: '🏃' },
+                    { value: 'hidden', label: 'Hidden', icon: '🚫' }
+                  ]}
+                />
               </div>
-              
+              <div className="setting-group" style={{ marginTop: '12px' }}>
+                <span className="group-label" style={{ fontSize: '0.9em', display: 'block', marginBottom: '6px' }}>Zoom</span>
+                <RadioGroup
+                  value={settings.mapZoomLevel}
+                  onChange={(value) => handleSettingsChange({ mapZoomLevel: value as MapZoomLevel })}
+                  options={[
+                    { value: 'neighbourhood', label: 'Neighbourhood', icon: '🏘️' },
+                    { value: 'city', label: 'City', icon: '🏙️' },
+                    { value: 'state', label: 'State', icon: '🗺️' },
+                    { value: 'country', label: 'Country', icon: '🌍' },
+                    { value: 'ocean', label: 'Ocean', icon: '🌊' },
+                    { value: 'continental', label: 'Continental', icon: '🌎' }
+                  ]}
+                />
+              </div>
+              <div className="setting-group" style={{ marginTop: '12px' }}>
+                <span className="group-label" style={{ fontSize: '0.9em', display: 'block', marginBottom: '6px' }}>Theme</span>
+                <RadioGroup
+                  value={settings.minimapTheme || 'auto'}
+                  onChange={(value) => handleSettingsChange({ minimapTheme: value as 'auto' | 'light' | 'dark' })}
+                  options={[
+                    { value: 'auto', label: 'Auto', icon: '🌓', description: 'Light during day, dark at night' },
+                    { value: 'light', label: 'Light', icon: '☀️', description: 'Always light theme' },
+                    { value: 'dark', label: 'Dark', icon: '🌙', description: 'Always dark theme' }
+                  ]}
+                />
+              </div>
             </div>
           </section>
 
-          {/* Map Section */}
+          {/* Stream title & chat */}
           <section className="settings-section">
             <div className="section-header">
-              <h2>🗺️ Map</h2>
+              <h2>📺 Stream title & chat</h2>
             </div>
-            
             <div className="setting-group">
-              <label className="group-label">Display Mode</label>
-              <RadioGroup
-                value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
-                onChange={(value) => {
-                  if (value === 'always') {
-                    handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
-                  } else if (value === 'speed') {
-                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
-                  } else {
-                    handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
-                  }
-                }}
-                options={[
-                  { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'speed', label: 'Auto on Movement', icon: '🏃' },
-                  { value: 'hidden', label: 'Hidden', icon: '🚫' }
-                ]}
-              />
-              
+              <h3 className="subsection-label">Stream title</h3>
+              <p className="group-label group-description">
+                Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> in Connection section below.
+              </p>
+            <div className="form-stack">
+              <div>
+                <label className="field-label">Custom title</label>
+                <input
+                  type="text"
+                  className="text-input"
+                  value={kickStreamTitleCustom}
+                  onChange={(e) => setKickStreamTitleCustom(e.target.value)}
+                  placeholder="Add any title text..."
+                  style={{ width: '100%', minWidth: 200 }}
+                  maxLength={200}
+                  disabled={!kickStatus?.connected}
+                />
+              </div>
+              <div>
+                <label className="field-label">Location</label>
+                <p className="input-hint" style={{ marginBottom: '8px', fontSize: '0.85em' }}>
+                  Preview when &quot;Include location&quot; is on:
+                </p>
+                <div
+                  className="stream-title-location-preview"
+                  style={{
+                    padding: '12px 16px',
+                    background: 'rgba(255,255,255,0.1)',
+                    borderRadius: 8,
+                    fontSize: '1.05rem',
+                    fontWeight: 600,
+                    minHeight: 48,
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: '#ffffff',
+                    marginBottom: '12px',
+                  }}
+                >
+                  {kickStreamTitleIncludeLocation && kickStreamTitleLocation
+                    ? buildStreamTitle(kickStreamTitleCustom, kickStreamTitleLocation)
+                    : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>}
+                </div>
+                <p className="input-hint" style={{ marginBottom: '8px', fontSize: '0.85em' }}>
+                  Display granularity:
+                </p>
+                <RadioGroup
+                  value={kickStreamTitleLocationDisplay}
+                  onChange={(v) => setKickStreamTitleLocationDisplay(v as StreamTitleLocationDisplay)}
+                  options={[
+                    { value: 'city', label: 'City', icon: '🏙️' },
+                    { value: 'state', label: 'State', icon: '🗺️' },
+                    { value: 'country', label: 'Country', icon: '🌍' },
+                  ]}
+                />
+                <label className="checkbox-label-row" style={{ marginTop: '12px' }}>
+                  <input
+                    type="checkbox"
+                    checked={kickStreamTitleIncludeLocation}
+                    onChange={async (e) => {
+                      const checked = e.target.checked;
+                      setKickStreamTitleIncludeLocation(checked);
+                      if (kickStatus?.connected) {
+                        const locationPart = checked ? (kickStreamTitleLocation || '') : '';
+                        const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart);
+                        try {
+                          const r = await authenticatedFetch('/api/kick-channel', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              stream_title: fullTitle.trim(),
+                              settings: {
+                                customTitle: kickStreamTitleCustom,
+                                locationDisplay: kickStreamTitleLocationDisplay,
+                                autoUpdateLocation: kickStreamTitleAutoUpdate,
+                                includeLocationInTitle: checked,
+                              },
+                            }),
+                          });
+                          if (r.ok) {
+                            setToast({ type: 'saved', message: checked ? 'Location added to title' : 'Location hidden from title' });
+                            setTimeout(() => setToast(null), 2500);
+                          }
+                        } catch {
+                          setKickStreamTitleIncludeLocation(!checked);
+                          setToast({ type: 'error', message: 'Failed to update' });
+                          setTimeout(() => setToast(null), 3000);
+                        }
+                      }
+                    }}
+                    className="checkbox-input"
+                  />
+                  Include location in stream title (when off, title does not update on new location)
+                </label>
+                <label className="checkbox-label-row">
+                  <input
+                    type="checkbox"
+                    checked={kickStreamTitleAutoUpdate}
+                    onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
+                    className="checkbox-input"
+                  />
+                  Auto-push stream title when live and location changes (uses interval below)
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  onClick={fetchKickStreamTitle}
+                  disabled={!kickStatus?.connected || kickStreamTitleLoading}
+                >
+                  {kickStreamTitleLoading ? 'Fetching…' : 'Fetch current'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-small"
+                  onClick={updateKickStreamTitle}
+                  disabled={!kickStatus?.connected || kickStreamTitleSaving}
+                >
+                  {kickStreamTitleSaving ? 'Updating…' : 'Update'}
+                </button>
+              </div>
+              </div>
             </div>
-            
-            <div className="setting-group">
-              <label className="group-label">Zoom Level</label>
-              <RadioGroup
-                value={settings.mapZoomLevel}
-                onChange={(value) => handleSettingsChange({ mapZoomLevel: value as MapZoomLevel })}
-                options={[
-                  { value: 'neighbourhood', label: 'Neighbourhood', icon: '🏘️' },
-                  { value: 'city', label: 'City', icon: '🏙️' },
-                  { value: 'state', label: 'State', icon: '🗺️' },
-                  { value: 'country', label: 'Country', icon: '🌍' },
-                  { value: 'ocean', label: 'Ocean', icon: '🌊' },
-                  { value: 'continental', label: 'Continental', icon: '🌎' }
-                ]}
-              />
+
+            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h3 className="subsection-label">Chat broadcasts</h3>
+              <p className="group-label group-description">
+                Location: when live, at most every N min (shared with stream title). Toggle below to also post in chat. Heart rate: high/very-high warnings when crossing thresholds.
+              </p>
+            <div className="broadcast-options-list">
+              <div className="broadcast-option-block">
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={kickChatBroadcastLocation}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setKickChatBroadcastLocation(checked);
+                      saveKickMessages({ alertSettings: { chatBroadcastLocation: checked } });
+                    }}
+                    className="checkbox-input"
+                  />
+                  <span className="radio-icon" aria-hidden="true">📍</span>
+                  <span>Location</span>
+                </label>
+                {(kickStreamTitleAutoUpdate || kickChatBroadcastLocation) && (
+                  <div className="broadcast-option-detail">
+                    <label className="checkbox-label-row-sm">
+                      Interval (stream title + chat, when live):
+                      <input
+                        type="number"
+                        className="text-input number-input"
+                        value={kickChatBroadcastLocationInterval}
+                        onChange={(e) => {
+                          const val = Math.max(1, parseInt(e.target.value, 10) || 5);
+                          setKickChatBroadcastLocationInterval(val);
+                          saveKickMessages({ alertSettings: { chatBroadcastLocationIntervalMin: val } });
+                        }}
+                        min={1}
+                        max={60}
+                      />
+                      min
+                    </label>
+                  </div>
+                )}
+              </div>
+              <div className="broadcast-option-block">
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={kickChatBroadcastHeartrate}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setKickChatBroadcastHeartrate(checked);
+                      saveKickMessages({ alertSettings: { chatBroadcastHeartrate: checked } });
+                    }}
+                    className="checkbox-input"
+                  />
+                  <span className="radio-icon" aria-hidden="true">❤️</span>
+                  <span>Heart rate</span>
+                </label>
+                {kickChatBroadcastHeartrate && (
+                  <div className="broadcast-option-detail">
+                    <div className="form-row-wrap">
+                      <label className="checkbox-label-row-sm">
+                        High:
+                        <input
+                          type="number"
+                          className="text-input number-input"
+                          value={kickChatBroadcastHeartrateMinBpm}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100));
+                            setKickChatBroadcastHeartrateMinBpm(val);
+                            saveKickMessages({ alertSettings: { chatBroadcastHeartrateMinBpm: val } });
+                          }}
+                          min={0}
+                          max={250}
+                        />
+                        BPM
+                      </label>
+                      <label className="checkbox-label-row-sm">
+                        Very high:
+                        <input
+                          type="number"
+                          className="text-input number-input"
+                          value={kickChatBroadcastHeartrateVeryHighBpm}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120));
+                            setKickChatBroadcastHeartrateVeryHighBpm(val);
+                            saveKickMessages({ alertSettings: { chatBroadcastHeartrateVeryHighBpm: val } });
+                          }}
+                          min={0}
+                          max={250}
+                        />
+                        BPM
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="broadcast-option-block">
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={kickChatBroadcastSpeed}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setKickChatBroadcastSpeed(checked);
+                      saveKickMessages({ alertSettings: { chatBroadcastSpeed: checked } });
+                    }}
+                    className="checkbox-input"
+                  />
+                  <span className="radio-icon" aria-hidden="true">🚀</span>
+                  <span>Speed (new top)</span>
+                </label>
+                {kickChatBroadcastSpeed && (
+                  <div className="broadcast-option-detail">
+                    <div className="form-row-wrap">
+                      <label className="checkbox-label-row-sm">
+                        Min
+                        <input
+                          type="number"
+                          className="text-input number-input"
+                          value={kickChatBroadcastSpeedMinKmh}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20));
+                            setKickChatBroadcastSpeedMinKmh(val);
+                            saveKickMessages({ alertSettings: { chatBroadcastSpeedMinKmh: val } });
+                          }}
+                          min={0}
+                          max={500}
+                        />
+                        km/h
+                      </label>
+                      <label className="checkbox-label-row-sm">
+                        Timeout
+                        <input
+                          type="number"
+                          className="text-input number-input"
+                          value={kickChatBroadcastSpeedTimeoutMin}
+                          onChange={(e) => {
+                            const val = Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 5));
+                            setKickChatBroadcastSpeedTimeoutMin(val);
+                            saveKickMessages({ alertSettings: { chatBroadcastSpeedTimeoutMin: val } });
+                          }}
+                          min={1}
+                          max={60}
+                        />
+                        min
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="broadcast-option-block">
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={kickChatBroadcastAltitude}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setKickChatBroadcastAltitude(checked);
+                      saveKickMessages({ alertSettings: { chatBroadcastAltitude: checked } });
+                    }}
+                    className="checkbox-input"
+                  />
+                  <span className="radio-icon" aria-hidden="true">⛰️</span>
+                  <span>Altitude (new top)</span>
+                </label>
+                {kickChatBroadcastAltitude && (
+                  <div className="broadcast-option-detail">
+                    <div className="form-row-wrap">
+                      <label className="checkbox-label-row-sm">
+                        Min
+                        <input
+                          type="number"
+                          className="text-input number-input"
+                          value={kickChatBroadcastAltitudeMinM}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50));
+                            setKickChatBroadcastAltitudeMinM(val);
+                            saveKickMessages({ alertSettings: { chatBroadcastAltitudeMinM: val } });
+                          }}
+                          min={0}
+                          max={9000}
+                        />
+                        m
+                      </label>
+                      <label className="checkbox-label-row-sm">
+                        Timeout
+                        <input
+                          type="number"
+                          className="text-input number-input"
+                          value={kickChatBroadcastAltitudeTimeoutMin}
+                          onChange={(e) => {
+                            const val = Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 5));
+                            setKickChatBroadcastAltitudeTimeoutMin(val);
+                            saveKickMessages({ alertSettings: { chatBroadcastAltitudeTimeoutMin: val } });
+                          }}
+                          min={1}
+                          max={60}
+                        />
+                        min
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            
-            <div className="setting-group">
-              <label className="group-label">Theme</label>
-              <RadioGroup
-                value={settings.minimapTheme || 'auto'}
-                onChange={(value) => handleSettingsChange({ minimapTheme: value as 'auto' | 'light' | 'dark' })}
-                options={[
-                  { value: 'auto', label: 'Auto', icon: '🌓', description: 'Light during day, dark at night' },
-                  { value: 'light', label: 'Light', icon: '☀️', description: 'Always light theme' },
-                  { value: 'dark', label: 'Dark', icon: '🌙', description: 'Always dark theme' }
-                ]}
-              />
             </div>
           </section>
 
-          {/* Weather Section */}
+          {/* === OVERLAY === */}
+          <div className="section-group" role="group" aria-labelledby="overlay-group">
+            <h2 id="overlay-group" className="section-group-title">Overlay</h2>
+
+          {/* Weather, altitude & speed — overlay data displays (shared Always/Auto/Hidden pattern) */}
           <section className="settings-section">
             <div className="section-header">
-              <h2>🌤️ Weather</h2>
+              <h2>🌤️ Weather, altitude & speed</h2>
             </div>
             
             <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '16px' }}>
+              <label className="group-label">Weather</label>
+              <div className="checkbox-group" style={{ marginBottom: '8px' }}>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -1002,50 +1368,41 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Show Temp/Weather</span>
+                  <span className="checkbox-text">Show temp</span>
                 </label>
               </div>
-              
-              <label className="group-label">Condition Icon & Text</label>
               <RadioGroup
                 value={settings.weatherConditionDisplay || 'auto'}
                 onChange={(value) => handleSettingsChange({ weatherConditionDisplay: value as DisplayMode })}
                 options={[
                   { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'auto', label: 'Auto', icon: '🌧️', description: 'Shows icon/text for rain, storms, snow, etc.' },
+                  { value: 'auto', label: 'Auto', icon: '🌧️', description: 'Rain, storms, snow, etc.' },
                   { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />
             </div>
-          </section>
-
-          {/* Altitude & Speed Section */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>📊 Altitude & Speed</h2>
-            </div>
             
-            <div className="setting-group">
-              <label className="group-label">Altitude Display</label>
+            <div className="setting-group" style={{ marginTop: '16px' }}>
+              <label className="group-label">Altitude</label>
               <RadioGroup
                 value={settings.altitudeDisplay || 'auto'}
                 onChange={(value) => handleSettingsChange({ altitudeDisplay: value as DisplayMode })}
                 options={[
                   { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'auto', label: 'Auto', icon: '📈', description: 'Shows when elevation >500m (mountains/hills)' },
+                  { value: 'auto', label: 'Auto', icon: '📈', description: 'When altitude changes ≥50m from baseline, show for 1 min' },
                   { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />
             </div>
             
-            <div className="setting-group">
-              <label className="group-label">Speed Display</label>
+            <div className="setting-group" style={{ marginTop: '16px' }}>
+              <label className="group-label">Speed</label>
               <RadioGroup
                 value={settings.speedDisplay || 'auto'}
                 onChange={(value) => handleSettingsChange({ speedDisplay: value as DisplayMode })}
                 options={[
                   { value: 'always', label: 'Always Show', icon: '👁️' },
-                  { value: 'auto', label: 'Auto', icon: '🏃', description: 'Shows when ≥10 km/h. Hides when GPS stale (>10s)' },
+                  { value: 'auto', label: 'Auto', icon: '🏃', description: 'When ≥10 km/h, GPS fresh' },
                   { value: 'hidden', label: 'Hidden', icon: '🚫' }
                 ]}
               />
@@ -1225,16 +1582,16 @@ export default function AdminPage() {
               )}
             </div>
           </section>
-            </>
-          )}
 
-          {activeTab === 'kick' && (
-            <>
-              {/* Connection */}
-              <section className="settings-section">
-                <div className="section-header">
-                  <h2>🔗 Connection</h2>
-                </div>
+          </div>
+          {/* === KICK === */}
+          <div className="section-group" role="group" aria-labelledby="kick-group">
+            <h2 id="kick-group" className="section-group-title">Kick</h2>
+
+          <section className="settings-section">
+            <div className="section-header">
+              <h2>🔗 Connection</h2>
+            </div>
                 <div className="setting-group">
                   {kickStatus?.connected ? (
                   <div className="kick-status connected">
@@ -1321,291 +1678,9 @@ export default function AdminPage() {
                 </div>
               </section>
 
-              {/* Stream title */}
               <section className="settings-section">
                 <div className="section-header">
-                  <h2>📺 Stream title</h2>
-                </div>
-                <div className="setting-group">
-                  <p className="group-label group-description">
-                    Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> above.
-                  </p>
-                <div className="form-stack">
-                  <div>
-                    <label className="field-label">Custom title</label>
-                    <input
-                      type="text"
-                      className="text-input"
-                      value={kickStreamTitleCustom}
-                      onChange={(e) => setKickStreamTitleCustom(e.target.value)}
-                      placeholder="Add any title text..."
-                      style={{ width: '100%', minWidth: 200 }}
-                      maxLength={200}
-                      disabled={!kickStatus?.connected}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label">Location</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div
-                          className="stream-title-location-preview"
-                          style={{
-                            padding: '12px 16px',
-                            background: 'rgba(255,255,255,0.1)',
-                            borderRadius: 8,
-                            fontSize: '1.05rem',
-                            fontWeight: 600,
-                            minHeight: 48,
-                            display: 'flex',
-                            alignItems: 'center',
-                            color: '#ffffff',
-                          }}
-                        >
-                          {kickStreamTitleLocation || <span style={{ opacity: 0.5 }}>No location data</span>}
-                        </div>
-                        <div>
-                          <label className="field-label field-label-sm">Display</label>
-                          <RadioGroup
-                          value={kickStreamTitleLocationDisplay}
-                          onChange={(v) => setKickStreamTitleLocationDisplay(v as StreamTitleLocationDisplay)}
-                          options={[
-                            { value: 'city', label: 'City', icon: '🏙️' },
-                            { value: 'state', label: 'State', icon: '🗺️' },
-                            { value: 'country', label: 'Country', icon: '🌍' },
-                          ]}
-                        />
-                        </div>
-                      </div>
-                      <label className="checkbox-label-row">
-                        <input
-                          type="checkbox"
-                          checked={kickStreamTitleAutoUpdate}
-                          onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
-                          className="checkbox-input"
-                        />
-                        Auto-push stream title when live and location changes (uses interval below)
-                      </label>
-                      <label className="checkbox-label-row">
-                        <input
-                          type="checkbox"
-                          checked={kickStreamTitleIncludeLocation}
-                          onChange={(e) => setKickStreamTitleIncludeLocation(e.target.checked)}
-                          className="checkbox-input"
-                        />
-                        Include location in stream title (uncheck to hide location in title only; overlay and chat keep location)
-                      </label>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-small"
-                      onClick={fetchKickStreamTitle}
-                      disabled={!kickStatus?.connected || kickStreamTitleLoading}
-                    >
-                      {kickStreamTitleLoading ? 'Fetching…' : 'Fetch current'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-small"
-                      onClick={fetchLocationForStreamTitle}
-                    >
-                      Refresh location
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-small"
-                      onClick={updateKickStreamTitle}
-                      disabled={!kickStatus?.connected || kickStreamTitleSaving}
-                    >
-                      {kickStreamTitleSaving ? 'Updating…' : 'Update'}
-                    </button>
-                  </div>
-                </div>
-                </div>
-              </section>
-
-              {/* Chat broadcasts */}
-              <section className="settings-section">
-                <div className="section-header">
-                  <h2>📢 Chat broadcasts</h2>
-                </div>
-                <div className="setting-group">
-                  <p className="group-label group-description">
-                    Location: when live, at most every N min (shared with stream title above). Toggle below to also post in chat. Heart rate: high/very-high warnings when crossing thresholds. No spam until HR drops below, then exceeds again.
-                  </p>
-                <div className="broadcast-options-list">
-                  <div className="broadcast-option-block">
-                    <label className="checkbox-label-row broadcast-checkbox-item">
-                      <input
-                        type="checkbox"
-                        checked={kickChatBroadcastLocation}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setKickChatBroadcastLocation(checked);
-                          saveKickMessages({ alertSettings: { chatBroadcastLocation: checked } });
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span className="radio-icon" aria-hidden="true">📍</span>
-                      <span>Location</span>
-                    </label>
-                    {(kickStreamTitleAutoUpdate || kickChatBroadcastLocation) && (
-                      <div className="broadcast-option-detail">
-                        <label className="checkbox-label-row-sm">
-                          Interval (stream title + chat, when live):
-                          <input
-                            type="number"
-                            className="text-input number-input"
-                            value={kickChatBroadcastLocationInterval}
-                            onChange={(e) => {
-                              const val = Math.max(1, parseInt(e.target.value, 10) || 5);
-                              setKickChatBroadcastLocationInterval(val);
-                              saveKickMessages({ alertSettings: { chatBroadcastLocationIntervalMin: val } });
-                            }}
-                            min={1}
-                            max={60}
-                          />
-                          min
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                  <div className="broadcast-option-block">
-                    <label className="checkbox-label-row broadcast-checkbox-item">
-                      <input
-                        type="checkbox"
-                        checked={kickChatBroadcastHeartrate}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setKickChatBroadcastHeartrate(checked);
-                          saveKickMessages({ alertSettings: { chatBroadcastHeartrate: checked } });
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span className="radio-icon" aria-hidden="true">❤️</span>
-                      <span>Heart rate</span>
-                    </label>
-                    {kickChatBroadcastHeartrate && (
-                      <div className="broadcast-option-detail">
-                        <div className="form-row-wrap">
-                          <label className="checkbox-label-row-sm">
-                            High:
-                            <input
-                              type="number"
-                              className="text-input number-input"
-                              value={kickChatBroadcastHeartrateMinBpm}
-                              onChange={(e) => {
-                                const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100));
-                                setKickChatBroadcastHeartrateMinBpm(val);
-                                saveKickMessages({ alertSettings: { chatBroadcastHeartrateMinBpm: val } });
-                              }}
-                              min={0}
-                              max={250}
-                            />
-                            BPM
-                          </label>
-                          <label className="checkbox-label-row-sm">
-                            Very high:
-                            <input
-                              type="number"
-                              className="text-input number-input"
-                              value={kickChatBroadcastHeartrateVeryHighBpm}
-                              onChange={(e) => {
-                                const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120));
-                                setKickChatBroadcastHeartrateVeryHighBpm(val);
-                                saveKickMessages({ alertSettings: { chatBroadcastHeartrateVeryHighBpm: val } });
-                              }}
-                              min={0}
-                              max={250}
-                            />
-                            BPM
-                          </label>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="broadcast-status-block">
-                  <div className="broadcast-status-actions">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-small"
-                      onClick={async () => {
-                        try {
-                          const r = await fetch('/api/cron/kick-chat-broadcast/status', { credentials: 'include' });
-                          const data = await r.json();
-                          setKickBroadcastStatus(data);
-                        } catch {
-                          setKickBroadcastStatus(null);
-                        }
-                      }}
-                    >
-                      Check broadcast status
-                    </button>
-                    {kickBroadcastStatus?.heartRate?.state !== 'below' && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          try {
-                            await fetch('/api/cron/kick-chat-broadcast/status', {
-                              method: 'POST',
-                              credentials: 'include',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ resetHrState: true }),
-                            });
-                            setToast({ type: 'saved', message: 'Saved!' });
-                            setTimeout(() => setToast(null), 3000);
-                            const r = await fetch('/api/cron/kick-chat-broadcast/status', { credentials: 'include' });
-                            const data = await r.json();
-                            setKickBroadcastStatus(data);
-                          } catch {
-                            setToast({ type: 'error', message: 'Reset failed' });
-                            setTimeout(() => setToast(null), 3000);
-                          }
-                        }}
-                      >
-                        Reset HR state (retest)
-                      </button>
-                    )}
-                  </div>
-                  {kickBroadcastStatus && (
-                    <div className="broadcast-status-details">
-                      {kickBroadcastStatus.heartRate && (
-                        <div>
-                          <strong>Heart rate:</strong> {kickBroadcastStatus.heartRate.currentBpm} BPM ({kickBroadcastStatus.heartRate.age})
-                          {!kickBroadcastStatus.heartRate.hasData && (
-                            <p className="broadcast-status-warning">No HR data — keep overlay open with Pulsoid connected. Data is stored when the overlay sends it.</p>
-                          )}
-                          <p>{kickBroadcastStatus.heartRate.reason}</p>
-                          <p className="broadcast-status-note">
-                            {kickBroadcastStatus.heartRate.lastSentAgo
-                              ? `Last message sent: ${kickBroadcastStatus.heartRate.lastSentAgo}`
-                              : 'No HR message sent recently'}
-                          </p>
-                          {kickBroadcastStatus.heartRate.wouldSendMessage && (
-                            <p className="broadcast-status-ok">Next cron run would send a message.</p>
-                          )}
-                        </div>
-                      )}
-                      {kickBroadcastStatus.kick && !kickBroadcastStatus.kick.hasTokens && (
-                        <p className="broadcast-status-warning">Kick not connected — connect in Kick Bot tab.</p>
-                      )}
-                      {kickBroadcastStatus.cron && (
-                        <p className="broadcast-status-note">Cron: {kickBroadcastStatus.cron.runsEvery}. {kickBroadcastStatus.cron.note}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-                </div>
-              </section>
-
-              {/* Chat Poll */}
-              <section className="settings-section">
-                <div className="section-header">
-                  <h2>🗳️ Chat poll</h2>
+                  <h2>🗳️ Poll</h2>
                 </div>
                 <div className="setting-group">
                   <p className="group-label group-description group-description-sm">
@@ -1639,7 +1714,7 @@ export default function AdminPage() {
                     {kickPollEnabled && (
                       <>
                         <label className="kick-group-options-item">
-                          <span>Duration (sec):</span>
+                          <span>Duration (sec) (recommended: 60–90):</span>
                           <input
                             type="number"
                             className="text-input number-input kick-group-options-input"
@@ -1835,16 +1910,16 @@ export default function AdminPage() {
                             }}
                             className="checkbox-input"
                           />
-                          <span>Auto-start polls when stream live + chat idle</span>
+                          <span>Auto-start polls when stream live + no poll run in X min</span>
                         </label>
                         {kickPollAutoStart && (
                           <label className="kick-group-options-item">
-                            <span>Chat idle (min) before auto-start:</span>
+                            <span>Min since last poll before auto-start (recommended: 3–5):</span>
                             <input
                               type="number"
                               className="text-input number-input kick-group-options-input"
-                              value={kickPollChatIdleMinutes}
-                              onChange={(e) => setKickPollChatIdleMinutes(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 5)))}
+                              value={kickPollMinutesSinceLastPoll}
+                              onChange={(e) => setKickPollMinutesSinceLastPoll(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || 5)))}
                               min={1}
                               max={30}
                               style={{ width: 52 }}
@@ -1853,7 +1928,7 @@ export default function AdminPage() {
                                   await authenticatedFetch('/api/kick-poll-settings', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ chatIdleMinutes: kickPollChatIdleMinutes }),
+                                    body: JSON.stringify({ minutesSinceLastPoll: kickPollMinutesSinceLastPoll }),
                                   });
                                   setToast({ type: 'saved', message: 'Saved!' });
                                 } catch { /* ignore */ }
@@ -1956,9 +2031,7 @@ export default function AdminPage() {
                 </div>
               </section>
 
-            </>
-          )}
-          
+          </div>
         </div>
       </main>
 

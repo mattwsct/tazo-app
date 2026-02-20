@@ -44,10 +44,10 @@ export interface PollSettings {
   subsCanStart: boolean;
   maxQueuedPolls: number;
   winnerDisplaySeconds: number;
-  /** Auto-start location-based polls when stream is live and chat idle */
+  /** Auto-start location-based polls when stream is live and no poll run in X min */
   autoStartPollsEnabled?: boolean;
-  /** Minutes of chat inactivity before auto-starting a poll (1–30) */
-  chatIdleMinutes?: number;
+  /** Minutes since last poll ended before auto-starting (1–30). Recommended: 3–5. */
+  minutesSinceLastPoll?: number;
   /** One vote per person (else unlimited votes per message) */
   oneVotePerPerson?: boolean;
 }
@@ -63,7 +63,7 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   maxQueuedPolls: 5,
   winnerDisplaySeconds: 10,
   autoStartPollsEnabled: false,
-  chatIdleMinutes: 5,
+  minutesSinceLastPoll: 5,
   oneVotePerPerson: false,
 };
 
@@ -71,4 +71,5 @@ export const POLL_STATE_KEY = 'overlay_poll_state';
 export const POLL_MODIFIED_KEY = 'overlay_poll_modified';
 export const POLL_QUEUE_KEY = 'overlay_poll_queue';
 export const POLL_SETTINGS_KEY = 'kick_poll_settings';
+export const LAST_POLL_ENDED_AT_KEY = 'overlay_last_poll_ended_at';
 export const KICK_LAST_CHAT_MESSAGE_AT_KEY = 'kick_last_chat_message_at';

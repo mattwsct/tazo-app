@@ -11,6 +11,7 @@ export function useRenderPerformance(componentName: string) {
   const lastRenderTime = React.useRef(0); // Initialized in effect to avoid calling performance.now() during render
 
   React.useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
     renderCount.current++;
     const now = performance.now();
     const timeSinceLastRender = now - lastRenderTime.current;

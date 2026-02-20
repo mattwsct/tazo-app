@@ -13,9 +13,17 @@ describe('getEffectiveDisplayModeForStaleGps', () => {
     expect(getEffectiveDisplayModeForStaleGps('neighbourhood', 11 * 60 * 1000)).toBe('state');
     expect(getEffectiveDisplayModeForStaleGps('city', 11 * 60 * 1000)).toBe('state');
   });
-  it('stops at state (not country) for long staleness', () => {
-    expect(getEffectiveDisplayModeForStaleGps('neighbourhood', 25 * 60 * 1000)).toBe('state');
-    expect(getEffectiveDisplayModeForStaleGps('city', 25 * 60 * 1000)).toBe('state');
+  it('broadens to country after 15 min when maxFallback is country', () => {
+    expect(getEffectiveDisplayModeForStaleGps('neighbourhood', 16 * 60 * 1000, true, 'country')).toBe('country');
+    expect(getEffectiveDisplayModeForStaleGps('city', 16 * 60 * 1000, true, 'country')).toBe('country');
+    expect(getEffectiveDisplayModeForStaleGps('state', 16 * 60 * 1000, true, 'country')).toBe('country');
+  });
+  it('caps at state when maxFallback is state', () => {
+    expect(getEffectiveDisplayModeForStaleGps('neighbourhood', 16 * 60 * 1000, true, 'state')).toBe('state');
+    expect(getEffectiveDisplayModeForStaleGps('city', 16 * 60 * 1000, true, 'state')).toBe('state');
+  });
+  it('caps at city when maxFallback is city', () => {
+    expect(getEffectiveDisplayModeForStaleGps('neighbourhood', 16 * 60 * 1000, true, 'city')).toBe('city');
   });
   it('returns hidden/custom as-is', () => {
     expect(getEffectiveDisplayModeForStaleGps('hidden', 20 * 60 * 1000)).toBe('hidden');
@@ -24,6 +32,11 @@ describe('getEffectiveDisplayModeForStaleGps', () => {
   it('returns settings when no GPS (age <= 0)', () => {
     expect(getEffectiveDisplayModeForStaleGps('neighbourhood', 0)).toBe('neighbourhood');
     expect(getEffectiveDisplayModeForStaleGps('neighbourhood', -1)).toBe('neighbourhood');
+  });
+  it('does not broaden when broadenWhenStale is false', () => {
+    expect(getEffectiveDisplayModeForStaleGps('neighbourhood', 25 * 60 * 1000, false)).toBe('neighbourhood');
+    expect(getEffectiveDisplayModeForStaleGps('city', 25 * 60 * 1000, false)).toBe('city');
+    expect(getEffectiveDisplayModeForStaleGps('state', 25 * 60 * 1000, false)).toBe('state');
   });
 });
 

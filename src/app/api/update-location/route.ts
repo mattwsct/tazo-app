@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updatePersistentLocation } from '@/utils/location-cache';
+import { updatePersistentLocationIfNewer } from '@/utils/location-cache';
 import { validateUpdateLocationPayload, MAX_PAYLOAD_BYTES_EXPORT } from '@/lib/location-payload-validator';
 import { checkApiRateLimit } from '@/lib/rate-limit';
 
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    await updatePersistentLocation(data);
-    return NextResponse.json({ ok: true });
+    const updated = await updatePersistentLocationIfNewer(data);
+    return NextResponse.json({ ok: true, updated });
   } catch (error) {
     if (error instanceof SyntaxError) {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });

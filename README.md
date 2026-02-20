@@ -89,7 +89,7 @@ The overlay supports 6 location display modes, each showing different levels of 
   - Weather and minimap still function independently
   - Best for: Weather-only or minimap-only overlays
 
-**Manual location update** (admin page, Location section): **Get from browser** uses browser geolocation → reverse geocodes via LocationIQ → updates persistent location (overlay, stream title, chat commands). **Hide location in stream title** removes location from the stream title only (overlay and chat keep location; toggle back on in Kick Bot tab).
+**Manual location update** (admin page, Location section): **Get from browser** uses browser geolocation → reverse geocodes via LocationIQ → updates persistent location for overlay, chat commands (`!location`), and stream title. Used as a one-off until RTIRL provides newer data; the app compares `updatedAt` timestamps so RTIRL fixes overwrite older browser-set locations. **Include location in stream title** toggle shows or hides location when building the title; when hidden, the title does not auto-update on new location. Toggling saves immediately; location data is kept so you can re-add it anytime.
 
 ### Location Formatting Logic
 
@@ -209,9 +209,10 @@ When GPS coordinates can't be reverse geocoded (ocean/remote areas):
 
 ## 🔧 Admin Panel Settings
 
-Access at `http://localhost:3000` to configure:
+Access at `http://localhost:3000` to configure. **Overlay** group: Location & map, Weather/altitude/speed, To-Do. **Kick** group: Connection, Stream title & chat (title + broadcasts), Poll, Message templates. Related settings are grouped (e.g. location + map; stream title + chat broadcasts share interval).
 
-- **Location Display** - Choose precision level (Neighbourhood/City/State/Country) or custom text
+- **Overlay display** - Granularity for overlay and chat (`!location`): Neighbourhood, City, State, Country, Custom, or Hidden
+- **Stream title display** - Granularity for Kick stream title when &quot;Include location&quot; is on: City, State, or Country (can differ from overlay)
   - Changes apply immediately to overlay via real-time sync
   - Location re-formats instantly when mode changes (uses cached location data)
   - Each mode follows fallback hierarchy: neighbourhood → city → state → country
@@ -220,7 +221,9 @@ Access at `http://localhost:3000` to configure:
 - **Custom Location** - Enter custom text when "Custom" mode is selected
   - Auto-saves after 1 second of no typing (debounced)
   - Optional country name/flag display toggle
-  
+
+- **Manual Location (Get from browser)** - Location section; updates overlay, chat commands (`!location`), and stream title until RTIRL provides newer data (uses `updatedAt` comparison)
+
 - **Weather** - Show/hide temperature display
   - Temperature updates every 5 minutes automatically
   - Shows both °C and °F
@@ -292,7 +295,7 @@ Settings changes propagate to overlay in real-time via:
   - **English Names**: API requests include `accept-language=en` parameter to request English location names
   - **Normalization**: Location names are normalized to English equivalents when possible
   - **Non-Latin Script Filtering**: Location names with non-Latin alphabets (Japanese, Chinese, Arabic, Cyrillic, etc.) are automatically skipped, falling back to the next precision level (e.g., city → state → country)
-  - **Accented Characters**: Accented Latin characters (é, ñ, ü, etc.) are allowed and displayed normally
+  - **Latin Script Support**: Basic Latin, accented Latin (é, ñ, ü), Latin Extended-A (Đ, ğ, Polish ąęć), Latin Extended-B (Romanian ș ț), and Latin Extended Additional (Vietnamese ủ, ứ, ơ) are allowed — Vietnamese, Turkish, Polish, Romanian, Czech, Hungarian, and similar scripts display correctly
   - **Fallback**: If English names aren't available or contain non-Latin scripts, the system automatically falls back to broader location levels
 - **OpenWeatherMap** - Weather & sunrise/sunset ([openweathermap.org](https://openweathermap.org/))
 
@@ -658,6 +661,7 @@ All API limits are enforced client-side to prevent quota exhaustion:
    - **GPS Freshness** (15 min): When to hide location/weather/minimap (GPS update age)
    - **Data Validity** (30 min): How long cached data remains usable (weather/location cache)
    - **GPS Stale** (10 sec): When GPS data is considered stale (no updates received)
+   - **Broaden when stale** (if enabled): neighbourhood→city at 5 min; city→state at 10 min; state→country at 15 min. **Max fallback** dropdown: choose whether to stop at city, state (always state+country), or country (allow country-only) when very stale. Browser-set location without timestamp is treated as very old so broadening triggers immediately.
    - **Important**: Data can be valid (cached) even if GPS is stale - this allows instant re-display
    - **See "GPS Staleness Behavior" section above for complete details on how staleness is handled**
 
@@ -733,9 +737,9 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 3. **Deploy** to Vercel so the webhook endpoint is live.
 
-4. **Connect**: Log into admin panel → **Kick Bot** tab → **Connect Kick**. Authorize with your Kick account. The bot will auto-subscribe to events and start responding.
+4. **Connect**: Log into admin panel → **Connection** section → **Connect Kick**. Authorize with your Kick account. The bot will auto-subscribe to events and start responding.
 
-5. **Customize messages**: Use the **Kick Bot** tab to edit message templates and send test messages to kick.com/tazo.
+5. **Customize messages**: Use the admin panel **Message templates** section to edit message templates and send test messages to kick.com/tazo.
 
 6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** when admin page is open (every 5 min) and via cron when location updates (runs every 2 min, updates title if live and location changed). Requires `channel:read` and `channel:write` scopes. The app uses Kick's `GET /channels` to fetch your channel (stream title, live status) and `broadcaster_user_id` for webhook subscription setup.
 
@@ -751,13 +755,13 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 | Channel reward | "{redeemer} redeemed {title}! ✨" |
 | Stream started/ended | "We're live! 🎬" / "Thanks for watching! Stream ended. 🙏" |
 
-Edit templates in the **Kick Bot** tab. Use the toggles to enable/disable each event type. When a toggle is off, the bot simply doesn't send a message (template text is kept). **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. `(5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{kickDescription}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
+Edit templates in the admin panel **Message templates** section. Use the toggles to enable/disable each event type. When a toggle is off, the bot simply doesn't send a message (template text is kept). **Gift subs** has a "Show lifetime subs" toggle — when on, appends the gifter's leaderboard total (e.g. `(5 lifetime)`). **Kicks gifted** has a minimum amount (e.g. 100) — only tips at or above that threshold trigger an alert. Placeholders: `{name}`, `{gifter}`, `{months}`, `{count}`, `{lifetimeSubs}`, `{sender}`, `{amount}`, `{kickDescription}`, `{redeemer}`, `{title}`, `{userInput}`, `{message}`.
 
-**Chat broadcasts** — optionally send location and/or heart rate to Kick chat. Location: periodic (e.g. every 5 min). When both stream title and chat location update together, the chat message shows the new title: e.g. `Stream title updated to "Tokyo Trip 🇯🇵 Tokyo, Japan" with new location` instead of only the location name. Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Requires Pulsoid for HR; RTIRL for location. Add `CRON_SECRET` to Vercel env to secure the cron endpoint. The cron path must be in middleware public routes (no auth cookies) since Vercel Cron sends GET with no cookies; the route itself validates `CRON_SECRET` if set. The same cron also auto-updates the Kick stream title with current location when **Auto-push location** is on (every 2 min while live). Overlay retries `update-location` once on failure to improve reliability when LocationIQ is transiently unavailable.
+**Chat broadcasts** — optionally send location, heart rate, speed, and/or altitude to Kick chat. Location: periodic (e.g. every 5 min). When both stream title and chat location update together, the chat message shows the new title: e.g. `Stream title updated to "Tokyo Trip 🇯🇵 Tokyo, Japan" with new location` instead of only the location name. Heart rate: high/very-high warnings when crossing thresholds — sends once when HR exceeds a limit, no spam until it drops below and exceeds again. Set High (e.g. 100 BPM) and Very high (e.g. 120 BPM). Speed: announces "New top speed: X km/h!" when the stream's top speed is beaten, with a minimum (e.g. 20 km/h) and timeout (e.g. 5 min) to avoid spam. Altitude: same pattern for "New top altitude: X m!" with min (e.g. 50 m) and timeout. Requires Pulsoid for HR; RTIRL for location/speed/altitude. Add `CRON_SECRET` to Vercel env to secure the cron endpoint. The cron path must be in middleware public routes (no auth cookies) since Vercel Cron sends GET with no cookies; the route itself validates `CRON_SECRET` if set. The same cron also auto-updates the Kick stream title with current location when **Auto-push location** is on (every 2 min while live). Overlay retries `update-location` once on failure to improve reliability when LocationIQ is transiently unavailable.
 
 ### Chat commands
 
-Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). `!heartrate` or `!hr` returns the highest and lowest BPM of the day (24h window) and current if live. Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
+Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
 
 ### Chat poll
 
@@ -821,7 +825,7 @@ When enabled, broadcaster or mods can start a poll with `!poll Question? Option1
    - In Kick Dev Dashboard, change webhook URL to that URL.
    - Have someone type `!ping` in chat. Check webhook.site — if you see the request, Kick is sending and the issue is with your app. If you don't, Kick isn't delivering (unverified app, revoked subs, etc.).
 
-6. **Admin panel diagnostics**: The Kick Bot tab shows "Last request received" when *any* POST hits `/api/webhooks/kick` (even before verification). Vercel logs will show `[Kick webhook] Verified:` when the webhook is processed. If both are empty, no request reached your server.
+6. **Admin panel diagnostics**: The admin panel **Connection** section shows "Last request received" when *any* POST hits `/api/webhooks/kick` (even before verification). Vercel logs will show `[Kick webhook] Verified:` when the webhook is processed. If both are empty, no request reached your server.
 
 ---
 

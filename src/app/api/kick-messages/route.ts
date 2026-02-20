@@ -29,6 +29,12 @@ export interface KickChatBroadcastSettings {
   chatBroadcastHeartrate?: boolean;
   chatBroadcastHeartrateMinBpm?: number;
   chatBroadcastHeartrateVeryHighBpm?: number;
+  chatBroadcastSpeed?: boolean;
+  chatBroadcastSpeedMinKmh?: number;
+  chatBroadcastSpeedTimeoutMin?: number;
+  chatBroadcastAltitude?: boolean;
+  chatBroadcastAltitudeMinM?: number;
+  chatBroadcastAltitudeTimeoutMin?: number;
 }
 
 export interface KickAlertSettings extends KickChatBroadcastSettings {
@@ -44,6 +50,12 @@ export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   chatBroadcastHeartrate: false,
   chatBroadcastHeartrateMinBpm: 100,
   chatBroadcastHeartrateVeryHighBpm: 120,
+  chatBroadcastSpeed: false,
+  chatBroadcastSpeedMinKmh: 20,
+  chatBroadcastSpeedTimeoutMin: 5,
+  chatBroadcastAltitude: false,
+  chatBroadcastAltitudeMinM: 50,
+  chatBroadcastAltitudeTimeoutMin: 5,
 };
 
 export const dynamic = 'force-dynamic';

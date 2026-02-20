@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
       updates.winnerDisplaySeconds = body.winnerDisplaySeconds;
     }
     if (typeof body.autoStartPollsEnabled === 'boolean') updates.autoStartPollsEnabled = body.autoStartPollsEnabled;
-    if (typeof body.chatIdleMinutes === 'number' && body.chatIdleMinutes >= 1 && body.chatIdleMinutes <= 30) {
-      updates.chatIdleMinutes = body.chatIdleMinutes;
+    if (typeof body.minutesSinceLastPoll === 'number' && body.minutesSinceLastPoll >= 1 && body.minutesSinceLastPoll <= 30) {
+      updates.minutesSinceLastPoll = body.minutesSinceLastPoll;
     }
     if (typeof body.oneVotePerPerson === 'boolean') updates.oneVotePerPerson = body.oneVotePerPerson;
     await setPollSettings(updates);

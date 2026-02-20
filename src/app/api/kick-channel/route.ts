@@ -6,15 +6,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { kv } from '@vercel/kv';
-import { refreshKickTokens } from '@/lib/kick-api';
-import type { StoredKickTokens } from '@/lib/kick-api';
-
-const KICK_API_BASE = 'https://api.kick.com';
-const KICK_TOKENS_KEY = 'kick_tokens';
-const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
-const KICK_BROADCASTER_SLUG_KEY = 'kick_broadcaster_slug';
-
-export type StreamTitleLocationDisplay = 'city' | 'state' | 'country';
+import {
+  KICK_API_BASE,
+  KICK_STREAM_TITLE_SETTINGS_KEY,
+  KICK_BROADCASTER_SLUG_KEY,
+  getValidAccessToken,
+} from '@/lib/kick-api';
+import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 
 export interface StreamTitleSettings {
   customTitle: string;
@@ -32,31 +30,6 @@ export const DEFAULT_STREAM_TITLE_SETTINGS: StreamTitleSettings = {
 };
 
 export const dynamic = 'force-dynamic';
-
-async function getValidAccessToken(): Promise<string | null> {
-  const stored = await kv.get<StoredKickTokens>(KICK_TOKENS_KEY);
-  if (!stored?.access_token || !stored.refresh_token) return null;
-
-  const now = Date.now();
-  const bufferMs = 60 * 1000;
-  if (stored.expires_at - bufferMs > now) {
-    return stored.access_token;
-  }
-
-  try {
-    const tokens = await refreshKickTokens(stored.refresh_token);
-    const expiresAt = now + tokens.expires_in * 1000;
-    await kv.set(KICK_TOKENS_KEY, {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expires_at: expiresAt,
-      scope: tokens.scope,
-    });
-    return tokens.access_token;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET() {
   const cookieStore = await cookies();

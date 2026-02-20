@@ -15,19 +15,21 @@ import { kv } from '@vercel/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import type { LocationDisplayMode } from '@/types/settings';
-import { getHeartrateStats } from '@/utils/stats-storage';
+import { getHeartrateStats, getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
 import { getCountryFlagEmoji } from '@/utils/chat-utils';
 import { formatLocationForStreamTitle, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 
-import { KICK_API_BASE, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
-
-const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
 const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
+const KICK_BROADCAST_SPEED_LAST_SENT_KEY = 'kick_chat_broadcast_speed_last_sent';
+const KICK_BROADCAST_SPEED_LAST_TOP_KEY = 'kick_chat_broadcast_speed_last_top';
+const KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY = 'kick_chat_broadcast_altitude_last_sent';
+const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_top';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
 type HeartrateBroadcastState = 'below' | 'high' | 'very_high';
@@ -50,13 +52,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
-  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings] = await Promise.all([
+  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
     kv.get<{ locationDisplay?: string }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; locationDisplay?: StreamTitleLocationDisplay; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
+    kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
+    kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
+    kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY),
+    kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
   ]);
 
   const now = Date.now();
@@ -155,6 +161,71 @@ export async function GET(request: NextRequest) {
           await kv.set(KICK_BROADCAST_LAST_LOCATION_KEY, now);
           await kv.set(KICK_BROADCAST_LAST_LOCATION_MSG_KEY, lastMsgToStore);
         }
+      }
+    }
+  }
+
+  // Speed & altitude broadcasts: only when live, new top above min, and timeout passed
+  const chatBroadcastSpeed = storedAlert?.chatBroadcastSpeed === true;
+  const chatBroadcastAltitude = storedAlert?.chatBroadcastAltitude === true;
+  let speedAltitudeLive = false;
+  if (chatBroadcastSpeed || chatBroadcastAltitude) {
+    try {
+      const channelRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (channelRes.ok) {
+        const channelData = await channelRes.json();
+        const ch = (channelData.data ?? [])[0];
+        speedAltitudeLive = !!(ch?.livestream?.is_live ?? ch?.is_live);
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (chatBroadcastSpeed && speedAltitudeLive) {
+    const minKmh = (storedAlert?.chatBroadcastSpeedMinKmh as number) ?? 20;
+    const speedTimeoutMin = (storedAlert?.chatBroadcastSpeedTimeoutMin as number) ?? 5;
+    const speedTimeoutMs = speedTimeoutMin * 60 * 1000;
+    const speedStats = await getSpeedStats();
+    const topSpeed = speedStats.max?.speed ?? 0;
+    const lastSent = typeof speedLastSent === 'number' ? speedLastSent : 0;
+    const lastTop = typeof speedLastTop === 'number' ? speedLastTop : 0;
+    const timeoutOk = now - lastSent >= speedTimeoutMs;
+    const isNewTop = topSpeed > lastTop && topSpeed >= minKmh;
+    if (timeoutOk && isNewTop && speedStats.hasData) {
+      const msg = `🚀 New top speed: ${Math.round(topSpeed)} km/h!`;
+      try {
+        await sendKickChatMessage(accessToken, msg);
+        sent++;
+        await kv.set(KICK_BROADCAST_SPEED_LAST_SENT_KEY, now);
+        await kv.set(KICK_BROADCAST_SPEED_LAST_TOP_KEY, topSpeed);
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'speed', topSpeed, msgPreview: msg.slice(0, 50) }));
+      } catch (err) {
+        console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'speed', error: err instanceof Error ? err.message : String(err) }));
+      }
+    }
+  }
+
+  if (chatBroadcastAltitude && speedAltitudeLive) {
+    const minM = (storedAlert?.chatBroadcastAltitudeMinM as number) ?? 50;
+    const altitudeTimeoutMin = (storedAlert?.chatBroadcastAltitudeTimeoutMin as number) ?? 5;
+    const altitudeTimeoutMs = altitudeTimeoutMin * 60 * 1000;
+    const altitudeStats = await getAltitudeStats();
+    const topAltitude = altitudeStats.highest?.altitude ?? 0;
+    const lastSent = typeof altitudeLastSent === 'number' ? altitudeLastSent : 0;
+    const lastTop = typeof altitudeLastTop === 'number' ? altitudeLastTop : 0;
+    const timeoutOk = now - lastSent >= altitudeTimeoutMs;
+    const isNewTop = topAltitude > lastTop && topAltitude >= minM;
+    if (timeoutOk && isNewTop && altitudeStats.hasData) {
+      const msg = `⛰️ New top altitude: ${Math.round(topAltitude)} m!`;
+      try {
+        await sendKickChatMessage(accessToken, msg);
+        sent++;
+        await kv.set(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY, now);
+        await kv.set(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY, topAltitude);
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'altitude', topAltitude, msgPreview: msg.slice(0, 50) }));
+      } catch (err) {
+        console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'altitude', error: err instanceof Error ? err.message : String(err) }));
       }
     }
   }

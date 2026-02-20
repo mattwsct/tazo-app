@@ -20,7 +20,7 @@ export async function handleKickChatCommand(cmd: KickChatCommand): Promise<strin
   if (cmd === 'ping') return '🏓 Pong!';
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();
-    if (!stats.hasData) return '💓 No heart rate data yet today.';
+    if (!stats.hasData) return '💓 No heart rate data this stream yet.';
     const parts: string[] = [];
     if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
     if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);

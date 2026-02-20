@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
         countryCode: persistentLocation.location.countryCode || '',
       },
       rawLocation: persistentLocation.location,
+      updatedAt: persistentLocation.updatedAt,
     });
   } catch (error) {
     console.error('Failed to get persistent location:', error);

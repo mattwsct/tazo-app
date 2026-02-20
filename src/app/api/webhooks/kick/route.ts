@@ -19,6 +19,7 @@ import {
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
+import { onStreamStarted } from '@/utils/stats-storage';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -127,6 +128,11 @@ export async function POST(request: NextRequest) {
       /* ignore */
     }
     await logWebhookReceived(eventType || '(unknown)');
+  }
+
+  // Stream start: reset stats session when going live
+  if (eventNorm === 'livestream.status.updated' && payload.is_live === true) {
+    void onStreamStarted();
   }
 
   // Chat: poll handling first (if enabled), then !ping
