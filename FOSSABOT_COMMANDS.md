@@ -263,6 +263,17 @@ Returns a list of all available country codes and names for use with other trave
 
 ## Stats Commands
 
+### Heart Rate
+
+```
+!heartrate → $(customapi https://app.tazo.wtf/api/chat/heartrate)
+!hr → $(customapi https://app.tazo.wtf/api/chat/hr)
+```
+
+Returns heart rate from Pulsoid (live when connected), or from Apple Health via Health Auto Export when Pulsoid is not running.
+
+Example output: `💓 High: 120 bpm | Low: 72 bpm | Current: 85 bpm (live)` or `💓 72 bpm (Apple Health)`
+
 ### Speed
 
 ```
@@ -302,12 +313,12 @@ These commands use wellness data imported from Health Auto Export (steps, distan
 
 Example outputs:
 - `👟 12,450 steps this stream`
-- `🚶 8.2 km walked/run this stream`
+- `🚶 8.2 km (5.1 mi) walked/run this stream`
 - `🧍 4 stand hours today`
 - `🔥 450 active, 1,200 resting cal today`
 - `🧼 3 hand washes this stream`
 - `⚖️ 75.2 kg (165.8 lbs)`
-- `📊 12,450 steps · 8.2 km · 3 washes · 4 stand hr · 450 active cal · 75.2 kg`
+- `📊 12,450 steps · 8.2 km (5.1 mi) · 3 washes · 4 stand hr · 450 active cal · 75.2 kg`
 
 ## Fun Commands
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { kmToMiles } from '@/utils/unit-conversions';
 
 const POLL_INTERVAL_MS = 10000; // 10s — wellness data updates from Health Auto Export
 
@@ -53,9 +54,8 @@ export default function StepCounter() {
         <div className="step-counter-row">
           <span className="step-counter-icon">🚶</span>
           <span className="step-counter-value">
-            {distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)}
+            {distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)} km ({kmToMiles(distance!).toFixed(1)} mi)
           </span>
-          <span className="step-counter-label">km</span>
         </div>
       )}
     </div>

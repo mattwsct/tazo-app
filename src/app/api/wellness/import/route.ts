@@ -89,15 +89,38 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   const handwashing = byName.get('handwashing');
   if (handwashing) updates.handwashingCount = Math.max(0, Math.round(sumQty(handwashing)));
 
-  const bodyMass = byName.get('body_mass') ?? byName.get('mass');
-  const weight = lastQty(bodyMass);
-  if (weight != null && weight >= 0) updates.weightKg = Math.round(weight * 100) / 100;
+  // Body mass: HealthKit uses body_mass; some exporters use mass or weight.
+  // Assume kg (Apple Health standard). If units are 'lb', convert: qty * 0.453592
+  const bodyMass = byName.get('body_mass') ?? byName.get('mass') ?? byName.get('weight');
+  if (bodyMass) {
+    const raw = lastQty(bodyMass);
+    if (raw != null && raw >= 0) {
+      const units = (bodyMass.units || '').toLowerCase();
+      const kg = units === 'lb' || units === 'lbs' ? raw * 0.453592 : raw;
+      updates.weightKg = Math.round(kg * 100) / 100;
+    }
+  }
 
   const hr = byName.get('heart_rate');
   const bpm = lastAvg(hr);
   if (bpm != null && bpm >= 0) updates.heartRate = Math.round(bpm);
 
+  const restingHr = byName.get('resting_heart_rate');
+  const restingBpm = lastAvg(restingHr) ?? lastQty(restingHr);
+  if (restingBpm != null && restingBpm >= 0) updates.restingHeartRate = Math.round(restingBpm);
+
+  const hrvMetric = byName.get('heart_rate_variability_sdnn') ?? byName.get('heart_rate_variability');
+  const hrvVal = lastAvg(hrvMetric) ?? lastQty(hrvMetric);
+  if (hrvVal != null && hrvVal >= 0) updates.hrv = Math.round(hrvVal);
+
   return updates;
+}
+
+function getMetricNamesFromPayload(body: Record<string, unknown>): string[] {
+  const data = body.data as { metrics?: Array<{ name?: string }> } | undefined;
+  const metrics = data?.metrics;
+  if (!Array.isArray(metrics)) return [];
+  return metrics.map((m) => m?.name).filter((n): n is string => !!n);
 }
 
 export async function POST(request: NextRequest) {
@@ -113,7 +136,13 @@ export async function POST(request: NextRequest) {
 
     // Health Auto Export format: { data: { metrics: [...] } }
     if (body.data && typeof body.data === 'object' && (body.data as { metrics?: unknown }).metrics) {
+      const metricNames = getMetricNamesFromPayload(body);
       Object.assign(updates, parseHealthAutoExport(body));
+      // Log received metrics and parsed updates — visible in Vercel Dashboard → Logs
+      console.log('[Wellness import] Health Auto Export:', {
+        received: metricNames,
+        parsed: Object.keys(updates),
+      });
     }
 
     // Flat format (also allow overriding from flat fields if present)
@@ -134,9 +163,16 @@ export async function POST(request: NextRequest) {
     if (body.hrv !== undefined) updates.hrv = Math.max(0, parseNumber(body.hrv) ?? 0);
 
     if (Object.keys(updates).length === 0) {
-      console.warn('[Wellness import] No valid fields. Received keys:', Object.keys(body));
+      const metricNames = getMetricNamesFromPayload(body);
+      console.warn('[Wellness import] No valid fields.', {
+        topLevelKeys: Object.keys(body),
+        healthAutoExportMetrics: metricNames.length ? metricNames : '(none)',
+      });
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
     }
+
+    // Log what we're saving (helps debug e.g. weight missing)
+    console.log('[Wellness import] Saving:', Object.keys(updates));
 
     await updateWellnessData(updates);
 

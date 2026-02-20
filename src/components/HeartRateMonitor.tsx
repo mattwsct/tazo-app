@@ -26,6 +26,7 @@ const HEART_RATE_CONFIG = {
   CONNECTION_DEBOUNCE: 30000, // 30 seconds - keep showing last BPM during brief socket drops before hiding
   COLOR_DEBOUNCE: 5000, // 5 seconds - debounce color changes to prevent rapid flashing
   STATS_SEND_INTERVAL: 5000, // 5 seconds - throttle stats API updates
+  WELLNESS_FALLBACK_POLL: 60000, // 60 seconds - poll wellness when using Apple Health fallback
 } as const;
 
 // === 💗 HEART RATE MONITOR COMPONENT ===
@@ -43,6 +44,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   });
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
   const [debouncedBpm, setDebouncedBpm] = useState(0); // Debounced BPM for color calculation
+  const [wellnessFallback, setWellnessFallback] = useState<{ bpm: number; updatedAt: number } | null>(null);
   
   // Use animated value hook for smooth BPM transitions - counts through each integer (70, 71, 72...)
   const smoothHeartRate = useAnimatedValue(
@@ -362,13 +364,47 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     };
       }, [pulsoidToken, onConnected, updateConnectionState, sendHeartrateToStats]);
 
-  // Don't render if not connected or no BPM data
-  if (!heartRate.isConnected || heartRate.bpm <= 0) {
-    return null;
-  }
+  // Wellness fallback: when Pulsoid not connected, use Apple Health data from Health Auto Export
+  useEffect(() => {
+    if (heartRate.isConnected && heartRate.bpm > 0) {
+      setWellnessFallback(null); // Clear fallback when Pulsoid is live
+      return;
+    }
+    let mounted = true;
+    const fetchWellness = async () => {
+      try {
+        const res = await fetch('/api/wellness', { cache: 'no-store' });
+        if (!res.ok || !mounted) return;
+        const data = await res.json();
+        if (!mounted) return;
+        const bpm = data.heartRate ?? data.restingHeartRate;
+        if (typeof bpm === 'number' && bpm > 0) {
+          setWellnessFallback({ bpm: Math.round(bpm), updatedAt: data.updatedAt ?? Date.now() });
+        } else {
+          setWellnessFallback(null);
+        }
+      } catch {
+        if (mounted) setWellnessFallback(null);
+      }
+    };
+    fetchWellness();
+    const id = setInterval(fetchWellness, HEART_RATE_CONFIG.WELLNESS_FALLBACK_POLL);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, [heartRate.isConnected, heartRate.bpm]);
 
-  // Get current heart rate
-  const currentBpm = Math.round(smoothHeartRate || heartRate.bpm);
+  const hasLiveData = heartRate.isConnected && heartRate.bpm > 0;
+  const hasFallbackData = !hasLiveData && wellnessFallback != null && wellnessFallback.bpm > 0;
+  const showHeartRate = hasLiveData || hasFallbackData;
+
+  if (!showHeartRate) return null;
+
+  // Get current heart rate (live from Pulsoid or fallback from Apple Health)
+  const currentBpm = hasLiveData
+    ? Math.round(smoothHeartRate || heartRate.bpm)
+    : wellnessFallback!.bpm;
   
   // Calculate color based on debounced BPM (only for numbers, not heart icon)
   // Use debouncedBpm if available, otherwise use currentBpm for initial display
@@ -388,16 +424,19 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     ? '0 0 4px rgba(255, 255, 255, 0.6), 0 1px 2px rgba(255, 255, 255, 0.4)'
     : undefined; // Use default CSS text-shadow for other colors
 
+  const animationBpm = hasLiveData ? stableAnimationBpm : currentBpm;
+  const fallbackOpacity = hasFallbackData ? 0.75 : 1;
+
   return (
     <ErrorBoundary>
-      <div className="heart-rate-wrapper">
+      <div className="heart-rate-wrapper" style={{ opacity: fallbackOpacity }}>
         <div className="heart-rate">
           <div className="heart-rate-content">
             {/* Heart icon - always red (same as high heart rate color) */}
             <div 
               className="heart-rate-icon beating"
               style={{
-                animationDuration: stableAnimationBpm > 0 ? `${60 / stableAnimationBpm}s` : '1s',
+                animationDuration: animationBpm > 0 ? `${60 / animationBpm}s` : '1s',
                 color: '#FF4444' // Always red, consistent with high heart rate text color
               }}
             >
@@ -412,6 +451,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
             </div>
             {/* Numbers - color changes based on BPM */}
             <div className="heart-rate-text">
+              {hasFallbackData && <span className="heart-rate-fallback-prefix">~</span>}
               <span 
                 className="heart-rate-value"
                 style={{

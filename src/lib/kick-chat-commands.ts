@@ -11,6 +11,7 @@ import {
   getWellnessHandwashingResponse,
   getWellnessWeightResponse,
   getWellnessSummaryResponse,
+  getWellnessHeartRateResponse,
 } from '@/utils/wellness-chat';
 
 export const KICK_CHAT_COMMANDS = [
@@ -47,15 +48,19 @@ export async function handleKickChatCommand(cmd: KickChatCommand): Promise<strin
   if (cmd === 'ping') return '🏓 Pong!';
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();
-    if (!stats.hasData) return '💓 No heart rate data this stream yet.';
-    const parts: string[] = [];
-    if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
-    if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);
-    if (stats.current) {
-      const curr = stats.current.age === 'current' ? `${stats.current.bpm} bpm (live)` : `${stats.current.bpm} bpm (${stats.current.age} ago)`;
-      parts.push(`Current: ${curr}`);
+    if (stats.hasData) {
+      const parts: string[] = [];
+      if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
+      if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);
+      if (stats.current) {
+        const curr = stats.current.age === 'current' ? `${stats.current.bpm} bpm (live)` : `${stats.current.bpm} bpm (${stats.current.age} ago)`;
+        parts.push(`Current: ${curr}`);
+      }
+      return `💓 ${parts.join(' | ')}`;
     }
-    return `💓 ${parts.join(' | ')}`;
+    const wellnessHr = await getWellnessHeartRateResponse();
+    if (wellnessHr) return wellnessHr;
+    return '💓 No heart rate data this stream yet.';
   }
   if (cmd === 'steps') return getWellnessStepsResponse();
   if (cmd === 'distance') return getWellnessDistanceResponse();

@@ -840,6 +840,7 @@ The overlay app also provides chat command APIs for Fossabot integration. All co
 - **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
 - **Weather**: `/api/chat/forecast`, `/api/chat/sun`
 - **Wellness** (Health Auto Export): `/api/chat/steps`, `/api/chat/distance`, `/api/chat/stand`, `/api/chat/calories`, `/api/chat/handwashing`, `/api/chat/weight`, `/api/chat/wellness`
+- **Heart rate**: `/api/chat/heartrate` — Pulsoid live when connected, falls back to Apple Health (Health Auto Export) when not
 - **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/tips`, `/api/chat/emergency`, `/api/chat/flirt`, `/api/chat/sex`, `/api/chat/insults` (optionally specify country code: `?q=JP`, `?q=AU`, etc.)
 - **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`
 - **Utility**: `/api/chat/status`

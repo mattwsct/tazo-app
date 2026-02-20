@@ -20,3 +20,10 @@ export function kmhToMph(kmh: number): number {
 export function metersToFeet(meters: number): number {
   return Math.round(meters * 3.28084);
 }
+
+/**
+ * Converts km to miles (walking/running distance)
+ */
+export function kmToMiles(km: number): number {
+  return km * 0.621371;
+}

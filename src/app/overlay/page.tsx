@@ -1579,13 +1579,9 @@ function OverlayPage() {
               </div>
             )}
             
-            {API_KEYS.PULSOID && (
-              <ErrorBoundary fallback={<div className="heart-rate-line">Heart rate unavailable</div>}>
-                <HeartRateMonitor 
-                  pulsoidToken={API_KEYS.PULSOID} 
-                />
-              </ErrorBoundary>
-            )}
+            <ErrorBoundary fallback={<div className="heart-rate-line">Heart rate unavailable</div>}>
+              <HeartRateMonitor pulsoidToken={API_KEYS.PULSOID} />
+            </ErrorBoundary>
             <ErrorBoundary fallback={null}>
               <StepCounter />
             </ErrorBoundary>

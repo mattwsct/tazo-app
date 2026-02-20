@@ -193,7 +193,24 @@ export async function GET(
   }
 
   // Stats routes (no RTIRL required - use KV storage)
-  // Heart rate command removed - not working reliably
+  if (route === 'heartrate' || route === 'hr') {
+    const { getHeartrateStats } = await import('@/utils/stats-storage');
+    const { getWellnessHeartRateResponse } = await import('@/utils/wellness-chat');
+    const stats = await getHeartrateStats();
+    if (stats.hasData) {
+      const parts: string[] = [];
+      if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
+      if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);
+      if (stats.current) {
+        const curr = stats.current.age === 'current' ? `${stats.current.bpm} bpm (live)` : `${stats.current.bpm} bpm (${stats.current.age} ago)`;
+        parts.push(`Current: ${curr}`);
+      }
+      return txtResponse(`💓 ${parts.join(' | ')}`);
+    }
+    const wellnessHr = await getWellnessHeartRateResponse();
+    if (wellnessHr) return txtResponse(wellnessHr);
+    return txtResponse('💓 No heart rate data this stream yet.');
+  }
 
   if (route === 'speed') {
     const stats = await getSpeedStats();

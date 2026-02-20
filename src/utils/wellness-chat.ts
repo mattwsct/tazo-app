@@ -8,6 +8,13 @@ import {
   getDistanceSinceStreamStart,
   getHandwashingSinceStreamStart,
 } from '@/utils/wellness-storage';
+import { kmToMiles } from '@/utils/unit-conversions';
+
+function formatDistance(km: number): string {
+  const kmStr = km >= 1 ? km.toFixed(1) : km.toFixed(2);
+  const mi = kmToMiles(km).toFixed(1);
+  return `${kmStr} km (${mi} mi)`;
+}
 
 export async function getWellnessStepsResponse(): Promise<string> {
   const steps = await getStepsSinceStreamStart();
@@ -18,8 +25,7 @@ export async function getWellnessStepsResponse(): Promise<string> {
 export async function getWellnessDistanceResponse(): Promise<string> {
   const km = await getDistanceSinceStreamStart();
   if (km <= 0) return '🚶 No walking/running distance this stream yet.';
-  const dist = km >= 1 ? `${km.toFixed(1)}` : km.toFixed(2);
-  return `🚶 ${dist} km walked/run this stream`;
+  return `🚶 ${formatDistance(km)} walked/run this stream`;
 }
 
 export async function getWellnessStandResponse(): Promise<string> {
@@ -48,6 +54,14 @@ export async function getWellnessHandwashingResponse(): Promise<string> {
   return `🧼 ${n} hand wash${n === 1 ? '' : 'es'} this stream`;
 }
 
+export async function getWellnessHeartRateResponse(): Promise<string | null> {
+  const wellness = await getWellnessData();
+  const bpm = wellness?.heartRate ?? wellness?.restingHeartRate;
+  if (bpm == null || bpm <= 0) return null;
+  const label = wellness?.heartRate != null ? 'Apple Health' : 'resting';
+  return `💓 ${bpm} bpm (${label})`;
+}
+
 export async function getWellnessWeightResponse(): Promise<string> {
   const wellness = await getWellnessData();
   const kg = wellness?.weightKg;
@@ -66,10 +80,13 @@ export async function getWellnessSummaryResponse(): Promise<string> {
 
   const parts: string[] = [];
   if (steps > 0) parts.push(`👟 ${steps.toLocaleString()} steps`);
-  if (distance > 0) parts.push(`🚶 ${distance.toFixed(1)} km`);
+  if (distance > 0) parts.push(`🚶 ${formatDistance(distance)}`);
   if (handwashing > 0) parts.push(`🧼 ${handwashing} wash${handwashing === 1 ? '' : 'es'}`);
   if ((wellness?.standHours ?? 0) > 0) parts.push(`🧍 ${wellness!.standHours} stand hr`);
   if ((wellness?.activeCalories ?? 0) > 0) parts.push(`🔥 ${wellness!.activeCalories} active cal`);
+  if ((wellness?.heartRate ?? 0) > 0 || (wellness?.restingHeartRate ?? 0) > 0) {
+    parts.push(`💓 ${wellness!.heartRate ?? wellness!.restingHeartRate} bpm`);
+  }
   if ((wellness?.weightKg ?? 0) > 0) parts.push(`⚖️ ${wellness!.weightKg} kg`);
 
   if (parts.length === 0) return '📊 No wellness data yet.';
