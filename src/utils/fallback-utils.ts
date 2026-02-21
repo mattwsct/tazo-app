@@ -9,20 +9,6 @@ import { type SunriseSunsetData } from './api-utils';
 // === 🌍 LOCATION FALLBACKS ===
 
 /**
- * Creates a basic location display from coordinates when LocationIQ fails
- */
-export function createCoordinateFallback(lat: number, lon: number): LocationDisplay {
-  // Round to 2 decimal places for readability
-  const latRounded = Math.round(lat * 100) / 100;
-  const lonRounded = Math.round(lon * 100) / 100;
-  
-  return {
-    primary: `${latRounded}, ${lonRounded}`,
-    secondary: undefined // No country info available
-  };
-}
-
-/**
  * Creates a basic location display with country estimation based on coordinates
  * Never shows raw coordinates - only shows country if estimable, or ocean names if on water
  * @param lat - Latitude
@@ -619,35 +605,5 @@ export function isValidApiKey(key: string | undefined): boolean {
   if (!key) return false;
   if (key.length < 10) return false; // Most API keys are longer
   if (key.includes('your-') || key.includes('replace-')) return false; // Placeholder keys
-  return true;
-}
-
-/**
- * Creates a user-friendly error message for API failures
- */
-export function getApiErrorMessage(apiName: string, error: unknown): string {
-  if (error instanceof Error) {
-    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-      return `${apiName} API key is invalid or expired`;
-    }
-    if (error.message.includes('429') || error.message.includes('rate limit')) {
-      return `${apiName} API rate limit exceeded`;
-    }
-    if (error.message.includes('402') || error.message.includes('quota')) {
-      return `${apiName} API quota exceeded`;
-    }
-    if (error.message.includes('timeout') || error.message.includes('network')) {
-      return `${apiName} API is temporarily unavailable`;
-    }
-  }
-  return `${apiName} API error occurred`;
-}
-
-/**
- * Determines if we should show fallback data or hide the feature
- */
-export function shouldShowFallback(): boolean {
-  // For now, always show fallbacks to maintain functionality
-  // In the future, this could be configurable
   return true;
 }

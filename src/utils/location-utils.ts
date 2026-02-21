@@ -1,5 +1,7 @@
 // === 🌍 LOCATION & GEOGRAPHIC UTILITIES ===
 
+import { hasOverlappingNames } from './string-utils';
+
 const MAX_CHARACTER_LIMIT = 16; // Single limit for both primary and secondary lines
 
 export interface LocationData {
@@ -336,60 +338,6 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 // === 📏 UTILITY FUNCTIONS ===
 
 /**
- * Checks if two location names overlap (one contains the other or shares significant words)
- * Used to prevent duplicate names in location display
- * 
- * Handles these duplicate scenarios:
- * - Exact matches: "Tokyo" = "Tokyo" (city vs prefecture), "New York" = "New York" (city vs state)
- * - Substring containment: "Tokyo" in "Tokyo Prefecture", "New York" in "New York State"
- * - Multi-word overlap: "Downtown Los Angeles" + "Los Angeles County" (shares "Los", "Angeles")
- * - City-country duplicates: "Singapore" = "Singapore" (city vs country)
- * - Neighbourhood-city duplicates: "Downtown Los Angeles" + "Los Angeles" (city contained in neighbourhood)
- * 
- * @param name1 First location name
- * @param name2 Second location name
- * @returns true if one name contains the other or they share 2+ significant words (case-insensitive)
- */
-function hasOverlappingNames(name1: string, name2: string): boolean {
-  if (!name1 || !name2) return false;
-  
-  const normalized1 = name1.toLowerCase().trim();
-  const normalized2 = name2.toLowerCase().trim();
-  
-  // Check exact match or simple substring containment first
-  if (normalized1 === normalized2) return true;
-  if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
-    return true;
-  }
-  
-  // Split into words for more accurate matching
-  const words1 = normalized1.split(/\s+/).filter(w => w.length > 0);
-  const words2 = normalized2.split(/\s+/).filter(w => w.length > 0);
-  
-  if (words1.length === 0 || words2.length === 0) return false;
-  
-  // Check if all words from the shorter name appear in the longer name
-  const shorter = words1.length <= words2.length ? words1 : words2;
-  const longer = words1.length > words2.length ? words1 : words2;
-  
-  // If shorter name has all its words in longer name, they overlap
-  if (shorter.length > 0 && shorter.every(word => longer.includes(word))) {
-    return true;
-  }
-  
-  // Check if they share 2+ significant words (catches cases like "Downtown Los Angeles" + "Los Angeles County")
-  // This prevents showing "Los Angeles" twice when we have "Downtown Los Angeles" and "Los Angeles County"
-  const commonWords = shorter.filter(word => longer.includes(word));
-  // If they share 2 or more words, consider them overlapping
-  // This catches: "Downtown Los Angeles" vs "Los Angeles County" (shares "Los", "Angeles")
-  if (commonWords.length >= 2) {
-    return true;
-  }
-  
-  return false;
-}
-
-/**
  * Gets the best city name by selecting the first available city field
  * Note: Excludes suburb as suburbs are neighborhoods, not cities
  */
@@ -610,25 +558,3 @@ export function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2:
   return R * c;
 }
 
-/**
- * Capitalizes the first letter of each word
- */
-export function capitalizeWords(str: string): string {
-  return str.replace(/\b\w/g, c => c.toUpperCase());
-}
-
-/**
- * Validates coordinate values are within valid ranges
- */
-export function isValidCoordinate(lat: number, lon: number): boolean {
-  return (
-    typeof lat === 'number' && 
-    typeof lon === 'number' && 
-    !isNaN(lat) && 
-    !isNaN(lon) && 
-    lat >= -90 && 
-    lat <= 90 && 
-    lon >= -180 && 
-    lon <= 180
-  );
-}

@@ -62,6 +62,7 @@ export function useOverlaySettings(): [
               ...merged,
               leaderboardTop: Array.isArray(merged.leaderboardTop) && merged.leaderboardTop.length > 0 ? merged.leaderboardTop : (prev.leaderboardTop ?? []),
               overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
+              streamGoals: merged.streamGoals ?? prev.streamGoals,
             }));
             lastSettingsHash.current = createSettingsHash(merged);
             settingsLoadedRef.current = true;
@@ -113,11 +114,14 @@ export function useOverlaySettings(): [
               leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
             }));
-          } else if (data && (data.leaderboardTop || data.overlayAlerts)) {
+          } else if (data && (data.leaderboardTop || data.overlayAlerts || data.streamGoals || 'subGoalCelebrationUntil' in data || 'kicksGoalCelebrationUntil' in data)) {
             setSettings((prev) => ({
               ...prev,
               leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
+              streamGoals: data.streamGoals ?? prev.streamGoals,
+              subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
+              kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
             }));
           }
         }
@@ -134,12 +138,15 @@ export function useOverlaySettings(): [
         if (!res.ok) return;
         const data = await res.json();
         if (!data) return;
-        // Only update leaderboard + alerts (lightweight update, no hash check)
+        // Only update leaderboard + alerts + goals + celebration (lightweight update, no hash check)
         // Preserve previous leaderboard when fetch returns empty to avoid flash
         setSettings((prev) => ({
           ...prev,
           leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
           overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
+          streamGoals: data.streamGoals ?? prev.streamGoals,
+          subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
+          kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
         }));
       } catch {
         /* ignore */

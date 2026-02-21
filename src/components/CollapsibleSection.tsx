@@ -27,15 +27,15 @@ export function saveCollapsed(map: Record<string, boolean>) {
 }
 
 export const ADMIN_SECTION_IDS = [
-  'location-map',
   'connection',
+  'location-map',
   'stream-title',
   'weather-altitude-speed',
   'steps-distance',
-  'todo-list',
   'leaderboard-alerts',
   'poll',
   'message-templates',
+  'advanced-data',
 ] as const;
 
 export function collapseAllSections(collapsed: boolean) {

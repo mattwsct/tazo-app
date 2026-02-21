@@ -12,10 +12,18 @@ import { TIMERS } from '@/utils/overlay-constants';
  */
 export function mergeSettingsWithDefaults(settingsData: Partial<OverlaySettings>): OverlaySettings {
   const data = settingsData ?? {};
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- exclude legacy key from spread
+  const { leaderboardDisplay: _ld, ...rest } = data as Record<string, unknown>;
+  const legacy = data as { leaderboardDisplay?: string; showLeaderboard?: boolean };
+  const showLeaderboard = data.showLeaderboard ?? (
+    legacy.leaderboardDisplay === 'hidden' ? false :
+    legacy.leaderboardDisplay !== undefined ? true :
+    DEFAULT_OVERLAY_SETTINGS.showLeaderboard ?? true
+  );
   return {
     ...DEFAULT_OVERLAY_SETTINGS,
-    ...data,
-    leaderboardDisplay: getLeaderboardDisplayMode(data),
+    ...rest,
+    showLeaderboard,
     broadenLocationWhenStale: settingsData.broadenLocationWhenStale ?? DEFAULT_OVERLAY_SETTINGS.broadenLocationWhenStale ?? true,
     locationStaleMaxFallback: settingsData.locationStaleMaxFallback ?? DEFAULT_OVERLAY_SETTINGS.locationStaleMaxFallback ?? 'country',
     weatherConditionDisplay: settingsData.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
@@ -90,16 +98,6 @@ export function getEffectiveDisplayModeForStaleGps(
   else if (gpsAgeMs >= STALE_CITY_MS && (displayMode === 'neighbourhood' || displayMode === 'city')) effective = 'state';
   else if (gpsAgeMs >= STALE_NEIGHBOURHOOD_MS && displayMode === 'neighbourhood') effective = 'city';
   return capAtMaxFallback(effective, maxFallback);
-}
-
-/** Resolve leaderboard display mode with legacy showLeaderboard fallback. */
-export function getLeaderboardDisplayMode(
-  settings: { leaderboardDisplay?: string; showLeaderboard?: boolean }
-): 'always' | 'auto' | 'hidden' {
-  const ld = settings.leaderboardDisplay ?? (
-    (settings as { showLeaderboard?: boolean }).showLeaderboard === false ? 'hidden' : 'auto'
-  );
-  return ld as 'always' | 'auto' | 'hidden';
 }
 
 /**

@@ -482,20 +482,3 @@ function formatDuration(ms: number): string {
   const seconds = totalSeconds % 60;
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 } 
-
-
-// === 🛠️ API HELPER FUNCTIONS ===
-
-/**
- * Creates a consistent error response
- */
-export function createErrorResponse(message: string, status: number = 400) {
-  return Response.json({ success: false, error: message }, { status });
-}
-
-/**
- * Creates a consistent success response
- */
-export function createSuccessResponse(data?: Record<string, unknown>) {
-  return Response.json({ success: true, ...data });
-} 

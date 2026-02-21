@@ -1,155 +1,8 @@
 /* === SIMPLE DARK MODE ADMIN STYLES === */
 
-/* === TO-DO LIST STYLES === */
-.todo-input-group {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.todo-input {
-  flex: 1;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.5rem;
-  color: #ffffff;
-  font-size: 1rem;
-  font-family: inherit;
-}
-
-.todo-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.todo-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
-}
-
 .btn-small {
   padding: 0.75rem 1.25rem;
   font-size: 0.9rem;
-}
-
-.todo-list-actions {
-  margin-top: 0.75rem;
-  margin-bottom: 0.75rem;
-  display: flex;
-  justify-content: flex-start;
-}
-
-.todo-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.todo-item-admin {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.5rem;
-  transition: background 0.2s;
-  gap: 0.5rem;
-}
-
-.todo-item-admin:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.todo-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex: 1;
-  cursor: pointer;
-}
-
-.todo-checkbox {
-  width: 1.25rem;
-  height: 1.25rem;
-  cursor: pointer;
-  accent-color: #3b82f6;
-}
-
-.todo-text-admin {
-  flex: 1;
-  color: #ffffff;
-  font-size: 1rem;
-  user-select: none;
-}
-
-.todo-text-admin.completed {
-  opacity: 0.5;
-}
-
-.todo-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.todo-edit-input {
-  flex: 1;
-  padding: 0.5rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.5);
-  border-radius: 0.25rem;
-  color: #ffffff;
-  font-size: 1rem;
-  font-family: inherit;
-  outline: none;
-}
-
-.todo-edit-input:focus {
-  border-color: #3b82f6;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.todo-edit-btn {
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  font-size: 0.9rem;
-  line-height: 1;
-  transition: all 0.2s;
-}
-
-.todo-edit-btn:hover {
-  background: rgba(59, 130, 246, 0.3);
-  border-color: rgba(59, 130, 246, 0.5);
-  color: #ffffff;
-}
-
-.todo-delete-btn {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  transition: all 0.2s;
-}
-
-.todo-delete-btn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #ffffff;
-}
-
-.todo-delete-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Base Styles */
@@ -1691,6 +1544,56 @@ body {
 .admin-select-big:focus {
   outline: none;
   border-color: #3b82f6;
+}
+
+/* Stream goals override — better readability, no spinner overlap */
+.stream-goals-override .input-hint {
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.stream-goals-override .admin-select-wrap label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.stream-goals-override-fields {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.stream-goals-override .admin-select-wrap {
+  margin-bottom: 0;
+}
+
+/* Number inputs: hide browser spinners that overlap the value */
+.admin-number-input {
+  padding-right: 14px !important;
+  min-width: 100px;
+  width: 100px;
+  background-image: none !important;
+}
+
+.admin-number-input::-webkit-inner-spin-button,
+.admin-number-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.admin-number-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.stream-goals-override .btn-secondary {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.stream-goals-override .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Collapsible section groups — mobile-friendly (kept for potential reuse) */

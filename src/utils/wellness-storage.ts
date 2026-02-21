@@ -13,6 +13,73 @@ const WELLNESS_STEPS_SESSION_KEY = 'wellness_steps_session';
 const WELLNESS_DISTANCE_SESSION_KEY = 'wellness_distance_session';
 const WELLNESS_HANDWASHING_SESSION_KEY = 'wellness_handwashing_session';
 const WELLNESS_FLIGHTS_SESSION_KEY = 'wellness_flights_session';
+const WELLNESS_LAST_IMPORT_KEY = 'wellness_last_import';
+
+/** Tracks last imported value+time per metric to deduplicate rapid/duplicate pushes. */
+interface WellnessLastImport {
+  steps?: { value: number; at: number };
+  distanceKm?: { value: number; at: number };
+  handwashingCount?: { value: number; at: number };
+  flightsClimbed?: { value: number; at: number };
+}
+
+const DEDUP_SAME_VALUE_MS = 60_000;   // Same value within 60s → treat as duplicate
+const DEDUP_STALE_LOWER_MS = 90_000;  // Lower value within 90s of last import → likely out-of-order, skip
+
+async function getLastImport(): Promise<WellnessLastImport> {
+  try {
+    const data = await kv.get<WellnessLastImport>(WELLNESS_LAST_IMPORT_KEY);
+    return data ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function setLastImportMetric(metric: keyof WellnessLastImport, value: number): Promise<void> {
+  try {
+    const existing = await getLastImport();
+    await kv.set(WELLNESS_LAST_IMPORT_KEY, {
+      ...existing,
+      [metric]: { value, at: Date.now() },
+    });
+  } catch (error) {
+    console.error('Failed to update wellness last import:', error);
+  }
+}
+
+/** Returns true if we should skip this session update (duplicate or stale/out-of-order). */
+function shouldSkipSessionUpdate(
+  lastImport: { value: number; at: number } | undefined,
+  newValue: number,
+  lastKnown: number,
+  now: number
+): boolean {
+  if (!lastImport) return false;
+
+  // Same value within window → duplicate push, skip
+  if (newValue === lastImport.value && (now - lastImport.at) < DEDUP_SAME_VALUE_MS) {
+    return true;
+  }
+
+  // Lower value shortly after last import → likely out-of-order (e.g. 15k then 10k), don't treat as daily reset
+  if (newValue < lastKnown && (now - lastImport.at) < DEDUP_STALE_LOWER_MS) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Call when stream goes live. Clears last-import timestamps so dedup state doesn't carry over from prior stream. */
+export async function resetWellnessLastImport(): Promise<void> {
+  try {
+    await kv.del(WELLNESS_LAST_IMPORT_KEY);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Wellness] Last import dedup state cleared (stream start)');
+    }
+  } catch (error) {
+    console.error('Failed to reset wellness last import:', error);
+  }
+}
 
 export interface StepsSession {
   accumulated: number;  // steps since stream start (survives midnight)
@@ -115,9 +182,18 @@ export async function resetStepsSession(currentSteps: number): Promise<void> {
 export async function updateStepsSession(newSteps: number): Promise<void> {
   try {
     const steps = Math.max(0, Math.floor(newSteps));
+    const now = Date.now();
+    const lastImportState = await getLastImport();
     const existing = await getStepsSession();
     const lastKnown = existing?.lastKnown ?? 0;
     const accumulated = existing?.accumulated ?? 0;
+
+    if (shouldSkipSessionUpdate(lastImportState.steps, steps, lastKnown, now)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Wellness] Skipping steps session update (duplicate/stale):', steps);
+      }
+      return;
+    }
 
     let delta: number;
     if (steps >= lastKnown) {
@@ -132,6 +208,7 @@ export async function updateStepsSession(newSteps: number): Promise<void> {
       lastKnown: steps,
     };
     await kv.set(WELLNESS_STEPS_SESSION_KEY, session);
+    await setLastImportMetric('steps', steps);
   } catch (error) {
     console.error('Failed to update steps session:', error);
     throw error;
@@ -175,9 +252,18 @@ export async function resetDistanceSession(currentDistanceKm: number): Promise<v
 export async function updateDistanceSession(newDistanceKm: number): Promise<void> {
   try {
     const km = Math.max(0, newDistanceKm);
+    const now = Date.now();
+    const lastImportState = await getLastImport();
     const existing = await getDistanceSession();
     const lastKnown = existing?.lastKnown ?? 0;
     const accumulated = existing?.accumulated ?? 0;
+
+    if (shouldSkipSessionUpdate(lastImportState.distanceKm, km, lastKnown, now)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Wellness] Skipping distance session update (duplicate/stale):', km);
+      }
+      return;
+    }
 
     let delta: number;
     if (km >= lastKnown) {
@@ -191,6 +277,7 @@ export async function updateDistanceSession(newDistanceKm: number): Promise<void
       lastKnown: km,
     };
     await kv.set(WELLNESS_DISTANCE_SESSION_KEY, session);
+    await setLastImportMetric('distanceKm', km);
   } catch (error) {
     console.error('Failed to update distance session:', error);
     throw error;
@@ -229,9 +316,18 @@ export async function resetHandwashingSession(currentCount: number): Promise<voi
 export async function updateHandwashingSession(newCount: number): Promise<void> {
   try {
     const count = Math.max(0, Math.floor(newCount));
+    const now = Date.now();
+    const lastImportState = await getLastImport();
     const existing = await getHandwashingSession();
     const lastKnown = existing?.lastKnown ?? 0;
     const accumulated = existing?.accumulated ?? 0;
+
+    if (shouldSkipSessionUpdate(lastImportState.handwashingCount, count, lastKnown, now)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Wellness] Skipping handwashing session update (duplicate/stale):', count);
+      }
+      return;
+    }
 
     let delta: number;
     if (count >= lastKnown) {
@@ -245,6 +341,7 @@ export async function updateHandwashingSession(newCount: number): Promise<void> 
       lastKnown: count,
     };
     await kv.set(WELLNESS_HANDWASHING_SESSION_KEY, session);
+    await setLastImportMetric('handwashingCount', count);
   } catch (error) {
     console.error('Failed to update handwashing session:', error);
     throw error;
@@ -283,12 +380,23 @@ export async function resetFlightsSession(currentFlights: number): Promise<void>
 export async function updateFlightsSession(newFlights: number): Promise<void> {
   try {
     const count = Math.max(0, Math.floor(newFlights));
+    const now = Date.now();
+    const lastImportState = await getLastImport();
     const existing = await getFlightsSession();
     const lastKnown = existing?.lastKnown ?? 0;
     const accumulated = existing?.accumulated ?? 0;
+
+    if (shouldSkipSessionUpdate(lastImportState.flightsClimbed, count, lastKnown, now)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Wellness] Skipping flights session update (duplicate/stale):', count);
+      }
+      return;
+    }
+
     const delta = count >= lastKnown ? count - lastKnown : count;
     const session: FlightsSession = { accumulated: accumulated + delta, lastKnown: count };
     await kv.set(WELLNESS_FLIGHTS_SESSION_KEY, session);
+    await setLastImportMetric('flightsClimbed', count);
   } catch (error) {
     console.error('Failed to update flights session:', error);
     throw error;

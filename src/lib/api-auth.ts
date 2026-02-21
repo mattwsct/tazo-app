@@ -72,40 +72,4 @@ export function logKVUsage(operation: 'read' | 'write') {
       console.warn(`🚨 MONTHLY KV PROJECTION: ${projectedReads.toFixed(0)} reads, ${projectedWrites.toFixed(0)} writes (limit: 100,000 each)`);
     }
   }
-}
-
-// === 🔄 GENERIC API UTILITIES ===
-
-/**
- * Generic API wrapper with authentication and error handling
- */
-export function withApiAuth<T extends unknown[]>(
-  handler: (...args: T) => Promise<Response>
-) {
-  return async (...args: T): Promise<Response> => {
-    const startTime = Date.now();
-    
-    try {
-      const isAuthenticated = await verifyAuth();
-      if (!isAuthenticated) {
-        return new Response('Unauthorized', { status: 401 });
-      }
-      
-      const result = await handler(...args);
-      const executionTime = Date.now() - startTime;
-      
-      // Warn if function is taking too long (approaching 10s limit)
-      if (executionTime > 8000) {
-        console.warn(`⚠️  SLOW FUNCTION: ${handler.name || 'Unknown'} took ${executionTime}ms (limit: 10s)`);
-      }
-      
-      return result;
-    } catch (error) {
-      const executionTime = Date.now() - startTime;
-      console.error(`❌ API Error in ${handler.name || 'Unknown'}:`, error);
-      console.error(`⏱️  Execution time: ${executionTime}ms`);
-      
-      return new Response('Internal Server Error', { status: 500 });
-    }
-  };
 } 

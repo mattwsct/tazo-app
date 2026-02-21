@@ -23,7 +23,10 @@ import { onStreamStarted } from '@/utils/stats-storage';
 import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPoints, addGiftSubPoints, addKicksPoints } from '@/utils/leaderboard-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
-import { getWellnessData, resetStepsSession, resetDistanceSession, resetHandwashingSession, resetFlightsSession, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
+import { getWellnessData, resetStepsSession, resetDistanceSession, resetHandwashingSession, resetFlightsSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
+import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
+import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
+import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -145,7 +148,10 @@ export async function POST(request: NextRequest) {
         await resetDistanceSession(wellness?.distanceKm ?? 0);
         await resetHandwashingSession(wellness?.handwashingCount ?? 0);
         await resetFlightsSession(wellness?.flightsClimbed ?? 0);
+        await resetWellnessLastImport();
         await resetWellnessMilestonesOnStreamStart();
+        await resetStreamGoalsOnStreamStart();
+        await clearGoalCelebrationOnStreamStart();
       } catch (e) {
         console.warn('Failed to reset wellness session on stream start:', e);
       }
@@ -243,23 +249,53 @@ export async function POST(request: NextRequest) {
   } else if (eventNorm === 'channel.subscription.new') {
     const subscriber = payload.subscriber;
     if (subscriber) {
-      await Promise.all([addSubPoints(getUsername(subscriber), false), pushSubAlert(subscriber)]);
+      await Promise.all([
+        addSubPoints(getUsername(subscriber), false),
+        addStreamGoalSubs(1),
+        pushSubAlert(subscriber),
+      ]);
       didAlertOrLeaderboard = true;
+      const [goals, settings] = await Promise.all([
+        getStreamGoals(),
+        kv.get<Record<string, unknown>>('overlay_settings'),
+      ]);
+      const target = (settings?.subGoalTarget as number) ?? 10;
+      if (target > 0) await setGoalCelebrationIfNeeded('subs', goals.subs, target);
     }
   } else if (eventNorm === 'channel.subscription.renewal') {
     const subscriber = payload.subscriber;
     const duration = (payload.duration as number) ?? 0;
     if (subscriber) {
-      await Promise.all([addSubPoints(getUsername(subscriber), true), pushResubAlert(subscriber, duration > 0 ? duration : undefined)]);
+      await Promise.all([
+        addSubPoints(getUsername(subscriber), true),
+        addStreamGoalSubs(1),
+        pushResubAlert(subscriber, duration > 0 ? duration : undefined),
+      ]);
       didAlertOrLeaderboard = true;
+      const [goals, settings] = await Promise.all([
+        getStreamGoals(),
+        kv.get<Record<string, unknown>>('overlay_settings'),
+      ]);
+      const target = (settings?.subGoalTarget as number) ?? 10;
+      if (target > 0) await setGoalCelebrationIfNeeded('subs', goals.subs, target);
     }
   } else if (eventNorm === 'channel.subscription.gifts') {
     const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
     const giftees = (payload.giftees as unknown[]) ?? [];
     const count = giftees.length > 0 ? giftees.length : 1;
     if (gifter) {
-      await Promise.all([addGiftSubPoints(getUsername(gifter), count), pushGiftSubAlert(gifter, count)]);
+      await Promise.all([
+        addGiftSubPoints(getUsername(gifter), count),
+        addStreamGoalSubs(count),
+        pushGiftSubAlert(gifter, count),
+      ]);
       didAlertOrLeaderboard = true;
+      const [goals, settings] = await Promise.all([
+        getStreamGoals(),
+        kv.get<Record<string, unknown>>('overlay_settings'),
+      ]);
+      const target = (settings?.subGoalTarget as number) ?? 10;
+      if (target > 0) await setGoalCelebrationIfNeeded('subs', goals.subs, target);
     }
   } else if (eventNorm === 'kicks.gifted') {
     const sender = payload.sender;
@@ -267,8 +303,18 @@ export async function POST(request: NextRequest) {
     const amount = Number(gift?.amount ?? 0);
     const giftName = gift?.name as string | undefined;
     if (sender && amount > 0) {
-      await Promise.all([addKicksPoints(getUsername(sender), amount), pushKicksAlert(sender, amount, giftName)]);
+      await Promise.all([
+        addKicksPoints(getUsername(sender), amount),
+        addStreamGoalKicks(amount),
+        pushKicksAlert(sender, amount, giftName),
+      ]);
       didAlertOrLeaderboard = true;
+      const [goals, settings] = await Promise.all([
+        getStreamGoals(),
+        kv.get<Record<string, unknown>>('overlay_settings'),
+      ]);
+      const target = (settings?.kicksGoalTarget as number) ?? 5000;
+      if (target > 0) await setGoalCelebrationIfNeeded('kicks', goals.kicks, target);
     }
   }
   if (didAlertOrLeaderboard) {

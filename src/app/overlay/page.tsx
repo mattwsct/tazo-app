@@ -11,7 +11,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Hook imports
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
-import { useTodoCompletion } from '@/hooks/useTodoCompletion';
 import { useRenderPerformance } from '@/lib/performance';
 
 // Type imports
@@ -35,7 +34,6 @@ import {
 import { 
   clearTimer,
   safeApiCall,
-  formatTimeUTC,
   formatTimeWithTimezone,
   isValidTimezone,
 } from '@/utils/overlay-helpers';
@@ -44,7 +42,6 @@ import {
   formatCountryCode,
   shouldShowDisplayMode,
   getEffectiveDisplayModeForStaleGps,
-  getLeaderboardDisplayMode,
 } from '@/utils/overlay-utils';
 import {
   processGpsData,
@@ -56,10 +53,7 @@ import {
   shouldFetchLocation,
   calculateMovedMeters
 } from '@/utils/fetch-decision';
-import {
-  isSpeedStale,
-  isAltitudeStale
-} from '@/utils/staleness-utils';
+import { isSpeedStale } from '@/utils/staleness-utils';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
 import BottomRightPanel from '@/components/BottomRightPanel';
@@ -135,10 +129,6 @@ function OverlayPage() {
   const [, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
   const [overlayVisible, setOverlayVisible] = useState(false); // Track if overlay should be visible (fade-in delay)
   
-  // Todo completion tracking with localStorage persistence
-  const visibleTodos = useTodoCompletion(settings.todos);
-
-
   // When active poll countdown ends: show winner immediately from current votes, then sync with server
   const pollCountdownRef = useRef<{ pollId: string } | null>(null);
   const latestPollRef = useRef<typeof settings.pollState>(null);
@@ -199,7 +189,7 @@ function OverlayPage() {
         });
     }, remainingMs);
     return () => clearTimeout(timeout);
-  }, [settings.pollState?.id, settings.pollState?.status, settings.pollState?.startedAt, settings.pollState?.durationSeconds, refreshSettings, setSettings]);
+  }, [settings.pollState, refreshSettings, setSettings]);
 
   // Re-render every second when showing winner so we hide when winnerDisplayUntil passes
   const [pollTick, setPollTick] = useState(0);
@@ -526,7 +516,7 @@ function OverlayPage() {
       return formatTimeWithTimezone(timezone);
     } catch (error) {
       OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone: tz, error });
-      return formatTimeUTC();
+      return formatTimeWithTimezone('UTC');
     }
   }, []);
 
@@ -1699,26 +1689,10 @@ function OverlayPage() {
         </div>
 
         {/* Bottom Right: To-Do, Poll, Leaderboard, Alerts */}
-        {(settings.showTodoList && visibleTodos.length > 0) ||
-        settings.pollState ||
-        getLeaderboardDisplayMode(settings) !== 'hidden' ||
+        {settings.pollState ||
+        settings.showLeaderboard !== false ||
         settings.showOverlayAlerts !== false ? (
-          <BottomRightPanel settings={settings} visibleTodos={visibleTodos}>
-            {settings.showTodoList && visibleTodos.length > 0 && (
-              <div className="overlay-box todo-list-box">
-                {visibleTodos
-                  .sort((a, b) => {
-                    if (a.completed === b.completed) return 0;
-                    return a.completed ? 1 : -1;
-                  })
-                  .map((todo) => (
-                    <div key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
-                      <span className="todo-checkbox-icon">{todo.completed ? '✓' : '☐'}</span>
-                      <span className="todo-text">{todo.text}</span>
-                    </div>
-                  ))}
-              </div>
-            )}
+          <BottomRightPanel settings={settings} refreshSettings={refreshSettings}>
             {settings.pollState && (() => {
               const poll = settings.pollState;
               const now = Date.now();

@@ -7,12 +7,6 @@ export type MapZoomLevel = 'neighbourhood' | 'city' | 'state' | 'country' | 'oce
 export type DisplayMode = 'always' | 'auto' | 'hidden';
 export type MinimapTheme = 'auto' | 'light' | 'dark';
 
-export interface TodoItem {
-  id: string;
-  text: string;
-  completed: boolean;
-}
-
 import type { PollState } from '@/types/poll';
 
 export interface OverlaySettings {
@@ -34,24 +28,39 @@ export interface OverlaySettings {
   showSteps: boolean;
   showDistance: boolean;
   showDistanceMiles: boolean;
-  todos?: TodoItem[];
-  showTodoList?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
   pollState?: PollState | null;
-  /** Leaderboard display: always (when poll inactive), auto (every N min for M sec), hidden. */
-  leaderboardDisplay?: 'always' | 'auto' | 'hidden';
+  /** Leaderboard: include in rotation (true) or hidden (false). */
+  showLeaderboard?: boolean;
+  /** When false, hide the rotating carousel — alerts still pop up in goal bars when they fire. */
+  showGoalsRotation?: boolean;
   leaderboardTopN?: number;
-  leaderboardIntervalMin?: number;
-  leaderboardDurationSec?: number;
-  /** Exclude broadcaster from earning leaderboard points (default true). */
-  leaderboardExcludeBroadcaster?: boolean;
-  /** Comma or newline-separated usernames to exclude from leaderboard (e.g. bots). */
+  /** Comma or newline-separated usernames to exclude from leaderboard (e.g. bots, your own name). */
   leaderboardExcludedBots?: string;
   showOverlayAlerts?: boolean;
   /** Runtime: top leaderboard entries (from get-settings). */
   leaderboardTop?: { username: string; points: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
+  /** Sub goal: show progress bar, target count. */
+  showSubGoal?: boolean;
+  subGoalTarget?: number;
+  /** Amount to add to sub goal when reached (auto-increment). */
+  subGoalIncrement?: number;
+  /** Optional second line for sub goal (e.g. "10 subs = 10 min extra!") */
+  subGoalSubtext?: string;
+  /** Kicks goal: show progress bar, target (in kicks). */
+  showKicksGoal?: boolean;
+  kicksGoalTarget?: number;
+  /** Amount to add to kicks goal when reached (auto-increment). */
+  kicksGoalIncrement?: number;
+  /** Optional second line for kicks goal */
+  kicksGoalSubtext?: string;
+  /** Runtime: celebration window end (ms) — show 100% until this time. */
+  subGoalCelebrationUntil?: number;
+  kicksGoalCelebrationUntil?: number;
+  /** Runtime: subs and kicks since stream start (from get-settings). */
+  streamGoals?: { subs: number; kicks: number };
 }
 
 // Default settings (single source of truth)
@@ -72,20 +81,22 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showSteps: true,
   showDistance: true,
   showDistanceMiles: true,
-  todos: [],
-  showTodoList: false,
-  leaderboardDisplay: 'auto',
+  showLeaderboard: true,
+  showGoalsRotation: true,
   leaderboardTopN: 5,
-  leaderboardIntervalMin: 10,
-  leaderboardDurationSec: 30,
-  leaderboardExcludeBroadcaster: true,
   leaderboardExcludedBots: '',
   showOverlayAlerts: true,
+  showSubGoal: false,
+  subGoalTarget: 10, // ~$50 at typical sub price
+  subGoalIncrement: 10,
+  showKicksGoal: false,
+  kicksGoalTarget: 5000, // 5000 kicks = $50 (fewer people use kicks than subs)
+  kicksGoalIncrement: 5000,
 };
 
 // Valid settings schema for validation
-// Note: 'todos' is handled separately; 'pollState', 'leaderboardTop', 'overlayAlerts' are runtime, not persisted
-export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'pollState' | 'leaderboardTop' | 'overlayAlerts'>, 'boolean' | 'string' | 'number'> = {
+// Note: 'pollState', 'leaderboardTop', 'overlayAlerts', 'streamGoals', 'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil' are runtime, not persisted
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'leaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'subGoalCelebrationUntil' | 'kicksGoalCelebrationUntil'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   broadenLocationWhenStale: 'boolean',
   locationStaleMaxFallback: 'string',
@@ -102,14 +113,19 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'p
   showSteps: 'boolean',
   showDistance: 'boolean',
   showDistanceMiles: 'boolean',
-  showTodoList: 'boolean',
-  leaderboardDisplay: 'string',
+  showLeaderboard: 'boolean',
+  showGoalsRotation: 'boolean',
   leaderboardTopN: 'number',
-  leaderboardIntervalMin: 'number',
-  leaderboardDurationSec: 'number',
-  leaderboardExcludeBroadcaster: 'boolean',
   leaderboardExcludedBots: 'string',
   showOverlayAlerts: 'boolean',
+  showSubGoal: 'boolean',
+  subGoalTarget: 'number',
+  subGoalIncrement: 'number',
+  subGoalSubtext: 'string',
+  showKicksGoal: 'boolean',
+  kicksGoalTarget: 'number',
+  kicksGoalIncrement: 'number',
+  kicksGoalSubtext: 'string',
 };
 
 // SSE message types

@@ -1,6 +1,12 @@
+/**
+ * POST /api/reset-wellness-session
+ * Resets only wellness session: steps, distance, handwashing, flights accumulated,
+ * last-import dedup state, and wellness milestones.
+ * Does not reset leaderboard or stream_started_at.
+ * Requires admin auth.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { onStreamStarted } from '@/utils/stats-storage';
-import { resetLeaderboardOnStreamStart } from '@/utils/leaderboard-storage';
 import {
   getWellnessData,
   resetStepsSession,
@@ -10,17 +16,9 @@ import {
   resetWellnessLastImport,
   resetWellnessMilestonesOnStreamStart,
 } from '@/utils/wellness-storage';
-import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
-import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * POST /api/reset-stream-session
- * Manually resets stream session: leaderboard, steps, distance, handwashing, flights,
- * wellness milestones, and stream_started_at. For use when auto-reset on stream start fails.
- * Requires admin auth.
- */
 export async function POST(request: NextRequest) {
   const authToken = request.cookies.get('auth-token')?.value;
   if (authToken !== 'authenticated') {
@@ -28,9 +26,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await onStreamStarted();
-    await resetLeaderboardOnStreamStart();
-
     const wellness = await getWellnessData();
     await Promise.all([
       resetStepsSession(wellness?.steps ?? 0),
@@ -39,14 +34,12 @@ export async function POST(request: NextRequest) {
       resetFlightsSession(wellness?.flightsClimbed ?? 0),
       resetWellnessLastImport(),
       resetWellnessMilestonesOnStreamStart(),
-      resetStreamGoalsOnStreamStart(),
-      clearGoalCelebrationOnStreamStart(),
     ]);
 
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Reset failed';
-    console.warn('[reset-stream-session]', err);
+    console.warn('[reset-wellness-session]', err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

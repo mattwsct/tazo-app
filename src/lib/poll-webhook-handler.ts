@@ -18,7 +18,6 @@ import {
   POLL_QUESTION_MAX_LENGTH,
   POLL_OPTION_MAX_LENGTH,
 } from '@/lib/poll-logic';
-import { buildRandomPoll } from '@/lib/poll-auto-start';
 import {
   getPollState,
   getPollStateAndSettings,
@@ -28,7 +27,7 @@ import {
   popPollQueue,
   tryAcquirePollEndLock,
 } from '@/lib/poll-store';
-import type { PollState, PollOption, QueuedPoll } from '@/types/poll';
+import type { PollState, QueuedPoll } from '@/types/poll';
 
 
 /** Parse badges array (strings or objects with type/slug/name) into role flags */
@@ -324,95 +323,20 @@ export async function handleChatPoll(
     return { handled: true };
   }
 
-  // --- !poll with no args: start random location poll (mod/broadcaster only) ---
+  // --- !poll with no args: show usage (no default/random poll) ---
   if (isBarePoll) {
-    const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
-    const roles = getSenderRoles(payload.sender);
-    const senderLower = senderUsername.toLowerCase();
-    const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
-    const isModOrBroadcaster = roles.isMod || senderLower === broadcasterLower;
-    const effectiveDuration = durationVariant?.duration ?? settings.durationSeconds;
-    if (isModOrBroadcaster) {
-      const built = await buildRandomPoll();
-      if (built) {
-        const { question, options } = built;
-        const currentState = initialState;
-        const hasActive = currentState && currentState.status === 'active';
-        const hasWinner = currentState && currentState.status === 'winner';
-        const pollOptions = options.map((o) => ({ ...o, voters: {} }));
-        if (!hasActive && !hasWinner) {
-          void addPollPoints(senderUsername, 'create');
-          const state: PollState = {
-            id: `poll_${Date.now()}`,
-            question,
-            options: pollOptions,
-            startedAt: Date.now(),
-            durationSeconds: effectiveDuration,
-            status: 'active',
-          };
-          await setPollState(state);
-          const accessToken = await getValidAccessToken();
-          const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
-          if (accessToken) {
-            try {
-              const sent = await sendKickChatMessage(
-                accessToken,
-                buildPollStartMessage(question, pollOptions, effectiveDuration),
-                triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
-              );
-              const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
-              if (msgId) {
-                state.startMessageId = String(msgId);
-                await setPollState(state);
-              }
-            } catch { /* ignore */ }
-          }
-          return { handled: true };
-        }
-        const queue = await getPollQueue();
-        const maxQueued = Math.max(1, settings.maxQueuedPolls ?? 5);
-        if (queue.length < maxQueued) {
-          const queuedPoll = { question, options: pollOptions, durationSeconds: effectiveDuration };
-          await setPollQueue([...queue, queuedPoll]);
-          const accessToken = await getValidAccessToken();
-          const messageId = (payload.id ?? payload.message_id) as string | undefined;
-          if (accessToken) {
-            try {
-              await sendKickChatMessage(
-                accessToken,
-                `Poll queued (#${queue.length + 1}). Estimated start: after current poll.`,
-                messageId ? { replyToMessageId: messageId } : undefined
-              );
-            } catch { /* ignore */ }
-          }
-          return { handled: true };
-        }
-        const accessToken = await getValidAccessToken();
-        const messageId = (payload.id ?? payload.message_id) as string | undefined;
-        if (accessToken) {
-          try {
-            await sendKickChatMessage(
-              accessToken,
-              `Too many polls queued (max ${maxQueued}). Try again later.`,
-              messageId ? { replyToMessageId: messageId } : undefined
-            );
-          } catch { /* ignore */ }
-        }
-        return { handled: true };
-      }
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            'Could not build a random poll — try again.',
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
-      return { handled: true };
+    const accessToken = await getValidAccessToken();
+    const messageId = (payload.id ?? payload.message_id) as string | undefined;
+    if (accessToken) {
+      try {
+        await sendKickChatMessage(
+          accessToken,
+          'Usage: !poll Question? Option1, Option2 — or !poll Food? Pizza burger chips (no options = Yes/No)',
+          messageId ? { replyToMessageId: messageId } : undefined
+        );
+      } catch { /* ignore */ }
     }
+    return { handled: true };
   }
 
   // --- !poll command: start or queue ---
@@ -721,7 +645,7 @@ export async function handleChatPoll(
   }
 
   // Try to parse as vote
-  const vote = parseVote(contentTrimmed, currentState.options, senderUsername);
+  const vote = parseVote(contentTrimmed, currentState.options);
   if (vote) {
     applyVote(currentState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? false);
     void addPollPoints(senderUsername, 'vote');

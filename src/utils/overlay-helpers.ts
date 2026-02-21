@@ -2,17 +2,9 @@
  * Helper functions for overlay page
  */
 
-import { TIMERS } from './overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
 import type { RTIRLPayload } from './overlay-constants';
 import type { OverlaySettings } from '@/types/settings';
-
-/**
- * Check if GPS update is fresh (within freshness timeout)
- */
-export function isGpsUpdateFresh(gpsUpdateTime: number, now: number): boolean {
-  return (now - gpsUpdateTime) <= TIMERS.GPS_FRESHNESS_TIMEOUT;
-}
 
 /**
  * Check if timezone is valid (not null/undefined/UTC placeholder)
@@ -47,30 +39,9 @@ export async function safeApiCall(
 }
 
 /**
- * Format time/date using UTC timezone (fallback)
+ * Format time/date using specified timezone (default UTC)
  */
-export function formatTimeUTC(): { time: string; date: string } {
-  const now = new Date();
-  return {
-    time: now.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'UTC',
-    }),
-    date: now.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }),
-  };
-}
-
-/**
- * Format time/date using specified timezone
- */
-export function formatTimeWithTimezone(timezone: string): { time: string; date: string } {
+export function formatTimeWithTimezone(timezone: string = 'UTC'): { time: string; date: string } {
   const now = new Date();
   return {
     time: now.toLocaleTimeString('en-US', {

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, LocationStaleMaxFallback, MapZoomLevel, DisplayMode, TodoItem } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, LocationStaleMaxFallback, MapZoomLevel, DisplayMode } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
   TEMPLATE_GROUP_CONFIG,
@@ -14,7 +14,6 @@ import type { KickMessageTemplates, KickMessageEnabled, KickMessageTemplateEnabl
 import { formatLocationForStreamTitle, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
-import { getLeaderboardDisplayMode } from '@/utils/overlay-utils';
 import '@/styles/admin.css';
 import CollapsibleSection, { collapseAllSections } from '@/components/CollapsibleSection';
 
@@ -58,13 +57,21 @@ export default function AdminPage() {
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [leaderboardExcludedBotsInput, setLeaderboardExcludedBotsInput] = useState('');
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
+  const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('5000');
+  const [subGoalIncrementInput, setSubGoalIncrementInput] = useState<string>('10');
+  const [kicksGoalIncrementInput, setKicksGoalIncrementInput] = useState<string>('5000');
+  const [subGoalSubtextInput, setSubGoalSubtextInput] = useState<string>('');
+  const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState<string>('');
+  const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const subGoalIncrementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const kicksGoalIncrementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const subGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const kicksGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
-
-  // Todo editing state
-  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
-  const [editingTodoText, setEditingTodoText] = useState('');
 
   // Kick bot state
   const [kickStatus, setKickStatus] = useState<{ connected: boolean; subscriptions?: unknown[] } | null>(null);
@@ -118,8 +125,6 @@ export default function AdminPage() {
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
-  const [kickPollAutoStart, setKickPollAutoStart] = useState(false);
-  const [kickPollMinutesSinceLastPoll, setKickPollMinutesSinceLastPoll] = useState(5);
   const [kickPollOneVotePerPerson, setKickPollOneVotePerPerson] = useState(false);
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
@@ -281,9 +286,6 @@ export default function AdminPage() {
         if (d?.ogsCanStart !== undefined) setKickPollOgsCanStart(d.ogsCanStart);
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
-        if (d?.autoStartPollsEnabled !== undefined) setKickPollAutoStart(d.autoStartPollsEnabled);
-        if (d?.minutesSinceLastPoll != null) setKickPollMinutesSinceLastPoll(d.minutesSinceLastPoll);
-        else if (d?.chatIdleMinutes != null) setKickPollMinutesSinceLastPoll(d.chatIdleMinutes);
         if (d?.oneVotePerPerson !== undefined) setKickPollOneVotePerPerson(d.oneVotePerPerson);
       })
       .catch(() => {});
@@ -747,6 +749,86 @@ export default function AdminPage() {
     };
   }, []);
 
+  // Sync sub/kicks goal target, increment, and subtext inputs from settings
+  useEffect(() => {
+    setSubGoalTargetInput(String(settings.subGoalTarget ?? 10));
+    setKicksGoalTargetInput(String(settings.kicksGoalTarget ?? 5000));
+    setSubGoalIncrementInput(String(settings.subGoalIncrement ?? 10));
+    setKicksGoalIncrementInput(String(settings.kicksGoalIncrement ?? 5000));
+    setSubGoalSubtextInput(settings.subGoalSubtext ?? '');
+    setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
+  }, [settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalSubtext, settings.kicksGoalSubtext]);
+
+  // Debounced handlers for number inputs (1s delay before saving)
+  const handleSubGoalTargetChange = useCallback((value: string) => {
+    setSubGoalTargetInput(value);
+    if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
+    subGoalTargetTimeoutRef.current = setTimeout(() => {
+      subGoalTargetTimeoutRef.current = null;
+      const n = Math.max(1, parseInt(value, 10) || 1);
+      handleSettingsChange({ subGoalTarget: n });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  const handleKicksGoalTargetChange = useCallback((value: string) => {
+    setKicksGoalTargetInput(value);
+    if (kicksGoalTargetTimeoutRef.current) clearTimeout(kicksGoalTargetTimeoutRef.current);
+    kicksGoalTargetTimeoutRef.current = setTimeout(() => {
+      kicksGoalTargetTimeoutRef.current = null;
+      const n = Math.max(1, parseInt(value, 10) || 1);
+      handleSettingsChange({ kicksGoalTarget: n });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  const handleSubGoalIncrementChange = useCallback((value: string) => {
+    setSubGoalIncrementInput(value);
+    if (subGoalIncrementTimeoutRef.current) clearTimeout(subGoalIncrementTimeoutRef.current);
+    subGoalIncrementTimeoutRef.current = setTimeout(() => {
+      subGoalIncrementTimeoutRef.current = null;
+      const n = Math.max(1, parseInt(value, 10) || 1);
+      handleSettingsChange({ subGoalIncrement: n });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  const handleKicksGoalIncrementChange = useCallback((value: string) => {
+    setKicksGoalIncrementInput(value);
+    if (kicksGoalIncrementTimeoutRef.current) clearTimeout(kicksGoalIncrementTimeoutRef.current);
+    kicksGoalIncrementTimeoutRef.current = setTimeout(() => {
+      kicksGoalIncrementTimeoutRef.current = null;
+      const n = Math.max(1, parseInt(value, 10) || 1);
+      handleSettingsChange({ kicksGoalIncrement: n });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  const handleSubGoalSubtextChange = useCallback((value: string) => {
+    setSubGoalSubtextInput(value);
+    if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
+    subGoalSubtextTimeoutRef.current = setTimeout(() => {
+      subGoalSubtextTimeoutRef.current = null;
+      handleSettingsChange({ subGoalSubtext: value.trim() || undefined });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  const handleKicksGoalSubtextChange = useCallback((value: string) => {
+    setKicksGoalSubtextInput(value);
+    if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
+    kicksGoalSubtextTimeoutRef.current = setTimeout(() => {
+      kicksGoalSubtextTimeoutRef.current = null;
+      handleSettingsChange({ kicksGoalSubtext: value.trim() || undefined });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  useEffect(() => {
+    return () => {
+      if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
+      if (kicksGoalTargetTimeoutRef.current) clearTimeout(kicksGoalTargetTimeoutRef.current);
+      if (subGoalIncrementTimeoutRef.current) clearTimeout(subGoalIncrementTimeoutRef.current);
+      if (kicksGoalIncrementTimeoutRef.current) clearTimeout(kicksGoalIncrementTimeoutRef.current);
+      if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
+      if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
+    };
+  }, []);
+
   // Manual location update (browser geolocation, clear)
   const [locationFromBrowserLoading, setLocationFromBrowserLoading] = useState(false);
 
@@ -868,7 +950,176 @@ export default function AdminPage() {
               Expand all
             </button>
           </div>
-          {/* Location & map — at top for overlay display, stored location, map */}
+
+          {/* Setup: Kick connection — connect first before stream title, poll, messages */}
+          <CollapsibleSection id="connection" title="🔗 Kick connection">
+                <div className="setting-group">
+                  {kickStatus?.connected ? (
+                  <div className="kick-status connected">
+                    <span className="status-dot">🟢</span>
+                    <span>Connected to kick.com/tazo</span>
+                    {kickStatus.subscriptions && kickStatus.subscriptions.length > 0 && (
+                      <span className="subscription-count">
+                        ({kickStatus.subscriptions.length} event subscriptions)
+                      </span>
+                    )}
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          if (!confirm('Disconnect Kick? Event subscriptions and chat responses will stop.')) return;
+                          try {
+                            const r = await fetch('/api/kick-oauth/disconnect', {
+                              method: 'POST',
+                              credentials: 'include',
+                            });
+                            const d = await r.json();
+                            if (r.ok) {
+                              setKickStatus({ connected: false });
+                              setToast({ type: 'saved', message: 'Disconnected' });
+                            } else {
+                              setToast({ type: 'error', message: d.error ?? 'Failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Failed to disconnect' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                      <div className="admin-select-wrap" style={{ margin: 0 }}>
+                        <select
+                          aria-label="Connection actions"
+                          className="admin-select-big btn btn-secondary btn-small"
+                          style={{ padding: '6px 28px 6px 12px', minWidth: 180 }}
+                          value=""
+                          onChange={async (e) => {
+                            const action = e.target.value;
+                            if (!action) return;
+                            (e.target as HTMLSelectElement).value = '';
+                            if (action === 'fix') {
+                              try {
+                                const r = await fetch('/api/kick-oauth/subscribe', {
+                                  method: 'POST',
+                                  credentials: 'include',
+                                });
+                                const data = await r.json();
+                                if (r.ok) {
+                                  setToast({ type: 'saved', message: 'Connection fixed!' });
+                                  fetch('/api/kick-oauth/status', { credentials: 'include' })
+                                    .then((res) => res.json())
+                                    .then(setKickStatus);
+                                } else {
+                                  const err = data.error ?? '';
+                                  if (r.status === 400 || r.status === 401) {
+                                    setToast({ type: 'error', message: 'Re-opening OAuth to reconnect…' });
+                                    handleKickOAuthConnect();
+                                  } else {
+                                    setToast({ type: 'error', message: err || 'Fix failed' });
+                                  }
+                                }
+                              } catch {
+                                setToast({ type: 'error', message: 'Fix failed — try Reconnect (OAuth)' });
+                                handleKickOAuthConnect();
+                              }
+                            } else if (action === 'subscribe') {
+                              try {
+                                const r = await fetch('/api/kick-oauth/subscribe', {
+                                  method: 'POST',
+                                  credentials: 'include',
+                                });
+                                const data = await r.json();
+                                if (r.ok) {
+                                  setToast({ type: 'saved', message: 'Re-subscribed!' });
+                                  fetch('/api/kick-oauth/status', { credentials: 'include' })
+                                    .then((res) => res.json())
+                                    .then(setKickStatus);
+                                } else {
+                                  setToast({ type: 'error', message: data.error ?? 'Re-subscribe failed' });
+                                }
+                              } catch {
+                                setToast({ type: 'error', message: 'Re-subscribe failed' });
+                              }
+                            } else if (action === 'reconnect') {
+                              handleKickOAuthConnect();
+                            }
+                            setTimeout(() => setToast(null), 3000);
+                          }}
+                        >
+                          <option value="">Connection…</option>
+                          <option value="fix">🔧 Fix connection</option>
+                          <option value="subscribe">📡 Re-subscribe only</option>
+                          <option value="reconnect">🔄 Reconnect (OAuth)</option>
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        title="Clear leaderboard points only"
+                        onClick={async () => {
+                          if (!confirm('Reset leaderboard? This will clear all points. Steps, distance, and wellness are unchanged.')) return;
+                          try {
+                            const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
+                            const data = await r.json();
+                            if (r.ok) {
+                              setToast({ type: 'saved', message: 'Leaderboard reset' });
+                            } else {
+                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Reset failed' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        🏆 Reset leaderboard
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        title="Reset steps, distance, handwashing, flights for current stream — leaderboard unchanged"
+                        onClick={async () => {
+                          if (!confirm('Reset stream session? Clears leaderboard, steps, distance, handwashing, flights, stream goals, and wellness milestones. Use when auto-reset fails or for a clean start.')) return;
+                          try {
+                            const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
+                            const data = await r.json();
+                            if (r.ok) {
+                              setToast({ type: 'saved', message: 'Stream session reset' });
+                            } else {
+                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Reset failed' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        🔄 Reset stream session
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="kick-status disconnected">
+                    <span className="status-dot">🔴</span>
+                    <span>Not connected to Kick</span>
+                    <p className="input-hint" style={{ marginTop: 8, marginBottom: 12 }}>
+                      Connect to receive subs, gifts, kicks, poll votes, and chat events. Required for stream title, poll, and message templates.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleKickOAuthConnect}
+                    >
+                      Connect Kick
+                    </button>
+                  </div>
+                )}
+              </div>
+          </CollapsibleSection>
+
+          {/* Location & map — overlay display, stored location, map */}
           <CollapsibleSection id="location-map" title="📍 Location & map">
             <div className="setting-group">
               {/* Current location — prominent at top for quick visibility */}
@@ -1037,144 +1288,12 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          {/* Connection — connect to Kick first, before stream title / poll / messages */}
-          <CollapsibleSection id="connection" title="🔗 Connection">
-                <div className="setting-group">
-                  {kickStatus?.connected ? (
-                  <div className="kick-status connected">
-                    <span className="status-dot">🟢</span>
-                    <span>Connected to kick.com/tazo</span>
-                    {kickStatus.subscriptions && kickStatus.subscriptions.length > 0 && (
-                      <span className="subscription-count">
-                        ({kickStatus.subscriptions.length} event subscriptions)
-                      </span>
-                    )}
-                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          if (!confirm('Disconnect Kick? Event subscriptions and chat responses will stop.')) return;
-                          try {
-                            const r = await fetch('/api/kick-oauth/disconnect', {
-                              method: 'POST',
-                              credentials: 'include',
-                            });
-                            const d = await r.json();
-                            if (r.ok) {
-                              setKickStatus({ connected: false });
-                              setToast({ type: 'saved', message: 'Disconnected' });
-                            } else {
-                              setToast({ type: 'error', message: d.error ?? 'Failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Failed to disconnect' });
-                          }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        Disconnect
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={handleKickOAuthConnect}
-                      >
-                        🔄 Reconnect
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          try {
-                            const r = await fetch('/api/kick-oauth/subscribe', {
-                              method: 'POST',
-                              credentials: 'include',
-                            });
-                            const data = await r.json();
-                            if (r.ok) {
-                              setToast({ type: 'saved', message: 'Re-subscribed!' });
-                              fetch('/api/kick-oauth/status', { credentials: 'include' })
-                                .then((res) => res.json())
-                                .then(setKickStatus);
-                            } else {
-                              setToast({ type: 'error', message: data.error ?? 'Failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Re-subscribe failed' });
-                          }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        📡 Re-subscribe
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        title="Clear leaderboard points only"
-                        onClick={async () => {
-                          if (!confirm('Reset leaderboard? This will clear all points. Steps, distance, and wellness are unchanged.')) return;
-                          try {
-                            const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
-                            const data = await r.json();
-                            if (r.ok) {
-                              setToast({ type: 'saved', message: 'Leaderboard reset' });
-                            } else {
-                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Reset failed' });
-                          }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        🏆 Reset leaderboard
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        title="Reset leaderboard, steps, distance, wellness sessions to simulate stream start"
-                        onClick={async () => {
-                          if (!confirm('Reset stream session? This will clear the leaderboard, steps since stream start, distance, handwashing, flights, and wellness milestones. Use if auto-reset on stream start did not run.')) return;
-                          try {
-                            const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
-                            const data = await r.json();
-                            if (r.ok) {
-                              setToast({ type: 'saved', message: 'Stream session reset' });
-                            } else {
-                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Reset failed' });
-                          }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        🔄 Reset session
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="kick-status disconnected">
-                    <span className="status-dot">🔴</span>
-                    <span>Not connected</span>
-                    <button
-                      type="button"
-                      className="btn btn-primary connect-kick-btn"
-                      onClick={handleKickOAuthConnect}
-                    >
-                      Connect Kick
-                    </button>
-                  </div>
-                )}
-              </div>
-          </CollapsibleSection>
-
-          {/* Stream title & chat */}
-          <CollapsibleSection id="stream-title" title="📺 Stream title & chat">
+          {/* Stream title & chat broadcasts */}
+          <CollapsibleSection id="stream-title" title="📺 Stream title & chat broadcasts">
             <div className="setting-group">
               <h3 className="subsection-label">Stream title</h3>
               <p className="group-label group-description">
-                Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> in Connection section above.
+                Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Fix connection</strong> or <strong>Reconnect (OAuth)</strong> in Kick connection above.
               </p>
             <div className="form-stack">
               <div>
@@ -1390,7 +1509,7 @@ export default function AdminPage() {
                           onChange={(e) => {
                             const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100));
                             setKickChatBroadcastHeartrateMinBpm(val);
-                            saveKickMessages({ alertSettings: { chatBroadcastHeartrateMinBpm: val } });
+                            scheduleKickMessagesSave();
                           }}
                           min={0}
                           max={250}
@@ -1406,7 +1525,7 @@ export default function AdminPage() {
                           onChange={(e) => {
                             const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120));
                             setKickChatBroadcastHeartrateVeryHighBpm(val);
-                            saveKickMessages({ alertSettings: { chatBroadcastHeartrateVeryHighBpm: val } });
+                            scheduleKickMessagesSave();
                           }}
                           min={0}
                           max={250}
@@ -1444,7 +1563,7 @@ export default function AdminPage() {
                           onChange={(e) => {
                             const val = Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20));
                             setKickChatBroadcastSpeedMinKmh(val);
-                            saveKickMessages({ alertSettings: { chatBroadcastSpeedMinKmh: val } });
+                            scheduleKickMessagesSave();
                           }}
                           min={0}
                           max={500}
@@ -1483,7 +1602,7 @@ export default function AdminPage() {
                           onChange={(e) => {
                             const val = Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50));
                             setKickChatBroadcastAltitudeMinM(val);
-                            saveKickMessages({ alertSettings: { chatBroadcastAltitudeMinM: val } });
+                            scheduleKickMessagesSave();
                           }}
                           min={0}
                           max={9000}
@@ -1536,7 +1655,7 @@ export default function AdminPage() {
 
           {/* === OVERLAY === */}
           {/* Weather, altitude & speed — overlay data displays (shared Always/Auto/Hidden pattern) */}
-          <CollapsibleSection id="weather-altitude-speed" title="🌤️ Weather, altitude & speed">
+          <CollapsibleSection id="weather-altitude-speed" title="🌤️ Overlay: weather, altitude & speed">
             <div className="setting-group">
               <div className="checkbox-group" style={{ marginBottom: '12px' }}>
                 <label className="checkbox-label">
@@ -1591,7 +1710,7 @@ export default function AdminPage() {
           </CollapsibleSection>
 
           {/* Steps & distance (Health Auto Export) */}
-          <CollapsibleSection id="steps-distance" title="👟 Steps & distance">
+          <CollapsibleSection id="steps-distance" title="👟 Overlay: steps & distance">
             <div className="setting-group">
               <label className="checkbox-label">
                 <input
@@ -1623,196 +1742,43 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          {/* To-Do List Section */}
-          <CollapsibleSection id="todo-list" title="✅ To-Do List">
-            <div className="checkbox-group" style={{ marginBottom: '16px' }}>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={settings.showTodoList ?? false}
-                  onChange={(e) => handleSettingsChange({ showTodoList: e.target.checked })}
-                  className="checkbox-input"
-                />
-                <span className="checkbox-text">Show on overlay</span>
-              </label>
-            </div>
-            <div className="setting-group">
-              <div className="todo-input-group">
-                <input
-                  type="text"
-                  placeholder="Add a new task..."
-                  className="todo-input"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                      const newTodo: TodoItem = {
-                        id: Date.now().toString(),
-                        text: e.currentTarget.value.trim(),
-                        completed: false
-                      };
-                      const updatedTodos = [...(settings.todos || []), newTodo];
-                      handleSettingsChange({ todos: updatedTodos });
-                      e.currentTarget.value = '';
-                    }
-                  }}
-                />
-                <button 
-                  className="btn btn-primary btn-small"
-                  onClick={(e) => {
-                    const input = e.currentTarget.previousElementSibling as HTMLInputElement;
-                    if (input && input.value.trim()) {
-                      const newTodo: TodoItem = {
-                        id: Date.now().toString(),
-                        text: input.value.trim(),
-                        completed: false
-                      };
-                      const updatedTodos = [...(settings.todos || []), newTodo];
-                      handleSettingsChange({ todos: updatedTodos });
-                      input.value = '';
-                    }
-                  }}
-                >
-                  Add
-                </button>
-              </div>
-
-
-              {settings.todos && settings.todos.length > 0 && (
-                <>
-                  <div className="todo-list-actions">
-                    <button
-                      className="btn btn-secondary btn-small"
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete all tasks?')) {
-                          handleSettingsChange({ todos: [] });
-                        }
-                      }}
-                      disabled={!settings.todos || settings.todos.length === 0}
-                    >
-                      🗑️ Delete All
-                    </button>
-                  </div>
-                  <div className="todo-list">
-                    {[...(settings.todos || [])]
-                      .sort((a, b) => {
-                        // Incomplete tasks first, then completed tasks
-                        if (a.completed === b.completed) return 0;
-                        return a.completed ? 1 : -1;
-                      })
-                      .map((todo) => (
-                      <div key={todo.id} className="todo-item-admin">
-                        <label className="todo-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={todo.completed}
-                            onChange={() => {
-                              const updatedTodos = settings.todos!.map(t =>
-                                t.id === todo.id ? { ...t, completed: !t.completed } : t
-                              );
-                              handleSettingsChange({ todos: updatedTodos });
-                            }}
-                            className="todo-checkbox"
-                            disabled={editingTodoId === todo.id}
-                          />
-                          {editingTodoId === todo.id ? (
-                            <input
-                              type="text"
-                              value={editingTodoText}
-                              onChange={(e) => setEditingTodoText(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  if (editingTodoText.trim()) {
-                                    const updatedTodos = settings.todos!.map(t =>
-                                      t.id === todo.id ? { ...t, text: editingTodoText.trim() } : t
-                                    );
-                                    handleSettingsChange({ todos: updatedTodos });
-                                  }
-                                  setEditingTodoId(null);
-                                  setEditingTodoText('');
-                                } else if (e.key === 'Escape') {
-                                  setEditingTodoId(null);
-                                  setEditingTodoText('');
-                                }
-                              }}
-                              onBlur={() => {
-                                if (editingTodoText.trim()) {
-                                  const updatedTodos = settings.todos!.map(t =>
-                                    t.id === todo.id ? { ...t, text: editingTodoText.trim() } : t
-                                  );
-                                  handleSettingsChange({ todos: updatedTodos });
-                                }
-                                setEditingTodoId(null);
-                                setEditingTodoText('');
-                              }}
-                              className="todo-edit-input"
-                              autoFocus
-                            />
-                          ) : (
-                            <span 
-                              className={`todo-text-admin ${todo.completed ? 'completed' : ''}`}
-                              onDoubleClick={() => {
-                                setEditingTodoId(todo.id);
-                                setEditingTodoText(todo.text);
-                              }}
-                              style={{ cursor: 'pointer' }}
-                              title="Double-click to edit"
-                            >
-                              {todo.text}
-                            </span>
-                          )}
-                        </label>
-                        <div className="todo-actions">
-                          {editingTodoId !== todo.id && (
-                            <button
-                              className="todo-edit-btn"
-                              onClick={() => {
-                                setEditingTodoId(todo.id);
-                                setEditingTodoText(todo.text);
-                              }}
-                              aria-label="Edit task"
-                            >
-                              ✏️
-                            </button>
-                          )}
-                          <button
-                            className="todo-delete-btn"
-                            onClick={() => {
-                              const updatedTodos = settings.todos!.filter(t => t.id !== todo.id);
-                              handleSettingsChange({ todos: updatedTodos });
-                            }}
-                            aria-label="Delete task"
-                            disabled={editingTodoId === todo.id}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </CollapsibleSection>
-
           {/* Leaderboard & Overlay Alerts */}
           <CollapsibleSection
             id="leaderboard-alerts"
-            title="📊 Leaderboard & Alerts"
-            description="Bottom-right overlay: leaderboard (when poll inactive) and alerts for subs, gifts, kicks."
+            title="📊 Overlay: leaderboard, goals & alerts"
+            description={
+              <>
+                <strong>How it works:</strong> The bottom-right shows one thing at a time, rotating every 7 seconds — Leaderboard → Sub goal → Kicks goal (only what you enable below). New sub or kicks? It switches instantly to that goal. Alerts (subs, gifts, kicks) appear above the rotating display.
+              </>
+            }
           >
             <div className="setting-group">
+              <p className="input-hint" style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.06)', borderRadius: 8 }}>
+                Enable leaderboard and/or goals below. Each rotates into view for 7 seconds. Sub/kicks goals switch immediately when someone subs or donates.
+              </p>
+              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showGoalsRotation !== false}
+                    onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Show rotating section — when off, carousel is hidden but sub/kicks alerts still pop up in progress bars</span>
+                </label>
+              </div>
               <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                <label>Leaderboard display</label>
+                <label>Leaderboard — include in rotation?</label>
                 <select
                   className="admin-select-big"
-                  value={getLeaderboardDisplayMode(settings)}
-                  onChange={(e) => handleSettingsChange({ leaderboardDisplay: e.target.value as 'always' | 'auto' | 'hidden' })}
+                  value={settings.showLeaderboard !== false ? 'true' : 'false'}
+                  onChange={(e) => handleSettingsChange({ showLeaderboard: e.target.value === 'true' })}
                 >
-                  <option value="always">👁️ Always (when poll inactive)</option>
-                  <option value="auto">🔄 Auto (every N min for M sec)</option>
-                  <option value="hidden">🚫 Hidden</option>
+                  <option value="true">👁️ Yes, include in rotation</option>
+                  <option value="false">🚫 No, hidden</option>
                 </select>
               </div>
-              {getLeaderboardDisplayMode(settings) !== 'hidden' && (
+              {settings.showLeaderboard !== false && (
                 <>
                   <div className="admin-select-wrap">
                     <label>Top N users</label>
@@ -1823,30 +1789,6 @@ export default function AdminPage() {
                     >
                       {[3, 4, 5, 7, 10].map((n) => (
                         <option key={n} value={n}>Top {n}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="admin-select-wrap">
-                    <label>Show every (minutes)</label>
-                    <select
-                      className="admin-select-big"
-                      value={settings.leaderboardIntervalMin ?? 10}
-                      onChange={(e) => handleSettingsChange({ leaderboardIntervalMin: Number(e.target.value) })}
-                    >
-                      {[5, 10, 15, 20, 30].map((n) => (
-                        <option key={n} value={n}>{n} min</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="admin-select-wrap">
-                    <label>Display duration (seconds)</label>
-                    <select
-                      className="admin-select-big"
-                      value={settings.leaderboardDurationSec ?? 30}
-                      onChange={(e) => handleSettingsChange({ leaderboardDurationSec: Number(e.target.value) })}
-                    >
-                      {[15, 20, 30, 45, 60].map((n) => (
-                        <option key={n} value={n}>{n}s</option>
                       ))}
                     </select>
                   </div>
@@ -1866,6 +1808,164 @@ export default function AdminPage() {
                   </div>
                 </>
               )}
+              <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showSubGoal ?? false}
+                    onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Sub goal — include in rotation</span>
+                </label>
+                {settings.showSubGoal && (
+                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
+                    <div className="admin-select-wrap">
+                      <label>Sub goal target</label>
+                      <input
+                        type="number"
+                        className="text-input admin-select-big"
+                        value={subGoalTargetInput}
+                        onChange={(e) => handleSubGoalTargetChange(e.target.value)}
+                        min={1}
+                      />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Auto-increment amount (when goal is reached)</label>
+                      <input
+                        type="number"
+                        className="text-input admin-select-big"
+                        value={subGoalIncrementInput}
+                        onChange={(e) => handleSubGoalIncrementChange(e.target.value)}
+                        min={1}
+                      />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Sub goal subtext (optional second line)</label>
+                      <input
+                        type="text"
+                        className="text-input admin-select-big"
+                        value={subGoalSubtextInput}
+                        onChange={(e) => handleSubGoalSubtextChange(e.target.value)}
+                        placeholder="e.g. 10 subs = 10 min extra stream"
+                      />
+                    </div>
+                  </div>
+                )}
+                <label className="checkbox-label" style={{ marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={settings.showKicksGoal ?? false}
+                    onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Kicks goal — include in rotation</span>
+                </label>
+                {settings.showKicksGoal && (
+                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
+                    <div className="admin-select-wrap">
+                      <label>Kicks goal target</label>
+                      <input
+                        type="number"
+                        className="text-input admin-select-big"
+                        value={kicksGoalTargetInput}
+                        onChange={(e) => handleKicksGoalTargetChange(e.target.value)}
+                        min={1}
+                      />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Auto-increment amount (when goal is reached)</label>
+                      <input
+                        type="number"
+                        className="text-input admin-select-big"
+                        value={kicksGoalIncrementInput}
+                        onChange={(e) => handleKicksGoalIncrementChange(e.target.value)}
+                        min={1}
+                      />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Kicks goal subtext (optional second line)</label>
+                      <input
+                        type="text"
+                        className="text-input admin-select-big"
+                        value={kicksGoalSubtextInput}
+                        onChange={(e) => handleKicksGoalSubtextChange(e.target.value)}
+                        placeholder="e.g. Help me hit $50!"
+                      />
+                    </div>
+                  </div>
+                )}
+                {(settings.showSubGoal || settings.showKicksGoal) && (
+                  <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                    <p className="input-hint">
+                      Goals reset to 0 when stream goes live (manual overrides reset too). Override current values:
+                    </p>
+                    <div className="stream-goals-override-fields">
+                      {settings.showSubGoal && (
+                        <div className="admin-select-wrap">
+                          <label>Current subs</label>
+                          <input
+                            key={`subs-${settings.streamGoals?.subs ?? 0}`}
+                            type="number"
+                            className="text-input admin-select-big admin-number-input"
+                            defaultValue={settings.streamGoals?.subs ?? 0}
+                            id="stream-goals-subs-input"
+                            min={0}
+                          />
+                        </div>
+                      )}
+                      {settings.showKicksGoal && (
+                        <div className="admin-select-wrap">
+                          <label>Current kicks</label>
+                          <input
+                            key={`kicks-${settings.streamGoals?.kicks ?? 0}`}
+                            type="number"
+                            className="text-input admin-select-big admin-number-input"
+                            defaultValue={settings.streamGoals?.kicks ?? 0}
+                            id="stream-goals-kicks-input"
+                            min={0}
+                          />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          try {
+                            const body: { subs?: number; kicks?: number } = {};
+                            if (settings.showSubGoal) {
+                              const el = document.getElementById('stream-goals-subs-input') as HTMLInputElement;
+                              if (el) body.subs = Math.max(0, parseInt(el.value, 10) || 0);
+                            }
+                            if (settings.showKicksGoal) {
+                              const el = document.getElementById('stream-goals-kicks-input') as HTMLInputElement;
+                              if (el) body.kicks = Math.max(0, parseInt(el.value, 10) || 0);
+                            }
+                            if (Object.keys(body).length === 0) return;
+                            const r = await authenticatedFetch('/api/stream-goals', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(body),
+                            });
+                            const data = await r.json();
+                            if (r.ok && data) {
+                              setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? 0 } }));
+                              setToast({ type: 'saved', message: 'Goals updated' });
+                            } else {
+                              setToast({ type: 'error', message: 'Update failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Update failed' });
+                          }
+                          setTimeout(() => setToast(null), 2000);
+                        }}
+                      >
+                        Update
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
                 <label className="checkbox-label">
                   <input
@@ -2122,60 +2222,13 @@ export default function AdminPage() {
                             ))}
                           </select>
                         </div>
-                        <label className="checkbox-label-row">
-                          <input
-                            type="checkbox"
-                            checked={kickPollAutoStart}
-                            onChange={async (e) => {
-                              const checked = e.target.checked;
-                              setKickPollAutoStart(checked);
-                              try {
-                                await authenticatedFetch('/api/kick-poll-settings', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ autoStartPollsEnabled: checked }),
-                                });
-                                setToast({ type: 'saved', message: 'Saved!' });
-                              } catch { setKickPollAutoStart(!checked); }
-                              setTimeout(() => setToast(null), 2000);
-                            }}
-                            className="checkbox-input"
-                          />
-                          <span>Auto-start polls when stream live + no poll run in X min</span>
-                        </label>
-                        {kickPollAutoStart && (
-                          <div className="admin-select-wrap">
-                            <label>Min since last poll before auto-start</label>
-                            <select
-                              className="admin-select-big"
-                              value={kickPollMinutesSinceLastPoll}
-                              onChange={async (e) => {
-                                const val = parseInt(e.target.value, 10);
-                                setKickPollMinutesSinceLastPoll(val);
-                                try {
-                                  await authenticatedFetch('/api/kick-poll-settings', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ minutesSinceLastPoll: val }),
-                                  });
-                                  setToast({ type: 'saved', message: 'Saved!' });
-                                } catch { /* ignore */ }
-                                setTimeout(() => setToast(null), 2000);
-                              }}
-                            >
-                              {[1, 2, 3, 5, 10, 15, 20, 30].map((n) => (
-                                <option key={n} value={n}>{n} min</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
                       </>
                     )}
                   </div>
                 </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="message-templates" title="📋 Message templates">
+          <CollapsibleSection id="message-templates" title="📋 Chat message templates">
             <div className="setting-group">
                   <p className="group-label group-description">
                     Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
@@ -2257,6 +2310,36 @@ export default function AdminPage() {
                   </button>
                 </div>
                 </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="advanced-data" title="⚙️ Advanced / Data" defaultCollapsed={true} description="Less frequently used data reset options.">
+            <div className="setting-group">
+              <p className="input-hint" style={{ marginBottom: 12 }}>
+                Reset specific data stores. Use when auto-reset fails or for targeted cleanup.
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                title="Reset wellness milestones only"
+                onClick={async () => {
+                  if (!confirm('Reset wellness milestones? Leaderboard, steps, distance unchanged.')) return;
+                  try {
+                    const r = await authenticatedFetch('/api/reset-wellness-session', { method: 'POST' });
+                    const data = await r.json();
+                    if (r.ok) {
+                      setToast({ type: 'saved', message: 'Wellness milestones reset' });
+                    } else {
+                      setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                    }
+                  } catch {
+                    setToast({ type: 'error', message: 'Reset failed' });
+                  }
+                  setTimeout(() => setToast(null), 3000);
+                }}
+              >
+                🧘 Reset wellness
+              </button>
+            </div>
           </CollapsibleSection>
         </div>
       </main>

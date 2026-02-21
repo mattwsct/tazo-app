@@ -35,6 +35,7 @@ export function ClampedNumberInput({
 
   useEffect(() => {
     if (!isFocused && String(value) !== localValue) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync controlled input when value prop changes externally
       setLocalValue(String(value));
     }
   }, [value, isFocused, localValue]);
@@ -85,9 +86,6 @@ export function ClampedNumberInput({
         onKeyDown={handleKeyDown}
         min={min}
         max={max}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={value}
         className={className}
         style={style}
         {...props}

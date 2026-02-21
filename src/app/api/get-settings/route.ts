@@ -3,10 +3,12 @@ import { kv } from '@vercel/kv';
 import { logKVUsage } from '@/lib/api-auth';
 import { validateEnvironment } from '@/lib/env-validator';
 import { OverlayLogger } from '@/lib/logger';
-import { mergeSettingsWithDefaults, getLeaderboardDisplayMode } from '@/utils/overlay-utils';
+import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { POLL_STATE_KEY, type PollState } from '@/types/poll';
-import { getLeaderboardTop } from '@/utils/leaderboard-storage';
+import { getLeaderboardTop, parseExcludedBots } from '@/utils/leaderboard-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
+import { getStreamGoals } from '@/utils/stream-goals-storage';
+import { getGoalCelebration } from '@/utils/stream-goals-celebration';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,14 +22,25 @@ async function handleGET() {
     const pollState: PollState | null = rawPollState ?? null;
     const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
 
-    // Fetch leaderboard & alerts when enabled
-    const ld = getLeaderboardDisplayMode(merged);
-    const [leaderboardTop, overlayAlerts] = await Promise.all([
-      ld !== 'hidden' ? getLeaderboardTop(merged.leaderboardTopN ?? 5) : [],
+    // Fetch leaderboard, alerts, and stream goals when enabled
+    const showLeaderboard = merged.showLeaderboard !== false;
+    const needGoals = merged.showSubGoal || merged.showKicksGoal;
+    const excludeUsernames = parseExcludedBots(merged.leaderboardExcludedBots);
+    const [leaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
+      showLeaderboard ? getLeaderboardTop(merged.leaderboardTopN ?? 5, { excludeUsernames }) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
+      needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
+      needGoals ? getGoalCelebration() : {},
     ]);
 
-    const combinedSettings = { ...merged, leaderboardTop, overlayAlerts };
+    const combinedSettings = {
+      ...merged,
+      leaderboardTop,
+      overlayAlerts,
+      streamGoals,
+      subGoalCelebrationUntil: (celebration as { subsUntil?: number }).subsUntil,
+      kicksGoalCelebrationUntil: (celebration as { kicksUntil?: number }).kicksUntil,
+    };
 
     // Log at most once per 30s in dev to avoid log spam (get-settings is polled frequently)
     if (process.env.NODE_ENV === 'development') {

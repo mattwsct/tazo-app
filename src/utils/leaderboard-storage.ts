@@ -29,7 +29,8 @@ function normalizeUsername(username: string): string {
   return username.trim().toLowerCase();
 }
 
-function parseExcludedBots(raw: string | null | undefined): Set<string> {
+/** Parse comma/newline-separated usernames into lowercase set. Exported for callers who already have settings. */
+export function parseExcludedBots(raw: string | null | undefined): Set<string> {
   if (!raw || typeof raw !== 'string') return new Set();
   return new Set(
     raw
@@ -39,7 +40,7 @@ function parseExcludedBots(raw: string | null | undefined): Set<string> {
   );
 }
 
-/** Get usernames to exclude from leaderboard (from configured list). Always reads fresh from KV. */
+/** Get usernames to exclude from leaderboard (from configured ignore list). Always reads fresh from KV. */
 export async function getLeaderboardExclusions(): Promise<Set<string>> {
   try {
     const settingsRaw = await kv.get<Record<string, unknown> | null>('overlay_settings');

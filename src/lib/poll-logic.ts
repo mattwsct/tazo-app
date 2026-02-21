@@ -2,7 +2,7 @@
  * Poll parsing and vote logic.
  */
 
-import type { PollOption, PollState, QueuedPoll } from '@/types/poll';
+import type { PollOption, PollState } from '@/types/poll';
 import { containsBlockedContent } from '@/lib/poll-content-filter';
 
 const YES_ALIASES = new Set(['yes', 'y']);
@@ -111,8 +111,7 @@ export function pollContainsBlockedContent(question: string, options: { label: s
 /** Map chat message to poll option index. Returns -1 if not a valid vote. */
 export function parseVote(
   content: string,
-  options: PollOption[],
-  username: string
+  options: PollOption[]
 ): { optionIndex: number } | null {
   const raw = content.trim().toLowerCase();
   const clean = raw.startsWith('!') ? raw.slice(1).trim() : raw;

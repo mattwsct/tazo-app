@@ -1,6 +1,6 @@
 // Settings validation utility to prevent malicious entries
 
-import { OverlaySettings, SETTINGS_CONFIG, TodoItem } from '@/types/settings';
+import { OverlaySettings, SETTINGS_CONFIG } from '@/types/settings';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 
 
@@ -36,47 +36,14 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     }
   }
 
-  // Validate todos array (special handling)
-  if (settings.todos !== undefined) {
-    if (Array.isArray(settings.todos)) {
-      const validTodos: TodoItem[] = [];
-      for (const todo of settings.todos) {
-        if (todo && typeof todo === 'object' && 'id' in todo && 'text' in todo && 'completed' in todo) {
-          const todoObj = todo as Record<string, unknown>;
-          if (typeof todoObj.id === 'string' && typeof todoObj.text === 'string' && typeof todoObj.completed === 'boolean') {
-            validTodos.push({
-              id: todoObj.id,
-              text: String(todoObj.text).slice(0, 200), // Limit text length
-              completed: Boolean(todoObj.completed)
-            });
-          }
-        }
-      }
-      cleanSettings.todos = validTodos;
-    } else {
-      console.warn('Invalid type for todos: expected array');
-      rejectedKeys.push('todos');
-    }
-  }
-
-  // Migrate showLeaderboard -> leaderboardDisplay
-  const legacy = settings as { showLeaderboard?: boolean };
-  if (settings.leaderboardDisplay === undefined && legacy.showLeaderboard !== undefined) {
-    (cleanSettings as Record<string, unknown>).leaderboardDisplay = legacy.showLeaderboard ? 'auto' : 'hidden';
-  }
-
-  // Validate showTodoList (it's in SETTINGS_CONFIG but handle explicitly for clarity)
-  if (settings.showTodoList !== undefined) {
-    if (typeof settings.showTodoList === 'boolean') {
-      cleanSettings.showTodoList = settings.showTodoList;
-    } else {
-      console.warn('Invalid type for showTodoList: expected boolean');
-      rejectedKeys.push('showTodoList');
-    }
+  // Migrate legacy leaderboardDisplay -> showLeaderboard
+  const legacy = settings as { leaderboardDisplay?: string; showLeaderboard?: boolean };
+  if (settings.showLeaderboard === undefined && legacy.leaderboardDisplay !== undefined) {
+    (cleanSettings as Record<string, unknown>).showLeaderboard = legacy.leaderboardDisplay !== 'hidden';
   }
 
   // Log any rejected keys (potential malicious entries)
-  const allowedNonSchema = ['todos', 'showTodoList', 'pollState', 'leaderboardTop', 'overlayAlerts'];
+  const allowedNonSchema = ['pollState', 'leaderboardTop', 'overlayAlerts'];
   for (const key of Object.keys(settings)) {
     if (!(key in SETTINGS_CONFIG) && !allowedNonSchema.includes(key)) {
       rejectedKeys.push(key);
@@ -110,7 +77,7 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const settingsObj = settings as Record<string, unknown>;
 
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in SETTINGS_CONFIG) && !['todos', 'showTodoList', 'pollState', 'leaderboardTop', 'overlayAlerts'].includes(key)) {
+    if (!(key in SETTINGS_CONFIG) && !['pollState', 'leaderboardTop', 'overlayAlerts'].includes(key)) {
       maliciousKeys.push(key);
     }
   }
