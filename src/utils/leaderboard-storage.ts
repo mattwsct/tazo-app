@@ -1,19 +1,16 @@
 /**
  * Leaderboard storage: per-stream points, reset on stream start.
  * Uses Redis sorted set for O(log n) leaderboard queries.
- * Point weights: chat=1 (5s cooldown), first chatter=25, poll vote=2, create poll=10,
+ * Point weights: chat=1 (every message), first chatter=25, poll vote=2, create poll=10,
  * follow=5, new sub=15, resub=10, gift sub=12 each, kicks: 10 pts per 100 kicks ($1).
  */
 
 import { kv } from '@vercel/kv';
 import { getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
-import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 
 const LEADERBOARD_SCORES_KEY = 'leaderboard_scores';
 const LEADERBOARD_FIRST_CHATTER_KEY = 'leaderboard_first_chatter';
 const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
-const LEADERBOARD_CHAT_COOLDOWN_PREFIX = 'leaderboard_chat:';
-const CHAT_COOLDOWN_SEC = 5;
 
 export const POINT_WEIGHTS = {
   chat: 1,
@@ -42,42 +39,15 @@ function parseExcludedBots(raw: string | null | undefined): Set<string> {
   );
 }
 
-const LEADERBOARD_EXCLUSIONS_CACHE_MS = 30_000; // 30s TTL to reduce KV reads
-let _exclusionsCache: { data: Set<string>; expires: number; settingsModified: number } | null = null;
-
-/** Get usernames to exclude from leaderboard (broadcaster + configured bots). Cached 30s. */
+/** Get usernames to exclude from leaderboard (from configured list). Always reads fresh from KV. */
 export async function getLeaderboardExclusions(): Promise<Set<string>> {
-  const now = Date.now();
-  if (_exclusionsCache && now < _exclusionsCache.expires) {
-    return _exclusionsCache.data;
-  }
   try {
-    const [settingsRaw, broadcaster, settingsModified] = await kv.mget<
-      [Record<string, unknown> | null, string | null, number | null]
-    >('overlay_settings', KICK_BROADCASTER_SLUG_KEY, 'overlay_settings_modified');
-    const mod = settingsModified ?? 0;
-    if (_exclusionsCache && mod === _exclusionsCache.settingsModified) {
-      _exclusionsCache.expires = now + LEADERBOARD_EXCLUSIONS_CACHE_MS;
-      return _exclusionsCache.data;
-    }
-    const settings = settingsRaw as { leaderboardExcludeBroadcaster?: boolean; leaderboardExcludedBots?: string } | null;
-    const excluded = new Set<string>();
-    if (broadcaster && typeof broadcaster === 'string') {
-      const excludeBroadcaster = settings?.leaderboardExcludeBroadcaster !== false;
-      if (excludeBroadcaster) excluded.add(broadcaster.toLowerCase().trim());
-    }
-    const bots = parseExcludedBots(settings?.leaderboardExcludedBots);
-    bots.forEach((b) => excluded.add(b));
-    _exclusionsCache = { data: excluded, expires: now + LEADERBOARD_EXCLUSIONS_CACHE_MS, settingsModified: mod };
-    return excluded;
+    const settingsRaw = await kv.get<Record<string, unknown> | null>('overlay_settings');
+    const settings = settingsRaw as { leaderboardExcludedBots?: string } | null;
+    return parseExcludedBots(settings?.leaderboardExcludedBots);
   } catch {
     return new Set();
   }
-}
-
-/** Call after saving settings to avoid stale exclusion cache. */
-export function invalidateLeaderboardExclusionsCache(): void {
-  _exclusionsCache = null;
 }
 
 /** Reset leaderboard when stream starts (called from onStreamStarted flow). */
@@ -86,7 +56,7 @@ export async function resetLeaderboardOnStreamStart(): Promise<void> {
     await kv.del(LEADERBOARD_SCORES_KEY);
     await kv.del(LEADERBOARD_FIRST_CHATTER_KEY);
     await kv.del(LEADERBOARD_DISPLAY_NAMES_KEY);
-    // Chat cooldown keys expire automatically
+    console.log('[Leaderboard] Reset on stream start at', new Date().toISOString());
   } catch (e) {
     console.warn('[Leaderboard] Failed to reset on stream start:', e);
   }
@@ -112,25 +82,15 @@ async function setDisplayName(normalized: string, display: string): Promise<void
   } catch { /* ignore */ }
 }
 
-/** Add points for a chat message (1 pt, 5s cooldown; first chatter gets +25). */
+/** Add points for a chat message (1 pt per message; first chatter gets +25). */
 export async function addChatPoints(username: string): Promise<{ points: number; isFirstChatter: boolean }> {
   const user = normalizeUsername(username);
   const excluded = await getLeaderboardExclusions();
   if (excluded.has(user)) return { points: 0, isFirstChatter: false };
   await ensureSessionStarted();
 
-  const [firstChatter, cooldownKey] = await Promise.all([
-    kv.get<string>(LEADERBOARD_FIRST_CHATTER_KEY),
-    kv.get<number>(`${LEADERBOARD_CHAT_COOLDOWN_PREFIX}${user}`),
-  ]);
-
-  const now = Date.now();
+  const firstChatter = await kv.get<string>(LEADERBOARD_FIRST_CHATTER_KEY);
   const isFirstChatter = !firstChatter;
-  const onCooldown = typeof cooldownKey === 'number' && now < cooldownKey;
-
-  if (onCooldown) {
-    return { points: 0, isFirstChatter: false };
-  }
 
   let points = POINT_WEIGHTS.chat;
   if (isFirstChatter) {
@@ -140,7 +100,6 @@ export async function addChatPoints(username: string): Promise<{ points: number;
 
   await Promise.all([
     kv.zincrby(LEADERBOARD_SCORES_KEY, points, user),
-    kv.set(`${LEADERBOARD_CHAT_COOLDOWN_PREFIX}${user}`, now + CHAT_COOLDOWN_SEC * 1000, { ex: CHAT_COOLDOWN_SEC + 2 }),
     setDisplayName(user, username),
   ]);
 

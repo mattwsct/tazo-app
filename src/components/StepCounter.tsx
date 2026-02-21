@@ -47,13 +47,13 @@ export default function StepCounter({ settings }: StepCounterProps) {
   const showMiles = settings?.showDistanceMiles ?? true;
 
   const hasSteps = showStepsSetting && steps !== null && steps >= 0;
-  const hasDistance = showDistanceSetting && distance !== null && distance > 0;
+  const hasDistance = showDistanceSetting && distance !== null && distance >= 0.1;
   if (!hasSteps && !hasDistance) return null;
 
   const distanceFormatted = hasDistance
     ? showMiles
-      ? `${Math.round(distance!)} km (${Math.round(kmToMiles(distance!))} mi)`
-      : `${Math.round(distance!)} km`
+      ? `${Number(distance!.toFixed(1))} km (${Number(kmToMiles(distance!).toFixed(1))} mi)`
+      : `${Number(distance!.toFixed(1))} km`
     : '';
 
   return (

@@ -106,7 +106,11 @@ export function useOverlaySettings(): [
             lastSettingsHash.current = createSettingsHash(data);
             setSettings(data);
           } else if (data && (data.leaderboardTop || data.overlayAlerts)) {
-            setSettings((prev) => ({ ...prev, leaderboardTop: data.leaderboardTop ?? prev.leaderboardTop, overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts }));
+            setSettings((prev) => ({
+              ...prev,
+              leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
+              overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
+            }));
           }
         }
       } catch (error) {
@@ -123,9 +127,10 @@ export function useOverlaySettings(): [
         const data = await res.json();
         if (!data) return;
         // Only update leaderboard + alerts (lightweight update, no hash check)
+        // Preserve previous leaderboard when fetch returns empty to avoid flash
         setSettings((prev) => ({
           ...prev,
-          leaderboardTop: data.leaderboardTop ?? prev.leaderboardTop,
+          leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
           overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
         }));
       } catch {

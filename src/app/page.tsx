@@ -1803,19 +1803,8 @@ export default function AdminPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="checkbox-group" style={{ marginTop: '12px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.leaderboardExcludeBroadcaster !== false}
-                        onChange={(e) => handleSettingsChange({ leaderboardExcludeBroadcaster: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Exclude broadcaster from leaderboard (your messages won&apos;t earn points)</span>
-                    </label>
-                  </div>
-                  <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
-                    <label>Bots to exclude from leaderboard (comma or newline separated)</label>
+                  <div className="admin-select-wrap">
+                    <label>Usernames to exclude from leaderboard (comma or newline separated)</label>
                     <textarea
                       className="text-input"
                       value={leaderboardExcludedBotsInput}
@@ -1825,7 +1814,7 @@ export default function AdminPage() {
                       style={{ resize: 'vertical', minHeight: 50 }}
                     />
                     <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
-                      Usernames that should not appear on or earn leaderboard points
+                      Add bots, your own username, or anyone who should not appear or earn points
                     </p>
                   </div>
                 </>

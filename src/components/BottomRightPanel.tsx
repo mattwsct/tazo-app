@@ -61,6 +61,7 @@ export default function BottomRightPanel({
   }, [showLeaderboard, showPoll, leaderboardAlways, leaderboardVisible, intervalMin, durationSec]);
 
   const leaderboardTop = settings.leaderboardTop ?? [];
+  const leaderboardDataLoaded = Array.isArray(settings.leaderboardTop);
   const overlayAlerts = settings.overlayAlerts ?? [];
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
 
@@ -104,7 +105,7 @@ export default function BottomRightPanel({
     <div className="bottom-right">
       {children}
 
-      {!showPoll && showLeaderboard && (leaderboardAlways || leaderboardVisible) && (
+      {!showPoll && showLeaderboard && leaderboardDataLoaded && (leaderboardAlways || leaderboardVisible) && (
         <div className="overlay-box leaderboard-box">
           <div className="leaderboard-title">🏆 Leaderboard</div>
           <div className="leaderboard-entries">
