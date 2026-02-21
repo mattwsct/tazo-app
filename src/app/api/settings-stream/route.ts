@@ -100,20 +100,25 @@ export async function GET(request: NextRequest): Promise<Response> {
       sendSSE(JSON.stringify({ type: 'connected', timestamp: Date.now() }));
       
       // Send current settings immediately (allow unauthenticated read access)
-        // Small delay to ensure connection is fully established
-        setTimeout(() => {
-          checkForUpdates();
-        }, 100);
+      setTimeout(() => {
+        checkForUpdates();
+      }, 100);
       
-      // Check every 15s to reduce KV ops (was 10s; 1 mget per check)
-      const interval = setInterval(checkForUpdates, 15000);
+      // Check every 15s for settings changes (1 mget per check)
+      const checkInterval = setInterval(checkForUpdates, 15000);
+      
+      // Heartbeat every 10s so client knows connection is alive (avoids "polling fallback" when nothing changed)
+      const heartbeatInterval = setInterval(() => {
+        sendSSE(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
+      }, 10000);
       
       // Cleanup on close
       request.signal.addEventListener('abort', () => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[SSE] Connection closed: ${connectionId}`);
-      }
-        clearInterval(interval);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[SSE] Connection closed: ${connectionId}`);
+        }
+        clearInterval(checkInterval);
+        clearInterval(heartbeatInterval);
         removeConnection(connectionId);
         controller.close();
       });

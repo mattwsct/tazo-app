@@ -52,11 +52,11 @@ export function useOverlaySettings(): [
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          lastSseUpdateRef.current = Date.now(); // any message = connection alive (heartbeat, connected, settings_update)
           if (data.type === 'settings_update') {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- type/timestamp excluded from settingsData
             const { type: _t, timestamp: _ts, ...settingsData } = data;
             const merged = mergeSettingsWithDefaults(settingsData);
-            lastSseUpdateRef.current = Date.now();
             OverlayLogger.settings('Settings updated via SSE', { locationDisplay: merged.locationDisplay, showWeather: merged.showWeather, showMinimap: merged.showMinimap });
             setSettings(merged);
             lastSettingsHash.current = createSettingsHash(merged);
@@ -81,7 +81,7 @@ export function useOverlaySettings(): [
     let eventSource: EventSource | null = null;
     let sseDelayId: ReturnType<typeof setTimeout> | null = null;
     const startSSE = () => {
-      sseDelayId = setTimeout(() => { eventSource = setupSSE(); }, 300);
+      sseDelayId = setTimeout(() => { eventSource = setupSSE(); }, 500);
     };
     loadSettingsRef.current = loadSettings;
     loadSettings().then(() => {
