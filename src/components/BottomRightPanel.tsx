@@ -187,7 +187,7 @@ export default function BottomRightPanel({
     const subsUntil = settings.subGoalCelebrationUntil;
     const kicksUntil = settings.kicksGoalCelebrationUntil;
     const subTarget = settings.subGoalTarget ?? 10;
-    const kicksTarget = settings.kicksGoalTarget ?? 5000;
+    const kicksTarget = settings.kicksGoalTarget ?? 1000;
 
     const maybeBump = async (type: 'subs' | 'kicks', until: number | undefined, count: number, target: number, bumpedRef: React.MutableRefObject<number | null>) => {
       if (until == null || Date.now() < until || count < target || bumpedRef.current === until) return;
@@ -272,7 +272,7 @@ export default function BottomRightPanel({
       <GoalProgressBar
         label="KICKS"
         current={streamGoals.kicks}
-        target={settings.kicksGoalTarget ?? 5000}
+        target={settings.kicksGoalTarget ?? 1000}
         formatValue={(n) => String(Math.round(n))}
         fillStyle="linear-gradient(90deg, rgba(16, 185, 129, 0.75) 0%, rgba(52, 211, 153, 0.95) 100%)"
         subtext={settings.kicksGoalSubtext}

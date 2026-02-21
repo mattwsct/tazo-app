@@ -31,10 +31,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const merged = mergeSettingsWithDefaults(settings ?? {});
     const target = type === 'subs'
       ? (merged.subGoalTarget ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget ?? 10)
-      : (merged.kicksGoalTarget ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget ?? 5000);
+      : (merged.kicksGoalTarget ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget ?? 1000);
     const increment = type === 'subs'
       ? (merged.subGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.subGoalIncrement ?? 10)
-      : (merged.kicksGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement ?? 5000);
+      : (merged.kicksGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement ?? 1000);
 
     const count = type === 'subs' ? goals.subs : goals.kicks;
     const until = type === 'subs' ? celebration.subsUntil : celebration.kicksUntil;

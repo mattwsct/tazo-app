@@ -313,7 +313,7 @@ export async function POST(request: NextRequest) {
         getStreamGoals(),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      const target = (settings?.kicksGoalTarget as number) ?? 5000;
+      const target = (settings?.kicksGoalTarget as number) ?? 1000;
       if (target > 0) await setGoalCelebrationIfNeeded('kicks', goals.kicks, target);
     }
   }

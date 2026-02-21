@@ -16,8 +16,8 @@ export interface KickMessageTemplates {
 }
 
 export const DEFAULT_KICK_MESSAGES: KickMessageTemplates = {
-  follow: 'New follow from {name}! 💚',
-  newSub: 'New sub from {name}! 🎉',
+  follow: '{name} followed! 💚',
+  newSub: '{name} just subscribed! 🎉',
   resub: '{name} resubbed! {months} months 💪',
   giftSubSingle: '{gifter} gifted a sub to {name}! 🎁 {lifetimeSubs}',
   giftSubMulti: '{gifter} gifted {count} subs! 🎁 {lifetimeSubs}',

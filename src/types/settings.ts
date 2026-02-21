@@ -90,8 +90,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   subGoalTarget: 10, // ~$50 at typical sub price
   subGoalIncrement: 10,
   showKicksGoal: false,
-  kicksGoalTarget: 5000, // 5000 kicks = $50 (fewer people use kicks than subs)
-  kicksGoalIncrement: 5000,
+  kicksGoalTarget: 1000, // 1000 kicks = $10
+  kicksGoalIncrement: 1000,
 };
 
 // Valid settings schema for validation

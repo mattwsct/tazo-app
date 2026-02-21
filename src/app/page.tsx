@@ -58,9 +58,9 @@ export default function AdminPage() {
   const [leaderboardExcludedBotsInput, setLeaderboardExcludedBotsInput] = useState('');
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
-  const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('5000');
+  const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
   const [subGoalIncrementInput, setSubGoalIncrementInput] = useState<string>('10');
-  const [kicksGoalIncrementInput, setKicksGoalIncrementInput] = useState<string>('5000');
+  const [kicksGoalIncrementInput, setKicksGoalIncrementInput] = useState<string>('1000');
   const [subGoalSubtextInput, setSubGoalSubtextInput] = useState<string>('');
   const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState<string>('');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -752,9 +752,9 @@ export default function AdminPage() {
   // Sync sub/kicks goal target, increment, and subtext inputs from settings
   useEffect(() => {
     setSubGoalTargetInput(String(settings.subGoalTarget ?? 10));
-    setKicksGoalTargetInput(String(settings.kicksGoalTarget ?? 5000));
+    setKicksGoalTargetInput(String(settings.kicksGoalTarget ?? 1000));
     setSubGoalIncrementInput(String(settings.subGoalIncrement ?? 10));
-    setKicksGoalIncrementInput(String(settings.kicksGoalIncrement ?? 5000));
+    setKicksGoalIncrementInput(String(settings.kicksGoalIncrement ?? 1000));
     setSubGoalSubtextInput(settings.subGoalSubtext ?? '');
     setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
   }, [settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalSubtext, settings.kicksGoalSubtext]);
