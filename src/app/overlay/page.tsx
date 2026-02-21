@@ -143,6 +143,7 @@ function OverlayPage() {
   const pollCountdownRef = useRef<{ pollId: string } | null>(null);
   const latestPollRef = useRef<typeof settings.pollState>(null);
   const lastPollIdRef = useRef<string | null>(null);
+  const pollShimmerPhaseRef = useRef<{ pollId: string; phase: number } | null>(null);
   if (settings.pollState?.status === 'active') latestPollRef.current = settings.pollState;
 
   useEffect(() => {
@@ -1748,7 +1749,15 @@ function OverlayPage() {
                         const optionsToShow = showWinner
                           ? [...poll.options].sort((a, b) => b.votes - a.votes).filter((o) => winnerLabels.has(o.label))
                           : [...poll.options].sort((a, b) => b.votes - a.votes);
-                        const animPhase = Date.now() % 5000; // Sync shimmer across all winner bars (5s = animation duration)
+                        // Stable phase per poll so shimmer stays in sync across all winner bars (avoid recalc on every render)
+                        if (winnerLabels.size > 0) {
+                          if (!pollShimmerPhaseRef.current || pollShimmerPhaseRef.current.pollId !== poll.id) {
+                            pollShimmerPhaseRef.current = { pollId: poll.id, phase: Date.now() % 5000 };
+                          }
+                        } else {
+                          pollShimmerPhaseRef.current = null;
+                        }
+                        const animPhase = pollShimmerPhaseRef.current?.phase ?? 0;
                         return optionsToShow.map((opt) => {
                           const pct = showWinner
                             ? 100

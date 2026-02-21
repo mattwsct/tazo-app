@@ -356,6 +356,13 @@ body.overlay-page {
 .leaderboard-box {
   font-size: var(--font-size-sm);
   min-width: 140px;
+  overflow: visible;
+  padding-bottom: var(--gap-md);
+}
+
+.leaderboard-box .leaderboard-entries {
+  line-height: 1.35;
+  padding-bottom: 0;
 }
 
 .leaderboard-title {
@@ -376,6 +383,7 @@ body.overlay-page {
   align-items: center;
   gap: 6px;
   font-weight: 600;
+  line-height: 1.35;
 }
 
 .leaderboard-entry.leaderboard-empty {
@@ -394,6 +402,7 @@ body.overlay-page {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.35;
 }
 
 .leaderboard-points {

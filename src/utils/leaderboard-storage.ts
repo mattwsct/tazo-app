@@ -11,6 +11,7 @@ import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 
 const LEADERBOARD_SCORES_KEY = 'leaderboard_scores';
 const LEADERBOARD_FIRST_CHATTER_KEY = 'leaderboard_first_chatter';
+const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
 const LEADERBOARD_CHAT_COOLDOWN_PREFIX = 'leaderboard_chat:';
 const CHAT_COOLDOWN_SEC = 5;
 
@@ -84,6 +85,7 @@ export async function resetLeaderboardOnStreamStart(): Promise<void> {
   try {
     await kv.del(LEADERBOARD_SCORES_KEY);
     await kv.del(LEADERBOARD_FIRST_CHATTER_KEY);
+    await kv.del(LEADERBOARD_DISPLAY_NAMES_KEY);
     // Chat cooldown keys expire automatically
   } catch (e) {
     console.warn('[Leaderboard] Failed to reset on stream start:', e);
@@ -95,6 +97,19 @@ async function ensureSessionStarted(): Promise<void> {
   if (!started) {
     await onStreamStarted();
   }
+}
+
+/** Store display name from Kick (original casing). Prefer mixed-case over all-lowercase. */
+async function setDisplayName(normalized: string, display: string): Promise<void> {
+  const trimmed = display.trim();
+  if (!trimmed) return;
+  try {
+    const existing = await kv.hget<string>(LEADERBOARD_DISPLAY_NAMES_KEY, normalized);
+    const hasMixedCase = trimmed !== trimmed.toLowerCase();
+    if (!existing || (hasMixedCase && existing === existing.toLowerCase())) {
+      await kv.hset(LEADERBOARD_DISPLAY_NAMES_KEY, { [normalized]: trimmed });
+    }
+  } catch { /* ignore */ }
 }
 
 /** Add points for a chat message (1 pt, 5s cooldown; first chatter gets +25). */
@@ -126,6 +141,7 @@ export async function addChatPoints(username: string): Promise<{ points: number;
   await Promise.all([
     kv.zincrby(LEADERBOARD_SCORES_KEY, points, user),
     kv.set(`${LEADERBOARD_CHAT_COOLDOWN_PREFIX}${user}`, now + CHAT_COOLDOWN_SEC * 1000, { ex: CHAT_COOLDOWN_SEC + 2 }),
+    setDisplayName(user, username),
   ]);
 
   return { points, isFirstChatter };
@@ -138,7 +154,10 @@ export async function addPollPoints(username: string, action: 'vote' | 'create')
   if (excluded.has(user)) return;
   await ensureSessionStarted();
   const points = action === 'vote' ? POINT_WEIGHTS.pollVote : POINT_WEIGHTS.createPoll;
-  await kv.zincrby(LEADERBOARD_SCORES_KEY, points, user);
+  await Promise.all([
+    kv.zincrby(LEADERBOARD_SCORES_KEY, points, user),
+    setDisplayName(user, username),
+  ]);
 }
 
 /** Add points for follow (5). */
@@ -147,7 +166,10 @@ export async function addFollowPoints(username: string): Promise<void> {
   const excluded = await getLeaderboardExclusions();
   if (excluded.has(user)) return;
   await ensureSessionStarted();
-  await kv.zincrby(LEADERBOARD_SCORES_KEY, POINT_WEIGHTS.follow, user);
+  await Promise.all([
+    kv.zincrby(LEADERBOARD_SCORES_KEY, POINT_WEIGHTS.follow, user),
+    setDisplayName(user, username),
+  ]);
 }
 
 /** Add points for new sub (15) or resub (10). */
@@ -157,7 +179,10 @@ export async function addSubPoints(username: string, isResub: boolean): Promise<
   if (excluded.has(user)) return;
   await ensureSessionStarted();
   const points = isResub ? POINT_WEIGHTS.resub : POINT_WEIGHTS.newSub;
-  await kv.zincrby(LEADERBOARD_SCORES_KEY, points, user);
+  await Promise.all([
+    kv.zincrby(LEADERBOARD_SCORES_KEY, points, user),
+    setDisplayName(user, username),
+  ]);
 }
 
 /** Add points for gift sub – gifter gets 12 per sub. */
@@ -167,7 +192,10 @@ export async function addGiftSubPoints(gifterUsername: string, count: number): P
   if (excluded.has(user)) return;
   await ensureSessionStarted();
   const points = POINT_WEIGHTS.giftSub * count;
-  await kv.zincrby(LEADERBOARD_SCORES_KEY, points, user);
+  await Promise.all([
+    kv.zincrby(LEADERBOARD_SCORES_KEY, points, user),
+    setDisplayName(user, gifterUsername),
+  ]);
 }
 
 /** Add points for kicks gifted. 100 kicks = $1 → 10 points per 100 kicks. */
@@ -177,24 +205,31 @@ export async function addKicksPoints(senderUsername: string, kicksAmount: number
   if (excluded.has(user)) return;
   await ensureSessionStarted();
   const points = Math.max(1, Math.floor(kicksAmount / 100) * POINT_WEIGHTS.kicksPer100);
-  await kv.zincrby(LEADERBOARD_SCORES_KEY, points, user);
+  await Promise.all([
+    kv.zincrby(LEADERBOARD_SCORES_KEY, points, user),
+    setDisplayName(user, senderUsername),
+  ]);
 }
 
-/** Get top N users with points. Returns [{ username, points }, ...]. Excludes broadcaster + configured bots. */
+/** Get top N users with points. Returns [{ username, points }, ...]. Excludes broadcaster + configured bots. Uses stored display names for correct capitalization. */
 export async function getLeaderboardTop(
   n: number,
   options?: { excludeUsernames?: Set<string> }
 ): Promise<{ username: string; points: number }[]> {
   try {
     const excluded = options?.excludeUsernames ?? (await getLeaderboardExclusions());
-    const raw = await kv.zrange(LEADERBOARD_SCORES_KEY, 0, n + excluded.size + 9, { rev: true, withScores: true });
+    const [raw, displayNames] = await Promise.all([
+      kv.zrange(LEADERBOARD_SCORES_KEY, 0, n + excluded.size + 9, { rev: true, withScores: true }),
+      kv.hgetall<Record<string, string>>(LEADERBOARD_DISPLAY_NAMES_KEY),
+    ]);
     if (!raw || !Array.isArray(raw)) return [];
+    const names = displayNames ?? {};
     const result: { username: string; points: number }[] = [];
     for (let i = 0; i < raw.length && result.length < n; i += 2) {
       const user = String(raw[i] ?? '').toLowerCase();
       if (excluded.has(user)) continue;
       result.push({
-        username: String(raw[i] ?? ''),
+        username: names[user] ?? user,
         points: Math.round(Number(raw[i + 1] ?? 0)),
       });
     }

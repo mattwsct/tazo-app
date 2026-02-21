@@ -112,7 +112,7 @@ export default function BottomRightPanel({
               leaderboardTop.slice(0, leaderboardTopN).map((u, i) => (
                 <div key={u.username} className="leaderboard-entry">
                   <span className="leaderboard-rank">#{i + 1}</span>
-                  <span className="leaderboard-username">{u.username}</span>
+                  <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
                   <span className="leaderboard-points">{u.points} pts</span>
                 </div>
               ))
