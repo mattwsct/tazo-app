@@ -199,12 +199,12 @@ export async function GET(
     const stats = await getHeartrateStats();
     if (stats.hasData) {
       const parts: string[] = [];
-      if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
-      if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);
       if (stats.current) {
         const curr = stats.current.age === 'current' ? `${stats.current.bpm} bpm (live)` : `${stats.current.bpm} bpm (${stats.current.age} ago)`;
         parts.push(`Current: ${curr}`);
       }
+      if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);
+      if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
       return txtResponse(`💓 ${parts.join(' | ')}`);
     }
     const wellnessHr = await getWellnessHeartRateResponse();
@@ -255,12 +255,12 @@ export async function GET(
       parts.push('Current: Not available');
     }
 
-    if (stats.highest) {
-      parts.push(`Highest: ${stats.highest.altitude} m (${stats.highest.age} ago)`);
-    }
-
     if (stats.lowest) {
       parts.push(`Lowest: ${stats.lowest.altitude} m (${stats.lowest.age} ago)`);
+    }
+
+    if (stats.highest) {
+      parts.push(`Highest: ${stats.highest.altitude} m (${stats.highest.age} ago)`);
     }
 
     return txtResponse(parts.join(' | '));

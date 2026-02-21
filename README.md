@@ -279,7 +279,7 @@ Settings changes propagate to overlay in real-time via:
   - `/api/location` - GET/POST, persistent location (overlay reads and updates)
   - `/api/location/browser` - POST only, admin sets location from browser geolocation (requires auth)
   - `/api/wellness` - GET only, wellness data (steps, calories, sleep, distance, handwashing) for overlay, plus stepsSinceStreamStart, distanceSinceStreamStart, handwashingSinceStreamStart
-  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header). Chat broadcast milestones (steps, distance, stand hours, active calories, hand washing) when enabled in admin.
+  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header). Chat broadcast milestones (steps, distance, stand hours, active calories, hand washing) when enabled in admin. **Note**: iOS typically updates health data infrequently (15–30+ min via background refresh); overlay polls wellness every 60s.
   - `/api/stats/update` - POST only, overlay sends speed/altitude/heart rate for chat commands
 - **Authenticated only (admin panel)**
   - `/api/save-settings` - POST only

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { kmToMiles } from '@/utils/unit-conversions';
 import type { OverlaySettings } from '@/types/settings';
 
-const POLL_INTERVAL_MS = 10000; // 10s — wellness data updates from Health Auto Export
+const POLL_INTERVAL_MS = 60000; // 60s — Health Auto Export on iOS updates infrequently (15–30+ min); polling more often doesn't improve freshness
 
 interface StepCounterProps {
   settings?: Pick<OverlaySettings, 'showSteps' | 'showDistance' | 'showDistanceMiles'>;

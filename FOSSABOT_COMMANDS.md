@@ -272,7 +272,7 @@ Returns a list of all available country codes and names for use with other trave
 
 Returns heart rate from Pulsoid (live when connected), or from Apple Health via Health Auto Export when Pulsoid is not running.
 
-Example output: `💓 High: 120 bpm | Low: 72 bpm | Current: 85 bpm (live)` or `💓 72 bpm (Apple Health)`
+Example output: `💓 Current: 85 bpm (live) | Low: 72 bpm | High: 120 bpm` or `💓 72 bpm (Apple Health)`
 
 ### Speed
 

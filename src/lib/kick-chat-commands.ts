@@ -70,12 +70,12 @@ export async function handleKickChatCommand(cmd: KickChatCommand, senderUsername
     const stats = await getHeartrateStats();
     if (stats.hasData) {
       const parts: string[] = [];
-      if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
-      if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);
       if (stats.current) {
         const curr = stats.current.age === 'current' ? `${stats.current.bpm} bpm (live)` : `${stats.current.bpm} bpm (${stats.current.age} ago)`;
         parts.push(`Current: ${curr}`);
       }
+      if (stats.min) parts.push(`Low: ${stats.min.bpm} bpm`);
+      if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
       return `💓 ${parts.join(' | ')}`;
     }
     const wellnessHr = await getWellnessHeartRateResponse();
