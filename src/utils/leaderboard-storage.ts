@@ -178,21 +178,23 @@ export async function getLeaderboardTop(
   try {
     const excluded = options?.excludeUsernames ?? (await getLeaderboardExclusions());
     const [raw, displayNames] = await Promise.all([
-      kv.zrange(LEADERBOARD_SCORES_KEY, 0, n + excluded.size + 9, { rev: true, withScores: true }),
+      kv.zrange(LEADERBOARD_SCORES_KEY, 0, n + excluded.size + 20, { rev: true, withScores: true }),
       kv.hgetall<Record<string, string>>(LEADERBOARD_DISPLAY_NAMES_KEY),
     ]);
     if (!raw || !Array.isArray(raw)) return [];
     const names = displayNames ?? {};
     const result: { username: string; points: number }[] = [];
     for (let i = 0; i < raw.length && result.length < n; i += 2) {
-      const user = String(raw[i] ?? '').toLowerCase();
+      const user = String(raw[i] ?? '').trim().toLowerCase();
+      if (!user) continue;
       if (excluded.has(user)) continue;
       result.push({
         username: names[user] ?? user,
         points: Math.round(Number(raw[i + 1] ?? 0)),
       });
     }
-    return result;
+    // Defensive: filter again in case exclusions were momentarily empty (e.g. during deploy)
+    return result.filter((u) => !excluded.has(u.username.trim().toLowerCase()));
   } catch {
     return [];
   }

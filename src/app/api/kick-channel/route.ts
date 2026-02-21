@@ -11,7 +11,9 @@ import {
   KICK_STREAM_TITLE_SETTINGS_KEY,
   KICK_BROADCASTER_SLUG_KEY,
   getValidAccessToken,
+  sendKickChatMessage,
 } from '@/lib/kick-api';
+import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 
 export interface StreamTitleSettings {
@@ -135,6 +137,16 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({
       error: `Kick API ${res.status}: ${err}${hint}`,
     }, { status: 502 });
+  }
+
+  // Announce stream title update in chat if toggle is on
+  const storedAlert = await kv.get<{ chatBroadcastStreamTitle?: boolean }>(KICK_ALERT_SETTINGS_KEY);
+  if (storedAlert?.chatBroadcastStreamTitle === true && streamTitle.trim()) {
+    try {
+      await sendKickChatMessage(accessToken, `Stream title updated to "${streamTitle.trim()}"`);
+    } catch {
+      // ignore - title was updated successfully
+    }
   }
 
   return NextResponse.json({ success: true });

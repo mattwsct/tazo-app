@@ -81,6 +81,7 @@ export default function AdminPage() {
   });
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickGiftSubShowLifetimeSubs, setKickGiftSubShowLifetimeSubs] = useState(true);
+  const [kickChatBroadcastStreamTitle, setKickChatBroadcastStreamTitle] = useState(false);
   const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
   const [kickChatBroadcastWeather, setKickChatBroadcastWeather] = useState(false);
   const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
@@ -251,6 +252,7 @@ export default function AdminPage() {
         if (d.templateEnabled) setKickTemplateEnabled((prev) => ({ ...prev, ...d.templateEnabled }));
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
         if (d.alertSettings?.giftSubShowLifetimeSubs !== undefined) setKickGiftSubShowLifetimeSubs(d.alertSettings.giftSubShowLifetimeSubs);
+        if (d.alertSettings?.chatBroadcastStreamTitle !== undefined) setKickChatBroadcastStreamTitle(d.alertSettings.chatBroadcastStreamTitle);
         if (d.alertSettings?.chatBroadcastLocation !== undefined) setKickChatBroadcastLocation(d.alertSettings.chatBroadcastLocation);
         if (d.alertSettings?.chatBroadcastWeather !== undefined) setKickChatBroadcastWeather(d.alertSettings.chatBroadcastWeather);
         if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
@@ -500,6 +502,7 @@ export default function AdminPage() {
     alertSettings?: Partial<{
       minimumKicks: number;
       giftSubShowLifetimeSubs: boolean;
+      chatBroadcastStreamTitle: boolean;
       chatBroadcastLocation: boolean;
       chatBroadcastLocationIntervalMin: number;
       chatBroadcastWeather: boolean;
@@ -526,6 +529,7 @@ export default function AdminPage() {
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
       giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+      chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
       chatBroadcastLocation: kickChatBroadcastLocation,
       chatBroadcastLocationIntervalMin: 5,
       chatBroadcastWeather: kickChatBroadcastWeather,
@@ -562,11 +566,12 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastLocation, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessStandHours, kickChatBroadcastWellnessActiveCalories, kickChatBroadcastWellnessHandwashing]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastStreamTitle, kickChatBroadcastLocation, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessStandHours, kickChatBroadcastWellnessActiveCalories, kickChatBroadcastWellnessHandwashing]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
     giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+    chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
     chatBroadcastLocation: kickChatBroadcastLocation,
     chatBroadcastLocationIntervalMin: 5,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -587,6 +592,7 @@ export default function AdminPage() {
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
     giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
+    chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
     chatBroadcastLocation: kickChatBroadcastLocation,
     chatBroadcastLocationIntervalMin: 5,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
@@ -1104,6 +1110,28 @@ export default function AdminPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
+                        title="Clear leaderboard points only"
+                        onClick={async () => {
+                          if (!confirm('Reset leaderboard? This will clear all points. Steps, distance, and wellness are unchanged.')) return;
+                          try {
+                            const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
+                            const data = await r.json();
+                            if (r.ok) {
+                              setToast({ type: 'saved', message: 'Leaderboard reset' });
+                            } else {
+                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Reset failed' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        🏆 Reset leaderboard
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
                         title="Reset leaderboard, steps, distance, wellness sessions to simulate stream start"
                         onClick={async () => {
                           if (!confirm('Reset stream session? This will clear the leaderboard, steps since stream start, distance, handwashing, flights, and wellness milestones. Use if auto-reset on stream start did not run.')) return;
@@ -1275,6 +1303,25 @@ export default function AdminPage() {
               </p>
             <div className="broadcast-options-list">
               <div className="broadcast-option-block">
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input
+                    type="checkbox"
+                    checked={kickChatBroadcastStreamTitle}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setKickChatBroadcastStreamTitle(checked);
+                      saveKickMessages({ alertSettings: { chatBroadcastStreamTitle: checked } });
+                    }}
+                    className="checkbox-input"
+                  />
+                  <span className="radio-icon" aria-hidden="true">📺</span>
+                  <span>Stream title</span>
+                </label>
+                {kickChatBroadcastStreamTitle && (
+                  <div className="broadcast-option-detail">
+                    <span className="checkbox-label-row-sm" style={{ opacity: 0.9 }}>Posts &quot;Stream title updated to X&quot; when you update manually or when auto-push runs</span>
+                  </div>
+                )}
                 <label className="checkbox-label-row broadcast-checkbox-item">
                   <input
                     type="checkbox"

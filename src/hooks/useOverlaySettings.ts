@@ -58,7 +58,11 @@ export function useOverlaySettings(): [
             const { type: _t, timestamp: _ts, ...settingsData } = data;
             const merged = mergeSettingsWithDefaults(settingsData);
             OverlayLogger.settings('Settings updated via SSE', { locationDisplay: merged.locationDisplay, showWeather: merged.showWeather, showMinimap: merged.showMinimap });
-            setSettings(merged);
+            setSettings((prev) => ({
+              ...merged,
+              leaderboardTop: Array.isArray(merged.leaderboardTop) && merged.leaderboardTop.length > 0 ? merged.leaderboardTop : (prev.leaderboardTop ?? []),
+              overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
+            }));
             lastSettingsHash.current = createSettingsHash(merged);
             settingsLoadedRef.current = true;
           }
@@ -104,7 +108,11 @@ export function useOverlaySettings(): [
           const data = await res.json();
           if (data && createSettingsHash(data) !== lastSettingsHash.current) {
             lastSettingsHash.current = createSettingsHash(data);
-            setSettings(data);
+            setSettings((prev) => ({
+              ...data,
+              leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
+              overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
+            }));
           } else if (data && (data.leaderboardTop || data.overlayAlerts)) {
             setSettings((prev) => ({
               ...prev,

@@ -238,7 +238,7 @@ export async function handleChatPoll(
       try {
         await sendKickChatMessage(
           accessToken,
-          'Poll ended by mod.',
+          'Poll ended early.',
           messageId ? { replyToMessageId: messageId } : undefined
         );
       } catch { /* ignore */ }

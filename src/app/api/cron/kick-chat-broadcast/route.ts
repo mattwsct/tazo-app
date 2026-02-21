@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
 
   // Unified location: stream title + chat — both only when live, at most every N min
   const autoUpdateLocation = streamTitleSettings?.autoUpdateLocation !== false;
+  const chatBroadcastStreamTitle = storedAlert?.chatBroadcastStreamTitle === true;
   const chatBroadcastLocation = storedAlert?.chatBroadcastLocation === true;
   const intervalMin = (storedAlert?.chatBroadcastLocationIntervalMin as number) ?? 5;
   const intervalMs = intervalMin * 60 * 1000;
@@ -164,19 +165,19 @@ export async function GET(request: NextRequest) {
             }
           }
           let lastMsgToStore = formattedForTitle ?? '';
-          if (chatBroadcastLocation && locationChanged) {
-            // When title updates with location, combine into one chat message so viewers see the new title
+          const shouldAnnounce = (chatBroadcastStreamTitle && titleChanged && newFullTitle) || (chatBroadcastLocation && locationChanged);
+          if (shouldAnnounce) {
             const chatMsg = titleChanged && newFullTitle
-              ? `Stream title updated to "${newFullTitle}" with new location`
+              ? (formattedForTitle ? `Stream title updated to "${newFullTitle}" with new location` : `Stream title updated to "${newFullTitle}"`)
               : formattedForChat;
             if (chatMsg) {
               try {
                 await sendKickChatMessage(accessToken, chatMsg);
                 sent++;
                 lastMsgToStore = chatMsg;
-                console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'location', msgPreview: chatMsg.slice(0, 80) }));
+                console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'stream_title', msgPreview: chatMsg.slice(0, 80) }));
               } catch (err) {
-                console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'location', error: err instanceof Error ? err.message : String(err) }));
+                console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'stream_title', error: err instanceof Error ? err.message : String(err) }));
               }
             }
           }

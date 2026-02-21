@@ -24,6 +24,7 @@ function derivedTemplateEnabled(groupEnabled: KickMessageEnabled): KickMessageTe
 }
 
 export interface KickChatBroadcastSettings {
+  chatBroadcastStreamTitle?: boolean;
   chatBroadcastLocation?: boolean;
   chatBroadcastLocationIntervalMin?: number;
   chatBroadcastWeather?: boolean;
@@ -52,6 +53,7 @@ export interface KickAlertSettings extends KickChatBroadcastSettings {
 export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   minimumKicks: 0,
   giftSubShowLifetimeSubs: true,
+  chatBroadcastStreamTitle: false,
   chatBroadcastLocation: false,
   chatBroadcastLocationIntervalMin: 5,
   chatBroadcastWeather: false,
