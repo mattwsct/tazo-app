@@ -1709,8 +1709,8 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          {/* Steps & distance (Health Auto Export) */}
-          <CollapsibleSection id="steps-distance" title="👟 Overlay: steps & distance">
+          {/* Steps (Health Auto Export) */}
+          <CollapsibleSection id="steps-distance" title="👟 Overlay: steps">
             <div className="setting-group">
               <label className="checkbox-label">
                 <input
@@ -1720,24 +1720,6 @@ export default function AdminPage() {
                   className="checkbox-input"
                 />
                 <span className="checkbox-text">Show steps</span>
-              </label>
-              <label className="checkbox-label" style={{ marginTop: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={settings.showDistance ?? true}
-                  onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })}
-                  className="checkbox-input"
-                />
-                <span className="checkbox-text">Show distance</span>
-              </label>
-              <label className="checkbox-label" style={{ marginTop: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={settings.showDistanceMiles ?? true}
-                  onChange={(e) => handleSettingsChange({ showDistanceMiles: e.target.checked })}
-                  className="checkbox-input"
-                />
-                <span className="checkbox-text">Show miles (km + mi)</span>
               </label>
             </div>
           </CollapsibleSection>
@@ -1787,7 +1769,7 @@ export default function AdminPage() {
                       value={settings.leaderboardTopN ?? 5}
                       onChange={(e) => handleSettingsChange({ leaderboardTopN: Number(e.target.value) })}
                     >
-                      {[3, 4, 5, 7, 10].map((n) => (
+                      {[1, 3, 4, 5, 7, 10].map((n) => (
                         <option key={n} value={n}>Top {n}</option>
                       ))}
                     </select>

@@ -79,7 +79,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   altitudeDisplay: 'auto',
   speedDisplay: 'auto',
   showSteps: true,
-  showDistance: true,
+  showDistance: false, // Distance display removed from overlay
   showDistanceMiles: true,
   showLeaderboard: true,
   showGoalsRotation: true,
