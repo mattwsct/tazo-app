@@ -59,6 +59,12 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     }
   }
 
+  // Migrate showLeaderboard -> leaderboardDisplay
+  const legacy = settings as { showLeaderboard?: boolean };
+  if (settings.leaderboardDisplay === undefined && legacy.showLeaderboard !== undefined) {
+    (cleanSettings as Record<string, unknown>).leaderboardDisplay = legacy.showLeaderboard ? 'auto' : 'hidden';
+  }
+
   // Validate showTodoList (it's in SETTINGS_CONFIG but handle explicitly for clarity)
   if (settings.showTodoList !== undefined) {
     if (typeof settings.showTodoList === 'boolean') {
@@ -70,8 +76,9 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
   }
 
   // Log any rejected keys (potential malicious entries)
+  const allowedNonSchema = ['todos', 'showTodoList', 'pollState', 'leaderboardTop', 'overlayAlerts'];
   for (const key of Object.keys(settings)) {
-    if (!(key in SETTINGS_CONFIG) && key !== 'todos' && key !== 'showTodoList' && key !== 'pollState') { // todos, showTodoList, pollState (runtime) are valid
+    if (!(key in SETTINGS_CONFIG) && !allowedNonSchema.includes(key)) {
       rejectedKeys.push(key);
     }
   }
@@ -103,7 +110,7 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const settingsObj = settings as Record<string, unknown>;
 
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in SETTINGS_CONFIG) && key !== 'todos' && key !== 'showTodoList') { // todos and showTodoList are valid keys
+    if (!(key in SETTINGS_CONFIG) && !['todos', 'showTodoList', 'pollState', 'leaderboardTop', 'overlayAlerts'].includes(key)) {
       maliciousKeys.push(key);
     }
   }

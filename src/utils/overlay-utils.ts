@@ -11,9 +11,11 @@ import { TIMERS } from '@/utils/overlay-constants';
  * Used in multiple places: settings loading, SSE updates, polling
  */
 export function mergeSettingsWithDefaults(settingsData: Partial<OverlaySettings>): OverlaySettings {
+  const data = settingsData ?? {};
   return {
     ...DEFAULT_OVERLAY_SETTINGS,
-    ...settingsData,
+    ...data,
+    leaderboardDisplay: getLeaderboardDisplayMode(data),
     broadenLocationWhenStale: settingsData.broadenLocationWhenStale ?? DEFAULT_OVERLAY_SETTINGS.broadenLocationWhenStale ?? true,
     locationStaleMaxFallback: settingsData.locationStaleMaxFallback ?? DEFAULT_OVERLAY_SETTINGS.locationStaleMaxFallback ?? 'country',
     weatherConditionDisplay: settingsData.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
@@ -88,6 +90,16 @@ export function getEffectiveDisplayModeForStaleGps(
   else if (gpsAgeMs >= STALE_CITY_MS && (displayMode === 'neighbourhood' || displayMode === 'city')) effective = 'state';
   else if (gpsAgeMs >= STALE_NEIGHBOURHOOD_MS && displayMode === 'neighbourhood') effective = 'city';
   return capAtMaxFallback(effective, maxFallback);
+}
+
+/** Resolve leaderboard display mode with legacy showLeaderboard fallback. */
+export function getLeaderboardDisplayMode(
+  settings: { leaderboardDisplay?: string; showLeaderboard?: boolean }
+): 'always' | 'auto' | 'hidden' {
+  const ld = settings.leaderboardDisplay ?? (
+    (settings as { showLeaderboard?: boolean }).showLeaderboard === false ? 'hidden' : 'auto'
+  );
+  return ld as 'always' | 'auto' | 'hidden';
 }
 
 /**

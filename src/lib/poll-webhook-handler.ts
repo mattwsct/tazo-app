@@ -4,6 +4,7 @@
 
 import { kv } from '@vercel/kv';
 import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
+import { addPollPoints } from '@/utils/leaderboard-storage';
 import {
   parsePollCommand,
   parsePollDurationVariant,
@@ -340,6 +341,7 @@ export async function handleChatPoll(
         const hasWinner = currentState && currentState.status === 'winner';
         const pollOptions = options.map((o) => ({ ...o, voters: {} }));
         if (!hasActive && !hasWinner) {
+          void addPollPoints(senderUsername, 'create');
           const state: PollState = {
             id: `poll_${Date.now()}`,
             question,
@@ -536,6 +538,7 @@ export async function handleChatPoll(
         if (process.env.NODE_ENV === 'development') {
           console.log('[poll] webhook: winner+empty queue, starting immediately (skip queue msg)');
         }
+        void addPollPoints(senderUsername, 'create');
         await setPollState(null);
         const state: PollState = {
           id: `poll_${Date.now()}`,
@@ -624,6 +627,7 @@ export async function handleChatPoll(
     if (process.env.NODE_ENV === 'development') {
       console.log('[poll] webhook: starting new poll (no active/winner)', parsed.question?.slice(0, 40));
     }
+    void addPollPoints(senderUsername, 'create');
     // Start new poll
     const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
     const state: PollState = {
@@ -720,6 +724,7 @@ export async function handleChatPoll(
   const vote = parseVote(contentTrimmed, currentState.options, senderUsername);
   if (vote) {
     applyVote(currentState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? false);
+    void addPollPoints(senderUsername, 'vote');
     // Guard: poll may have ended and been replaced; don't overwrite new poll with stale voted state
     const stateNow = await getPollState();
     if (stateNow?.id !== currentState.id) return { handled: true };

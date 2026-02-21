@@ -20,6 +20,9 @@ import {
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
+import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPoints, addGiftSubPoints, addKicksPoints } from '@/utils/leaderboard-storage';
+import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
+import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetHandwashingSession, resetFlightsSession, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
@@ -131,9 +134,10 @@ export async function POST(request: NextRequest) {
     await logWebhookReceived(eventType || '(unknown)');
   }
 
-  // Stream start: reset stats session and steps counter when going live
+  // Stream start: reset stats session, steps counter, and leaderboard when going live
   if (eventNorm === 'livestream.status.updated' && payload.is_live === true) {
     void onStreamStarted();
+    void resetLeaderboardOnStreamStart();
     void (async () => {
       try {
         const wellness = await getWellnessData();
@@ -148,10 +152,11 @@ export async function POST(request: NextRequest) {
     })();
   }
 
-  // Chat: poll handling first (if enabled), then !ping
+  // Chat: poll handling first (if enabled), then !ping. Award leaderboard points for chat.
   if (eventNorm === 'chat.message.sent') {
     const content = (payload.content as string) || '';
     const sender = (payload.sender as { username?: string })?.username ?? '?';
+    void addChatPoints(sender);
     try {
       await kv.set(KICK_LAST_CHAT_MESSAGE_AT_KEY, Date.now());
     } catch { /* ignore */ }
@@ -160,7 +165,7 @@ export async function POST(request: NextRequest) {
 
     const parsed = parseKickChatMessage(content);
     if (!parsed) return NextResponse.json({ received: true }, { status: 200 });
-    const response = await handleKickChatCommand(parsed.cmd);
+    const response = await handleKickChatCommand(parsed.cmd, sender);
     if (!response) return NextResponse.json({ received: true }, { status: 200 });
     const accessToken = await getValidAccessToken();
     if (!accessToken) return NextResponse.json({ received: true }, { status: 200 });
@@ -224,6 +229,50 @@ export async function POST(request: NextRequest) {
   const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
   if (!isKnownEvent) {
     return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  // Award leaderboard points and push overlay alerts for subs, gifts, kicks
+  const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
+  let didAlertOrLeaderboard = false;
+  if (eventNorm === 'channel.followed') {
+    const follower = getUsername(payload.follower);
+    if (follower) {
+      await addFollowPoints(follower);
+      didAlertOrLeaderboard = true;
+    }
+  } else if (eventNorm === 'channel.subscription.new') {
+    const subscriber = payload.subscriber;
+    if (subscriber) {
+      await Promise.all([addSubPoints(getUsername(subscriber), false), pushSubAlert(subscriber)]);
+      didAlertOrLeaderboard = true;
+    }
+  } else if (eventNorm === 'channel.subscription.renewal') {
+    const subscriber = payload.subscriber;
+    const duration = (payload.duration as number) ?? 0;
+    if (subscriber) {
+      await Promise.all([addSubPoints(getUsername(subscriber), true), pushResubAlert(subscriber, duration > 0 ? duration : undefined)]);
+      didAlertOrLeaderboard = true;
+    }
+  } else if (eventNorm === 'channel.subscription.gifts') {
+    const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
+    const giftees = (payload.giftees as unknown[]) ?? [];
+    const count = giftees.length > 0 ? giftees.length : 1;
+    if (gifter) {
+      await Promise.all([addGiftSubPoints(getUsername(gifter), count), pushGiftSubAlert(gifter, count)]);
+      didAlertOrLeaderboard = true;
+    }
+  } else if (eventNorm === 'kicks.gifted') {
+    const sender = payload.sender;
+    const gift = payload.gift as { amount?: number; name?: string } | undefined;
+    const amount = Number(gift?.amount ?? 0);
+    const giftName = gift?.name as string | undefined;
+    if (sender && amount > 0) {
+      await Promise.all([addKicksPoints(getUsername(sender), amount), pushKicksAlert(sender, amount, giftName)]);
+      didAlertOrLeaderboard = true;
+    }
+  }
+  if (didAlertOrLeaderboard) {
+    void broadcastAlertsAndLeaderboard();
   }
 
   if (isToggleDisabled(toggleKey, toggleValue)) {

@@ -1,4 +1,11 @@
 // Overlay configuration constants
+
+/** Fetch options for no-cache requests (settings, poll state, etc.) */
+export const NO_CACHE_FETCH_OPTIONS: RequestInit = {
+  cache: 'no-store',
+  headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' },
+};
+
 export const TIMERS = {
   // Weather updates - time-based only (weather changes regardless of movement)
   WEATHER_UPDATE_INTERVAL: 300000, // 5 minutes - weather changes over time

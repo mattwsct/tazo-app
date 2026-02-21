@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import { validateAndSanitizeSettings, detectMaliciousKeys } from '@/lib/settings-validator';
+import { invalidateLeaderboardExclusionsCache } from '@/utils/leaderboard-storage';
 import { verifyAuth, logKVUsage } from '@/lib/api-auth';
 import { broadcastSettings } from '@/lib/settings-broadcast';
 import { OverlayLogger } from '@/lib/logger';
@@ -42,7 +43,8 @@ async function handlePOST(request: NextRequest) {
         kv.set('overlay_settings_modified', Date.now())
       ]).then(() => {
         logKVUsage('write');
-        invalidateSSECache(); // Invalidate cache after successful save
+        invalidateSSECache();
+        invalidateLeaderboardExclusionsCache();
         return true;
       }).catch((error) => {
         OverlayLogger.error('KV operation failed', error);

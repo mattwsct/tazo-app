@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { createSettingsHash } from '@/utils/overlay-helpers';
+import { NO_CACHE_FETCH_OPTIONS } from '@/utils/overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
 import type { OverlaySettings } from '@/types/settings';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
@@ -27,10 +28,7 @@ export function useOverlaySettings(): [
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' },
-        });
+        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, NO_CACHE_FETCH_OPTIONS);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data) {
@@ -46,6 +44,11 @@ export function useOverlaySettings(): [
 
     const setupSSE = () => {
       const eventSource = new EventSource('/api/settings-stream');
+      eventSource.onopen = () => {
+        if (process.env.NODE_ENV === 'development') {
+          OverlayLogger.settings('SSE connected — updates will appear rapidly when admin saves');
+        }
+      };
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -65,6 +68,9 @@ export function useOverlaySettings(): [
       };
       eventSource.onerror = () => {
         if (eventSource.readyState === EventSource.CLOSED) return;
+        if (process.env.NODE_ENV === 'development') {
+          OverlayLogger.warn('SSE connection error — reconnecting in 1s, polling will be used as fallback');
+        }
         try { eventSource.close(); } catch { /* ignore */ }
         setTimeout(() => { try { setupSSE(); } catch { /* ignore */ } }, 1000);
       };
@@ -85,28 +91,54 @@ export function useOverlaySettings(): [
       sseDelayId = setTimeout(() => { eventSource = setupSSE(); }, 2000);
     });
 
+    const pollInterval = 5000; // 5s for settings
     const poll = setInterval(async () => {
       try {
         // Skip poll if SSE updated recently (saves KV reads)
-        if (Date.now() - lastSseUpdateRef.current < 20000) return;
-        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
+        if (Date.now() - lastSseUpdateRef.current < 15000) return;
+        if (process.env.NODE_ENV === 'development' && lastSseUpdateRef.current > 0) {
+          OverlayLogger.settings('Polling fallback — SSE has not updated in 15s, fetching settings');
+        }
+        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, NO_CACHE_FETCH_OPTIONS);
         if (res.ok) {
           const data = await res.json();
           if (data && createSettingsHash(data) !== lastSettingsHash.current) {
             lastSettingsHash.current = createSettingsHash(data);
             setSettings(data);
+          } else if (data && (data.leaderboardTop || data.overlayAlerts)) {
+            setSettings((prev) => ({ ...prev, leaderboardTop: data.leaderboardTop ?? prev.leaderboardTop, overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts }));
           }
         }
       } catch (error) {
         OverlayLogger.warn('Settings polling failed', { error: error instanceof Error ? error.message : String(error) });
       }
-    }, TIMERS.SETTINGS_POLLING_INTERVAL);
+    }, pollInterval);
+
+    // Fast poll for alerts (never skipped) — alerts expire in 15s, so we need frequent fetches
+    const fastPollInterval = 2000; // 2s
+    const fastPoll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, NO_CACHE_FETCH_OPTIONS);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data) return;
+        // Only update leaderboard + alerts (lightweight update, no hash check)
+        setSettings((prev) => ({
+          ...prev,
+          leaderboardTop: data.leaderboardTop ?? prev.leaderboardTop,
+          overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
+        }));
+      } catch {
+        /* ignore */
+      }
+    }, fastPollInterval);
 
     return () => {
       window.removeEventListener('load', startSSE);
       if (sseDelayId) clearTimeout(sseDelayId);
       if (eventSource) eventSource.close();
       clearInterval(poll);
+      clearInterval(fastPoll);
     };
   }, []);
 
@@ -116,10 +148,7 @@ export function useOverlaySettings(): [
     let timeoutId: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const res = await fetch(`/api/get-poll-state?_t=${Date.now()}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
-        });
+        const res = await fetch(`/api/get-poll-state?_t=${Date.now()}`, NO_CACHE_FETCH_OPTIONS);
         if (res.ok) {
           const { pollState } = await res.json();
           if (pollState?.status === 'active') {

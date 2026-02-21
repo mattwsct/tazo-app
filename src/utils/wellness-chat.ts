@@ -12,8 +12,8 @@ import {
 import { kmToMiles } from '@/utils/unit-conversions';
 
 function formatDistance(km: number): string {
-  const kmStr = km >= 1 ? km.toFixed(1) : km.toFixed(2);
-  const mi = kmToMiles(km).toFixed(1);
+  const kmStr = String(Math.round(km));
+  const mi = String(Math.round(kmToMiles(km)));
   return `${kmStr} km (${mi} mi)`;
 }
 

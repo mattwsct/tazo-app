@@ -44,6 +44,7 @@ import {
   formatCountryCode,
   shouldShowDisplayMode,
   getEffectiveDisplayModeForStaleGps,
+  getLeaderboardDisplayMode,
 } from '@/utils/overlay-utils';
 import {
   processGpsData,
@@ -61,6 +62,7 @@ import {
 } from '@/utils/staleness-utils';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
+import BottomRightPanel from '@/components/BottomRightPanel';
 
 // Extract constants for cleaner code
 const {
@@ -1695,9 +1697,12 @@ function OverlayPage() {
           )}
         </div>
 
-        {/* Bottom Right: To-Do List and/or Poll */}
-        {(settings.showTodoList && visibleTodos.length > 0) || settings.pollState ? (
-          <div className="bottom-right">
+        {/* Bottom Right: To-Do, Poll, Leaderboard, Alerts */}
+        {(settings.showTodoList && visibleTodos.length > 0) ||
+        settings.pollState ||
+        getLeaderboardDisplayMode(settings) !== 'hidden' ||
+        settings.showOverlayAlerts !== false ? (
+          <BottomRightPanel settings={settings} visibleTodos={visibleTodos}>
             {settings.showTodoList && visibleTodos.length > 0 && (
               <div className="overlay-box todo-list-box">
                 {visibleTodos
@@ -1743,6 +1748,7 @@ function OverlayPage() {
                         const optionsToShow = showWinner
                           ? [...poll.options].sort((a, b) => b.votes - a.votes).filter((o) => winnerLabels.has(o.label))
                           : [...poll.options].sort((a, b) => b.votes - a.votes);
+                        const animPhase = Date.now() % 5000; // Sync shimmer across all winner bars (5s = animation duration)
                         return optionsToShow.map((opt) => {
                           const pct = showWinner
                             ? 100
@@ -1758,7 +1764,13 @@ function OverlayPage() {
                               className={`poll-option ${showWinner ? 'poll-option-winner' : ''}`}
                             >
                               <div className="poll-option-bar">
-                                <div className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`} style={{ width: `${pct}%` }} />
+                                <div
+                                  className={`poll-option-fill ${isLeading ? 'poll-option-fill-winner' : ''}`}
+                                  style={{
+                                    width: `${pct}%`,
+                                    ...(isLeading && { animationDelay: `-${animPhase}ms` }),
+                                  }}
+                                />
                                 <div className="poll-option-text">
                                   <span className="poll-option-label">
                                     {showWinner ? `Winner - ${displayLabel} (${voteStr})` : displayLabel}
@@ -1775,7 +1787,7 @@ function OverlayPage() {
               }
               return null;
             })()}
-          </div>
+          </BottomRightPanel>
         ) : null}
       </div>
     </ErrorBoundary>

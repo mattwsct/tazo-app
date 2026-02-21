@@ -14,7 +14,9 @@ import type { KickMessageTemplates, KickMessageEnabled, KickMessageTemplateEnabl
 import { formatLocationForStreamTitle, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
+import { getLeaderboardDisplayMode } from '@/utils/overlay-utils';
 import '@/styles/admin.css';
+import CollapsibleSection, { collapseAllSections } from '@/components/CollapsibleSection';
 
 function formatLocationAge(ms: number): string {
   const seconds = Math.floor((Date.now() - ms) / 1000);
@@ -54,6 +56,8 @@ export default function AdminPage() {
   // Custom location input state (for debouncing)
   const [customLocationInput, setCustomLocationInput] = useState('');
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [leaderboardExcludedBotsInput, setLeaderboardExcludedBotsInput] = useState('');
+  const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
@@ -718,6 +722,25 @@ export default function AdminPage() {
     setCustomLocationInput(settings.customLocation || '');
   }, [settings.customLocation]);
 
+  // Debounced leaderboard excluded bots (saves after 1s of no typing)
+  const handleLeaderboardExcludedBotsChange = useCallback((value: string) => {
+    setLeaderboardExcludedBotsInput(value);
+    if (leaderboardExcludedBotsTimeoutRef.current) clearTimeout(leaderboardExcludedBotsTimeoutRef.current);
+    leaderboardExcludedBotsTimeoutRef.current = setTimeout(() => {
+      handleSettingsChange({ leaderboardExcludedBots: value });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  useEffect(() => {
+    setLeaderboardExcludedBotsInput(settings.leaderboardExcludedBots ?? '');
+  }, [settings.leaderboardExcludedBots]);
+
+  useEffect(() => {
+    return () => {
+      if (leaderboardExcludedBotsTimeoutRef.current) clearTimeout(leaderboardExcludedBotsTimeoutRef.current);
+    };
+  }, []);
+
   // Manual location update (browser geolocation, clear)
   const [locationFromBrowserLoading, setLocationFromBrowserLoading] = useState(false);
 
@@ -831,11 +854,16 @@ export default function AdminPage() {
       {/* Main Content — single scrollable page with shared and tab-specific sections */}
       <main className="main-content">
         <div className="settings-container">
+          <div className="collapse-all-row">
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => collapseAllSections(true)}>
+              Collapse all
+            </button>
+            <button type="button" className="btn btn-secondary btn-small" onClick={() => collapseAllSections(false)}>
+              Expand all
+            </button>
+          </div>
           {/* Location & map — at top for overlay display, stored location, map */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>📍 Location & map</h2>
-            </div>
+          <CollapsibleSection id="location-map" title="📍 Location & map">
             <div className="setting-group">
               {/* Current location — prominent at top for quick visibility */}
               <div style={{
@@ -1001,17 +1029,124 @@ export default function AdminPage() {
                 </select>
               </div>
             </div>
-          </section>
+          </CollapsibleSection>
+
+          {/* Connection — connect to Kick first, before stream title / poll / messages */}
+          <CollapsibleSection id="connection" title="🔗 Connection">
+                <div className="setting-group">
+                  {kickStatus?.connected ? (
+                  <div className="kick-status connected">
+                    <span className="status-dot">🟢</span>
+                    <span>Connected to kick.com/tazo</span>
+                    {kickStatus.subscriptions && kickStatus.subscriptions.length > 0 && (
+                      <span className="subscription-count">
+                        ({kickStatus.subscriptions.length} event subscriptions)
+                      </span>
+                    )}
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          if (!confirm('Disconnect Kick? Event subscriptions and chat responses will stop.')) return;
+                          try {
+                            const r = await fetch('/api/kick-oauth/disconnect', {
+                              method: 'POST',
+                              credentials: 'include',
+                            });
+                            const d = await r.json();
+                            if (r.ok) {
+                              setKickStatus({ connected: false });
+                              setToast({ type: 'saved', message: 'Disconnected' });
+                            } else {
+                              setToast({ type: 'error', message: d.error ?? 'Failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Failed to disconnect' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={handleKickOAuthConnect}
+                      >
+                        🔄 Reconnect
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          try {
+                            const r = await fetch('/api/kick-oauth/subscribe', {
+                              method: 'POST',
+                              credentials: 'include',
+                            });
+                            const data = await r.json();
+                            if (r.ok) {
+                              setToast({ type: 'saved', message: 'Re-subscribed!' });
+                              fetch('/api/kick-oauth/status', { credentials: 'include' })
+                                .then((res) => res.json())
+                                .then(setKickStatus);
+                            } else {
+                              setToast({ type: 'error', message: data.error ?? 'Failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Re-subscribe failed' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        📡 Re-subscribe
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        title="Reset leaderboard, steps, distance, wellness sessions to simulate stream start"
+                        onClick={async () => {
+                          if (!confirm('Reset stream session? This will clear the leaderboard, steps since stream start, distance, handwashing, flights, and wellness milestones. Use if auto-reset on stream start did not run.')) return;
+                          try {
+                            const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
+                            const data = await r.json();
+                            if (r.ok) {
+                              setToast({ type: 'saved', message: 'Stream session reset' });
+                            } else {
+                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Reset failed' });
+                          }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        🔄 Reset session
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="kick-status disconnected">
+                    <span className="status-dot">🔴</span>
+                    <span>Not connected</span>
+                    <button
+                      type="button"
+                      className="btn btn-primary connect-kick-btn"
+                      onClick={handleKickOAuthConnect}
+                    >
+                      Connect Kick
+                    </button>
+                  </div>
+                )}
+              </div>
+          </CollapsibleSection>
 
           {/* Stream title & chat */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>📺 Stream title & chat</h2>
-            </div>
+          <CollapsibleSection id="stream-title" title="📺 Stream title & chat">
             <div className="setting-group">
               <h3 className="subsection-label">Stream title</h3>
               <p className="group-label group-description">
-                Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> in Connection section below.
+                Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Reconnect</strong> in Connection section above.
               </p>
             <div className="form-stack">
               <div>
@@ -1350,15 +1485,11 @@ export default function AdminPage() {
               </div>
             </div>
             </div>
-          </section>
+          </CollapsibleSection>
 
           {/* === OVERLAY === */}
           {/* Weather, altitude & speed — overlay data displays (shared Always/Auto/Hidden pattern) */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>🌤️ Weather, altitude & speed</h2>
-            </div>
-            
+          <CollapsibleSection id="weather-altitude-speed" title="🌤️ Weather, altitude & speed">
             <div className="setting-group">
               <div className="checkbox-group" style={{ marginBottom: '12px' }}>
                 <label className="checkbox-label">
@@ -1410,13 +1541,10 @@ export default function AdminPage() {
                 <option value="hidden">🚫 Hidden</option>
               </select>
             </div>
-          </section>
+          </CollapsibleSection>
 
           {/* Steps & distance (Health Auto Export) */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>👟 Steps & distance</h2>
-            </div>
+          <CollapsibleSection id="steps-distance" title="👟 Steps & distance">
             <div className="setting-group">
               <label className="checkbox-label">
                 <input
@@ -1446,25 +1574,21 @@ export default function AdminPage() {
                 <span className="checkbox-text">Show miles (km + mi)</span>
               </label>
             </div>
-          </section>
+          </CollapsibleSection>
 
           {/* To-Do List Section */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>✅ To-Do List</h2>
-              <div className="checkbox-group" style={{ marginTop: '8px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showTodoList ?? false}
-                    onChange={(e) => handleSettingsChange({ showTodoList: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Show on overlay</span>
-                </label>
-              </div>
+          <CollapsibleSection id="todo-list" title="✅ To-Do List">
+            <div className="checkbox-group" style={{ marginBottom: '16px' }}>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={settings.showTodoList ?? false}
+                  onChange={(e) => handleSettingsChange({ showTodoList: e.target.checked })}
+                  className="checkbox-input"
+                />
+                <span className="checkbox-text">Show on overlay</span>
+              </label>
             </div>
-            
             <div className="setting-group">
               <div className="todo-input-group">
                 <input
@@ -1620,104 +1744,136 @@ export default function AdminPage() {
                 </>
               )}
             </div>
-          </section>
+          </CollapsibleSection>
 
-          {/* === KICK === */}
-          <section className="settings-section">
-            <div className="section-header">
-              <h2>🔗 Connection</h2>
-            </div>
-                <div className="setting-group">
-                  {kickStatus?.connected ? (
-                  <div className="kick-status connected">
-                    <span className="status-dot">🟢</span>
-                    <span>Connected to kick.com/tazo</span>
-                    {kickStatus.subscriptions && kickStatus.subscriptions.length > 0 && (
-                      <span className="subscription-count">
-                        ({kickStatus.subscriptions.length} event subscriptions)
-                      </span>
-                    )}
-                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          if (!confirm('Disconnect Kick? Event subscriptions and chat responses will stop.')) return;
-                          try {
-                            const r = await fetch('/api/kick-oauth/disconnect', {
-                              method: 'POST',
-                              credentials: 'include',
-                            });
-                            const d = await r.json();
-                            if (r.ok) {
-                              setKickStatus({ connected: false });
-                              setToast({ type: 'saved', message: 'Disconnected' });
-                            } else {
-                              setToast({ type: 'error', message: d.error ?? 'Failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Failed to disconnect' });
-                          }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        Disconnect
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={handleKickOAuthConnect}
-                      >
-                        🔄 Reconnect
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          try {
-                            const r = await fetch('/api/kick-oauth/subscribe', {
-                              method: 'POST',
-                              credentials: 'include',
-                            });
-                            const data = await r.json();
-                            if (r.ok) {
-                              setToast({ type: 'saved', message: 'Re-subscribed!' });
-                              fetch('/api/kick-oauth/status', { credentials: 'include' })
-                                .then((res) => res.json())
-                                .then(setKickStatus);
-                            } else {
-                              setToast({ type: 'error', message: data.error ?? 'Failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Re-subscribe failed' });
-                          }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        📡 Re-subscribe
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="kick-status disconnected">
-                    <span className="status-dot">🔴</span>
-                    <span>Not connected</span>
-                    <button
-                      type="button"
-                      className="btn btn-primary connect-kick-btn"
-                      onClick={handleKickOAuthConnect}
+          {/* Leaderboard & Overlay Alerts */}
+          <CollapsibleSection
+            id="leaderboard-alerts"
+            title="📊 Leaderboard & Alerts"
+            description="Bottom-right overlay: leaderboard (when poll inactive) and alerts for subs, gifts, kicks."
+          >
+            <div className="setting-group">
+              <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
+                <label>Leaderboard display</label>
+                <select
+                  className="admin-select-big"
+                  value={getLeaderboardDisplayMode(settings)}
+                  onChange={(e) => handleSettingsChange({ leaderboardDisplay: e.target.value as 'always' | 'auto' | 'hidden' })}
+                >
+                  <option value="always">👁️ Always (when poll inactive)</option>
+                  <option value="auto">🔄 Auto (every N min for M sec)</option>
+                  <option value="hidden">🚫 Hidden</option>
+                </select>
+              </div>
+              {getLeaderboardDisplayMode(settings) !== 'hidden' && (
+                <>
+                  <div className="admin-select-wrap">
+                    <label>Top N users</label>
+                    <select
+                      className="admin-select-big"
+                      value={settings.leaderboardTopN ?? 5}
+                      onChange={(e) => handleSettingsChange({ leaderboardTopN: Number(e.target.value) })}
                     >
-                      Connect Kick
-                    </button>
+                      {[3, 4, 5, 7, 10].map((n) => (
+                        <option key={n} value={n}>Top {n}</option>
+                      ))}
+                    </select>
                   </div>
-                )}
-                </div>
-              </section>
+                  <div className="admin-select-wrap">
+                    <label>Show every (minutes)</label>
+                    <select
+                      className="admin-select-big"
+                      value={settings.leaderboardIntervalMin ?? 10}
+                      onChange={(e) => handleSettingsChange({ leaderboardIntervalMin: Number(e.target.value) })}
+                    >
+                      {[5, 10, 15, 20, 30].map((n) => (
+                        <option key={n} value={n}>{n} min</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="admin-select-wrap">
+                    <label>Display duration (seconds)</label>
+                    <select
+                      className="admin-select-big"
+                      value={settings.leaderboardDurationSec ?? 30}
+                      onChange={(e) => handleSettingsChange({ leaderboardDurationSec: Number(e.target.value) })}
+                    >
+                      {[15, 20, 30, 45, 60].map((n) => (
+                        <option key={n} value={n}>{n}s</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '12px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.leaderboardExcludeBroadcaster !== false}
+                        onChange={(e) => handleSettingsChange({ leaderboardExcludeBroadcaster: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Exclude broadcaster from leaderboard (your messages won&apos;t earn points)</span>
+                    </label>
+                  </div>
+                  <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
+                    <label>Bots to exclude from leaderboard (comma or newline separated)</label>
+                    <textarea
+                      className="text-input"
+                      value={leaderboardExcludedBotsInput}
+                      onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
+                      placeholder="e.g. nightbot, moobot, streamelements"
+                      rows={2}
+                      style={{ resize: 'vertical', minHeight: 50 }}
+                    />
+                    <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
+                      Usernames that should not appear on or earn leaderboard points
+                    </p>
+                  </div>
+                </>
+              )}
+              <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showOverlayAlerts ?? true}
+                    onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
+                </label>
+              </div>
+              <div className="button-row" style={{ marginTop: '12px' }}>
+                <span className="group-label" style={{ marginRight: '8px' }}>Test alert:</span>
+                {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      try {
+                        const res = await authenticatedFetch('/api/overlay-alerts/test', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type }),
+                        });
+                        if (res.ok) setToast({ type: 'saved', message: `Test ${type} alert sent` });
+                        else setToast({ type: 'error', message: 'Test failed' });
+                      } catch {
+                        setToast({ type: 'error', message: 'Test failed' });
+                      }
+                    }}
+                  >
+                    {type === 'sub' && '🎉 Sub'}
+                    {type === 'resub' && '💪 Resub'}
+                    {type === 'giftSub' && '🎁 Gift'}
+                    {type === 'kicks' && '💰 Kicks'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CollapsibleSection>
 
-              <section className="settings-section">
-                <div className="section-header">
-                  <h2>🗳️ Poll</h2>
-                </div>
-                <div className="setting-group">
+          <CollapsibleSection id="poll" title="🗳️ Poll">
+            <div className="setting-group">
                   <p className="group-label group-description group-description-sm">
                     Mods/broadcaster start polls with <code>!poll Question? Option1, Option2</code> or <code>!poll Food? Pizza burger chips</code> (space-separated when no commas). No options = Yes/No. Vote by typing option text (e.g. pizza, yes). Winner posts in chat and overlay. Mods and broadcaster can use <code>!endpoll</code> to end the current poll early.
                   </p>
@@ -1981,14 +2137,10 @@ export default function AdminPage() {
                     )}
                   </div>
                 </div>
-              </section>
+          </CollapsibleSection>
 
-              {/* Message templates */}
-              <section className="settings-section">
-                <div className="section-header">
-                  <h2>📋 Message templates</h2>
-                </div>
-                <div className="setting-group">
+          <CollapsibleSection id="message-templates" title="📋 Message templates">
+            <div className="setting-group">
                   <p className="group-label group-description">
                     Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
                   </p>
@@ -2069,7 +2221,7 @@ export default function AdminPage() {
                   </button>
                 </div>
                 </div>
-              </section>
+          </CollapsibleSection>
         </div>
       </main>
 

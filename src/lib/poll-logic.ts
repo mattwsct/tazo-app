@@ -8,6 +8,15 @@ import { containsBlockedContent } from '@/lib/poll-content-filter';
 const YES_ALIASES = new Set(['yes', 'y']);
 const NO_ALIASES = new Set(['no', 'n']);
 
+/** Normalize string for vote matching: lowercase + strip accents (café → cafe) so US/UK keyboards work. */
+function normalizeForVote(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
 /** Single-word options to filter out — conjunctions etc. that slip in from "Yes or no" or "Pizza and burgers". */
 const BANNED_OPTION_WORDS = new Set([
   'and', 'or', 'but', 'the', 'a', 'an', 'to', 'for', 'of', 'in', 'on', 'at',
@@ -124,9 +133,10 @@ export function parseVote(
     }
   }
 
-  // Exact match (case-insensitive) to option label
+  // Match option label (case-insensitive, accents normalized: café matches "cafe")
+  const userNorm = normalizeForVote(clean);
   for (let i = 0; i < options.length; i++) {
-    if (options[i].label.toLowerCase() === clean) return { optionIndex: i };
+    if (normalizeForVote(options[i].label) === userNorm) return { optionIndex: i };
   }
   return null;
 }

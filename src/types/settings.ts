@@ -38,6 +38,20 @@ export interface OverlaySettings {
   showTodoList?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
   pollState?: PollState | null;
+  /** Leaderboard display: always (when poll inactive), auto (every N min for M sec), hidden. */
+  leaderboardDisplay?: 'always' | 'auto' | 'hidden';
+  leaderboardTopN?: number;
+  leaderboardIntervalMin?: number;
+  leaderboardDurationSec?: number;
+  /** Exclude broadcaster from earning leaderboard points (default true). */
+  leaderboardExcludeBroadcaster?: boolean;
+  /** Comma or newline-separated usernames to exclude from leaderboard (e.g. bots). */
+  leaderboardExcludedBots?: string;
+  showOverlayAlerts?: boolean;
+  /** Runtime: top leaderboard entries (from get-settings). */
+  leaderboardTop?: { username: string; points: number }[];
+  /** Runtime: recent overlay alerts (from get-settings). */
+  overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
 }
 
 // Default settings (single source of truth)
@@ -60,11 +74,18 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showDistanceMiles: true,
   todos: [],
   showTodoList: false,
+  leaderboardDisplay: 'auto',
+  leaderboardTopN: 5,
+  leaderboardIntervalMin: 10,
+  leaderboardDurationSec: 30,
+  leaderboardExcludeBroadcaster: true,
+  leaderboardExcludedBots: '',
+  showOverlayAlerts: true,
 };
 
 // Valid settings schema for validation
-// Note: 'todos' is handled separately; 'pollState' is runtime from SSE, not persisted
-export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'pollState'>, 'boolean' | 'string' | 'number'> = {
+// Note: 'todos' is handled separately; 'pollState', 'leaderboardTop', 'overlayAlerts' are runtime, not persisted
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'pollState' | 'leaderboardTop' | 'overlayAlerts'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   broadenLocationWhenStale: 'boolean',
   locationStaleMaxFallback: 'string',
@@ -81,7 +102,14 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'todos' | 'p
   showSteps: 'boolean',
   showDistance: 'boolean',
   showDistanceMiles: 'boolean',
-  showTodoList: 'boolean'
+  showTodoList: 'boolean',
+  leaderboardDisplay: 'string',
+  leaderboardTopN: 'number',
+  leaderboardIntervalMin: 'number',
+  leaderboardDurationSec: 'number',
+  leaderboardExcludeBroadcaster: 'boolean',
+  leaderboardExcludedBots: 'string',
+  showOverlayAlerts: 'boolean',
 };
 
 // SSE message types

@@ -367,7 +367,7 @@ export async function GET(request: NextRequest) {
       'distanceKm',
       '🚶',
       'km',
-      (n) => (n % 1 === 0 ? String(n) : n.toFixed(1))
+      (n) => String(Math.round(n))
     );
     await checkAndSend(
       storedAlert?.chatBroadcastWellnessFlights === true,

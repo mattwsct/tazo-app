@@ -113,13 +113,19 @@ export function extractAltitude(payload: RTIRLPayload): number | null {
   return null;
 }
 
+const HASH_EXCLUDE = new Set(['leaderboardTop', 'overlayAlerts', 'pollState']);
+
 /**
  * Create a stable hash from settings (sorts keys for consistency)
+ * Excludes runtime-only fields that change frequently
  */
 export function createSettingsHash(settings: OverlaySettings): string {
-  const sorted = Object.keys(settings).sort().reduce((acc, key) => {
-    acc[key] = settings[key as keyof OverlaySettings];
-    return acc;
-  }, {} as Record<string, unknown>);
+  const sorted = Object.keys(settings)
+    .filter((k) => !HASH_EXCLUDE.has(k))
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = settings[key as keyof OverlaySettings];
+      return acc;
+    }, {} as Record<string, unknown>);
   return JSON.stringify(sorted);
 }

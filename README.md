@@ -338,7 +338,7 @@ The overlay automatically prevents caching issues:
 
 **Vercel KV limits** — Free tier is ~30,000 commands/day. The overlay uses immediate broadcast on write (no extra KV reads) and polling fallback to stay under limits.
 
-**Faster updates without higher cost** — The app uses **broadcast-on-write**: when you save settings or poll state changes, the server immediately pushes to all connected SSE overlays. No additional KV reads. Poll state changes (votes, winner) also trigger instant broadcast. For even faster poll-end timing (winner in chat as soon as poll ends with zero delay), consider **Upstash QStash** to schedule an HTTP call at exactly poll end time — eliminates reliance on overlay countdown or 1-min cron. Upstash KV remains sufficient for most use cases; no need to switch storage.
+**Faster updates without higher cost** — The app uses **broadcast-on-write**: when you save settings, poll state changes, or alerts/leaderboard update (subs, gifts, kicks, follows), the server immediately pushes to all connected SSE overlays. No additional KV reads. Alerts and leaderboard now use SSE for instant delivery instead of waiting for the 2s poll. For even faster poll-end timing (winner in chat as soon as poll ends with zero delay), consider **Upstash QStash** to schedule an HTTP call at exactly poll end time — eliminates reliance on overlay countdown or 1-min cron. Upstash KV remains sufficient for most use cases; no need to switch storage.
 
 **Queued poll timing** — When a poll ends and a winner is announced, the next queued poll starts immediately. The overlay calls poll-end-trigger when its countdown reaches zero (winner in chat within seconds). The poll-cleanup cron runs every minute as backup (ends overdue polls if overlay wasn't open). Winner displays for 10s (configurable). Poll state changes broadcast instantly to overlays. Kick chat webhooks read poll state per message; a busy chat adds reads. One overlay + typical Kick usage fits free tier. Multiple overlays or very active chat may need a paid KV plan.
 
@@ -763,6 +763,12 @@ Edit templates in the admin panel **Message templates** section. Use the toggles
 ### Chat commands
 
 Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. **Wellness commands** (from Health Auto Export): `!steps`, `!distance` (since stream start), `!stand`, `!calories`, `!handwashing`, `!weight`, `!wellness` (summary). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
+
+**Leaderboard commands**: `!points` or `!pts` returns your points for the current stream. `!leaderboard` or `!lb` or `!top` returns the top 5 users. Points reset when the stream starts. **Point weights**: chat 1 (5s cooldown), first chatter 25, poll vote 2, create poll 10, follow 5, new sub 15, resub 10, gift sub 12 each, kicks 10 pts per 100 kicks ($1).
+
+### Leaderboard & overlay alerts
+
+The bottom-right overlay area (when poll is inactive) shows a **leaderboard** (top 3–5 users) on a schedule (e.g. every 10 min for 30 s) and **overlay alerts** for subs, gifts, and kicks. Admin **Leaderboard & Alerts** section: toggles for leaderboard and overlay alerts, top N (3–10), interval (5–30 min), display duration (15–60 s), and **Test alert** buttons (Sub, Resub, Gift, Kicks) to preview alerts on the overlay. Uses the same bottom-right space as the poll and todo list. Not expensive: Vercel KV for per-stream points and recent alerts; no extra paid APIs.
 
 ### Chat poll
 

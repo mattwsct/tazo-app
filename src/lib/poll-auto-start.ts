@@ -59,6 +59,48 @@ const MUSIC_OPTIONS = ['Chill', 'Hype', 'Lo-fi', 'Metal', 'Silence'];
 const DRINK_POLL_QUESTIONS = ["What to drink?", "Drink vote?", "Beverage of choice?"] as const;
 const DRINK_OPTIONS = ['Water', 'Coffee', 'Energy drink', 'Soda', 'Tea'];
 
+const VIDEO_GAME_CHARACTER_QUESTIONS = ["Best video game character?", "GOAT game character?", "Favorite game character ever?"] as const;
+const VIDEO_GAME_CHARACTER_OPTIONS = ['Mario', 'Link', 'Sonic', 'Pikachu', 'Master Chief', 'Lara Croft', 'Kratos', 'Samus', 'Kirby', 'Donkey Kong', 'Pac-Man', 'Crash', 'Spyro', 'Cloud', 'Solid Snake', 'Nathan Drake', 'Ellie', 'Arthur Morgan'];
+
+const VIDEO_GAME_FRANCHISE_QUESTIONS = ["Best video game franchise?", "GOAT game series?", "Favorite game franchise?"] as const;
+const VIDEO_GAME_FRANCHISE_OPTIONS = ['Zelda', 'Mario', 'Pokemon', 'Halo', 'Final Fantasy', 'Minecraft', 'GTA', 'Elden Ring', 'Dark Souls', 'Metal Gear', 'Uncharted', 'The Last of Us', 'Red Dead', 'Assassins Creed', 'Resident Evil', 'God of War'];
+
+const SUPERHERO_QUESTIONS = ["Best superhero?", "GOAT superhero?", "Favorite superhero ever?"] as const;
+const SUPERHERO_OPTIONS = ['Batman', 'Superman', 'Spider-Man', 'Iron Man', 'Wonder Woman', 'Thor', 'Captain America', 'Wolverine', 'Deadpool', 'Black Panther', 'Hulk', 'Flash', 'Green Lantern', 'Aquaman', 'Doctor Strange'];
+
+const CARTOON_QUESTIONS = ["Best cartoon?", "Favorite cartoon ever?", "GOAT cartoon show?"] as const;
+const CARTOON_OPTIONS = ['SpongeBob', 'Simpsons', 'Avatar', 'Adventure Time', 'Rick and Morty', 'Gravity Falls', 'Regular Show', 'Courage', 'Dragon Ball', 'One Piece', 'Naruto', 'Cowboy Bebop', 'Arcane', 'Invincible'];
+
+const MOVIE_GENRE_QUESTIONS = ["Best movie genre?", "Movie night genre?", "Favorite film genre?"] as const;
+const MOVIE_GENRE_OPTIONS = ['Action', 'Comedy', 'Horror', 'Sci-fi', 'Romance', 'Thriller', 'Animation', 'Documentary'];
+
+const PIZZA_TOPPING_QUESTIONS = ["Best pizza topping?", "Pizza vote?", "Favorite pizza topping?"] as const;
+const PIZZA_TOPPING_OPTIONS = ['Pepperoni', 'Mushrooms', 'Olives', 'Ham', 'Pineapple', 'Sausage', 'Bacon', 'Extra cheese', 'Onions', 'Bell peppers', 'Jalapeños', 'BBQ chicken'];
+
+const PET_QUESTIONS = ["Best pet?", "Favorite pet?", "Pet of choice?"] as const;
+const PET_OPTIONS = ['Dog', 'Cat', 'Fish', 'Bird', 'Hamster', 'Snake', 'Lizard', 'Rabbit'];
+
+const SEASON_QUESTIONS = ["Best season?", "Favorite season?", "Season vibe?"] as const;
+const SEASON_OPTIONS = ['Spring', 'Summer', 'Fall', 'Winter'];
+
+const CONSOLE_QUESTIONS = ["Best gaming console?", "Favorite console?", "Console of choice?"] as const;
+const CONSOLE_OPTIONS = ['PlayStation', 'Xbox', 'Nintendo Switch', 'PC', 'Steam Deck'];
+
+const ANIME_CHARACTER_QUESTIONS = ["Best anime character?", "Favorite anime character?", "GOAT anime character?"] as const;
+const ANIME_CHARACTER_OPTIONS = ['Goku', 'Luffy', 'Naruto', 'Edward', 'Spike', 'Light', 'L', 'Eren', 'Levi', 'Saitama', 'Gon', 'Midoriya', 'Tanjiro'];
+
+const STREAMING_SERVICE_QUESTIONS = ["Best streaming service?", "Where to watch?", "Streaming pick?"] as const;
+const STREAMING_SERVICE_OPTIONS = ['Netflix', 'Disney+', 'Prime', 'HBO Max', 'Crunchyroll', 'YouTube'];
+
+const FANTASY_CREATURE_QUESTIONS = ["Best fantasy creature?", "Favorite mythical creature?", "Fantasy creature pick?"] as const;
+const FANTASY_CREATURE_OPTIONS = ['Dragon', 'Phoenix', 'Unicorn', 'Griffin', 'Hydra', 'Pegasus', 'Mermaid', 'Vampire', 'Werewolf'];
+
+const BREAKFAST_QUESTIONS = ["Best breakfast food?", "Breakfast vote?", "Favorite morning food?"] as const;
+const BREAKFAST_OPTIONS = ['Eggs', 'Pancakes', 'Waffles', 'Bacon', 'Cereal', 'Toast', 'Oatmeal', 'French toast', 'Bagel'];
+
+const SPORT_QUESTIONS = ["Best sport?", "Favorite sport to watch?", "Sport of choice?"] as const;
+const SPORT_OPTIONS = ['Soccer', 'Basketball', 'Football', 'Baseball', 'Hockey', 'Tennis', 'Golf', 'Esports'];
+
 /**
  * Build a random mood poll (no location needed). Five random simple mood words.
  * Takes at least one from each category (positive, neutral, negative).
@@ -127,9 +169,31 @@ function buildSimplePoll(
   };
 }
 
+/** All simple poll types (question sets + option sets). Picked randomly for variety. */
+const SIMPLE_POLL_TYPES: Array<{ questions: readonly string[]; options: string[] }> = [
+  { questions: ENERGY_POLL_QUESTIONS, options: ENERGY_OPTIONS },
+  { questions: SNACK_POLL_QUESTIONS, options: SNACK_OPTIONS },
+  { questions: MUSIC_POLL_QUESTIONS, options: MUSIC_OPTIONS },
+  { questions: DRINK_POLL_QUESTIONS, options: DRINK_OPTIONS },
+  { questions: VIDEO_GAME_CHARACTER_QUESTIONS, options: VIDEO_GAME_CHARACTER_OPTIONS },
+  { questions: VIDEO_GAME_FRANCHISE_QUESTIONS, options: VIDEO_GAME_FRANCHISE_OPTIONS },
+  { questions: SUPERHERO_QUESTIONS, options: SUPERHERO_OPTIONS },
+  { questions: CARTOON_QUESTIONS, options: CARTOON_OPTIONS },
+  { questions: MOVIE_GENRE_QUESTIONS, options: MOVIE_GENRE_OPTIONS },
+  { questions: PIZZA_TOPPING_QUESTIONS, options: PIZZA_TOPPING_OPTIONS },
+  { questions: PET_QUESTIONS, options: PET_OPTIONS },
+  { questions: SEASON_QUESTIONS, options: SEASON_OPTIONS },
+  { questions: CONSOLE_QUESTIONS, options: CONSOLE_OPTIONS },
+  { questions: ANIME_CHARACTER_QUESTIONS, options: ANIME_CHARACTER_OPTIONS },
+  { questions: STREAMING_SERVICE_QUESTIONS, options: STREAMING_SERVICE_OPTIONS },
+  { questions: FANTASY_CREATURE_QUESTIONS, options: FANTASY_CREATURE_OPTIONS },
+  { questions: BREAKFAST_QUESTIONS, options: BREAKFAST_OPTIONS },
+  { questions: SPORT_QUESTIONS, options: SPORT_OPTIONS },
+];
+
 /**
- * Build a random poll (mood, food, hot take, snack, music, drink). Mood always works; food needs location.
- * Weighted mix for variety.
+ * Build a random poll (mood, food, video games, superheroes, cartoons, snacks, etc.).
+ * Mood and location-food get higher weight; others distributed evenly.
  */
 export async function buildRandomPoll(): Promise<{
   question: string;
@@ -139,25 +203,16 @@ export async function buildRandomPoll(): Promise<{
   const hasLocation = !!persistent?.location?.countryCode;
   const roll = Math.random();
 
-  if (hasLocation && roll < 0.25) {
+  if (hasLocation && roll < 0.2) {
     return buildRandomLocationPoll();
   }
-  if (roll < 0.45) {
+  if (roll < 0.35) {
     return buildRandomMoodPoll();
   }
-  if (roll < 0.6) {
-    return buildSimplePoll(ENERGY_POLL_QUESTIONS, ENERGY_OPTIONS);
-  }
-  if (roll < 0.75) {
-    return buildSimplePoll(SNACK_POLL_QUESTIONS, SNACK_OPTIONS);
-  }
-  if (roll < 0.85) {
-    return buildSimplePoll(MUSIC_POLL_QUESTIONS, MUSIC_OPTIONS);
-  }
+  const simple = SIMPLE_POLL_TYPES[Math.floor(Math.random() * SIMPLE_POLL_TYPES.length)]!;
   if (roll < 0.95) {
-    return buildSimplePoll(DRINK_POLL_QUESTIONS, DRINK_OPTIONS);
+    return buildSimplePoll(simple.questions, simple.options);
   }
-  // Fallback: mood or food
   if (hasLocation) {
     const food = await buildRandomLocationPoll();
     if (food) return food;

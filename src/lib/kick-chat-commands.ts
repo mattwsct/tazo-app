@@ -3,6 +3,7 @@
  */
 
 import { getHeartrateStats } from '@/utils/stats-storage';
+import { getUserPoints, getLeaderboardTop } from '@/utils/leaderboard-storage';
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
@@ -17,6 +18,8 @@ import {
 
 export const KICK_CHAT_COMMANDS = [
   'ping',
+  'points',
+  'leaderboard',
   'heartrate',
   'hr',
   'steps',
@@ -35,6 +38,8 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand } 
   if (!trimmed.startsWith('!')) return null;
   const cmd = trimmed.slice(1).trim().split(/\s/)[0]?.toLowerCase();
   if (cmd === 'ping') return { cmd: 'ping' };
+  if (cmd === 'points' || cmd === 'pts') return { cmd: 'points' };
+  if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard' };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
   if (cmd === 'steps') return { cmd: 'steps' };
   if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
@@ -47,8 +52,20 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand } 
   return null;
 }
 
-export async function handleKickChatCommand(cmd: KickChatCommand): Promise<string | null> {
+export async function handleKickChatCommand(cmd: KickChatCommand, senderUsername?: string): Promise<string | null> {
   if (cmd === 'ping') return '🏓 Pong!';
+  if (cmd === 'points') {
+    const user = senderUsername?.trim();
+    if (!user) return null;
+    const pts = await getUserPoints(user);
+    return `📊 You have ${pts} points this stream. Chat, vote in polls, sub, gift, or tip to earn more!`;
+  }
+  if (cmd === 'leaderboard') {
+    const top = await getLeaderboardTop(5);
+    if (top.length === 0) return '📊 No points yet this stream. Chat, vote in polls, sub, gift, or tip to earn!';
+    const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.points} pts`).join(' | ');
+    return `📊 Top: ${lines}`;
+  }
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();
     if (stats.hasData) {

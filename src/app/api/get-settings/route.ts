@@ -3,8 +3,10 @@ import { kv } from '@vercel/kv';
 import { logKVUsage } from '@/lib/api-auth';
 import { validateEnvironment } from '@/lib/env-validator';
 import { OverlayLogger } from '@/lib/logger';
-import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
+import { mergeSettingsWithDefaults, getLeaderboardDisplayMode } from '@/utils/overlay-utils';
 import { POLL_STATE_KEY, type PollState } from '@/types/poll';
+import { getLeaderboardTop } from '@/utils/leaderboard-storage';
+import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +18,16 @@ async function handleGET() {
       POLL_STATE_KEY
     );
     const pollState: PollState | null = rawPollState ?? null;
-    const combinedSettings = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
+    const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
+
+    // Fetch leaderboard & alerts when enabled
+    const ld = getLeaderboardDisplayMode(merged);
+    const [leaderboardTop, overlayAlerts] = await Promise.all([
+      ld !== 'hidden' ? getLeaderboardTop(merged.leaderboardTopN ?? 5) : [],
+      merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
+    ]);
+
+    const combinedSettings = { ...merged, leaderboardTop, overlayAlerts };
 
     // Log at most once per 30s in dev to avoid log spam (get-settings is polled frequently)
     if (process.env.NODE_ENV === 'development') {

@@ -52,8 +52,8 @@ export default function StepCounter({ settings }: StepCounterProps) {
 
   const distanceFormatted = hasDistance
     ? showMiles
-      ? `${distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)} km (${kmToMiles(distance!).toFixed(1)} mi)`
-      : `${distance! >= 1 ? distance!.toFixed(1) : distance!.toFixed(2)} km`
+      ? `${Math.round(distance!)} km (${Math.round(kmToMiles(distance!))} mi)`
+      : `${Math.round(distance!)} km`
     : '';
 
   return (
