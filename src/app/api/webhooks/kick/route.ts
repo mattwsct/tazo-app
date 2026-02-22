@@ -8,6 +8,7 @@ import {
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { handleChatPoll } from '@/lib/poll-webhook-handler';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
+import { handleAddChipsCommand } from '@/lib/addchips-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
@@ -193,6 +194,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
+    const addchipsResult = await handleAddChipsCommand(content, sender, payload);
+    if (addchipsResult.handled) {
+      if (addchipsResult.reply) {
+        const accessToken = await getValidAccessToken();
+        if (accessToken) {
+          const messageId = (payload.id ?? payload.message_id) as string | undefined;
+          try {
+            await sendKickChatMessage(accessToken, addchipsResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
+          } catch (err) {
+            console.error('[Kick webhook] !addchips reply failed:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
     const parsed = parseKickChatMessage(content);
     if (!parsed) return NextResponse.json({ received: true }, { status: 200 });
     const response = await handleKickChatCommand(parsed, sender);
@@ -264,7 +281,17 @@ export async function POST(request: NextRequest) {
       if (configuredTitle && rewardTitle.toLowerCase() === configuredTitle.toLowerCase()) {
         const redeemer = (payload.redeemer as { username?: string })?.username;
         if (redeemer) {
-          await addChipsForReward(redeemer, chips);
+          const added = await addChipsForReward(redeemer, chips);
+          if (added > 0) {
+            const token = await getValidAccessToken();
+            if (token) {
+              try {
+                await sendKickChatMessage(token, `🃏 @${redeemer} redeemed channel points for chips! +${added} chips added.`);
+              } catch (err) {
+                console.warn('[Kick webhook] Chip redemption chat message failed:', err instanceof Error ? err.message : String(err));
+              }
+            }
+          }
         }
       }
     }

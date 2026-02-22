@@ -149,6 +149,14 @@ async function addChips(user: string, amount: number): Promise<void> {
   ]);
 }
 
+/** Add chips as admin (broadcaster/mod via !addchips). Bypasses gambling check and exclusions. */
+export async function addChipsAsAdmin(username: string, amount: number): Promise<number> {
+  const user = normalizeUser(username);
+  if (amount < 1) return 0;
+  await addChips(user, amount);
+  return amount;
+}
+
 /** Add chips for channel point reward redemption. Returns chips added, or 0 if skipped (gambling off, excluded, or invalid). */
 export async function addChipsForReward(username: string, amount: number): Promise<number> {
   const user = normalizeUser(username);
