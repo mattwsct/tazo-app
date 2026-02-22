@@ -1,19 +1,26 @@
 /**
  * Blackjack game: gambling chips (separate from leaderboard points), per-user game state.
- * Commands: !deal <amount>, !hit, !stand. Chips and gambling leaderboard reset each stream.
+ * Commands: !deal <amount>, !hit, !stand, !double (2 cards), !split (pairs). Chips and gambling leaderboard reset each stream.
  * New players start with 100 chips.
  */
 
 import { kv } from '@vercel/kv';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 
+const VIEW_CHIPS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const VIEW_CHIPS_PER_INTERVAL = 10;
+
 const CHIPS_BALANCE_KEY = 'blackjack_chips';
 const GAMBLING_LEADERBOARD_KEY = 'blackjack_leaderboard';
 const DEAL_COOLDOWN_KEY = 'blackjack_deal_last_at';
+const REBUYS_KEY = 'blackjack_rebuys';
+const VIEW_CHIPS_LAST_AT_KEY = 'blackjack_view_chips_last_at';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
 const GAME_TIMEOUT_MS = 90_000; // Auto-stand after 90s
 const DEAL_COOLDOWN_MS = 15_000; // Min 15s between starting new hands
 const STARTING_CHIPS = 100;
+const REBUY_CHIPS = 50; // Chips given when !refill at 0 (once per stream)
+const REBUYS_PER_STREAM = 1;
 const MIN_BET = 1;
 const MAX_BET = 50;
 
@@ -63,16 +70,28 @@ function cardDisplay(card: Card): string {
   return card; // e.g. "K♥" "A♠"
 }
 
+function cardRank(card: Card): Rank {
+  return card.slice(0, -1) as Rank;
+}
+
+function isPair(cards: Card[]): boolean {
+  return cards.length === 2 && cardRank(cards[0]) === cardRank(cards[1]);
+}
+
 function normalizeUser(username: string): string {
   return username.trim().toLowerCase();
 }
 
 export interface BlackjackGame {
   playerHand: Card[];
+  playerHand2?: Card[];
   dealerHand: Card[];
   deck: Card[];
   bet: number;
+  bet2?: number;
   status: 'playing' | 'stand' | 'bust' | 'blackjack' | 'dealer_turn';
+  split?: boolean;
+  hand1Done?: boolean;
   createdAt: number;
 }
 
@@ -120,6 +139,59 @@ async function addChips(user: string, amount: number): Promise<void> {
   ]);
 }
 
+/** Award chips for watch time (chat as heartbeat). 10 chips per 10 min, max 10 per chat (no backpay). */
+export async function addViewTimeChips(username: string): Promise<number> {
+  const user = normalizeUser(username);
+  const excluded = await getLeaderboardExclusions();
+  if (excluded.has(user)) return 0;
+
+  try {
+    const now = Date.now();
+    const lastRaw = await kv.hget<number | string>(VIEW_CHIPS_LAST_AT_KEY, user);
+    const lastAt = typeof lastRaw === 'number' ? lastRaw : (typeof lastRaw === 'string' ? parseInt(lastRaw, 10) : 0);
+    const elapsed = lastAt > 0 ? now - lastAt : VIEW_CHIPS_INTERVAL_MS;
+    const intervals = Math.floor(elapsed / VIEW_CHIPS_INTERVAL_MS);
+    if (intervals < 1) return 0;
+
+    // Cap at 1 interval per chat so you can't save up 2 hours and claim 120 chips
+    const chipsToAdd = Math.min(intervals, 1) * VIEW_CHIPS_PER_INTERVAL;
+    const bal = await getChips(user);
+    const newBal = bal + chipsToAdd;
+    await Promise.all([
+      kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
+      kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
+      kv.hset(VIEW_CHIPS_LAST_AT_KEY, { [user]: String(now) }),
+    ]);
+    return chipsToAdd;
+  } catch {
+    return 0;
+  }
+}
+
+/** Refill chips when at 0. Returns message. Limited to REBUYS_PER_STREAM per user per stream. */
+export async function refillChips(username: string): Promise<string> {
+  const user = normalizeUser(username);
+  const chips = await getChips(user);
+  if (chips > 0) {
+    return `🃏 You have ${chips} chips. !refill only works when you have 0. Use !deal <amount> to play.`;
+  }
+  try {
+    const usedRaw = await kv.hget<number | string>(REBUYS_KEY, user);
+    const used = typeof usedRaw === 'number' ? usedRaw : (typeof usedRaw === 'string' ? parseInt(usedRaw, 10) : 0);
+    if (used >= REBUYS_PER_STREAM) {
+      return `🃏 You've already used your ${REBUYS_PER_STREAM} rebu${REBUYS_PER_STREAM === 1 ? 'y' : 'ys'} this stream. Chips reset when the stream starts.`;
+    }
+    await Promise.all([
+      kv.hset(CHIPS_BALANCE_KEY, { [user]: String(REBUY_CHIPS) }),
+      kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: REBUY_CHIPS, member: user }),
+      kv.hset(REBUYS_KEY, { [user]: String(used + 1) }),
+    ]);
+    return `🃏 Rebuy! You have ${REBUY_CHIPS} chips. !deal <amount> to play.`;
+  } catch {
+    return `🃏 Rebuy failed. Try again.`;
+  }
+}
+
 /** Reset chips and gambling leaderboard on stream start. */
 export async function resetGamblingOnStreamStart(): Promise<void> {
   try {
@@ -127,6 +199,8 @@ export async function resetGamblingOnStreamStart(): Promise<void> {
       kv.del(CHIPS_BALANCE_KEY),
       kv.del(GAMBLING_LEADERBOARD_KEY),
       kv.del(DEAL_COOLDOWN_KEY),
+      kv.del(REBUYS_KEY),
+      kv.del(VIEW_CHIPS_LAST_AT_KEY),
     ]);
     console.log('[Blackjack] Chips and gambling leaderboard reset on stream start at', new Date().toISOString());
   } catch (e) {
@@ -240,7 +314,71 @@ export async function deal(username: string, betAmount: number): Promise<string>
   ]);
 
   const dealerVis = cardDisplay(d1) + ' ?';
-  return `🃏 Your hand: ${playerHand.map(cardDisplay).join(' ')} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand`;
+  const extras = isPair(playerHand) ? ' | !double (2 cards) | !split (pair)' : ' | !double (2 cards)';
+  return `🃏 Your hand: ${playerHand.map(cardDisplay).join(' ')} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
+}
+
+/** Double - double bet, take one card, stand. Only when 2 cards and not split. */
+export async function double(username: string): Promise<string> {
+  const user = normalizeUser(username);
+  const game = await getActiveGame(username);
+  if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
+  if (game.split) return `🃏 Can't !double on split hands. Use !hit or !stand.`;
+  if (game.playerHand.length !== 2) return `🃏 !double only on first 2 cards. Use !hit or !stand.`;
+
+  const extraBet = game.bet;
+  const hasChips = await deductChips(user, extraBet);
+  if (!hasChips) {
+    const chips = await getChips(user);
+    return `🃏 Not enough chips to double (need ${extraBet} more). You have ${chips}.`;
+  }
+
+  const card = game.deck.pop()!;
+  game.playerHand.push(card);
+  const { value } = handValue(game.playerHand);
+
+  if (value > 21) {
+    await kv.del(gameKey(user));
+    return `🃏 Double bust! Drew ${cardDisplay(card)} — ${game.playerHand.map(cardDisplay).join(' ')} = ${value}. Lost ${game.bet * 2} chips.`;
+  }
+
+  game.bet *= 2;
+  game.createdAt = Date.now();
+  await kv.set(gameKey(user), game);
+  return stand(username);
+}
+
+/** Split - split pair into two hands. Requires pair and matching bet. */
+export async function split(username: string): Promise<string> {
+  const user = normalizeUser(username);
+  const game = await getActiveGame(username);
+  if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
+  if (game.split) return `🃏 Already split. Use !hit or !stand.`;
+  if (!isPair(game.playerHand)) return `🃏 !split only on pairs. Use !hit or !stand.`;
+
+  const extraBet = game.bet;
+  const hasChips = await deductChips(user, extraBet);
+  if (!hasChips) {
+    const chips = await getChips(user);
+    return `🃏 Not enough chips to split (need ${extraBet} more). You have ${chips}.`;
+  }
+
+  const [c1, c2] = game.playerHand;
+  game.playerHand = [c1];
+  game.playerHand2 = [c2];
+  game.bet2 = extraBet;
+  game.split = true;
+  game.hand1Done = false;
+
+  const card1 = game.deck.pop()!;
+  const card2 = game.deck.pop()!;
+  game.playerHand.push(card1);
+  game.playerHand2!.push(card2);
+
+  game.createdAt = Date.now();
+  await kv.set(gameKey(user), game);
+  const v1 = handValue(game.playerHand).value;
+  return `🃏 Split! Hand 1: ${game.playerHand.map(cardDisplay).join(' ')} (${v1}) — !hit or !stand (Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} waits)`;
 }
 
 /** Hit - draw a card. */
@@ -249,29 +387,68 @@ export async function hit(username: string): Promise<string> {
   const game = await getActiveGame(username);
   if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
 
+  const isHand1 = !game.split || !game.hand1Done;
+  const hand = isHand1 ? game.playerHand : game.playerHand2!;
+  const bet = isHand1 ? game.bet : game.bet2!;
+
   const card = game.deck.pop()!;
-  game.playerHand.push(card);
-  const { value } = handValue(game.playerHand);
+  hand.push(card);
+  const { value } = handValue(hand);
 
   if (value > 21) {
+    if (game.split) {
+      if (!game.hand1Done) {
+        game.hand1Done = true;
+        game.createdAt = Date.now();
+        await kv.set(gameKey(user), game);
+        const v2 = handValue(game.playerHand2!).value;
+        if (v2 > 21) {
+          await kv.del(gameKey(user));
+          return `🃏 Hand 1 bust! Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} (${v2}) also bust. Lost ${game.bet + game.bet2!} chips.`;
+        }
+        return `🃏 Hand 1 bust! Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} (${v2}) — !hit or !stand`;
+      } else {
+        await kv.del(gameKey(user));
+        return `🃏 Hand 2 bust! ${game.playerHand2!.map(cardDisplay).join(' ')} = ${value}. Lost ${game.bet + game.bet2!} chips.`;
+      }
+    }
     await kv.del(gameKey(user));
     return `🃏 Bust! You got ${cardDisplay(card)} — ${game.playerHand.map(cardDisplay).join(' ')} = ${value}. Lost ${game.bet} chips.`;
   }
 
   game.createdAt = Date.now();
   await kv.set(gameKey(user), game);
-  return `🃏 Drew ${cardDisplay(card)}. Your hand: ${game.playerHand.map(cardDisplay).join(' ')} (${value}) — !hit or !stand`;
+  const handLabel = game.split ? (isHand1 ? 'Hand 1' : 'Hand 2') : 'Your hand';
+  return `🃏 Drew ${cardDisplay(card)}. ${handLabel}: ${hand.map(cardDisplay).join(' ')} (${value}) — !hit or !stand`;
 }
 
-/** Stand - dealer plays. */
+function resolveHand(
+  dealerVal: number,
+  playerVal: number,
+  bet: number,
+): { win: number; msg: string } {
+  if (dealerVal > 21) return { win: bet * 2, msg: `bust vs ${playerVal}: +${bet}` };
+  if (dealerVal > playerVal) return { win: 0, msg: `${dealerVal} vs ${playerVal}: -${bet}` };
+  if (dealerVal < playerVal) return { win: bet * 2, msg: `${playerVal} vs ${dealerVal}: +${bet}` };
+  return { win: bet, msg: `push: returned` };
+}
+
+/** Stand - dealer plays (or switch to hand 2 when split). */
 export async function stand(username: string): Promise<string> {
   const user = normalizeUser(username);
   const game = await getActiveGame(username);
   if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
 
+  if (game.split && !game.hand1Done) {
+    game.hand1Done = true;
+    game.createdAt = Date.now();
+    await kv.set(gameKey(user), game);
+    const v2 = handValue(game.playerHand2!).value;
+    return `🃏 Hand 1 stood. Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} (${v2}) — !hit or !stand`;
+  }
+
   const dealerHand = [...game.dealerHand];
   const deck = [...game.deck];
-  const playerVal = handValue(game.playerHand).value;
 
   while (handValue(dealerHand).value < 17) {
     const card = deck.pop()!;
@@ -280,22 +457,22 @@ export async function stand(username: string): Promise<string> {
 
   const dealerVal = handValue(dealerHand).value;
 
-  let result: string;
-  if (dealerVal > 21) {
-    const win = game.bet * 2;
-    await addChips(user, win);
-    result = `Dealer busts! You win ${game.bet} chips!`;
-  } else if (dealerVal > playerVal) {
-    result = `Dealer wins ${dealerVal} vs ${playerVal}. Lost ${game.bet} chips.`;
-  } else if (dealerVal < playerVal) {
-    const win = game.bet * 2;
-    await addChips(user, win);
-    result = `You win ${playerVal} vs ${dealerVal}! +${game.bet} chips.`;
-  } else {
-    await addChips(user, game.bet);
-    result = `Push. Bet returned.`;
+  if (game.split && game.playerHand2) {
+    const v1 = handValue(game.playerHand).value;
+    const v2 = handValue(game.playerHand2).value;
+    const r1 = v1 <= 21 ? resolveHand(dealerVal, v1, game.bet) : { win: 0, msg: `bust: -${game.bet}` };
+    const r2 = v2 <= 21 ? resolveHand(dealerVal, v2, game.bet2!) : { win: 0, msg: `bust: -${game.bet2!}` };
+    const totalWin = r1.win + r2.win;
+    const totalBet = game.bet + game.bet2!;
+    if (totalWin > 0) await addChips(user, totalWin);
+    await kv.del(gameKey(user));
+    return `🃏 Dealer: ${dealerHand.map(cardDisplay).join(' ')} (${dealerVal}) | H1: ${r1.msg} | H2: ${r2.msg} | Net: ${totalWin - totalBet >= 0 ? '+' : ''}${totalWin - totalBet} chips`;
   }
 
+  const playerVal = handValue(game.playerHand).value;
+  const { win, msg } = resolveHand(dealerVal, playerVal, game.bet);
+  if (win > 0) await addChips(user, win);
+
   await kv.del(gameKey(user));
-  return `🃏 Dealer: ${dealerHand.map(cardDisplay).join(' ')} (${dealerVal}) | ${result}`;
+  return `🃏 Dealer: ${dealerHand.map(cardDisplay).join(' ')} (${dealerVal}) | ${msg}`;
 }

@@ -17,7 +17,7 @@ import {
 } from '@/utils/wellness-chat';
 import { getLocationData } from '@/utils/location-cache';
 import { formatUvResponse, formatAqiResponse } from '@/utils/weather-chat';
-import { getActiveGame, deal as blackjackDeal, hit as blackjackHit, stand as blackjackStand, getChips, getGamblingLeaderboardTop } from '@/utils/blackjack-storage';
+import { getActiveGame, deal as blackjackDeal, hit as blackjackHit, stand as blackjackStand, double as blackjackDouble, split as blackjackSplit, getChips, getGamblingLeaderboardTop, refillChips } from '@/utils/blackjack-storage';
 
 export const KICK_CHAT_COMMANDS = [
   'ping',
@@ -38,6 +38,9 @@ export const KICK_CHAT_COMMANDS = [
   'deal',
   'bj',
   'hit',
+  'double',
+  'split',
+  'refill',
   'chips',
   'gambleboard',
   'chiptop',
@@ -67,6 +70,9 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'aqi') return { cmd: 'aqi' };
   if (cmd === 'deal' || cmd === 'bj') return { cmd: cmd as 'deal' | 'bj', arg };
   if (cmd === 'hit') return { cmd: 'hit' };
+  if (cmd === 'double' || cmd === 'dd') return { cmd: 'double' };
+  if (cmd === 'split') return { cmd: 'split' };
+  if (cmd === 'refill' || cmd === 'rebuy' || cmd === 'rebuys') return { cmd: 'refill' };
   if (cmd === 'chips') return { cmd: 'chips' };
   if (cmd === 'gambleboard' || cmd === 'chiptop' || cmd === 'gambletop') return { cmd: 'gambleboard' };
   return null;
@@ -129,10 +135,14 @@ export async function handleKickChatCommand(
   }
 
   // Blackjack
+  if (cmd === 'refill') {
+    if (!user) return null;
+    return refillChips(user);
+  }
   if (cmd === 'chips') {
     if (!user) return null;
     const chips = await getChips(user);
-    return `🃏 You have ${chips} chips. !deal <amount> to play blackjack.`;
+    return `🃏 You have ${chips} chips. Chat to earn 10 per 10 min. !deal <amount> to play. At 0? !refill for a rebuy (1 per stream).`;
   }
   if (cmd === 'gambleboard') {
     const top = await getGamblingLeaderboardTop(5);
@@ -149,6 +159,14 @@ export async function handleKickChatCommand(
   if (cmd === 'hit') {
     if (!user) return null;
     return blackjackHit(user);
+  }
+  if (cmd === 'double') {
+    if (!user) return null;
+    return blackjackDouble(user);
+  }
+  if (cmd === 'split') {
+    if (!user) return null;
+    return blackjackSplit(user);
   }
   return null;
 }

@@ -22,6 +22,7 @@ import {
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
 import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPoints, addGiftSubPoints, addKicksPoints } from '@/utils/leaderboard-storage';
+import { addViewTimeChips } from '@/utils/blackjack-storage';
 import { resetGamblingOnStreamStart } from '@/utils/blackjack-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
@@ -166,6 +167,7 @@ export async function POST(request: NextRequest) {
     const content = (payload.content as string) || '';
     const sender = (payload.sender as { username?: string })?.username ?? '?';
     void addChatPoints(sender);
+    void addViewTimeChips(sender); // 10 chips per 10 min of chat activity
     try {
       await kv.set(KICK_LAST_CHAT_MESSAGE_AT_KEY, Date.now());
     } catch { /* ignore */ }
