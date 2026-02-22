@@ -34,7 +34,9 @@ export interface OverlaySettings {
   showOverlayAlerts?: boolean;
   /** Runtime: top leaderboard entries (from get-settings). */
   leaderboardTop?: { username: string; points: number }[];
-  /** Gambling (chips) leaderboard: include in rotation. */
+  /** Master switch: gambling (blackjack) enabled. When false, commands disabled and chips hidden. */
+  gamblingEnabled?: boolean;
+  /** Gambling (chips) leaderboard: include in rotation. Only applies when gamblingEnabled is true. */
   showGamblingLeaderboard?: boolean;
   /** Top N for gambling leaderboard. */
   gamblingLeaderboardTopN?: number;
@@ -81,6 +83,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showGoalsRotation: true,
   leaderboardTopN: 5,
   leaderboardExcludedBots: '',
+  gamblingEnabled: true,
   showGamblingLeaderboard: false,
   gamblingLeaderboardTopN: 5,
   showOverlayAlerts: true,
@@ -111,6 +114,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   showGoalsRotation: 'boolean',
   leaderboardTopN: 'number',
   leaderboardExcludedBots: 'string',
+  gamblingEnabled: 'boolean',
   showGamblingLeaderboard: 'boolean',
   gamblingLeaderboardTopN: 'number',
   showOverlayAlerts: 'boolean',

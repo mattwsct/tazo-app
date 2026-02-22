@@ -25,7 +25,8 @@ export async function broadcastAlertsAndLeaderboard(): Promise<void> {
       pollState: rawPoll ?? null,
     });
     const showLeaderboard = merged.showLeaderboard !== false;
-    const showGamblingLeaderboard = merged.showGamblingLeaderboard === true;
+    const gamblingEnabled = merged.gamblingEnabled !== false;
+    const showGamblingLeaderboard = gamblingEnabled && merged.showGamblingLeaderboard === true;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
     const excludeUsernames = parseExcludedBots(merged.leaderboardExcludedBots);
     const [leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals] = await Promise.all([
@@ -34,7 +35,7 @@ export async function broadcastAlertsAndLeaderboard(): Promise<void> {
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
     ]);
-    const combined = { ...merged, leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals };
+    const combined = { ...merged, showGamblingLeaderboard, leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals };
     await broadcastSettings(combined);
   } catch (err) {
     if (process.env.NODE_ENV === 'development') {

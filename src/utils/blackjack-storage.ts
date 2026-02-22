@@ -82,6 +82,16 @@ function normalizeUser(username: string): string {
   return username.trim().toLowerCase();
 }
 
+/** Check if gambling is enabled (from overlay settings). When false, all blackjack commands should be disabled. */
+export async function isGamblingEnabled(): Promise<boolean> {
+  try {
+    const settings = (await kv.get<{ gamblingEnabled?: boolean }>('overlay_settings')) ?? {};
+    return settings.gamblingEnabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 export interface BlackjackGame {
   playerHand: Card[];
   playerHand2?: Card[];
@@ -142,6 +152,7 @@ async function addChips(user: string, amount: number): Promise<void> {
 /** Award chips for watch time (chat as heartbeat). 10 chips per 10 min, max 10 per chat (no backpay). */
 export async function addViewTimeChips(username: string): Promise<number> {
   const user = normalizeUser(username);
+  if (!(await isGamblingEnabled())) return 0;
   const excluded = await getLeaderboardExclusions();
   if (excluded.has(user)) return 0;
 
@@ -290,14 +301,14 @@ export async function deal(username: string, betAmount: number): Promise<string>
         addChips(user, bet),
         kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) }),
       ]);
-      return `🃏 Push! Both have 21. Bet returned.`;
+      return `🃏 Push! Both have 21. ${bet} chips returned.`;
     }
     const win = Math.floor(bet * 1.5);
     await Promise.all([
       addChips(user, bet + win),
       kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) }),
     ]);
-    return `🃏 Blackjack! You win ${win} chips!`;
+    return `🃏 Blackjack! You win ${win} chips! (bet returned + ${win} profit)`;
   }
 
   const game: BlackjackGame = {
@@ -345,7 +356,8 @@ export async function double(username: string): Promise<string> {
   game.bet *= 2;
   game.createdAt = Date.now();
   await kv.set(gameKey(user), game);
-  return stand(username);
+  const standResult = await stand(username);
+  return `🃏 Doubled! Drew ${cardDisplay(card)} → ${value}. ${standResult.replace(/^🃏 /, '')}`;
 }
 
 /** Split - split pair into two hands. Requires pair and matching bet. */
@@ -427,10 +439,10 @@ function resolveHand(
   playerVal: number,
   bet: number,
 ): { win: number; msg: string } {
-  if (dealerVal > 21) return { win: bet * 2, msg: `bust vs ${playerVal}: +${bet}` };
-  if (dealerVal > playerVal) return { win: 0, msg: `${dealerVal} vs ${playerVal}: -${bet}` };
-  if (dealerVal < playerVal) return { win: bet * 2, msg: `${playerVal} vs ${dealerVal}: +${bet}` };
-  return { win: bet, msg: `push: returned` };
+  if (dealerVal > 21) return { win: bet * 2, msg: `Dealer busts! You win ${bet} chips (${bet * 2} back)` };
+  if (dealerVal > playerVal) return { win: 0, msg: `Dealer wins ${dealerVal} vs ${playerVal} — lost ${bet} chips` };
+  if (dealerVal < playerVal) return { win: bet * 2, msg: `You win ${playerVal} vs ${dealerVal}! +${bet} chips (${bet * 2} back)` };
+  return { win: bet, msg: `Push — ${bet} chips returned` };
 }
 
 /** Stand - dealer plays (or switch to hand 2 when split). */
@@ -460,8 +472,8 @@ export async function stand(username: string): Promise<string> {
   if (game.split && game.playerHand2) {
     const v1 = handValue(game.playerHand).value;
     const v2 = handValue(game.playerHand2).value;
-    const r1 = v1 <= 21 ? resolveHand(dealerVal, v1, game.bet) : { win: 0, msg: `bust: -${game.bet}` };
-    const r2 = v2 <= 21 ? resolveHand(dealerVal, v2, game.bet2!) : { win: 0, msg: `bust: -${game.bet2!}` };
+    const r1 = v1 <= 21 ? resolveHand(dealerVal, v1, game.bet) : { win: 0, msg: `Bust — lost ${game.bet} chips` };
+    const r2 = v2 <= 21 ? resolveHand(dealerVal, v2, game.bet2!) : { win: 0, msg: `Bust — lost ${game.bet2!} chips` };
     const totalWin = r1.win + r2.win;
     const totalBet = game.bet + game.bet2!;
     if (totalWin > 0) await addChips(user, totalWin);

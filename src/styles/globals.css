@@ -330,6 +330,12 @@ body.overlay-page {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
+  margin-bottom: 2px;
+}
+
+.leaderboard-subtitle {
+  font-size: 0.7em;
+  opacity: 0.75;
   margin-bottom: 6px;
 }
 

@@ -257,6 +257,7 @@ export default function BottomRightPanel({
   const renderChipsLeaderboard = () => (
     <div className="overlay-box leaderboard-box">
       <div className="leaderboard-title">🃏 Top Chips</div>
+      <div className="leaderboard-subtitle">Resets each stream</div>
       <div className="leaderboard-entries">
         {gamblingLeaderboardTop.length > 0 ? (
           gamblingLeaderboardTop.slice(0, gamblingLeaderboardTopN).map((u, i) => (

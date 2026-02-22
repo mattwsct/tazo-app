@@ -1884,7 +1884,22 @@ export default function AdminPage() {
                   </div>
                 </>
               )}
-              <div className="admin-select-wrap" style={{ marginTop: '16px', marginBottom: '12px' }}>
+              <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.gamblingEnabled !== false}
+                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Enable blackjack (gambling chips)</span>
+                </label>
+                <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
+                  When off, !deal/!chips/!hit etc. are disabled and the chips leaderboard is hidden
+                </p>
+              </div>
+              {settings.gamblingEnabled !== false && (
+              <div className="admin-select-wrap" style={{ marginTop: '12px', marginBottom: '12px' }}>
                 <label>Gambling (chips) leaderboard — include in rotation?</label>
                 <select
                   className="admin-select-big"
@@ -1895,7 +1910,8 @@ export default function AdminPage() {
                   <option value="false">🚫 No, hidden</option>
                 </select>
               </div>
-              {settings.showGamblingLeaderboard === true && (
+              )}
+              {settings.gamblingEnabled !== false && settings.showGamblingLeaderboard === true && (
                 <div className="admin-select-wrap">
                   <label>Top N chips</label>
                   <select

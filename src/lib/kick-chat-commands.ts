@@ -17,7 +17,7 @@ import {
 } from '@/utils/wellness-chat';
 import { getLocationData } from '@/utils/location-cache';
 import { formatUvResponse, formatAqiResponse } from '@/utils/weather-chat';
-import { getActiveGame, deal as blackjackDeal, hit as blackjackHit, stand as blackjackStand, double as blackjackDouble, split as blackjackSplit, getChips, getGamblingLeaderboardTop, refillChips } from '@/utils/blackjack-storage';
+import { getActiveGame, deal as blackjackDeal, hit as blackjackHit, stand as blackjackStand, double as blackjackDouble, split as blackjackSplit, getChips, getGamblingLeaderboardTop, refillChips, isGamblingEnabled } from '@/utils/blackjack-storage';
 
 export const KICK_CHAT_COMMANDS = [
   'ping',
@@ -134,7 +134,11 @@ export async function handleKickChatCommand(
     return formatAqiResponse(data?.weather?.aqi);
   }
 
-  // Blackjack
+  // Blackjack (all require gambling enabled)
+  const gamblingOn = await isGamblingEnabled();
+  if (!gamblingOn && ['refill', 'chips', 'gambleboard', 'deal', 'bj', 'hit', 'double', 'split'].includes(cmd)) {
+    return '🃏 Gambling is disabled for this stream.';
+  }
   if (cmd === 'refill') {
     if (!user) return null;
     return refillChips(user);
@@ -142,13 +146,13 @@ export async function handleKickChatCommand(
   if (cmd === 'chips') {
     if (!user) return null;
     const chips = await getChips(user);
-    return `🃏 You have ${chips} chips. Chat to earn 10 per 10 min. !deal <amount> to play. At 0? !refill for a rebuy (1 per stream).`;
+    return `🃏 You have ${chips} chips (resets each stream). Chat to earn 10 per 10 min. !deal <amount> to play. At 0? !refill for a rebuy (1 per stream).`;
   }
   if (cmd === 'gambleboard') {
     const top = await getGamblingLeaderboardTop(5);
     if (top.length === 0) return '🃏 No chips yet this stream. !deal <amount> to play blackjack — everyone starts with 100 chips.';
     const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.chips}`).join(' | ');
-    return `🃏 Top chips: ${lines}`;
+    return `🃏 Top chips (resets each stream): ${lines}`;
   }
   if (cmd === 'deal' || cmd === 'bj') {
     if (!user) return null;

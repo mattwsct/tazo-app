@@ -25,7 +25,8 @@ async function handleGET() {
 
     // Fetch leaderboard, gambling leaderboard, alerts, and stream goals when enabled
     const showLeaderboard = merged.showLeaderboard !== false;
-    const showGamblingLeaderboard = merged.showGamblingLeaderboard === true;
+    const gamblingEnabled = merged.gamblingEnabled !== false;
+    const showGamblingLeaderboard = gamblingEnabled && merged.showGamblingLeaderboard === true;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
     const excludeUsernames = parseExcludedBots(merged.leaderboardExcludedBots);
     const [leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
@@ -38,6 +39,7 @@ async function handleGET() {
 
     const combinedSettings = {
       ...merged,
+      showGamblingLeaderboard,
       leaderboardTop,
       gamblingLeaderboardTop,
       overlayAlerts,
