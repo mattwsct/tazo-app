@@ -17,6 +17,12 @@ import {
 import { getLocationData } from '@/utils/location-cache';
 import { formatUvResponse, formatAqiResponse } from '@/utils/weather-chat';
 import {
+  getSpeedResponse,
+  getAltitudeResponse,
+  getForecastResponse,
+  getMapResponse,
+} from '@/lib/chat-response-helpers';
+import {
   getActiveGame,
   deal as blackjackDeal,
   hit as blackjackHit,
@@ -50,6 +56,11 @@ export const KICK_CHAT_COMMANDS = [
   'wellness',
   'uv',
   'aqi',
+  'speed',
+  'altitude',
+  'elevation',
+  'forecast',
+  'map',
   'deal',
   'bj',
   'hit',
@@ -92,6 +103,10 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'wellness') return { cmd: 'wellness' };
   if (cmd === 'uv') return { cmd: 'uv' };
   if (cmd === 'aqi') return { cmd: 'aqi' };
+  if (cmd === 'speed') return { cmd: 'speed' };
+  if (cmd === 'altitude' || cmd === 'elevation' || cmd === 'elev') return { cmd: 'altitude' };
+  if (cmd === 'forecast' || cmd === 'fc') return { cmd: 'forecast' };
+  if (cmd === 'map') return { cmd: 'map' };
   if (cmd === 'deal' || cmd === 'bj') return { cmd: cmd as 'deal' | 'bj', arg };
   if (cmd === 'hit') return { cmd: 'hit' };
   if (cmd === 'double' || cmd === 'dd') return { cmd: 'double' };
@@ -176,6 +191,10 @@ export async function handleKickChatCommand(
     const data = await getLocationData();
     return formatAqiResponse(data?.weather?.aqi);
   }
+  if (cmd === 'speed') return getSpeedResponse();
+  if (cmd === 'altitude') return getAltitudeResponse();
+  if (cmd === 'forecast') return getForecastResponse();
+  if (cmd === 'map') return getMapResponse();
 
   // Gambling (all require gambling enabled)
   const gamblingCmds = ['refill', 'chips', 'gambleboard', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'gamba', 'gamble'];
@@ -236,10 +255,16 @@ export async function handleKickChatCommand(
     if (!user) return null;
     const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
     const choice = args[0];
-    if (!choice) return '🎡 Usage: !roulette <red|black|1-36> [amount] — default 5';
-    const betRaw = args.length >= 2 ? parseInt(args[1], 10) : (['red', 'black'].includes(choice.toLowerCase()) ? 5 : parseInt(args[0], 10));
+    if (!choice) return '🎡 Usage: !roulette <red|black|number> <amount> — e.g. !roulette red 10 or !roulette 27 10';
+    const isColorBet = ['red', 'black'].includes(choice.toLowerCase());
+    const isNumberBet = !isColorBet && !isNaN(parseInt(choice, 10));
+    const num = parseInt(choice, 10);
+    const validNumber = isNumberBet && num >= 1 && num <= 36;
+    const amountArg = args.length >= 2 ? args[1] : null;
+    const betRaw = amountArg != null ? parseInt(amountArg, 10) : 5;
     const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return playRoulette(user, choice, bet);
+    const actualChoice = validNumber ? String(num) : choice;
+    return playRoulette(user, actualChoice, bet);
   }
   if (cmd === 'dice') {
     if (!user) return null;
@@ -254,7 +279,7 @@ export async function handleKickChatCommand(
     if (!user) return null;
     const betRaw = parseInt((arg ?? '').trim(), 10);
     if (isNaN(betRaw) || betRaw < 1) {
-      return '🎲 Games: !slots / !spin [amt] | !roulette red/black/number [amt] | !coinflip / !flip [amt] | !dice high/low [amt] | !deal [amt]. Bet 5–50, default 5. !chips for balance.';
+      return '🎲 Games: !slots [amt] | !roulette red/black/number <amt> | !coinflip [amt] | !dice high/low [amt] | !deal [amt]. Bet 5–50, default 5. !chips. !speed !altitude !forecast !map for stats.';
     }
     const bet = betRaw;
     const games: Array<'coinflip' | 'slots' | 'roulette' | 'dice'> = ['coinflip', 'slots', 'roulette', 'dice'];

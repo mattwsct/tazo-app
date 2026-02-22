@@ -49,7 +49,6 @@ export function middleware(request: NextRequest) {
     '/api/kick-oauth/authorize',
     '/api/kick-oauth/callback',
     '/api/webhooks/kick',
-    '/api/kick-webhook',
     '/api/cron/kick-chat-broadcast',
     '/api/cron/poll-cleanup',
     '/kick-oauth-complete',

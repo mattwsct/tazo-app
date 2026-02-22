@@ -79,7 +79,11 @@ const AQI_LABELS: Record<number, string> = {
 };
 
 export function formatUvResponse(uvIndex: number | null | undefined): string {
-  if (typeof uvIndex !== 'number' || uvIndex < 0) return '☀️ UV data unavailable.';
+  if (typeof uvIndex !== 'number' || uvIndex < 0) {
+    return isNightTime()
+      ? '☀️ UV is negligible at night (sun is down).'
+      : '☀️ UV data unavailable.';
+  }
   const level = uvIndex >= 11 ? 'Extreme' : uvIndex >= 8 ? 'Very high' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Moderate' : 'Low';
   return `☀️ UV index ${uvIndex} (${level}).${uvIndex >= 6 ? ' Wear sunscreen!' : ''}`;
 }
