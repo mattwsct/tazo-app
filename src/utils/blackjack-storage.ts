@@ -21,7 +21,7 @@ const DEAL_COOLDOWN_MS = 15_000; // Min 15s between starting new hands
 const STARTING_CHIPS = 100;
 const REBUY_CHIPS = 50; // Chips given when !refill at 0 (once per stream)
 const REBUYS_PER_STREAM = 1;
-const MIN_BET = 1;
+const MIN_BET = 5;
 const MAX_BET = 50;
 
 const SUITS = ['♠', '♥', '♦', '♣'] as const;
