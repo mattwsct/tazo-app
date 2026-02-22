@@ -264,6 +264,8 @@ export async function deal(username: string, betAmount: number): Promise<string>
   const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
   if (bet < MIN_BET) return `🃏 Min bet is ${MIN_BET} chip${MIN_BET > 1 ? 's' : ''}. !deal <amount>`;
 
+  const overMaxNote = betAmount > MAX_BET ? `Max bet ${MAX_BET} chips — playing for ${bet}. ` : '';
+
   const now = Date.now();
   const lastAtRaw = await kv.hget<number | string>(DEAL_COOLDOWN_KEY, user);
   const lastAt = typeof lastAtRaw === 'number' ? lastAtRaw : (typeof lastAtRaw === 'string' ? parseInt(lastAtRaw, 10) : 0);
@@ -301,14 +303,14 @@ export async function deal(username: string, betAmount: number): Promise<string>
         addChips(user, bet),
         kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) }),
       ]);
-      return `🃏 Push! Both have 21. ${bet} chips returned.`;
+      return `🃏 ${overMaxNote}Push! Both have 21. ${bet} chips returned.`;
     }
     const win = Math.floor(bet * 1.5);
     await Promise.all([
       addChips(user, bet + win),
       kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) }),
     ]);
-    return `🃏 Blackjack! You win ${win} chips! (bet returned + ${win} profit)`;
+    return `🃏 ${overMaxNote}Blackjack! You win ${win} chips! (bet returned + ${win} profit)`;
   }
 
   const game: BlackjackGame = {
@@ -326,7 +328,7 @@ export async function deal(username: string, betAmount: number): Promise<string>
 
   const dealerVis = cardDisplay(d1) + ' ?';
   const extras = isPair(playerHand) ? ' | !double (2 cards) | !split (pair)' : ' | !double (2 cards)';
-  return `🃏 Your hand: ${playerHand.map(cardDisplay).join(' ')} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
+  return `🃏 ${overMaxNote}Your hand: ${playerHand.map(cardDisplay).join(' ')} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
 }
 
 /** Double - double bet, take one card, stand. Only when 2 cards and not split. */

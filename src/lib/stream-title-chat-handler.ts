@@ -4,7 +4,7 @@
 
 import { kv } from '@vercel/kv';
 import { KICK_API_BASE, KICK_BROADCASTER_SLUG_KEY, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken } from '@/lib/kick-api';
-import { getLocationData, getPersistentLocation } from '@/utils/location-cache';
+import { getPersistentLocation, getCachedLocationData } from '@/utils/location-cache';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
 import type { LocationDisplayMode } from '@/types/settings';
 
@@ -62,20 +62,19 @@ export async function handleStreamTitleCommand(
     return { handled: true, reply: 'Usage: !title Your title here' };
   }
 
-  // Try to refresh location (RTIRL + LocationIQ) so title has the latest; falls back to cached if cooldown/rate limit
-  const [overlaySettings, streamTitleSettings, persistent, freshData] = await Promise.all([
+  // Use cached/persistent location only — avoid blocking on RTIRL/LocationIQ (which can hang and prevent title update)
+  const [overlaySettings, streamTitleSettings, persistent, cached] = await Promise.all([
     kv.get<{ locationDisplay?: string; customLocation?: string }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     getPersistentLocation(),
-    getLocationData(true),
+    getCachedLocationData(true),
   ]);
 
   const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
   const locationDisplay = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
   const customLoc = (overlaySettings?.customLocation as string) ?? '';
 
-  // Prefer fresh location when available; otherwise use persistent (cached)
-  const locationData = freshData?.location?.rawLocationData ?? persistent?.location;
+  const locationData = cached?.location?.rawLocationData ?? persistent?.location;
 
   const locationPart = getStreamTitleLocationPart(
     locationData ?? null,

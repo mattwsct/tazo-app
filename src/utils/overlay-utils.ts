@@ -40,8 +40,6 @@ export function mergeSettingsWithDefaults(settingsData: Partial<OverlaySettings>
     mapZoomLevel: migrateMapZoomLevel((rest as { mapZoomLevel?: string }).mapZoomLevel),
     showLeaderboard,
     weatherConditionDisplay: settingsData.weatherConditionDisplay || DEFAULT_OVERLAY_SETTINGS.weatherConditionDisplay,
-    altitudeDisplay: settingsData.altitudeDisplay || DEFAULT_OVERLAY_SETTINGS.altitudeDisplay,
-    speedDisplay: settingsData.speedDisplay || DEFAULT_OVERLAY_SETTINGS.speedDisplay,
     showSteps: settingsData.showSteps ?? DEFAULT_OVERLAY_SETTINGS.showSteps,
     minimapTheme: settingsData.minimapTheme || DEFAULT_OVERLAY_SETTINGS.minimapTheme,
   };

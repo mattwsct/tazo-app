@@ -1021,11 +1021,11 @@ export default function AdminPage() {
             <button type="button" className="btn btn-secondary btn-small" onClick={() => collapseAllSections(false)}>
               Expand all
             </button>
-          </div>
-
+            </div>
+            
           {/* Setup: Kick connection — connect first before stream title, poll, messages */}
           <CollapsibleSection id="connection" title="🔗 Kick connection">
-                <div className="setting-group">
+            <div className="setting-group">
                   {kickStatus?.connected ? (
                   <div className="kick-status connected">
                     <span className="status-dot">🟢</span>
@@ -1326,7 +1326,7 @@ export default function AdminPage() {
                   >
                     🚫 Hidden
                   </button>
-                </div>
+            </div>
               </div>
               <div className="admin-select-wrap">
                 <label>Map zoom</label>
@@ -1481,7 +1481,7 @@ export default function AdminPage() {
               </div>
               </div>
             </div>
-
+            
             <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h3 className="subsection-label">Chat broadcasts</h3>
               <p className="group-label group-description">
@@ -1506,7 +1506,7 @@ export default function AdminPage() {
                 {kickChatBroadcastStreamTitle && (
                   <div className="broadcast-option-detail">
                     <span className="checkbox-label-row-sm" style={{ opacity: 0.9 }}>Posts &quot;Stream title updated to X&quot; when you update manually or when auto-push runs</span>
-                  </div>
+            </div>
                 )}
                 <label className="checkbox-label-row broadcast-checkbox-item">
                   <input
@@ -1743,12 +1743,12 @@ export default function AdminPage() {
                   />
                   <span className="checkbox-text">Steps</span>
                 </label>
-              </div>
+            </div>
               <p className="input-hint" style={{ fontSize: '0.85em', marginTop: 4 }}>
                 Date from timezone. All rotate every 7s.
               </p>
             </div>
-
+            
             <div className="setting-group" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-right (location data)</h4>
               <div className="checkbox-group" style={{ marginBottom: 12 }}>
@@ -1778,43 +1778,12 @@ export default function AdminPage() {
                         {mode === 'hidden' && '🚫 Hidden'}
                       </button>
                     ))}
-                  </div>
-                </div>
+            </div>
+            </div>
               )}
-              <div className="admin-select-wrap">
-                <label>Altitude</label>
-                <div className="option-buttons" role="group">
-                  {(['always', 'auto', 'hidden'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      className={`option-btn ${(settings.altitudeDisplay || 'auto') === mode ? 'active' : ''}`}
-                      onClick={() => handleSettingsChange({ altitudeDisplay: mode })}
-                    >
-                      {mode === 'always' && '👁️ Always'}
-                      {mode === 'auto' && '📈 Auto'}
-                      {mode === 'hidden' && '🚫 Hidden'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="admin-select-wrap">
-                <label>Speed</label>
-                <div className="option-buttons" role="group">
-                  {(['always', 'auto', 'hidden'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      className={`option-btn ${(settings.speedDisplay || 'auto') === mode ? 'active' : ''}`}
-                      onClick={() => handleSettingsChange({ speedDisplay: mode })}
-                    >
-                      {mode === 'always' && '👁️ Always'}
-                      {mode === 'auto' && '🏃 Auto'}
-                      {mode === 'hidden' && '🚫 Hidden'}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <p className="input-hint" style={{ fontSize: '0.85em', marginTop: 8 }}>
+                Altitude & speed auto-show when notable (e.g. climb/descent, moving) and hide when no longer relevant.
+              </p>
             </div>
           </CollapsibleSection>
 
@@ -1842,7 +1811,7 @@ export default function AdminPage() {
                   />
                   <span className="checkbox-text">Show rotating section — when off, carousel is hidden but sub/kicks alerts still pop up in progress bars</span>
                 </label>
-              </div>
+            </div>
               <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
                 <label>Leaderboard — include in rotation?</label>
                 <select
@@ -1881,7 +1850,7 @@ export default function AdminPage() {
                     <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
                       Add bots, your own username, or anyone who should not appear or earn points
                     </p>
-                  </div>
+            </div>
                 </>
               )}
               <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
@@ -1909,7 +1878,7 @@ export default function AdminPage() {
                   <option value="true">🃏 Yes, include in rotation</option>
                   <option value="false">🚫 No, hidden</option>
                 </select>
-              </div>
+            </div>
               )}
               {settings.gamblingEnabled !== false && settings.showGamblingLeaderboard === true && (
                 <div className="admin-select-wrap">
@@ -1959,8 +1928,8 @@ export default function AdminPage() {
                     </div>
                     <div className="admin-select-wrap" style={{ marginTop: 8 }}>
                       <label>Sub goal subtext (optional second line)</label>
-                      <input
-                        type="text"
+                <input
+                  type="text"
                         className="text-input admin-select-big"
                         value={subGoalSubtextInput}
                         onChange={(e) => handleSubGoalSubtextChange(e.target.value)}
@@ -2044,7 +2013,7 @@ export default function AdminPage() {
                           />
                         </div>
                       )}
-                      <button
+                <button 
                         type="button"
                         className="btn btn-secondary btn-small"
                         onClick={async () => {
@@ -2078,8 +2047,8 @@ export default function AdminPage() {
                         }}
                       >
                         Update
-                      </button>
-                    </div>
+                </button>
+              </div>
                   </div>
                 )}
               </div>
@@ -2097,10 +2066,10 @@ export default function AdminPage() {
               <div className="button-row" style={{ marginTop: '12px' }}>
                 <span className="group-label" style={{ marginRight: '8px' }}>Test alert:</span>
                 {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
-                  <button
+                    <button
                     key={type}
                     type="button"
-                    className="btn btn-secondary btn-small"
+                      className="btn btn-secondary btn-small"
                     onClick={async () => {
                       try {
                         const res = await authenticatedFetch('/api/overlay-alerts/test', {
@@ -2119,9 +2088,9 @@ export default function AdminPage() {
                     {type === 'resub' && '💪 Resub'}
                     {type === 'giftSub' && '🎁 Gift'}
                     {type === 'kicks' && '💰 Kicks'}
-                  </button>
+                    </button>
                 ))}
-              </div>
+                  </div>
             </div>
           </CollapsibleSection>
 
@@ -2132,8 +2101,8 @@ export default function AdminPage() {
                   </p>
                   <div className="form-stack" style={{ maxWidth: 520 }}>
                     <label className="checkbox-label-row">
-                      <input
-                        type="checkbox"
+                          <input
+                            type="checkbox"
                         checked={kickPollEnabled}
                         onChange={async (e) => {
                           const checked = e.target.checked;
@@ -2369,7 +2338,7 @@ export default function AdminPage() {
                                 className="checkbox-input"
                               />
                               <span>Show lifetime subs in message</span>
-                            </label>
+                        </label>
                           )}
                           {group.toggleKey === 'kicksGifted' && (
                             <label className="kick-group-options-item">
@@ -2416,17 +2385,17 @@ export default function AdminPage() {
                   ))}
                 </div>
                 <div className="section-actions">
-                  <button
+                          <button
                     className="btn btn-secondary"
-                    onClick={() => {
+                            onClick={() => {
                       setKickMessages(DEFAULT_KICK_MESSAGES);
                       saveKickMessages({ messages: DEFAULT_KICK_MESSAGES, templateEnabled: kickTemplateEnabled });
-                    }}
-                  >
+                            }}
+                          >
                     Reset to defaults
-                  </button>
-                </div>
-                </div>
+                          </button>
+                        </div>
+                      </div>
           </CollapsibleSection>
 
           <CollapsibleSection id="health-data" title="🏃 Health data (manual entry)" description="Current values from Health Auto Export. Add missing data (e.g. weight) before your next export sends it.">

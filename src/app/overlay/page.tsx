@@ -795,7 +795,7 @@ function OverlayPage() {
                 // Auto mode: track baseline and show when notable change from baseline
                 if (altitudeBaselineRef.current === null) {
                   altitudeBaselineRef.current = roundedAltitude;
-                } else if (settingsRef.current.altitudeDisplay === 'auto') {
+                } else {
                   const change = Math.abs(roundedAltitude - altitudeBaselineRef.current);
                   if (change >= ALTITUDE_CHANGE_THRESHOLD_M) {
                     const showUntil = now + ALTITUDE_DISPLAY_DURATION_MS;
@@ -1476,65 +1476,28 @@ function OverlayPage() {
     allowNull: true,
   });
 
-  // Altitude display logic - auto shows when altitude changes notably from baseline for a set duration
+  // Altitude display logic - auto shows when altitude changes notably from baseline, hides when no longer relevant
   const altitudeDisplay = useMemo(() => {
-    // Hide if no altitude data
-    if (currentAltitude === null || displayedAltitude === null) {
-      return null;
-    }
-    
-    // Check display mode first
-    if (settings.altitudeDisplay === 'hidden') {
-      return null;
-    }
-    
-    // "Always" mode: show regardless of staleness or notable changes
-    if (settings.altitudeDisplay === 'always') {
-      const altitudeM = displayedAltitude;
-      const altitudeFt = metersToFeet(altitudeM);
-      return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
-    }
-    
-    // "Auto" mode: show when altitude changed notably from baseline, for ALTITUDE_DISPLAY_DURATION_MS
-    if (settings.altitudeDisplay === 'auto') {
-      const now = Date.now();
-      const isInShowWindow = altitudeShowUntil > 0 && now < altitudeShowUntil;
-      if (!isInShowWindow) {
-        return null;
-      }
-    }
-    
-    // Show altitude (always, or auto within show window)
+    if (currentAltitude === null || displayedAltitude === null) return null;
+    const now = Date.now();
+    const isInShowWindow = altitudeShowUntil > 0 && now < altitudeShowUntil;
+    if (!isInShowWindow) return null;
     const altitudeM = displayedAltitude;
     const altitudeFt = metersToFeet(altitudeM);
     return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- altitudeUpdateTimestamp + altitudeShowUntil
-  }, [currentAltitude, displayedAltitude, settings.altitudeDisplay, altitudeUpdateTimestamp, altitudeShowUntil]);
+  }, [currentAltitude, displayedAltitude, altitudeUpdateTimestamp, altitudeShowUntil]);
 
-  // Speed display logic
+  // Speed display logic - auto shows when speed >= 10 km/h and fresh, hides when stale or below threshold
   const speedDisplay = useMemo(() => {
-    // Check display mode first
-    if (settings.speedDisplay === 'hidden') {
-      return null;
-    }
-    
-    // Check staleness only for "auto" mode - "always" mode shows even if stale
-    if (settings.speedDisplay === 'auto') {
-      const speedIsStale = isSpeedStale(lastSpeedGpsTimestamp.current);
-      const meetsSpeedThreshold = currentSpeed >= 10;
-      
-      if (!shouldShowDisplayMode('auto', speedIsStale, meetsSpeedThreshold)) {
-        return null;
-      }
-    }
-    
-    // Show speed (either always mode, or auto mode with speed >= 10 km/h)
-    // In always mode, show even if speed is 0
+    const speedIsStale = isSpeedStale(lastSpeedGpsTimestamp.current);
+    const meetsSpeedThreshold = currentSpeed >= 10;
+    if (!shouldShowDisplayMode('auto', speedIsStale, meetsSpeedThreshold)) return null;
     const speedKmh = displayedSpeed;
     const speedMph = kmhToMph(speedKmh);
     return { value: speedKmh, formatted: `${Math.round(speedKmh)} km/h (${Math.round(speedMph)} mph)` };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- speedUpdateTimestamp + speedStaleCheckTime force re-run (latter for when no RTIRL updates)
-  }, [currentSpeed, displayedSpeed, settings.speedDisplay, speedUpdateTimestamp, speedStaleCheckTime]);
+  }, [currentSpeed, displayedSpeed, speedUpdateTimestamp, speedStaleCheckTime]);
 
   return (
     <ErrorBoundary autoReload={false}>

@@ -19,8 +19,6 @@ export interface OverlaySettings {
   minimapSpeedBased: boolean;
   minimapTheme: MinimapTheme;
   mapZoomLevel: MapZoomLevel;
-  altitudeDisplay: DisplayMode;
-  speedDisplay: DisplayMode;
   showSteps: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
   pollState?: PollState | null;
@@ -76,8 +74,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   minimapSpeedBased: false,
   minimapTheme: 'auto',
   mapZoomLevel: 'match',
-  altitudeDisplay: 'auto',
-  speedDisplay: 'auto',
   showSteps: true,
   showLeaderboard: true,
   showGoalsRotation: true,
@@ -107,8 +103,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   minimapSpeedBased: 'boolean',
   minimapTheme: 'string',
   mapZoomLevel: 'string',
-  altitudeDisplay: 'string',
-  speedDisplay: 'string',
   showSteps: 'boolean',
   showLeaderboard: 'boolean',
   showGoalsRotation: 'boolean',
