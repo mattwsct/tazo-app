@@ -145,8 +145,12 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'chips') {
     if (!user) return null;
-    const chips = await getChips(user);
-    return `🃏 You have ${chips} chips (resets each stream). Chat to earn 10 per 10 min. !deal <amount> to play. At 0? !refill for a rebuy (1 per stream).`;
+    const targetUser = (arg ?? '').trim() || user;
+    const chips = await getChips(targetUser);
+    if (targetUser.toLowerCase() === user.toLowerCase()) {
+      return `🃏 You have ${chips} chips (resets each stream). Chat to earn 10 per 10 min. !deal <amount> to play. At 0? !refill for a rebuy (1 per stream).`;
+    }
+    return `🃏 ${targetUser} has ${chips} chips (resets each stream).`;
   }
   if (cmd === 'gambleboard') {
     const top = await getGamblingLeaderboardTop(5);
