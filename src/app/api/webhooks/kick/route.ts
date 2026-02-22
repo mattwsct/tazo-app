@@ -23,7 +23,7 @@ import {
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
 import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPoints, addGiftSubPoints, addKicksPoints } from '@/utils/leaderboard-storage';
-import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsForReward } from '@/utils/blackjack-storage';
+import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin } from '@/utils/blackjack-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
@@ -272,16 +272,17 @@ export async function POST(request: NextRequest) {
     } catch {
       /* ignore */
     }
-    // Channel point → chips: when approved and reward title matches, grant chips
+    // Channel point → chips: when approved/accepted and reward title matches, grant chips
     const status = String(payload.status ?? '').toLowerCase();
-    if (status === 'approved') {
+    const isApproved = status === 'approved' || status === 'accepted';
+    if (isApproved) {
       const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardChips?: number }>('overlay_settings')) ?? {};
       const configuredTitle = (settings.chipRewardTitle ?? 'Buy Chips').trim();
       const chips = Math.max(1, Math.floor(Number(settings.chipRewardChips ?? 50)));
       if (configuredTitle && rewardTitle.toLowerCase() === configuredTitle.toLowerCase()) {
         const redeemer = (payload.redeemer as { username?: string })?.username;
         if (redeemer) {
-          const added = await addChipsForReward(redeemer, chips);
+          const added = await addChipsAsAdmin(redeemer, chips);
           if (added > 0) {
             const token = await getValidAccessToken();
             if (token) {
