@@ -548,7 +548,7 @@ export async function playCoinflip(username: string, betAmount: number): Promise
   const win = Math.random() < 0.5;
   if (win) {
     await addChips(user, bet * 2);
-    return `🎲 Coinflip: HEADS — You win! +${bet} chips (${bet * 2} total)`;
+    return `🎲 Coinflip: HEADS — You win! +${bet} chips`;
   }
   return `🎲 Coinflip: TAILS — Lost ${bet} chips.`;
 }
@@ -594,7 +594,7 @@ export async function playSlots(username: string, betAmount: number): Promise<st
     const mult = Math.max(1, Math.floor(SLOT_MULTIPLIERS[match] / 2));
     const win = bet * mult;
     await addChips(user, win);
-    return `🎰 [ ${display} ] Two match! ${mult}x — +${win - bet} chips (${win} back)`;
+    return `🎰 [ ${display} ] Two match! ${mult}x — +${win - bet} chips`;
   }
   return `🎰 [ ${display} ] No match — lost ${bet} chips.`;
 }

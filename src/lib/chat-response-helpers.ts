@@ -11,33 +11,42 @@ import { formatLocation } from '@/utils/location-utils';
 import { roundCoordinate, getCountryNameFromCode } from '@/utils/chat-utils';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { OverlaySettings } from '@/types/settings';
+import { kmhToMph } from '@/utils/unit-conversions';
+
+function fmtSpeed(kmh: number): string {
+  return `${Math.round(kmh)} km/h (${Math.round(kmhToMph(kmh))} mph)`;
+}
+
+function fmtAltitude(m: number): string {
+  return `${m} m (${Math.round(m * 3.281)} ft)`;
+}
 
 export async function getSpeedResponse(): Promise<string> {
   const stats = await getSpeedStats();
-  if (!stats.hasData) return '🚀 Speed data not available';
+  if (!stats.hasData) return '🚀 No speed data yet — updates from GPS when moving.';
   const parts: string[] = [];
   if (stats.current) {
     const currentText = stats.current.age === 'current'
-      ? `${Math.round(stats.current.speed)} km/h`
-      : `${Math.round(stats.current.speed)} km/h (${stats.current.age} ago)`;
+      ? fmtSpeed(stats.current.speed)
+      : `${fmtSpeed(stats.current.speed)} (${stats.current.age} ago)`;
     parts.push(`Current: ${currentText}`);
-  } else parts.push('Current: Not available');
-  if (stats.max) parts.push(`Max: ${Math.round(stats.max.speed)} km/h (${stats.max.age} ago)`);
+  } else parts.push('Current: n/a');
+  if (stats.max) parts.push(`Top: ${fmtSpeed(stats.max.speed)} (${stats.max.age} ago)`);
   return `🚀 ${parts.join(' | ')}`;
 }
 
 export async function getAltitudeResponse(): Promise<string> {
   const stats = await getAltitudeStats();
-  if (!stats.hasData) return '⛰️ Altitude data not available';
+  if (!stats.hasData) return '⛰️ No altitude data yet — updates from GPS.';
   const parts: string[] = [];
   if (stats.current) {
     const currentText = stats.current.age === 'current'
-      ? `${stats.current.altitude} m`
-      : `${stats.current.altitude} m (${stats.current.age} ago)`;
+      ? fmtAltitude(stats.current.altitude)
+      : `${fmtAltitude(stats.current.altitude)} (${stats.current.age} ago)`;
     parts.push(`Current: ${currentText}`);
-  } else parts.push('Current: Not available');
-  if (stats.lowest) parts.push(`Lowest: ${stats.lowest.altitude} m (${stats.lowest.age} ago)`);
-  if (stats.highest) parts.push(`Highest: ${stats.highest.altitude} m (${stats.highest.age} ago)`);
+  } else parts.push('Current: n/a');
+  if (stats.lowest) parts.push(`Low: ${fmtAltitude(stats.lowest.altitude)} (${stats.lowest.age} ago)`);
+  if (stats.highest) parts.push(`High: ${fmtAltitude(stats.highest.altitude)} (${stats.highest.age} ago)`);
   return `⛰️ ${parts.join(' | ')}`;
 }
 
@@ -171,14 +180,16 @@ export async function getMapResponse(): Promise<string> {
 
 export async function getFollowersResponse(): Promise<string> {
   const stats = await getKickChannelStats();
-  if (stats.followers == null) return '👥 Follower count unavailable. Connect Kick and fetch channel data first.';
+  if (stats.followers == null) return '👥 Follower count unavailable.';
   const n = stats.followers.toLocaleString();
-  return `👥 ${n} followers`;
+  const channel = stats.slug ? ` (kick.com/${stats.slug})` : '';
+  return `👥 ${n} followers${channel}`;
 }
 
 export async function getSubsResponse(): Promise<string> {
   const stats = await getKickChannelStats();
-  if (stats.subscribers == null) return '⭐ Subscriber count unavailable. Connect Kick and fetch channel data first.';
+  if (stats.subscribers == null) return '⭐ Subscriber count unavailable.';
   const n = stats.subscribers.toLocaleString();
-  return `⭐ ${n} subscribers`;
+  const channel = stats.slug ? ` (kick.com/${stats.slug})` : '';
+  return `⭐ ${n} subscribers${channel}`;
 }

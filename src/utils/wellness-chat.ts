@@ -57,11 +57,11 @@ export async function getWellnessCaloriesResponse(): Promise<string> {
   const total = wellness?.totalCalories;
   if (activeSince <= 0 && resting <= 0) return '🔥 No calorie data this stream yet.';
   const parts: string[] = [];
-  if (activeSince > 0) parts.push(`${activeSince} active (this stream)`);
-  if (resting > 0) parts.push(`${resting} resting (today)`);
-  if ((total ?? 0) > 0 && parts.length === 0) parts.push(`${total} total`);
+  if (activeSince > 0) parts.push(`${activeSince} active cal (stream)`);
+  if (resting > 0) parts.push(`${resting} resting cal (today)`);
+  if ((total ?? 0) > 0 && parts.length === 0) parts.push(`${total} total cal`);
   const age = formatDataAge(getMetricUpdatedAt(wellness, ['activeCalories', 'restingCalories', 'totalCalories']));
-  return `🔥 ${parts.join(', ')} cal${age}`;
+  return `🔥 ${parts.join(' · ')}${age}`;
 }
 
 export async function getWellnessFlightsResponse(): Promise<string> {

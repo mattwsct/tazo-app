@@ -58,6 +58,7 @@ export const KICK_CHAT_COMMANDS = [
   'calories',
   'flights',
   'height',
+  'length',
   'weight',
   'wellness',
   'uv',
@@ -108,6 +109,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'calories' || cmd === 'cal') return { cmd: 'calories' };
   if (cmd === 'flights' || cmd === 'stairs') return { cmd: 'flights' };
   if (cmd === 'height' || cmd === 'ht') return { cmd: 'height' };
+  if (cmd === 'length') return { cmd: 'length' };
   if (cmd === 'weight' || cmd === 'wt') return { cmd: 'weight' };
   if (cmd === 'wellness') return { cmd: 'wellness' };
   if (cmd === 'uv') return { cmd: 'uv' };
@@ -154,7 +156,7 @@ export async function handleKickChatCommand(
     if (d > 0) parts.push(`${d}d`);
     if (h % 24 > 0) parts.push(`${h % 24}h`);
     parts.push(`${m % 60}m`);
-    return `⏱️ ${parts.join(' ')}`;
+    return `⏱️ Live for ${parts.join(' ')}`;
   }
   if (cmd === 'leaderboard') {
     const gamblingOn = await isGamblingEnabled();
@@ -185,11 +187,13 @@ export async function handleKickChatCommand(
   if (cmd === 'stand') {
     const bjGame = await getActiveGame(user);
     if (bjGame) return blackjackStand(user);
-    return '🃏 No active hand. Use !deal <amount> to play.';
+    const standChips = await getChips(user);
+    return `🃏 No active hand. !deal <amount> to play. You have ${standChips} chips.`;
   }
   if (cmd === 'calories') return getWellnessCaloriesResponse();
   if (cmd === 'flights') return getWellnessFlightsResponse();
   if (cmd === 'height') return getWellnessHeightResponse();
+  if (cmd === 'length') return '📏 18 cm × 14 cm (7.1" × 5.5")';
   if (cmd === 'weight') return getWellnessWeightResponse();
   if (cmd === 'wellness') return getWellnessSummaryResponse();
   if (cmd === 'uv') {
@@ -283,6 +287,7 @@ export async function handleKickChatCommand(
   if (cmd === 'crash') {
     if (!user) return null;
     const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+    if (!args.length) return '💥 Usage: !crash <amount> [target multiplier] — e.g. !crash 50 2.0 (cash out before it crashes!)';
     const betRaw = parseInt(args[0] ?? '', 10);
     const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
     const multRaw = args.length >= 2 ? parseFloat(args[1]) : undefined;
