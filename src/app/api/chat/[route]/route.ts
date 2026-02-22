@@ -272,9 +272,7 @@ export async function GET(
   const {
     getWellnessStepsResponse,
     getWellnessDistanceResponse,
-    getWellnessStandResponse,
     getWellnessCaloriesResponse,
-    getWellnessHandwashingResponse,
     getWellnessFlightsResponse,
     getWellnessWeightResponse,
     getWellnessSummaryResponse,
@@ -282,9 +280,7 @@ export async function GET(
 
   if (route === 'steps') return txtResponse(await getWellnessStepsResponse());
   if (route === 'distance' || route === 'dist') return txtResponse(await getWellnessDistanceResponse());
-  if (route === 'stand') return txtResponse(await getWellnessStandResponse());
   if (route === 'calories' || route === 'cal') return txtResponse(await getWellnessCaloriesResponse());
-  if (route === 'handwashing' || route === 'handwash') return txtResponse(await getWellnessHandwashingResponse());
   if (route === 'flights' || route === 'stairs') return txtResponse(await getWellnessFlightsResponse());
   if (route === 'weight' || route === 'wt') return txtResponse(await getWellnessWeightResponse());
   if (route === 'wellness') return txtResponse(await getWellnessSummaryResponse());

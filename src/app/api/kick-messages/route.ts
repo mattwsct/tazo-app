@@ -40,9 +40,7 @@ export interface KickChatBroadcastSettings {
   chatBroadcastWellnessSteps?: boolean;
   chatBroadcastWellnessDistance?: boolean;
   chatBroadcastWellnessFlights?: boolean;
-  chatBroadcastWellnessStandHours?: boolean;
   chatBroadcastWellnessActiveCalories?: boolean;
-  chatBroadcastWellnessHandwashing?: boolean;
 }
 
 export interface KickAlertSettings extends KickChatBroadcastSettings {
@@ -69,9 +67,7 @@ export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   chatBroadcastWellnessSteps: false,
   chatBroadcastWellnessDistance: false,
   chatBroadcastWellnessFlights: false,
-  chatBroadcastWellnessStandHours: false,
   chatBroadcastWellnessActiveCalories: false,
-  chatBroadcastWellnessHandwashing: false,
 };
 
 export const dynamic = 'force-dynamic';

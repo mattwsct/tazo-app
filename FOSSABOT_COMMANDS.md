@@ -306,30 +306,26 @@ Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago
 
 ## Wellness Commands (Health Auto Export)
 
-These commands use wellness data imported from Health Auto Export (steps, distance, flights, stand hours, calories, handwashing, weight). Steps, distance, and flights are "since stream start"; others use today's data.
+These commands use wellness data imported from Health Auto Export (steps, distance, flights, calories, weight). Steps, distance, and flights are "since stream start"; others use today's data.
 
 ```
 !steps → $(customapi https://app.tazo.wtf/api/chat/steps)
 !distance → $(customapi https://app.tazo.wtf/api/chat/distance)
-!stand → $(customapi https://app.tazo.wtf/api/chat/stand)
-!calories → $(customapi https://app.tazo.wtf/api/chat/calories)
-!handwashing → $(customapi https://app.tazo.wtf/api/chat/handwashing)
 !flights → $(customapi https://app.tazo.wtf/api/chat/flights)
+!calories → $(customapi https://app.tazo.wtf/api/chat/calories)
 !weight → $(customapi https://app.tazo.wtf/api/chat/weight)
 !wellness → $(customapi https://app.tazo.wtf/api/chat/wellness)
 ```
 
-**Aliases:** `!dist` for distance, `!cal` for calories, `!handwash` for handwashing, `!stairs` for flights, `!wt` for weight.
+**Aliases:** `!dist` for distance, `!cal` for calories, `!stairs` for flights, `!wt` for weight.
 
 Example outputs:
 - `👟 12,450 steps this stream`
 - `🚶 8.2 km (5.1 mi) walked/run this stream`
 - `🪜 25 flights climbed this stream`
-- `🧍 4 stand hours today`
 - `🔥 450 active, 1,200 resting cal today`
-- `🧼 2 min 15 sec handwashing this stream`
 - `⚖️ 75.2 kg (165.8 lbs)`
-- `📊 12,450 steps · 8.2 km (5.1 mi) · 3 washes · 4 stand hr · 450 active cal · 75.2 kg`
+- `📊 12,450 steps · 8.2 km (5.1 mi) · 25 flights · 450 active cal · 75.2 kg`
 
 ## Fun Commands
 

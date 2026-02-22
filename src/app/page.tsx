@@ -27,6 +27,7 @@ function formatLocationAge(ms: number): string {
 
 /** Manual entry for body metrics from smart scales; data persists until overwritten (no TTL). */
 const HEALTH_FIELDS: { key: string; label: string; unit: string }[] = [
+  { key: 'heightCm', label: 'Height', unit: 'cm' },
   { key: 'weightKg', label: 'Weight', unit: 'kg' },
   { key: 'bodyMassIndex', label: 'BMI', unit: '' },
   { key: 'bodyFatPercent', label: 'Body fat', unit: '%' },
@@ -216,9 +217,7 @@ export default function AdminPage() {
   const [kickChatBroadcastWellnessSteps, setKickChatBroadcastWellnessSteps] = useState(false);
   const [kickChatBroadcastWellnessDistance, setKickChatBroadcastWellnessDistance] = useState(false);
   const [kickChatBroadcastWellnessFlights, setKickChatBroadcastWellnessFlights] = useState(false);
-  const [kickChatBroadcastWellnessStandHours, setKickChatBroadcastWellnessStandHours] = useState(false);
   const [kickChatBroadcastWellnessActiveCalories, setKickChatBroadcastWellnessActiveCalories] = useState(false);
-  const [kickChatBroadcastWellnessHandwashing, setKickChatBroadcastWellnessHandwashing] = useState(false);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleIncludeLocation, setKickStreamTitleIncludeLocation] = useState(true);
@@ -387,9 +386,7 @@ export default function AdminPage() {
         if (d.alertSettings?.chatBroadcastWellnessSteps !== undefined) setKickChatBroadcastWellnessSteps(d.alertSettings.chatBroadcastWellnessSteps);
         if (d.alertSettings?.chatBroadcastWellnessDistance !== undefined) setKickChatBroadcastWellnessDistance(d.alertSettings.chatBroadcastWellnessDistance);
         if (d.alertSettings?.chatBroadcastWellnessFlights !== undefined) setKickChatBroadcastWellnessFlights(d.alertSettings.chatBroadcastWellnessFlights);
-        if (d.alertSettings?.chatBroadcastWellnessStandHours !== undefined) setKickChatBroadcastWellnessStandHours(d.alertSettings.chatBroadcastWellnessStandHours);
         if (d.alertSettings?.chatBroadcastWellnessActiveCalories !== undefined) setKickChatBroadcastWellnessActiveCalories(d.alertSettings.chatBroadcastWellnessActiveCalories);
-        if (d.alertSettings?.chatBroadcastWellnessHandwashing !== undefined) setKickChatBroadcastWellnessHandwashing(d.alertSettings.chatBroadcastWellnessHandwashing);
       })
       .catch(() => {});
     fetch('/api/kick-poll-settings', { credentials: 'include' })
@@ -584,9 +581,7 @@ export default function AdminPage() {
       chatBroadcastWellnessSteps: boolean;
       chatBroadcastWellnessDistance: boolean;
       chatBroadcastWellnessFlights: boolean;
-      chatBroadcastWellnessStandHours: boolean;
       chatBroadcastWellnessActiveCalories: boolean;
-      chatBroadcastWellnessHandwashing: boolean;
     }>;
   }) => {
     const messages = overrides?.messages ?? kickMessages;
@@ -611,9 +606,7 @@ export default function AdminPage() {
       chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
       chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
       chatBroadcastWellnessFlights: kickChatBroadcastWellnessFlights,
-      chatBroadcastWellnessStandHours: kickChatBroadcastWellnessStandHours,
       chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
-      chatBroadcastWellnessHandwashing: kickChatBroadcastWellnessHandwashing,
     };
     setToast({ type: 'saving', message: 'Saving...' });
     try {
@@ -632,7 +625,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastStreamTitle, kickChatBroadcastLocation, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessStandHours, kickChatBroadcastWellnessActiveCalories, kickChatBroadcastWellnessHandwashing]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastStreamTitle, kickChatBroadcastLocation, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
@@ -651,9 +644,7 @@ export default function AdminPage() {
     chatBroadcastAltitudeTimeoutMin: 5,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
-    chatBroadcastWellnessStandHours: kickChatBroadcastWellnessStandHours,
     chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
-    chatBroadcastWellnessHandwashing: kickChatBroadcastWellnessHandwashing,
   });
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
@@ -672,9 +663,7 @@ export default function AdminPage() {
     chatBroadcastAltitudeTimeoutMin: 5,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
-    chatBroadcastWellnessStandHours: kickChatBroadcastWellnessStandHours,
     chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
-    chatBroadcastWellnessHandwashing: kickChatBroadcastWellnessHandwashing,
   };
   kickMessagesRef.current = kickMessages;
   kickTemplateEnabledRef.current = kickTemplateEnabled;
@@ -1143,9 +1132,9 @@ export default function AdminPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        title="Reset steps, distance, handwashing, flights for current stream — leaderboard unchanged"
+                        title="Reset steps, distance, flights for current stream — leaderboard unchanged"
                         onClick={async () => {
-                          if (!confirm('Reset stream session? Clears leaderboard, steps, distance, handwashing, flights, stream goals, and wellness milestones. Use when auto-reset fails or for a clean start.')) return;
+                          if (!confirm('Reset stream session? Clears leaderboard, steps, distance, flights, stream goals, and wellness milestones. Use when auto-reset fails or for a clean start.')) return;
                           try {
                             const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
                             const data = await r.json();
@@ -1692,19 +1681,9 @@ export default function AdminPage() {
                     <span>Flights climbed</span>
                   </label>
                   <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input type="checkbox" checked={kickChatBroadcastWellnessStandHours} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessStandHours(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessStandHours: c } }); }} className="checkbox-input" />
-                    <span className="radio-icon">🧍</span>
-                    <span>Stand hours</span>
-                  </label>
-                  <label className="checkbox-label-row broadcast-checkbox-item">
                     <input type="checkbox" checked={kickChatBroadcastWellnessActiveCalories} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessActiveCalories(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessActiveCalories: c } }); }} className="checkbox-input" />
                     <span className="radio-icon">🔥</span>
                     <span>Active calories</span>
-                  </label>
-                  <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input type="checkbox" checked={kickChatBroadcastWellnessHandwashing} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessHandwashing(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessHandwashing: c } }); }} className="checkbox-input" />
-                    <span className="radio-icon">🧼</span>
-                    <span>Handwashing (time spent)</span>
                   </label>
                 </div>
               </div>

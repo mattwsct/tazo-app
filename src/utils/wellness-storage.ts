@@ -1,5 +1,5 @@
 // === 🏃 WELLNESS STORAGE ===
-// Human health data from Health Auto Export (steps, calories, sleep, etc.)
+// Human health data from Health Auto Export (steps, calories, distance, flights, etc.)
 // Separate from stats (stream-session speed/altitude/heart rate from Pulsoid/RTIRL)
 //
 // Steps session: Tracks steps accumulated since stream start, surviving daily resets.
@@ -11,7 +11,6 @@ import { kv } from '@vercel/kv';
 const WELLNESS_KEY = 'wellness_data';
 const WELLNESS_STEPS_SESSION_KEY = 'wellness_steps_session';
 const WELLNESS_DISTANCE_SESSION_KEY = 'wellness_distance_session';
-const WELLNESS_HANDWASHING_SESSION_KEY = 'wellness_handwashing_session';
 const WELLNESS_FLIGHTS_SESSION_KEY = 'wellness_flights_session';
 const WELLNESS_LAST_IMPORT_KEY = 'wellness_last_import';
 
@@ -19,7 +18,6 @@ const WELLNESS_LAST_IMPORT_KEY = 'wellness_last_import';
 interface WellnessLastImport {
   steps?: { value: number; at: number };
   distanceKm?: { value: number; at: number };
-  handwashingCount?: { value: number; at: number };
   flightsClimbed?: { value: number; at: number };
 }
 
@@ -91,11 +89,6 @@ export interface DistanceSession {
   lastKnown: number;     // last raw distance from API (for delta calc / daily-reset detection)
 }
 
-export interface HandwashingSession {
-  accumulated: number;  // total handwashing duration in seconds since stream start (Apple Health: duration per event, not count)
-  lastKnown: number;
-}
-
 export interface FlightsSession {
   accumulated: number;  // flights climbed since stream start (survives midnight)
   lastKnown: number;
@@ -106,20 +99,15 @@ export interface WellnessData {
   activeCalories?: number;
   restingCalories?: number;
   totalCalories?: number;
-  sleepHours?: number;
-  sleepStart?: string;
-  sleepEnd?: string;
   distanceKm?: number;
   flightsClimbed?: number;
-  standHours?: number;
-  handwashingCount?: number;  // Total handwashing duration in seconds (Apple Health: HKCategoryType handwashingEvent stores duration per event)
+  heightCm?: number;         // Height in cm (from Health Auto Export / manual)
   weightKg?: number;         // Body mass in kg (from Health Auto Export / smart scale)
   bodyMassIndex?: number;    // BMI (from Health Auto Export / smart scale)
   bodyFatPercent?: number;   // Body fat % (0–100, from smart scale)
   leanBodyMassKg?: number;   // Lean body mass in kg (from smart scale)
   heartRate?: number;        // From Apple Health (resting etc) — live BPM stays in stats from Pulsoid
   restingHeartRate?: number;
-  hrv?: number;              // Heart rate variability (ms)
   updatedAt: number;
 }
 
@@ -287,70 +275,6 @@ export async function updateDistanceSession(newDistanceKm: number): Promise<void
   }
 }
 
-// === Handwashing since stream start (handles daily midnight reset) ===
-
-export async function getHandwashingSession(): Promise<HandwashingSession | null> {
-  try {
-    const data = await kv.get<HandwashingSession>(WELLNESS_HANDWASHING_SESSION_KEY);
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-export async function getHandwashingSinceStreamStart(): Promise<number> {
-  const session = await getHandwashingSession();
-  return session?.accumulated ?? 0;
-}
-
-export async function resetHandwashingSession(currentCount: number): Promise<void> {
-  try {
-    const session: HandwashingSession = {
-      accumulated: 0,
-      lastKnown: Math.max(0, Math.floor(currentCount)),
-    };
-    await kv.set(WELLNESS_HANDWASHING_SESSION_KEY, session);
-  } catch (error) {
-    console.error('Failed to reset handwashing session:', error);
-    throw error;
-  }
-}
-
-export async function updateHandwashingSession(newCount: number): Promise<void> {
-  try {
-    const count = Math.max(0, Math.floor(newCount));
-    const now = Date.now();
-    const lastImportState = await getLastImport();
-    const existing = await getHandwashingSession();
-    const lastKnown = existing?.lastKnown ?? 0;
-    const accumulated = existing?.accumulated ?? 0;
-
-    if (shouldSkipSessionUpdate(lastImportState.handwashingCount, count, lastKnown, now)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Wellness] Skipping handwashing session update (duplicate/stale):', count);
-      }
-      return;
-    }
-
-    let delta: number;
-    if (count >= lastKnown) {
-      delta = count - lastKnown;
-    } else {
-      delta = count;
-    }
-
-    const session: HandwashingSession = {
-      accumulated: accumulated + delta,
-      lastKnown: count,
-    };
-    await kv.set(WELLNESS_HANDWASHING_SESSION_KEY, session);
-    await setLastImportMetric('handwashingCount', count);
-  } catch (error) {
-    console.error('Failed to update handwashing session:', error);
-    throw error;
-  }
-}
-
 // === Flights climbed since stream start (handles daily midnight reset) ===
 
 export async function getFlightsSession(): Promise<FlightsSession | null> {
@@ -414,9 +338,7 @@ export interface WellnessMilestonesLastSent {
   steps?: number;
   distanceKm?: number;
   flightsClimbed?: number;
-  standHours?: number;
   activeCalories?: number;
-  handwashing?: number;
 }
 
 export async function getWellnessMilestonesLastSent(): Promise<WellnessMilestonesLastSent> {

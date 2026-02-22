@@ -11,15 +11,13 @@
  * - basal_energy_burned: basalEnergyBurned — kJ or kcal
  * - apple_stand_hour: stand hours count
  * - walking_running_distance: distanceWalkingRunning — m, km, or mi (Apple native: m)
- * - handwashing: HKCategoryType handwashingEvent — duration per event (s or min), NOT count
  * - flights_climbed: flightsClimbed — count
  * - body_mass: bodyMass — kg or lb
  * - heart_rate, resting_heart_rate: bpm
- * - heart_rate_variability_sdnn: ms (SD of NN intervals)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateWellnessData, updateStepsSession, updateDistanceSession, updateHandwashingSession, updateFlightsSession } from '@/utils/wellness-storage';
+import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 
 export const dynamic = 'force-dynamic';
@@ -62,13 +60,6 @@ function distanceToKm(val: number, units: string | undefined): number {
   if (u.includes('km')) return val;
   if (u.includes('mi') || u.includes('mile')) return val * 1.60934;
   return val / 1000; // default: meters (Apple Health native unit)
-}
-
-/** Parse handwashing to seconds. Apple Health: HKCategoryType handwashingEvent stores duration per event (start–end). */
-function handwashingToSeconds(val: number, units: string | undefined): number {
-  const u = normUnits(units);
-  if (u.includes('min') && !u.includes('sec')) return val * 60;
-  return val; // sec or unspecified: assume seconds
 }
 
 function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessData> {
@@ -122,10 +113,6 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
     updates.totalCalories = (updates.activeCalories ?? 0) + (updates.restingCalories ?? 0);
   }
 
-  // apple_stand_hour: count of hours stood (HKActivitySummary / category samples)
-  const standHour = byName.get('apple_stand_hour');
-  if (standHour) updates.standHours = Math.max(0, Math.round(sumQty(standHour)));
-
   // walking_running_distance: HKQuantityTypeIdentifier.distanceWalkingRunning — Apple stores meters; export may be m, km, mi
   const walkingDist = byName.get('walking_running_distance');
   if (walkingDist) {
@@ -134,19 +121,26 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
     updates.distanceKm = Math.max(0, Math.round(km * 1000) / 1000);
   }
 
-  // handwashing: HKCategoryTypeIdentifier.handwashingEvent — duration (seconds) per event, not count
-  const handwashing = byName.get('handwashing');
-  if (handwashing) {
-    const raw = sumQty(handwashing);
-    const sec = handwashingToSeconds(raw, handwashing.units);
-    updates.handwashingCount = Math.max(0, Math.round(sec));
-  }
-
   // flights_climbed: HKQuantityTypeIdentifier.flightsClimbed — count
   const flights = byName.get('flights_climbed');
   if (flights) {
     const total = Math.max(0, Math.round(sumQty(flights)));
     updates.flightsClimbed = total;
+  }
+
+  // height: HKQuantityTypeIdentifier.height — typically m or cm (Apple Health uses m)
+  const heightMetric = byName.get('height') ?? byName.get('body_height') ?? byName.get('stature');
+  if (heightMetric) {
+    const raw = lastQty(heightMetric);
+    if (raw != null && raw >= 0) {
+      const units = normUnits(heightMetric.units);
+      let cm: number;
+      if (units.includes('in') && !units.includes('cm')) cm = raw * 2.54;
+      else if (units.includes('ft') || units.includes('foot')) cm = raw * 30.48;
+      else if (units.includes('m') && raw < 10) cm = raw * 100;
+      else cm = raw; // assume cm
+      updates.heightCm = Math.round(Math.max(0, cm) * 10) / 10;
+    }
   }
 
   // body_mass: HKQuantityTypeIdentifier.bodyMass — kg or lb. Also weight_body_mass (Health Auto Export).
@@ -191,11 +185,6 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   const restingBpm = lastAvg(restingHr) ?? lastQty(restingHr);
   if (restingBpm != null && restingBpm >= 0) updates.restingHeartRate = Math.round(restingBpm);
 
-  // heart_rate_variability_sdnn: standard deviation of NN intervals, typically in ms
-  const hrvMetric = byName.get('heart_rate_variability_sdnn') ?? byName.get('heart_rate_variability');
-  const hrvVal = lastAvg(hrvMetric) ?? lastQty(hrvMetric);
-  if (hrvVal != null && hrvVal >= 0) updates.hrv = Math.round(hrvVal);
-
   return updates;
 }
 
@@ -233,21 +222,15 @@ export async function POST(request: NextRequest) {
     if (body.activeCalories !== undefined) updates.activeCalories = Math.max(0, parseNumber(body.activeCalories) ?? 0);
     if (body.restingCalories !== undefined) updates.restingCalories = Math.max(0, parseNumber(body.restingCalories) ?? 0);
     if (body.totalCalories !== undefined) updates.totalCalories = Math.max(0, parseNumber(body.totalCalories) ?? 0);
-    if (body.sleepHours !== undefined) updates.sleepHours = Math.max(0, parseNumber(body.sleepHours) ?? 0);
-    if (body.sleepStart !== undefined) updates.sleepStart = parseString(body.sleepStart);
-    if (body.sleepEnd !== undefined) updates.sleepEnd = parseString(body.sleepEnd);
     if (body.distanceKm !== undefined) updates.distanceKm = Math.max(0, parseNumber(body.distanceKm) ?? 0);
     if (body.flightsClimbed !== undefined) updates.flightsClimbed = Math.max(0, Math.floor(parseNumber(body.flightsClimbed) ?? 0));
-    if (body.standHours !== undefined) updates.standHours = Math.max(0, parseNumber(body.standHours) ?? 0);
-    if (body.handwashingCount !== undefined) updates.handwashingCount = Math.max(0, Math.floor(parseNumber(body.handwashingCount) ?? 0));
+    if (body.heightCm !== undefined) updates.heightCm = Math.max(0, parseNumber(body.heightCm) ?? 0);
     if (body.weightKg !== undefined) updates.weightKg = Math.max(0, parseNumber(body.weightKg) ?? 0);
     if (body.bodyMassIndex !== undefined) updates.bodyMassIndex = Math.max(0, parseNumber(body.bodyMassIndex) ?? 0);
     if (body.bodyFatPercent !== undefined) updates.bodyFatPercent = Math.max(0, Math.min(100, parseNumber(body.bodyFatPercent) ?? 0));
     if (body.leanBodyMassKg !== undefined) updates.leanBodyMassKg = Math.max(0, parseNumber(body.leanBodyMassKg) ?? 0);
     if (body.heartRate !== undefined) updates.heartRate = Math.max(0, Math.floor(parseNumber(body.heartRate) ?? 0));
     if (body.restingHeartRate !== undefined) updates.restingHeartRate = Math.max(0, Math.floor(parseNumber(body.restingHeartRate) ?? 0));
-    if (body.hrv !== undefined) updates.hrv = Math.max(0, parseNumber(body.hrv) ?? 0);
-
     if (Object.keys(updates).length === 0) {
       const metricNames = getMetricNamesFromPayload(body);
       console.warn('[Wellness import] No valid fields.', {
@@ -267,9 +250,6 @@ export async function POST(request: NextRequest) {
     }
     if (updates.distanceKm !== undefined) {
       await updateDistanceSession(updates.distanceKm);
-    }
-    if (updates.handwashingCount !== undefined) {
-      await updateHandwashingSession(updates.handwashingCount);
     }
     if (updates.flightsClimbed !== undefined) {
       await updateFlightsSession(updates.flightsClimbed);

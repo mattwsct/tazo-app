@@ -7,9 +7,7 @@ import { getUserPoints, getLeaderboardTop } from '@/utils/leaderboard-storage';
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
-  getWellnessStandResponse,
   getWellnessCaloriesResponse,
-  getWellnessHandwashingResponse,
   getWellnessFlightsResponse,
   getWellnessWeightResponse,
   getWellnessSummaryResponse,
@@ -29,7 +27,6 @@ export const KICK_CHAT_COMMANDS = [
   'distance',
   'stand',
   'calories',
-  'handwashing',
   'flights',
   'weight',
   'wellness',
@@ -62,7 +59,6 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
   if (cmd === 'stand') return { cmd: 'stand' };
   if (cmd === 'calories' || cmd === 'cal') return { cmd: 'calories' };
-  if (cmd === 'handwashing' || cmd === 'handwash') return { cmd: 'handwashing' };
   if (cmd === 'flights' || cmd === 'stairs') return { cmd: 'flights' };
   if (cmd === 'weight' || cmd === 'wt') return { cmd: 'weight' };
   if (cmd === 'wellness') return { cmd: 'wellness' };
@@ -118,10 +114,9 @@ export async function handleKickChatCommand(
   if (cmd === 'stand') {
     const bjGame = await getActiveGame(user);
     if (bjGame) return blackjackStand(user);
-    return getWellnessStandResponse();
+    return '🃏 No active hand. Use !deal <amount> to play.';
   }
   if (cmd === 'calories') return getWellnessCaloriesResponse();
-  if (cmd === 'handwashing') return getWellnessHandwashingResponse();
   if (cmd === 'flights') return getWellnessFlightsResponse();
   if (cmd === 'weight') return getWellnessWeightResponse();
   if (cmd === 'wellness') return getWellnessSummaryResponse();

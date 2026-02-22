@@ -5,7 +5,6 @@ import {
   getWellnessData,
   resetStepsSession,
   resetDistanceSession,
-  resetHandwashingSession,
   resetFlightsSession,
   resetWellnessLastImport,
   resetWellnessMilestonesOnStreamStart,
@@ -17,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/reset-stream-session
- * Manually resets stream session: leaderboard, steps, distance, handwashing, flights,
+ * Manually resets stream session: leaderboard, steps, distance, flights,
  * wellness milestones, and stream_started_at. For use when auto-reset on stream start fails.
  * Requires admin auth.
  */
@@ -35,7 +34,6 @@ export async function POST(request: NextRequest) {
     await Promise.all([
       resetStepsSession(wellness?.steps ?? 0),
       resetDistanceSession(wellness?.distanceKm ?? 0),
-      resetHandwashingSession(wellness?.handwashingCount ?? 0),
       resetFlightsSession(wellness?.flightsClimbed ?? 0),
       resetWellnessLastImport(),
       resetWellnessMilestonesOnStreamStart(),

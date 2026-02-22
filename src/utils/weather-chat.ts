@@ -31,6 +31,24 @@ export function isNightTime(): boolean {
 }
 
 /**
+ * Condenses OpenWeatherMap descriptions for chat (e.g. "moderate rain" → "rain", "broken clouds" → "clouds")
+ */
+export function condenseWeatherDescription(desc: string): string {
+  if (!desc || !desc.trim()) return desc;
+  const d = desc.toLowerCase().trim();
+  // Strip intensity/cloud-cover modifiers
+  let core = d
+    .replace(/^(very heavy|heavy intensity|heavy|moderate|light intensity|light|extreme)\s+/i, '')
+    .replace(/^(few|broken|overcast|scattered)\s+/i, '')
+    .replace(/\s+with\s+(light\s+)?(heavy\s+)?rain$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (core === 'clear sky') return 'clear';
+  if (core === 'cloud' || core === 'clouds') return 'clouds';
+  return core || d;
+}
+
+/**
  * Formats temperature for chat (both °C and °F)
  */
 export function formatTemperature(tempC: number): string {
@@ -250,7 +268,8 @@ export function parseWeatherData(ow: OpenWeatherCurrentResponse | null | undefin
   if (!ow?.main?.temp) return null;
 
   const condition = (ow.weather?.[0]?.main || '').toLowerCase();
-  const desc = (ow.weather?.[0]?.description || '').toLowerCase();
+  const rawDesc = (ow.weather?.[0]?.description || '').toLowerCase();
+  const desc = condenseWeatherDescription(rawDesc);
   const tempC = Math.round(ow.main.temp);
   const feelsLikeC = Math.round(ow.main.feels_like || tempC);
   const windKmh = Math.round((ow.wind?.speed || 0) * 3.6);

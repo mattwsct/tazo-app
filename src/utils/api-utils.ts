@@ -1,5 +1,6 @@
 import { type LocationData, stripTrailingNumbers } from './location-utils';
 import { ApiLogger } from '@/lib/logger';
+import { condenseWeatherDescription } from './weather-chat';
 import { 
   isValidApiKey
 } from './fallback-utils';
@@ -316,7 +317,7 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     if (data.main && typeof data.main.feels_like === 'number' && data.weather && data.weather[0]) {
       weather = {
         temp: Math.round(data.main.feels_like), // Use "feels like" temperature
-        desc: data.weather[0].description || 'unknown',
+        desc: condenseWeatherDescription(data.weather[0].description || 'unknown'),
         windKmh: windKmh,
         humidity: data.main.humidity || undefined,
         visibility: data.visibility ? (data.visibility / 1000) : null,
@@ -327,7 +328,7 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
       // Fallback to regular temp if feels_like is not available
       weather = {
         temp: Math.round(data.main.temp),
-        desc: data.weather[0].description || 'unknown',
+        desc: condenseWeatherDescription(data.weather[0].description || 'unknown'),
         windKmh: windKmh,
         humidity: data.main.humidity || undefined,
         visibility: data.visibility ? (data.visibility / 1000) : null,

@@ -21,12 +21,10 @@ import {
   getStepsSinceStreamStart,
   getDistanceSinceStreamStart,
   getFlightsSinceStreamStart,
-  getHandwashingSinceStreamStart,
   getWellnessMilestonesLastSent,
   setWellnessMilestoneLastSent,
 } from '@/utils/wellness-storage';
 import { getCountryFlagEmoji } from '@/utils/chat-utils';
-import { formatDuration } from '@/utils/wellness-chat';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
@@ -49,7 +47,6 @@ const WELLNESS_MILESTONES = {
   steps: [1000, 2000, 5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 75000, 100000],
   distanceKm: [1, 2, 5, 10, 15, 20, 25, 30, 50, 75, 100],
   flightsClimbed: [5, 10, 25, 50, 75, 100, 150],
-  standHours: [1, 2, 4, 6, 8, 10, 12, 14, 16, 18],
   activeCalories: [100, 250, 500, 1000, 1500, 2000, 3000, 5000],
 } as const;
 
@@ -294,21 +291,18 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Wellness milestones: steps, distance, stand hours, active calories, handwashing (only when live)
+  // Wellness milestones: steps, distance, flights, active calories (only when live)
   const hasWellnessToggles =
     storedAlert?.chatBroadcastWellnessSteps ||
     storedAlert?.chatBroadcastWellnessDistance ||
     storedAlert?.chatBroadcastWellnessFlights ||
-    storedAlert?.chatBroadcastWellnessStandHours ||
-    storedAlert?.chatBroadcastWellnessActiveCalories ||
-    storedAlert?.chatBroadcastWellnessHandwashing;
+    storedAlert?.chatBroadcastWellnessActiveCalories;
   if (hasWellnessToggles && speedAltitudeLive) {
-    const [wellness, stepsSince, distanceSince, flightsSince, handwashingSince, milestonesLast] = await Promise.all([
+    const [wellness, stepsSince, distanceSince, flightsSince, milestonesLast] = await Promise.all([
       getWellnessData(),
       getStepsSinceStreamStart(),
       getDistanceSinceStreamStart(),
       getFlightsSinceStreamStart(),
-      getHandwashingSinceStreamStart(),
       getWellnessMilestonesLastSent(),
     ]);
 
@@ -317,7 +311,7 @@ export async function GET(request: NextRequest) {
       current: number,
       milestones: readonly number[],
       lastSent: number | undefined,
-      metric: 'steps' | 'distanceKm' | 'flightsClimbed' | 'standHours' | 'activeCalories',
+      metric: 'steps' | 'distanceKm' | 'flightsClimbed' | 'activeCalories',
       emoji: string,
       unit: string,
       fmt: (n: number) => string
@@ -337,24 +331,6 @@ export async function GET(request: NextRequest) {
         }
       }
     };
-
-    // Handwashing: notify when total duration increases (duration in seconds, not count)
-    const handwashingToggle = storedAlert?.chatBroadcastWellnessHandwashing === true;
-    if (handwashingToggle && handwashingSince > 0) {
-      const lastHandwashing = milestonesLast.handwashing ?? 0;
-      if (handwashingSince > lastHandwashing) {
-        const n = handwashingSince;
-        const msg = `🧼 ${formatDuration(n)} handwashing this stream!`;
-        try {
-          await sendKickChatMessage(accessToken, msg);
-          sent++;
-          await setWellnessMilestoneLastSent('handwashing', n);
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'wellness_handwashing', value: n, msgPreview: msg.slice(0, 50) }));
-        } catch (err) {
-          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'wellness_handwashing', error: err instanceof Error ? err.message : String(err) }));
-        }
-      }
-    }
 
     await checkAndSend(
       storedAlert?.chatBroadcastWellnessSteps === true,
@@ -384,16 +360,6 @@ export async function GET(request: NextRequest) {
       'flightsClimbed',
       '🪜',
       'flights',
-      String
-    );
-    await checkAndSend(
-      storedAlert?.chatBroadcastWellnessStandHours === true,
-      wellness?.standHours ?? 0,
-      WELLNESS_MILESTONES.standHours,
-      milestonesLast.standHours,
-      'standHours',
-      '🧍',
-      'stand hours',
       String
     );
     await checkAndSend(
