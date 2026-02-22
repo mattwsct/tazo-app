@@ -18,6 +18,8 @@ const VIEW_CHIPS_LAST_AT_KEY = 'blackjack_view_chips_last_at';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
 const GAME_TIMEOUT_MS = 90_000; // Auto-stand after 90s
 const DEAL_COOLDOWN_MS = 15_000; // Min 15s between starting new hands
+const GAMBLE_INSTANT_COOLDOWN_MS = 5_000; // Min 5s between slots/roulette/coinflip/dice
+const GAMBLE_INSTANT_LAST_AT_KEY = 'gamble_instant_last_at';
 const STARTING_CHIPS = 100;
 const REBUY_CHIPS = 50; // Chips given when !refill at 0 (once per stream)
 const REBUYS_PER_STREAM = 1;
@@ -508,4 +510,178 @@ export async function stand(username: string): Promise<string> {
 
   await kv.del(gameKey(user));
   return `🃏 Dealer: ${dealerHand.map(cardDisplay).join(' ')} (${dealerVal}) | ${msg}`;
+}
+
+// --- Instant games: coinflip, slots, roulette, dice ---
+
+async function checkInstantCooldown(user: string): Promise<number | null> {
+  const now = Date.now();
+  const lastRaw = await kv.hget<number | string>(GAMBLE_INSTANT_LAST_AT_KEY, user);
+  const lastAt = typeof lastRaw === 'number' ? lastRaw : (typeof lastRaw === 'string' ? parseInt(lastRaw, 10) : 0);
+  if (lastAt > 0 && now - lastAt < GAMBLE_INSTANT_COOLDOWN_MS) {
+    return Math.ceil((GAMBLE_INSTANT_COOLDOWN_MS - (now - lastAt)) / 1000);
+  }
+  return null;
+}
+
+async function setInstantCooldown(user: string): Promise<void> {
+  await kv.hset(GAMBLE_INSTANT_LAST_AT_KEY, { [user]: String(Date.now()) });
+}
+
+/** Coinflip: 50/50, 2x on win. !coinflip <amount> or !flip <amount> */
+export async function playCoinflip(username: string, betAmount: number): Promise<string> {
+  const user = normalizeUser(username);
+  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
+  if (bet < MIN_BET) return `🎲 Min bet ${MIN_BET}. !coinflip <amount> or !flip <amount>`;
+
+  const wait = await checkInstantCooldown(user);
+  if (wait !== null) return `🎲 Wait ${wait}s before another game.`;
+
+  const hasChips = await deductChips(user, bet);
+  if (!hasChips) {
+    const chips = await getChips(user);
+    return `🎲 Not enough chips. You have ${chips}.`;
+  }
+  await setInstantCooldown(user);
+
+  const win = Math.random() < 0.5;
+  if (win) {
+    await addChips(user, bet * 2);
+    return `🎲 Coinflip: HEADS — You win! +${bet} chips (${bet * 2} total)`;
+  }
+  return `🎲 Coinflip: TAILS — Lost ${bet} chips.`;
+}
+
+const SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍀', '7️⃣', '💎'] as const;
+const SLOT_MULTIPLIERS: Record<(typeof SLOT_SYMBOLS)[number], number> = {
+  '🍒': 2,
+  '🍋': 3,
+  '🍊': 5,
+  '🍀': 8,
+  '7️⃣': 12,
+  '💎': 25,
+};
+
+/** Slots: 3 reels, match 3 = big win, match 2 = push. !slots <amount> or !spin <amount> */
+export async function playSlots(username: string, betAmount: number): Promise<string> {
+  const user = normalizeUser(username);
+  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
+  if (bet < MIN_BET) return `🎰 Min bet ${MIN_BET}. !slots <amount> or !spin <amount>`;
+
+  const wait = await checkInstantCooldown(user);
+  if (wait !== null) return `🎰 Wait ${wait}s before another spin.`;
+
+  const hasChips = await deductChips(user, bet);
+  if (!hasChips) {
+    const chips = await getChips(user);
+    return `🎰 Not enough chips. You have ${chips}.`;
+  }
+  await setInstantCooldown(user);
+
+  const reels = [
+    SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)],
+    SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)],
+    SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)],
+  ] as (typeof SLOT_SYMBOLS)[number][];
+  const display = reels.join(' ');
+
+  if (reels[0] === reels[1] && reels[1] === reels[2]) {
+    const mult = SLOT_MULTIPLIERS[reels[0]];
+    const win = bet * mult;
+    await addChips(user, win);
+    return `🎰 [ ${display} ] JACKPOT! ${mult}x — +${win} chips!`;
+  }
+  if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
+    const match = reels[0] === reels[1] ? reels[0] : reels[1];
+    const mult = Math.max(1, Math.floor(SLOT_MULTIPLIERS[match] / 2));
+    const win = bet * mult;
+    await addChips(user, win);
+    return `🎰 [ ${display} ] Two match! ${mult}x — +${win - bet} chips (${win} back)`;
+  }
+  return `🎰 [ ${display} ] No match — lost ${bet} chips.`;
+}
+
+const ROULETTE_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+
+/** Roulette: bet red/black (2x) or number 1-36 (36x). !roulette <red|black|1-36> <amount> */
+export async function playRoulette(username: string, choice: string, betAmount: number): Promise<string> {
+  const user = normalizeUser(username);
+  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
+  if (bet < MIN_BET) return `🎡 Min bet ${MIN_BET}. !roulette <red|black|number> <amount>`;
+
+  const wait = await checkInstantCooldown(user);
+  if (wait !== null) return `🎡 Wait ${wait}s before another spin.`;
+
+  const choiceLower = choice.trim().toLowerCase();
+  const isRed = choiceLower === 'red';
+  const isBlack = choiceLower === 'black';
+  const numBet = !isRed && !isBlack ? parseInt(choice, 10) : NaN;
+  const isValidNum = !isNaN(numBet) && numBet >= 1 && numBet <= 36;
+
+  if (!isRed && !isBlack && !isValidNum) {
+    return `🎡 Bet red, black, or a number 1-36. !roulette red 10`;
+  }
+
+  const hasChips = await deductChips(user, bet);
+  if (!hasChips) {
+    const chips = await getChips(user);
+    return `🎡 Not enough chips. You have ${chips}.`;
+  }
+  await setInstantCooldown(user);
+
+  const spin = Math.floor(Math.random() * 37);
+  const spinRed = ROULETTE_RED.has(spin);
+  const spinBlack = spin >= 1 && spin <= 36 && !spinRed;
+  const spinStr = spin === 0 ? '0 (green)' : `${spin} (${spinRed ? 'red' : spinBlack ? 'black' : 'green'})`;
+
+  if (isRed) {
+    if (spinRed) {
+      await addChips(user, bet * 2);
+      return `🎡 [ ${spinStr} ] Red wins! +${bet} chips (${bet * 2} total)`;
+    }
+    return `🎡 [ ${spinStr} ] Red lost — ${bet} chips gone.`;
+  }
+  if (isBlack) {
+    if (spinBlack) {
+      await addChips(user, bet * 2);
+      return `🎡 [ ${spinStr} ] Black wins! +${bet} chips (${bet * 2} total)`;
+    }
+    return `🎡 [ ${spinStr} ] Black lost — ${bet} chips gone.`;
+  }
+  if (spin === numBet) {
+    const win = bet * 36;
+    await addChips(user, win);
+    return `🎡 [ ${spinStr} ] NUMBER HIT! 36x — +${win} chips!`;
+  }
+  return `🎡 [ ${spinStr} ] Wrong number — lost ${bet} chips.`;
+}
+
+/** Dice: bet high (4-6) or low (1-3). 2x on win. !dice <high|low> <amount> */
+export async function playDice(username: string, choice: string, betAmount: number): Promise<string> {
+  const user = normalizeUser(username);
+  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
+  if (bet < MIN_BET) return `🎲 Min bet ${MIN_BET}. !dice <high|low> <amount>`;
+
+  const wait = await checkInstantCooldown(user);
+  if (wait !== null) return `🎲 Wait ${wait}s before another roll.`;
+
+  const choiceLower = choice.trim().toLowerCase();
+  const isHigh = choiceLower === 'high' || choiceLower === 'h';
+  const isLow = choiceLower === 'low' || choiceLower === 'l';
+  if (!isHigh && !isLow) return `🎲 Bet high (4-6) or low (1-3). !dice high 10`;
+
+  const hasChips = await deductChips(user, bet);
+  if (!hasChips) {
+    const chips = await getChips(user);
+    return `🎲 Not enough chips. You have ${chips}.`;
+  }
+  await setInstantCooldown(user);
+
+  const roll = Math.floor(Math.random() * 6) + 1;
+  const won = (isHigh && roll >= 4) || (isLow && roll <= 3);
+  if (won) {
+    await addChips(user, bet * 2);
+    return `🎲 Rolled ${roll} (${isHigh ? 'high' : 'low'}) — You win! +${bet} chips (${bet * 2} total)`;
+  }
+  return `🎲 Rolled ${roll} (${roll >= 4 ? 'high' : 'low'}) — Lost ${bet} chips.`;
 }
