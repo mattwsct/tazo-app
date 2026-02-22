@@ -222,38 +222,41 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'coinflip' || cmd === 'flip') {
     if (!user) return null;
-    const bet = parseInt((arg ?? '').trim(), 10);
-    if (isNaN(bet) || bet < 1) return '🎲 Usage: !coinflip <amount> or !flip <amount> — 50/50, 2x on win';
+    const betRaw = parseInt((arg ?? '').trim(), 10);
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
     return playCoinflip(user, bet);
   }
   if (cmd === 'slots' || cmd === 'spin') {
     if (!user) return null;
-    const bet = parseInt((arg ?? '').trim(), 10);
-    if (isNaN(bet) || bet < 1) return '🎰 Usage: !slots <amount> or !spin <amount> — 3 reels, match to win';
+    const betRaw = parseInt((arg ?? '').trim(), 10);
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
     return playSlots(user, bet);
   }
   if (cmd === 'roulette') {
     if (!user) return null;
     const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
     const choice = args[0];
-    const bet = parseInt(args[1] ?? args[0], 10);
-    if (!choice || isNaN(bet) || bet < 1) return '🎡 Usage: !roulette <red|black|1-36> <amount>';
-    return playRoulette(user, choice, args.length >= 2 ? parseInt(args[1], 10) : bet);
+    if (!choice) return '🎡 Usage: !roulette <red|black|1-36> [amount] — default 5';
+    const betRaw = args.length >= 2 ? parseInt(args[1], 10) : (['red', 'black'].includes(choice.toLowerCase()) ? 5 : parseInt(args[0], 10));
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
+    return playRoulette(user, choice, bet);
   }
   if (cmd === 'dice') {
     if (!user) return null;
     const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
     const choice = args[0]?.toLowerCase();
-    const bet = parseInt(args[1] ?? args[0], 10);
-    if (!choice || !['high', 'h', 'low', 'l'].includes(choice) || isNaN(bet) || bet < 1) {
-      return '🎲 Usage: !dice <high|low> <amount> — 2x on win';
-    }
-    return playDice(user, choice, args.length >= 2 ? parseInt(args[1], 10) : bet);
+    if (!choice || !['high', 'h', 'low', 'l'].includes(choice)) return '🎲 Usage: !dice <high|low> [amount] — default 5';
+    const betRaw = args.length >= 2 ? parseInt(args[1], 10) : 5;
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
+    return playDice(user, choice, bet);
   }
   if (cmd === 'gamba' || cmd === 'gamble') {
     if (!user) return null;
-    const bet = parseInt((arg ?? '').trim(), 10);
-    if (isNaN(bet) || bet < 1) return '🎲 !gamba <amount> — random game! Try !slots !roulette !coinflip !dice !deal';
+    const betRaw = parseInt((arg ?? '').trim(), 10);
+    if (isNaN(betRaw) || betRaw < 1) {
+      return '🎲 Games: !slots / !spin [amt] | !roulette red/black/number [amt] | !coinflip / !flip [amt] | !dice high/low [amt] | !deal [amt]. Bet 5–50, default 5. !chips for balance.';
+    }
+    const bet = betRaw;
     const games: Array<'coinflip' | 'slots' | 'roulette' | 'dice'> = ['coinflip', 'slots', 'roulette', 'dice'];
     const pick = games[Math.floor(Math.random() * games.length)];
     if (pick === 'coinflip') return playCoinflip(user, bet);
