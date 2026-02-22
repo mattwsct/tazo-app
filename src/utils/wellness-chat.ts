@@ -79,9 +79,16 @@ export async function getWellnessHeartRateResponse(): Promise<string | null> {
 export async function getWellnessWeightResponse(): Promise<string> {
   const wellness = await getWellnessData();
   const kg = wellness?.weightKg;
-  if (kg == null || kg <= 0) return '⚖️ No weight data yet.';
-  const lbs = (kg * 2.205).toFixed(1);
-  return `⚖️ ${kg} kg (${lbs} lbs)`;
+  const bmi = wellness?.bodyMassIndex;
+  const bodyFat = wellness?.bodyFatPercent;
+  const leanKg = wellness?.leanBodyMassKg;
+  const parts: string[] = [];
+  if (kg != null && kg > 0) parts.push(`${kg} kg (${(kg * 2.205).toFixed(1)} lbs)`);
+  if (bmi != null && bmi > 0) parts.push(`BMI ${bmi}`);
+  if (bodyFat != null && bodyFat > 0) parts.push(`Body fat ${bodyFat}%`);
+  if (leanKg != null && leanKg > 0) parts.push(`Lean ${leanKg} kg`);
+  if (parts.length === 0) return '⚖️ No weight data yet.';
+  return `⚖️ ${parts.join(' · ')}`;
 }
 
 export async function getWellnessSummaryResponse(): Promise<string> {
@@ -103,7 +110,15 @@ export async function getWellnessSummaryResponse(): Promise<string> {
   if ((wellness?.heartRate ?? 0) > 0 || (wellness?.restingHeartRate ?? 0) > 0) {
     parts.push(`💓 ${wellness!.heartRate ?? wellness!.restingHeartRate} bpm`);
   }
-  if ((wellness?.weightKg ?? 0) > 0) parts.push(`⚖️ ${wellness!.weightKg} kg`);
+  const hasBody = (wellness?.weightKg ?? 0) > 0 || (wellness?.bodyMassIndex ?? 0) > 0 || (wellness?.bodyFatPercent ?? 0) > 0 || (wellness?.leanBodyMassKg ?? 0) > 0;
+  if (hasBody) {
+    const body: string[] = [];
+    if (wellness!.weightKg) body.push(`${wellness!.weightKg} kg`);
+    if (wellness!.bodyMassIndex) body.push(`BMI ${wellness!.bodyMassIndex}`);
+    if (wellness!.bodyFatPercent) body.push(`${wellness!.bodyFatPercent}% fat`);
+    if (wellness!.leanBodyMassKg) body.push(`lean ${wellness!.leanBodyMassKg} kg`);
+    parts.push(`⚖️ ${body.join(' · ')}`);
+  }
 
   if (parts.length === 0) return '📊 No wellness data yet.';
   return `📊 ${parts.join(' · ')}`;

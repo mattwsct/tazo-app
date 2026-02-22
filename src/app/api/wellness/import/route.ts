@@ -160,6 +160,28 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
     }
   }
 
+  // body_mass_index: HKQuantityTypeIdentifier.bodyMassIndex — from smart scales / Health Auto Export
+  const bmiMetric = byName.get('body_mass_index') ?? byName.get('bmi');
+  const bmiVal = lastQty(bmiMetric) ?? lastAvg(bmiMetric);
+  if (bmiVal != null && bmiVal >= 0) updates.bodyMassIndex = Math.round(bmiVal * 10) / 10;
+
+  // body_fat_percentage: HKQuantityTypeIdentifier.bodyFatPercentage — Apple stores 0–1; export may be % or decimal
+  const bodyFatMetric = byName.get('body_fat_percentage') ?? byName.get('body_fat') ?? byName.get('bodyFatPercentage');
+  const bodyFatVal = lastQty(bodyFatMetric) ?? lastAvg(bodyFatMetric);
+  if (bodyFatVal != null && bodyFatVal >= 0) {
+    const pct = bodyFatVal <= 1 ? bodyFatVal * 100 : bodyFatVal; // 0.22 → 22 or already 22
+    updates.bodyFatPercent = Math.round(pct * 10) / 10;
+  }
+
+  // lean_body_mass: HKQuantityTypeIdentifier.leanBodyMass — kg or lb
+  const leanMassMetric = byName.get('lean_body_mass') ?? byName.get('leanBodyMass');
+  const leanMassVal = lastQty(leanMassMetric) ?? lastAvg(leanMassMetric);
+  if (leanMassVal != null && leanMassVal >= 0) {
+    const units = normUnits(leanMassMetric?.units);
+    const kg = units.includes('lb') ? leanMassVal * 0.453592 : leanMassVal;
+    updates.leanBodyMassKg = Math.round(kg * 100) / 100;
+  }
+
   // heart_rate: HKQuantityTypeIdentifier.heartRate — count/time (bpm)
   const hr = byName.get('heart_rate');
   const bpm = lastAvg(hr);
@@ -219,6 +241,9 @@ export async function POST(request: NextRequest) {
     if (body.standHours !== undefined) updates.standHours = Math.max(0, parseNumber(body.standHours) ?? 0);
     if (body.handwashingCount !== undefined) updates.handwashingCount = Math.max(0, Math.floor(parseNumber(body.handwashingCount) ?? 0));
     if (body.weightKg !== undefined) updates.weightKg = Math.max(0, parseNumber(body.weightKg) ?? 0);
+    if (body.bodyMassIndex !== undefined) updates.bodyMassIndex = Math.max(0, parseNumber(body.bodyMassIndex) ?? 0);
+    if (body.bodyFatPercent !== undefined) updates.bodyFatPercent = Math.max(0, Math.min(100, parseNumber(body.bodyFatPercent) ?? 0));
+    if (body.leanBodyMassKg !== undefined) updates.leanBodyMassKg = Math.max(0, parseNumber(body.leanBodyMassKg) ?? 0);
     if (body.heartRate !== undefined) updates.heartRate = Math.max(0, Math.floor(parseNumber(body.heartRate) ?? 0));
     if (body.restingHeartRate !== undefined) updates.restingHeartRate = Math.max(0, Math.floor(parseNumber(body.restingHeartRate) ?? 0));
     if (body.hrv !== undefined) updates.hrv = Math.max(0, parseNumber(body.hrv) ?? 0);

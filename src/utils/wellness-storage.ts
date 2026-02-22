@@ -113,7 +113,10 @@ export interface WellnessData {
   flightsClimbed?: number;
   standHours?: number;
   handwashingCount?: number;  // Total handwashing duration in seconds (Apple Health: HKCategoryType handwashingEvent stores duration per event)
-  weightKg?: number;         // Body mass in kg (from Health Auto Export)
+  weightKg?: number;         // Body mass in kg (from Health Auto Export / smart scale)
+  bodyMassIndex?: number;    // BMI (from Health Auto Export / smart scale)
+  bodyFatPercent?: number;   // Body fat % (0–100, from smart scale)
+  leanBodyMassKg?: number;   // Lean body mass in kg (from smart scale)
   heartRate?: number;        // From Apple Health (resting etc) — live BPM stays in stats from Pulsoid
   restingHeartRate?: number;
   hrv?: number;              // Heart rate variability (ms)

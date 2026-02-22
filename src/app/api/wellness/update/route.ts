@@ -76,6 +76,18 @@ export async function PATCH(request: NextRequest) {
       const v = parseNumber(body.weightKg);
       if (v !== undefined) updates.weightKg = Math.max(0, v);
     }
+    if (body.bodyMassIndex !== undefined) {
+      const v = parseNumber(body.bodyMassIndex);
+      if (v !== undefined) updates.bodyMassIndex = Math.max(0, v);
+    }
+    if (body.bodyFatPercent !== undefined) {
+      const v = parseNumber(body.bodyFatPercent);
+      if (v !== undefined) updates.bodyFatPercent = Math.max(0, Math.min(100, v));
+    }
+    if (body.leanBodyMassKg !== undefined) {
+      const v = parseNumber(body.leanBodyMassKg);
+      if (v !== undefined) updates.leanBodyMassKg = Math.max(0, v);
+    }
     if (body.heartRate !== undefined) {
       const v = parseNumber(body.heartRate);
       if (v !== undefined) updates.heartRate = Math.max(0, Math.floor(v));
@@ -94,6 +106,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     await updateWellnessData(updates);
+    // Only session metrics need session updates; weight/BMI are stored directly
     if (updates.steps !== undefined) await updateStepsSession(updates.steps as number);
     if (updates.distanceKm !== undefined) await updateDistanceSession(updates.distanceKm as number);
     if (updates.handwashingCount !== undefined) await updateHandwashingSession(updates.handwashingCount as number);

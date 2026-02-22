@@ -73,7 +73,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'double' || cmd === 'dd') return { cmd: 'double' };
   if (cmd === 'split') return { cmd: 'split' };
   if (cmd === 'refill' || cmd === 'rebuy' || cmd === 'rebuys') return { cmd: 'refill' };
-  if (cmd === 'chips') return { cmd: 'chips' };
+  if (cmd === 'chips') return { cmd: 'chips', arg };
   if (cmd === 'gambleboard' || cmd === 'chiptop' || cmd === 'gambletop') return { cmd: 'gambleboard' };
   return null;
 }

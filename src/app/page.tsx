@@ -25,20 +25,12 @@ function formatLocationAge(ms: number): string {
   return `${hours}h`;
 }
 
-const HEALTH_FIELDS: { key: string; label: string; unit: string; sessionKey?: string }[] = [
-  { key: 'steps', label: 'Steps (today)', unit: '', sessionKey: 'stepsSinceStreamStart' },
-  { key: 'distanceKm', label: 'Distance (today)', unit: 'km', sessionKey: 'distanceSinceStreamStart' },
+/** Manual entry for body metrics from smart scales; data persists until overwritten (no TTL). */
+const HEALTH_FIELDS: { key: string; label: string; unit: string }[] = [
   { key: 'weightKg', label: 'Weight', unit: 'kg' },
-  { key: 'activeCalories', label: 'Active calories', unit: 'kcal' },
-  { key: 'restingCalories', label: 'Resting calories', unit: 'kcal' },
-  { key: 'totalCalories', label: 'Total calories', unit: 'kcal' },
-  { key: 'standHours', label: 'Stand hours', unit: 'hr' },
-  { key: 'flightsClimbed', label: 'Flights climbed', unit: '', sessionKey: 'flightsSinceStreamStart' },
-  { key: 'handwashingCount', label: 'Handwashing', unit: 'sec', sessionKey: 'handwashingSinceStreamStart' },
-  { key: 'sleepHours', label: 'Sleep', unit: 'hr' },
-  { key: 'heartRate', label: 'Heart rate', unit: 'bpm' },
-  { key: 'restingHeartRate', label: 'Resting HR', unit: 'bpm' },
-  { key: 'hrv', label: 'HRV', unit: 'ms' },
+  { key: 'bodyMassIndex', label: 'BMI', unit: '' },
+  { key: 'bodyFatPercent', label: 'Body fat', unit: '%' },
+  { key: 'leanBodyMassKg', label: 'Lean body mass', unit: 'kg' },
 ];
 
 function HealthDataSection() {
@@ -56,7 +48,7 @@ function HealthDataSection() {
       if (r.ok) {
         const out: Record<string, number | string> = {};
         for (const f of HEALTH_FIELDS) {
-          const val = d[f.key] ?? d[f.sessionKey ?? ''];
+          const val = d[f.key];
           out[f.key] = typeof val === 'number' ? val : '';
         }
         out.updatedAt = d.updatedAt ?? 0;
@@ -2398,7 +2390,7 @@ export default function AdminPage() {
                       </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="health-data" title="🏃 Health data (manual entry)" description="Current values from Health Auto Export. Add missing data (e.g. weight) before your next export sends it.">
+          <CollapsibleSection id="health-data" title="⚖️ Body metrics (manual entry)" description="Weight and BMI — add missing data before your smart scale or Health Auto Export sends it.">
             <HealthDataSection />
           </CollapsibleSection>
 
