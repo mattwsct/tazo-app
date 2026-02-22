@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resetLeaderboardOnStreamStart } from '@/utils/leaderboard-storage';
+import { resetGamblingOnStreamStart } from '@/utils/blackjack-storage';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/reset-leaderboard
- * Resets only the leaderboard (points, display names, first chatter).
+ * Resets chips leaderboard, gambling state, and display names.
  * Does not reset steps, distance, wellness, or stream_started_at.
  * Requires admin auth.
  */
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await resetLeaderboardOnStreamStart();
+    await resetGamblingOnStreamStart();
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Reset failed';

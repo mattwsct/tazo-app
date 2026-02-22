@@ -1,51 +1,11 @@
 'use client';
 
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
-export const STORAGE_KEY = 'admin_sections_collapsed';
 export const COLLAPSE_ALL_EVENT = 'admin-collapse-sections';
 
-function loadCollapsed(): Record<string, boolean> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-export function saveCollapsed(map: Record<string, boolean>) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Must match actual CollapsibleSection id props in admin page */
-export const ADMIN_SECTION_IDS = [
-  'connection',
-  'location-map',
-  'stream-title',
-  'overlay-top-rotation',
-  'leaderboard-alerts',
-  'poll',
-  'message-templates',
-  'wellness-data',
-  'advanced-data',
-] as const;
-
 export function collapseAllSections(collapsed: boolean) {
-  const map: Record<string, boolean> = {};
-  for (const id of ADMIN_SECTION_IDS) {
-    map[id] = collapsed;
-  }
-  saveCollapsed(map);
-  window.dispatchEvent(new CustomEvent(COLLAPSE_ALL_EVENT));
+  window.dispatchEvent(new CustomEvent(COLLAPSE_ALL_EVENT, { detail: { collapsed } }));
 }
 
 export default function CollapsibleSection({
@@ -53,45 +13,25 @@ export default function CollapsibleSection({
   title,
   description,
   children,
-  defaultCollapsed = false,
 }: {
   id: string;
   title: React.ReactNode;
   description?: React.ReactNode;
   children: React.ReactNode;
-  defaultCollapsed?: boolean;
 }) {
-  const [collapsed, setCollapsedState] = useState<boolean>(defaultCollapsed);
-  const hasHydratedRef = useRef(false);
-
-  // Sync from localStorage on mount (client-only; SSR uses defaultCollapsed)
-  useLayoutEffect(() => {
-    if (hasHydratedRef.current) return;
-    hasHydratedRef.current = true;
-    const stored = loadCollapsed();
-    if (id in stored) {
-      setCollapsedState(stored[id]);
-    }
-  }, [id]);
+  const [collapsed, setCollapsed] = useState(true);
 
   useEffect(() => {
-    if (!hasHydratedRef.current) return;
-    const stored = loadCollapsed();
-    const next = { ...stored, [id]: collapsed };
-    saveCollapsed(next);
-  }, [id, collapsed]);
-
-  useEffect(() => {
-    const handler = () => {
-      const stored = loadCollapsed();
-      setCollapsedState(id in stored ? stored[id] : defaultCollapsed);
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ collapsed: boolean }>).detail;
+      setCollapsed(detail.collapsed);
     };
     window.addEventListener(COLLAPSE_ALL_EVENT, handler);
     return () => window.removeEventListener(COLLAPSE_ALL_EVENT, handler);
-  }, [id, defaultCollapsed]);
+  }, []);
 
   const toggle = useCallback(() => {
-    setCollapsedState((prev) => !prev);
+    setCollapsed((prev) => !prev);
   }, []);
 
   return (

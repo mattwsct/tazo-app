@@ -5,7 +5,7 @@
  */
 
 import { kv } from '@vercel/kv';
-import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
+import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 
 const VIEW_CHIPS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 const VIEW_CHIPS_PER_INTERVAL = 10;
@@ -15,16 +15,22 @@ const GAMBLING_LEADERBOARD_KEY = 'blackjack_leaderboard';
 const DEAL_COOLDOWN_KEY = 'blackjack_deal_last_at';
 const REBUYS_KEY = 'blackjack_rebuys';
 const VIEW_CHIPS_LAST_AT_KEY = 'blackjack_view_chips_last_at';
+const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
 const GAME_TIMEOUT_MS = 90_000; // Auto-stand after 90s
 const DEAL_COOLDOWN_MS = 15_000; // Min 15s between starting new hands
 const GAMBLE_INSTANT_COOLDOWN_MS = 5_000; // Min 5s between slots/roulette/coinflip/dice
 const GAMBLE_INSTANT_LAST_AT_KEY = 'gamble_instant_last_at';
 const STARTING_CHIPS = 100;
-const REBUY_CHIPS = 50; // Chips given when !refill at 0 (once per stream)
+const REBUY_CHIPS = 50;
 const REBUYS_PER_STREAM = 1;
 const MIN_BET = 5;
 const MAX_BET = 50;
+
+function parseKvInt(value: number | string | null | undefined, fallback = 0): number {
+  if (value == null) return fallback;
+  return typeof value === 'number' ? Math.floor(value) : parseInt(String(value), 10) || fallback;
+}
 
 const SUITS = ['♠', '♥', '♦', '♣'] as const;
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
@@ -119,26 +125,28 @@ export async function getChips(username: string): Promise<number> {
     if (bal != null) {
       return typeof bal === 'string' ? parseInt(bal, 10) : Math.floor(bal);
     }
-    await Promise.all([
+    const init: Promise<unknown>[] = [
       kv.hset(CHIPS_BALANCE_KEY, { [user]: String(STARTING_CHIPS) }),
       kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: STARTING_CHIPS, member: user }),
-    ]);
+    ];
+    if (username?.trim()) init.push(setLeaderboardDisplayName(user, username.trim()));
+    await Promise.all(init);
     return STARTING_CHIPS;
   } catch {
     return STARTING_CHIPS;
   }
 }
 
-/** Deduct chips (for bet). Returns false if insufficient. */
-async function deductChips(user: string, amount: number): Promise<boolean> {
+/** Deduct chips (for bet). Returns { ok, balance } — balance is always current, avoiding an extra KV read on failure. */
+async function deductChips(user: string, amount: number): Promise<{ ok: boolean; balance: number }> {
   const bal = await getChips(user);
-  if (bal < amount) return false;
+  if (bal < amount) return { ok: false, balance: bal };
   const newBal = bal - amount;
   await Promise.all([
     kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
     kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
   ]);
-  return true;
+  return { ok: true, balance: newBal };
 }
 
 /** Add chips (for win). */
@@ -156,6 +164,7 @@ export async function addChipsAsAdmin(username: string, amount: number): Promise
   const user = normalizeUser(username);
   if (amount < 1) return 0;
   await addChips(user, amount);
+  if (username?.trim()) await setLeaderboardDisplayName(user, username.trim());
   return amount;
 }
 
@@ -179,8 +188,7 @@ export async function addViewTimeChips(username: string): Promise<number> {
 
   try {
     const now = Date.now();
-    const lastRaw = await kv.hget<number | string>(VIEW_CHIPS_LAST_AT_KEY, user);
-    const lastAt = typeof lastRaw === 'number' ? lastRaw : (typeof lastRaw === 'string' ? parseInt(lastRaw, 10) : 0);
+    const lastAt = parseKvInt(await kv.hget<number | string>(VIEW_CHIPS_LAST_AT_KEY, user));
     const elapsed = lastAt > 0 ? now - lastAt : VIEW_CHIPS_INTERVAL_MS;
     const intervals = Math.floor(elapsed / VIEW_CHIPS_INTERVAL_MS);
     if (intervals < 1) return 0;
@@ -189,11 +197,13 @@ export async function addViewTimeChips(username: string): Promise<number> {
     const chipsToAdd = Math.min(intervals, 1) * VIEW_CHIPS_PER_INTERVAL;
     const bal = await getChips(user);
     const newBal = bal + chipsToAdd;
-    await Promise.all([
+    const updates: Promise<unknown>[] = [
       kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
       kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
       kv.hset(VIEW_CHIPS_LAST_AT_KEY, { [user]: String(now) }),
-    ]);
+    ];
+    if (username?.trim()) updates.push(setLeaderboardDisplayName(user, username.trim()));
+    await Promise.all(updates);
     return chipsToAdd;
   } catch {
     return 0;
@@ -208,8 +218,7 @@ export async function refillChips(username: string): Promise<string> {
     return `🃏 You have ${chips} chips. !refill only works when you have 0. Use !deal <amount> to play.`;
   }
   try {
-    const usedRaw = await kv.hget<number | string>(REBUYS_KEY, user);
-    const used = typeof usedRaw === 'number' ? usedRaw : (typeof usedRaw === 'string' ? parseInt(usedRaw, 10) : 0);
+    const used = parseKvInt(await kv.hget<number | string>(REBUYS_KEY, user));
     if (used >= REBUYS_PER_STREAM) {
       return `🃏 You've already used your ${REBUYS_PER_STREAM} rebu${REBUYS_PER_STREAM === 1 ? 'y' : 'ys'} this stream. Chips reset when the stream starts.`;
     }
@@ -217,6 +226,7 @@ export async function refillChips(username: string): Promise<string> {
       kv.hset(CHIPS_BALANCE_KEY, { [user]: String(REBUY_CHIPS) }),
       kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: REBUY_CHIPS, member: user }),
       kv.hset(REBUYS_KEY, { [user]: String(used + 1) }),
+      setLeaderboardDisplayName(user, username.trim()),
     ]);
     return `🃏 Rebuy! You have ${REBUY_CHIPS} chips. !deal <amount> to play.`;
   } catch {
@@ -244,7 +254,7 @@ export async function resetGamblingOnStreamStart(): Promise<void> {
 export async function getGamblingLeaderboardTop(n: number): Promise<{ username: string; chips: number }[]> {
   try {
     const excluded = await getLeaderboardExclusions();
-    const names = (await kv.hgetall<Record<string, string>>('leaderboard_display_names')) ?? {};
+    const names = (await kv.hgetall<Record<string, string>>(LEADERBOARD_DISPLAY_NAMES_KEY)) ?? {};
     const raw = await kv.zrange(GAMBLING_LEADERBOARD_KEY, 0, n + excluded.size + 20, { rev: true, withScores: true });
     if (!raw || !Array.isArray(raw)) return [];
     const result: { username: string; chips: number }[] = [];
@@ -256,7 +266,7 @@ export async function getGamblingLeaderboardTop(n: number): Promise<{ username: 
         chips: Math.round(Number(raw[i + 1] ?? 0)),
       });
     }
-    return result.filter((u) => !excluded.has(u.username.trim().toLowerCase()));
+    return result;
   } catch {
     return [];
   }
@@ -288,8 +298,7 @@ export async function deal(username: string, betAmount: number): Promise<string>
   const overMaxNote = betAmount > MAX_BET ? `Max bet ${MAX_BET} chips — playing for ${bet}. ` : '';
 
   const now = Date.now();
-  const lastAtRaw = await kv.hget<number | string>(DEAL_COOLDOWN_KEY, user);
-  const lastAt = typeof lastAtRaw === 'number' ? lastAtRaw : (typeof lastAtRaw === 'string' ? parseInt(lastAtRaw, 10) : 0);
+  const lastAt = parseKvInt(await kv.hget<number | string>(DEAL_COOLDOWN_KEY, user));
   if (lastAt > 0 && now - lastAt < DEAL_COOLDOWN_MS) {
     const wait = Math.ceil((DEAL_COOLDOWN_MS - (now - lastAt)) / 1000);
     return `🃏 Wait ${wait}s before starting another hand.`;
@@ -301,10 +310,9 @@ export async function deal(username: string, betAmount: number): Promise<string>
     return `🃏 You're already in a hand (${existing.playerHand.map(cardDisplay).join(' ')} = ${value}). !hit or !stand`;
   }
 
-  const hasChips = await deductChips(user, bet);
-  if (!hasChips) {
-    const chips = await getChips(user);
-    return `🃏 Not enough chips. You have ${chips}. Use !chips to check balance.`;
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) {
+    return `🃏 Not enough chips. You have ${balance}. Use !chips to check balance.`;
   }
 
   const deck = shuffleDeck();
@@ -361,10 +369,9 @@ export async function double(username: string): Promise<string> {
   if (game.playerHand.length !== 2) return `🃏 !double only on first 2 cards. Use !hit or !stand.`;
 
   const extraBet = game.bet;
-  const hasChips = await deductChips(user, extraBet);
-  if (!hasChips) {
-    const chips = await getChips(user);
-    return `🃏 Not enough chips to double (need ${extraBet} more). You have ${chips}.`;
+  const { ok, balance } = await deductChips(user, extraBet);
+  if (!ok) {
+    return `🃏 Not enough chips to double (need ${extraBet} more). You have ${balance}.`;
   }
 
   const card = game.deck.pop()!;
@@ -392,10 +399,9 @@ export async function split(username: string): Promise<string> {
   if (!isPair(game.playerHand)) return `🃏 !split only on pairs. Use !hit or !stand.`;
 
   const extraBet = game.bet;
-  const hasChips = await deductChips(user, extraBet);
-  if (!hasChips) {
-    const chips = await getChips(user);
-    return `🃏 Not enough chips to split (need ${extraBet} more). You have ${chips}.`;
+  const { ok, balance } = await deductChips(user, extraBet);
+  if (!ok) {
+    return `🃏 Not enough chips to split (need ${extraBet} more). You have ${balance}.`;
   }
 
   const [c1, c2] = game.playerHand;
@@ -516,8 +522,7 @@ export async function stand(username: string): Promise<string> {
 
 async function checkInstantCooldown(user: string): Promise<number | null> {
   const now = Date.now();
-  const lastRaw = await kv.hget<number | string>(GAMBLE_INSTANT_LAST_AT_KEY, user);
-  const lastAt = typeof lastRaw === 'number' ? lastRaw : (typeof lastRaw === 'string' ? parseInt(lastRaw, 10) : 0);
+  const lastAt = parseKvInt(await kv.hget<number | string>(GAMBLE_INSTANT_LAST_AT_KEY, user));
   if (lastAt > 0 && now - lastAt < GAMBLE_INSTANT_COOLDOWN_MS) {
     return Math.ceil((GAMBLE_INSTANT_COOLDOWN_MS - (now - lastAt)) / 1000);
   }
@@ -537,11 +542,8 @@ export async function playCoinflip(username: string, betAmount: number): Promise
   const wait = await checkInstantCooldown(user);
   if (wait !== null) return `🎲 Wait ${wait}s before another game.`;
 
-  const hasChips = await deductChips(user, bet);
-  if (!hasChips) {
-    const chips = await getChips(user);
-    return `🎲 Not enough chips. You have ${chips}.`;
-  }
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) return `🎲 Not enough chips. You have ${balance}.`;
   await setInstantCooldown(user);
 
   const win = Math.random() < 0.5;
@@ -571,11 +573,8 @@ export async function playSlots(username: string, betAmount: number): Promise<st
   const wait = await checkInstantCooldown(user);
   if (wait !== null) return `🎰 Wait ${wait}s before another spin.`;
 
-  const hasChips = await deductChips(user, bet);
-  if (!hasChips) {
-    const chips = await getChips(user);
-    return `🎰 Not enough chips. You have ${chips}.`;
-  }
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) return `🎰 Not enough chips. You have ${balance}.`;
   await setInstantCooldown(user);
 
   const reels = [
@@ -622,11 +621,8 @@ export async function playRoulette(username: string, choice: string, betAmount: 
     return `🎡 Bet red, black, or a number 1-36. !roulette red 10`;
   }
 
-  const hasChips = await deductChips(user, bet);
-  if (!hasChips) {
-    const chips = await getChips(user);
-    return `🎡 Not enough chips. You have ${chips}.`;
-  }
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) return `🎡 Not enough chips. You have ${balance}.`;
   await setInstantCooldown(user);
 
   const spin = Math.floor(Math.random() * 37);
@@ -670,11 +666,8 @@ export async function playDice(username: string, choice: string, betAmount: numb
   const isLow = choiceLower === 'low' || choiceLower === 'l';
   if (!isHigh && !isLow) return `🎲 Bet high (4-6) or low (1-3). !dice high 10`;
 
-  const hasChips = await deductChips(user, bet);
-  if (!hasChips) {
-    const chips = await getChips(user);
-    return `🎲 Not enough chips. You have ${chips}.`;
-  }
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) return `🎲 Not enough chips. You have ${balance}.`;
   await setInstantCooldown(user);
 
   const roll = Math.floor(Math.random() * 6) + 1;

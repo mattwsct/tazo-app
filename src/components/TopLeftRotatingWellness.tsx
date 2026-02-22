@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import type { OverlaySettings } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
+import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
 const POLL_INTERVAL_MS = 60000;
 const CYCLE_DURATION_MS = 30000;
-const CROSSFADE_DURATION_MS = 500;
 
 type SlotType = 'date' | 'steps';
 
@@ -23,11 +23,6 @@ interface WellnessData {
 
 export default function TopLeftRotatingWellness({ date, timezoneValid, settings }: TopLeftRotatingWellnessProps) {
   const [wellness, setWellness] = useState<WellnessData | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [displayedIndex, setDisplayedIndex] = useState(0);
-  const [outgoingIndex, setOutgoingIndex] = useState<number | null>(null);
-  const transitionRef = useRef<NodeJS.Timeout | null>(null);
-  const slidesRef = useRef<SlotType[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -55,7 +50,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     };
   }, []);
 
-  // Don't show steps if wellness data is stale (no recent Health Auto Export import)
   const stepsFresh = useMemo(() => {
     if (!wellness?.updatedAt) return false;
     return Date.now() - wellness.updatedAt <= TIMERS.WELLNESS_STALE_MS;
@@ -68,52 +62,7 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     return s;
   }, [timezoneValid, date, settings.showSteps, stepsFresh, wellness]);
 
-  const slidesKey = slides.join(',');
-  useEffect(() => {
-    slidesRef.current = slides;
-  }, [slidesKey, slides]);
-
-  useEffect(() => {
-    if (slides.length === 0) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- clamp index when slides change
-    setActiveIndex((prev) => Math.min(prev, Math.max(0, slides.length - 1)));
-  }, [slides.length, slides]);
-
-  useEffect(() => {
-    if (slides.length <= 1) return;
-
-    const tick = () => {
-      const current = slidesRef.current;
-      if (current.length <= 1) return;
-
-      setActiveIndex((prev) => {
-        const idx = Math.min(prev, current.length - 1);
-        return (idx + 1) % current.length;
-      });
-    };
-
-    const id = setInterval(tick, CYCLE_DURATION_MS);
-    return () => clearInterval(id);
-  }, [slides.length]);
-
-  useEffect(() => {
-    if (activeIndex === displayedIndex && outgoingIndex === null) return;
-    if (slides.length === 0) return;
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- crossfade transition, timeout handles async
-    setOutgoingIndex(displayedIndex);
-
-    if (transitionRef.current) clearTimeout(transitionRef.current);
-    transitionRef.current = setTimeout(() => {
-      transitionRef.current = null;
-      setDisplayedIndex(activeIndex);
-      setOutgoingIndex(null);
-    }, CROSSFADE_DURATION_MS);
-
-    return () => {
-      if (transitionRef.current) clearTimeout(transitionRef.current);
-    };
-  }, [activeIndex, displayedIndex, outgoingIndex, slides.length]);
+  const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
 
   if (slides.length === 0) return null;
 

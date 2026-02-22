@@ -81,25 +81,15 @@ export async function resetWellnessLastImport(): Promise<void> {
   }
 }
 
-export interface StepsSession {
-  accumulated: number;  // steps since stream start (survives midnight)
-  lastKnown: number;     // last raw steps from API (for delta calc / daily-reset detection)
-}
-
-export interface DistanceSession {
-  accumulated: number;  // km since stream start (survives midnight)
-  lastKnown: number;     // last raw distance from API (for delta calc / daily-reset detection)
-}
-
-export interface FlightsSession {
-  accumulated: number;  // flights climbed since stream start (survives midnight)
+export interface AccumulatorSession {
+  accumulated: number;
   lastKnown: number;
 }
 
-export interface ActiveCaloriesSession {
-  accumulated: number;  // active cal since stream start (survives midnight)
-  lastKnown: number;
-}
+export type StepsSession = AccumulatorSession;
+export type DistanceSession = AccumulatorSession;
+export type FlightsSession = AccumulatorSession;
+export type ActiveCaloriesSession = AccumulatorSession;
 
 /** Per-metric timestamps (ms) — when each field was last updated. Falls back to updatedAt if missing. */
 export type WellnessMetricKey = 'steps' | 'distanceKm' | 'flightsClimbed' | 'activeCalories' | 'restingCalories' | 'totalCalories' | 'heightCm' | 'weightKg' | 'bodyMassIndex' | 'bodyFatPercent' | 'leanBodyMassKg' | 'heartRate' | 'restingHeartRate';
@@ -142,6 +132,25 @@ export interface UpdateWellnessOptions {
   fromManualEntry?: boolean;
 }
 
+/** Float metrics: treat as "unchanged" if within tolerance (avoids "just now" on re-import of same values). */
+const FLOAT_METRIC_EPSILON: Partial<Record<WellnessMetricKey, number>> = {
+  weightKg: 0.01,
+  bodyMassIndex: 0.01,
+  bodyFatPercent: 0.01,
+  leanBodyMassKg: 0.01,
+  heightCm: 0.01,
+  distanceKm: 0.001,
+};
+
+function isMetricValueChanged(key: WellnessMetricKey, existingVal: unknown, newVal: unknown): boolean {
+  if (existingVal === newVal) return false;
+  const eps = FLOAT_METRIC_EPSILON[key];
+  if (eps != null && typeof existingVal === 'number' && typeof newVal === 'number') {
+    return Math.abs(newVal - existingVal) >= eps;
+  }
+  return true;
+}
+
 export async function updateWellnessData(updates: Partial<WellnessData>, options?: UpdateWellnessOptions): Promise<void> {
   try {
     const existing = await kv.get<WellnessData>(WELLNESS_KEY);
@@ -155,7 +164,7 @@ export async function updateWellnessData(updates: Partial<WellnessData>, options
         metricUpdatedAt[key] = 0;  // 0 = no timestamp, don't show "(X ago)" for manual entry
       } else {
         const existingVal = existing?.[key as keyof WellnessData];
-        if (newVal !== existingVal) {
+        if (isMetricValueChanged(key, existingVal, newVal)) {
           metricUpdatedAt[key] = now;
         }
       }
@@ -186,256 +195,86 @@ export function getMetricUpdatedAt(wellness: WellnessData | null | undefined, me
   return map[metric] ?? fallback;
 }
 
-// === Steps since stream start (handles daily midnight reset) ===
+// === Generic accumulator session (steps, distance, flights, active calories) ===
+// All 4 metrics follow the same pattern: accumulate deltas since stream start, handle midnight resets.
 
-export async function getStepsSession(): Promise<StepsSession | null> {
-  try {
-    const data = await kv.get<StepsSession>(WELLNESS_STEPS_SESSION_KEY);
-    return data;
-  } catch {
-    return null;
-  }
+interface SessionConfig {
+  kvKey: string;
+  importMetric: keyof WellnessLastImport;
+  normalize: (v: number) => number;
+  roundAccumulated?: (v: number) => number;
 }
 
-export async function getStepsSinceStreamStart(): Promise<number> {
-  const session = await getStepsSession();
-  return session?.accumulated ?? 0;
+const SESSION_CONFIGS: Record<string, SessionConfig> = {
+  steps: { kvKey: WELLNESS_STEPS_SESSION_KEY, importMetric: 'steps', normalize: (v) => Math.max(0, Math.floor(v)) },
+  distance: { kvKey: WELLNESS_DISTANCE_SESSION_KEY, importMetric: 'distanceKm', normalize: (v) => Math.max(0, v), roundAccumulated: (v) => Math.round(v * 1000) / 1000 },
+  flights: { kvKey: WELLNESS_FLIGHTS_SESSION_KEY, importMetric: 'flightsClimbed', normalize: (v) => Math.max(0, Math.floor(v)) },
+  activeCalories: { kvKey: WELLNESS_ACTIVE_CALORIES_SESSION_KEY, importMetric: 'activeCalories', normalize: (v) => Math.max(0, Math.round(v)) },
+};
+
+async function getSession(config: SessionConfig): Promise<AccumulatorSession | null> {
+  try { return await kv.get<AccumulatorSession>(config.kvKey); } catch { return null; }
 }
 
-/** Call when stream goes live. Resets accumulator; uses current steps as new baseline so we don't count pre-stream steps. */
-export async function resetStepsSession(currentSteps: number): Promise<void> {
+async function getSinceStreamStart(config: SessionConfig): Promise<number> {
+  return (await getSession(config))?.accumulated ?? 0;
+}
+
+async function resetSession(config: SessionConfig, currentValue: number): Promise<void> {
   try {
-    const session: StepsSession = {
-      accumulated: 0,
-      lastKnown: Math.max(0, Math.floor(currentSteps)),
-    };
-    await kv.set(WELLNESS_STEPS_SESSION_KEY, session);
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Wellness] Steps session reset at stream start, baseline:', session.lastKnown);
-    }
+    await kv.set(config.kvKey, { accumulated: 0, lastKnown: config.normalize(currentValue) });
   } catch (error) {
-    console.error('Failed to reset steps session:', error);
+    console.error(`Failed to reset ${config.importMetric} session:`, error);
     throw error;
   }
 }
 
-/** Call on each wellness import when steps are present. Accumulates delta; treats newSteps < lastKnown as daily reset. */
-export async function updateStepsSession(newSteps: number): Promise<void> {
+async function updateSession(config: SessionConfig, newValue: number): Promise<void> {
   try {
-    const steps = Math.max(0, Math.floor(newSteps));
+    const val = config.normalize(newValue);
     const now = Date.now();
     const lastImportState = await getLastImport();
-    const existing = await getStepsSession();
+    const existing = await getSession(config);
     const lastKnown = existing?.lastKnown ?? 0;
     const accumulated = existing?.accumulated ?? 0;
 
-    if (shouldSkipSessionUpdate(lastImportState.steps, steps, lastKnown, now)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Wellness] Skipping steps session update (duplicate/stale):', steps);
-      }
+    if (shouldSkipSessionUpdate(lastImportState[config.importMetric], val, lastKnown, now)) {
       return;
     }
 
-    let delta: number;
-    if (steps >= lastKnown) {
-      delta = steps - lastKnown;
-    } else {
-      // Daily reset: newSteps is today's count; add it as fresh contribution
-      delta = steps;
-    }
-
-    const session: StepsSession = {
-      accumulated: accumulated + delta,
-      lastKnown: steps,
-    };
-    await kv.set(WELLNESS_STEPS_SESSION_KEY, session);
-    await setLastImportMetric('steps', steps);
+    const delta = val >= lastKnown ? val - lastKnown : val;
+    const newAccumulated = config.roundAccumulated ? config.roundAccumulated(accumulated + delta) : accumulated + delta;
+    await kv.set(config.kvKey, { accumulated: newAccumulated, lastKnown: val });
+    await setLastImportMetric(config.importMetric, val);
   } catch (error) {
-    console.error('Failed to update steps session:', error);
+    console.error(`Failed to update ${config.importMetric} session:`, error);
     throw error;
   }
 }
 
-// === Distance since stream start (handles daily midnight reset) ===
+// Steps
+export const getStepsSession = () => getSession(SESSION_CONFIGS.steps);
+export const getStepsSinceStreamStart = () => getSinceStreamStart(SESSION_CONFIGS.steps);
+export const resetStepsSession = (current: number) => resetSession(SESSION_CONFIGS.steps, current);
+export const updateStepsSession = (value: number) => updateSession(SESSION_CONFIGS.steps, value);
 
-export async function getDistanceSession(): Promise<DistanceSession | null> {
-  try {
-    const data = await kv.get<DistanceSession>(WELLNESS_DISTANCE_SESSION_KEY);
-    return data;
-  } catch {
-    return null;
-  }
-}
+// Distance
+export const getDistanceSession = () => getSession(SESSION_CONFIGS.distance);
+export const getDistanceSinceStreamStart = () => getSinceStreamStart(SESSION_CONFIGS.distance);
+export const resetDistanceSession = (current: number) => resetSession(SESSION_CONFIGS.distance, current);
+export const updateDistanceSession = (value: number) => updateSession(SESSION_CONFIGS.distance, value);
 
-export async function getDistanceSinceStreamStart(): Promise<number> {
-  const session = await getDistanceSession();
-  return session?.accumulated ?? 0;
-}
+// Flights
+export const getFlightsSession = () => getSession(SESSION_CONFIGS.flights);
+export const getFlightsSinceStreamStart = () => getSinceStreamStart(SESSION_CONFIGS.flights);
+export const resetFlightsSession = (current: number) => resetSession(SESSION_CONFIGS.flights, current);
+export const updateFlightsSession = (value: number) => updateSession(SESSION_CONFIGS.flights, value);
 
-/** Call when stream goes live. Resets distance accumulator. */
-export async function resetDistanceSession(currentDistanceKm: number): Promise<void> {
-  try {
-    const session: DistanceSession = {
-      accumulated: 0,
-      lastKnown: Math.max(0, currentDistanceKm),
-    };
-    await kv.set(WELLNESS_DISTANCE_SESSION_KEY, session);
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Wellness] Distance session reset at stream start, baseline:', session.lastKnown, 'km');
-    }
-  } catch (error) {
-    console.error('Failed to reset distance session:', error);
-    throw error;
-  }
-}
-
-/** Call on each wellness import when distance is present. Accumulates delta; treats newKm < lastKnown as daily reset. */
-export async function updateDistanceSession(newDistanceKm: number): Promise<void> {
-  try {
-    const km = Math.max(0, newDistanceKm);
-    const now = Date.now();
-    const lastImportState = await getLastImport();
-    const existing = await getDistanceSession();
-    const lastKnown = existing?.lastKnown ?? 0;
-    const accumulated = existing?.accumulated ?? 0;
-
-    if (shouldSkipSessionUpdate(lastImportState.distanceKm, km, lastKnown, now)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Wellness] Skipping distance session update (duplicate/stale):', km);
-      }
-      return;
-    }
-
-    let delta: number;
-    if (km >= lastKnown) {
-      delta = km - lastKnown;
-    } else {
-      delta = km;  // Daily reset: new distance is today's count
-    }
-
-    const session: DistanceSession = {
-      accumulated: Math.round((accumulated + delta) * 1000) / 1000,
-      lastKnown: km,
-    };
-    await kv.set(WELLNESS_DISTANCE_SESSION_KEY, session);
-    await setLastImportMetric('distanceKm', km);
-  } catch (error) {
-    console.error('Failed to update distance session:', error);
-    throw error;
-  }
-}
-
-// === Flights climbed since stream start (handles daily midnight reset) ===
-
-export async function getFlightsSession(): Promise<FlightsSession | null> {
-  try {
-    const data = await kv.get<FlightsSession>(WELLNESS_FLIGHTS_SESSION_KEY);
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-export async function getFlightsSinceStreamStart(): Promise<number> {
-  const session = await getFlightsSession();
-  return session?.accumulated ?? 0;
-}
-
-export async function resetFlightsSession(currentFlights: number): Promise<void> {
-  try {
-    const session: FlightsSession = {
-      accumulated: 0,
-      lastKnown: Math.max(0, Math.floor(currentFlights)),
-    };
-    await kv.set(WELLNESS_FLIGHTS_SESSION_KEY, session);
-  } catch (error) {
-    console.error('Failed to reset flights session:', error);
-    throw error;
-  }
-}
-
-export async function updateFlightsSession(newFlights: number): Promise<void> {
-  try {
-    const count = Math.max(0, Math.floor(newFlights));
-    const now = Date.now();
-    const lastImportState = await getLastImport();
-    const existing = await getFlightsSession();
-    const lastKnown = existing?.lastKnown ?? 0;
-    const accumulated = existing?.accumulated ?? 0;
-
-    if (shouldSkipSessionUpdate(lastImportState.flightsClimbed, count, lastKnown, now)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Wellness] Skipping flights session update (duplicate/stale):', count);
-      }
-      return;
-    }
-
-    const delta = count >= lastKnown ? count - lastKnown : count;
-    const session: FlightsSession = { accumulated: accumulated + delta, lastKnown: count };
-    await kv.set(WELLNESS_FLIGHTS_SESSION_KEY, session);
-    await setLastImportMetric('flightsClimbed', count);
-  } catch (error) {
-    console.error('Failed to update flights session:', error);
-    throw error;
-  }
-}
-
-// === Active calories since stream start (handles daily midnight reset) ===
-
-export async function getActiveCaloriesSession(): Promise<ActiveCaloriesSession | null> {
-  try {
-    const data = await kv.get<ActiveCaloriesSession>(WELLNESS_ACTIVE_CALORIES_SESSION_KEY);
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-export async function getActiveCaloriesSinceStreamStart(): Promise<number> {
-  const session = await getActiveCaloriesSession();
-  return session?.accumulated ?? 0;
-}
-
-/** Call when stream goes live. Resets accumulator; uses current active cal as new baseline. */
-export async function resetActiveCaloriesSession(currentActiveCal: number): Promise<void> {
-  try {
-    const session: ActiveCaloriesSession = {
-      accumulated: 0,
-      lastKnown: Math.max(0, Math.round(currentActiveCal)),
-    };
-    await kv.set(WELLNESS_ACTIVE_CALORIES_SESSION_KEY, session);
-  } catch (error) {
-    console.error('Failed to reset active calories session:', error);
-    throw error;
-  }
-}
-
-/** Call on each wellness import when activeCalories are present. Accumulates delta; treats drop as daily reset. */
-export async function updateActiveCaloriesSession(newActiveCal: number): Promise<void> {
-  try {
-    const cal = Math.max(0, Math.round(newActiveCal));
-    const now = Date.now();
-    const lastImportState = await getLastImport();
-    const existing = await getActiveCaloriesSession();
-    const lastKnown = existing?.lastKnown ?? 0;
-    const accumulated = existing?.accumulated ?? 0;
-
-    if (shouldSkipSessionUpdate(lastImportState.activeCalories, cal, lastKnown, now)) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Wellness] Skipping active calories session update (duplicate/stale):', cal);
-      }
-      return;
-    }
-
-    const delta = cal >= lastKnown ? cal - lastKnown : cal;
-    const session: ActiveCaloriesSession = { accumulated: accumulated + delta, lastKnown: cal };
-    await kv.set(WELLNESS_ACTIVE_CALORIES_SESSION_KEY, session);
-    await setLastImportMetric('activeCalories', cal);
-  } catch (error) {
-    console.error('Failed to update active calories session:', error);
-    throw error;
-  }
-}
+// Active calories
+export const getActiveCaloriesSession = () => getSession(SESSION_CONFIGS.activeCalories);
+export const getActiveCaloriesSinceStreamStart = () => getSinceStreamStart(SESSION_CONFIGS.activeCalories);
+export const resetActiveCaloriesSession = (current: number) => resetSession(SESSION_CONFIGS.activeCalories, current);
+export const updateActiveCaloriesSession = (value: number) => updateSession(SESSION_CONFIGS.activeCalories, value);
 
 // === Wellness milestones (reset on stream start) ===
 

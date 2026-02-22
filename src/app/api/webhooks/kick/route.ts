@@ -22,7 +22,6 @@ import {
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
-import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPoints, addGiftSubPoints, addKicksPoints } from '@/utils/leaderboard-storage';
 import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin } from '@/utils/blackjack-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
@@ -143,7 +142,6 @@ export async function POST(request: NextRequest) {
   // Stream start: reset stats session, steps counter, and leaderboard when going live
   if (eventNorm === 'livestream.status.updated' && payload.is_live === true) {
     void onStreamStarted();
-    void resetLeaderboardOnStreamStart();
     void (async () => {
       if (await isGamblingEnabled()) void resetGamblingOnStreamStart();
     })();
@@ -164,11 +162,10 @@ export async function POST(request: NextRequest) {
     })();
   }
 
-  // Chat: poll handling first (if enabled), then !ping. Award leaderboard points for chat.
+  // Chat: poll handling first (if enabled), then !ping. Award view-time chips when gambling enabled.
   if (eventNorm === 'chat.message.sent') {
     const content = (payload.content as string) || '';
     const sender = (payload.sender as { username?: string })?.username ?? '?';
-    void addChatPoints(sender);
     void (async () => {
       if (await isGamblingEnabled()) void addViewTimeChips(sender);
     })(); // 10 chips per 10 min of chat activity (only when gambling enabled)
@@ -305,20 +302,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Award leaderboard points and push overlay alerts for subs, gifts, kicks
+  // Push overlay alerts for follows, subs, gifts, kicks
   const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
   let didAlertOrLeaderboard = false;
   if (eventNorm === 'channel.followed') {
     const follower = getUsername(payload.follower);
-    if (follower) {
-      await addFollowPoints(follower);
-      didAlertOrLeaderboard = true;
-    }
+    if (follower) didAlertOrLeaderboard = true;
   } else if (eventNorm === 'channel.subscription.new') {
     const subscriber = payload.subscriber;
     if (subscriber) {
       await Promise.all([
-        addSubPoints(getUsername(subscriber), false),
         addStreamGoalSubs(1),
         pushSubAlert(subscriber),
       ]);
@@ -335,7 +328,6 @@ export async function POST(request: NextRequest) {
     const duration = (payload.duration as number) ?? 0;
     if (subscriber) {
       await Promise.all([
-        addSubPoints(getUsername(subscriber), true),
         addStreamGoalSubs(1),
         pushResubAlert(subscriber, duration > 0 ? duration : undefined),
       ]);
@@ -353,7 +345,6 @@ export async function POST(request: NextRequest) {
     const count = giftees.length > 0 ? giftees.length : 1;
     if (gifter) {
       await Promise.all([
-        addGiftSubPoints(getUsername(gifter), count),
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
       ]);
@@ -372,7 +363,6 @@ export async function POST(request: NextRequest) {
     const giftName = gift?.name as string | undefined;
     if (sender && amount > 0) {
       await Promise.all([
-        addKicksPoints(getUsername(sender), amount),
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),
       ]);

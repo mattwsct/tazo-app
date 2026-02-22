@@ -60,7 +60,6 @@ export function useOverlaySettings(): [
             OverlayLogger.settings('Settings updated via SSE', { locationDisplay: merged.locationDisplay, showWeather: merged.showWeather, showMinimap: merged.showMinimap });
             setSettings((prev) => ({
               ...merged,
-              leaderboardTop: Array.isArray(merged.leaderboardTop) && merged.leaderboardTop.length > 0 ? merged.leaderboardTop : (prev.leaderboardTop ?? []),
               gamblingLeaderboardTop: Array.isArray(merged.gamblingLeaderboardTop) && merged.gamblingLeaderboardTop.length > 0 ? merged.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: merged.streamGoals ?? prev.streamGoals,
@@ -112,14 +111,12 @@ export function useOverlaySettings(): [
             lastSettingsHash.current = createSettingsHash(data);
             setSettings((prev) => ({
               ...data,
-              leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
               gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
             }));
-          } else if (data && (data.leaderboardTop || data.gamblingLeaderboardTop || data.overlayAlerts || data.streamGoals || 'subGoalCelebrationUntil' in data || 'kicksGoalCelebrationUntil' in data)) {
+          } else if (data && (data.gamblingLeaderboardTop || data.overlayAlerts || data.streamGoals || 'subGoalCelebrationUntil' in data || 'kicksGoalCelebrationUntil' in data)) {
             setSettings((prev) => ({
               ...prev,
-              leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
               gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: data.streamGoals ?? prev.streamGoals,
@@ -141,11 +138,9 @@ export function useOverlaySettings(): [
         if (!res.ok) return;
         const data = await res.json();
         if (!data) return;
-        // Only update leaderboard + alerts + goals + celebration (lightweight update, no hash check)
         // Preserve previous leaderboard when fetch returns empty to avoid flash
         setSettings((prev) => ({
           ...prev,
-          leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
           gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
           overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
           streamGoals: data.streamGoals ?? prev.streamGoals,

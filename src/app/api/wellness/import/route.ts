@@ -129,51 +129,56 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   }
 
   // height: HKQuantityTypeIdentifier.height — typically m or cm (Apple Health uses m)
+  // Only include if > 0 — empty/zero latest = no new data, don't overwrite or stamp "just now"
   const heightMetric = byName.get('height') ?? byName.get('body_height') ?? byName.get('stature');
   if (heightMetric) {
     const raw = lastQty(heightMetric);
-    if (raw != null && raw >= 0) {
+    if (raw != null && raw > 0) {
       const units = normUnits(heightMetric.units);
       let cm: number;
       if (units.includes('in') && !units.includes('cm')) cm = raw * 2.54;
       else if (units.includes('ft') || units.includes('foot')) cm = raw * 30.48;
       else if (units.includes('m') && raw < 10) cm = raw * 100;
       else cm = raw; // assume cm
-      updates.heightCm = Math.round(Math.max(0, cm) * 10) / 10;
+      const rounded = Math.round(Math.max(0, cm) * 10) / 10;
+      if (rounded > 0) updates.heightCm = rounded;
     }
   }
 
-  // body_mass: HKQuantityTypeIdentifier.bodyMass — kg or lb. Also weight_body_mass (Health Auto Export).
+  // body_mass: HKQuantityTypeIdentifier.bodyMass — kg or lb. Only include if > 0 (empty = no new data)
   const bodyMass = byName.get('body_mass') ?? byName.get('weight_body_mass') ?? byName.get('mass') ?? byName.get('weight');
   if (bodyMass) {
     const raw = lastQty(bodyMass);
-    if (raw != null && raw >= 0) {
+    if (raw != null && raw > 0) {
       const units = normUnits(bodyMass.units);
       const kg = units.includes('lb') ? raw * 0.453592 : raw;
-      updates.weightKg = Math.round(kg * 100) / 100;
+      const rounded = Math.round(kg * 100) / 100;
+      if (rounded > 0) updates.weightKg = rounded;
     }
   }
 
-  // body_mass_index: HKQuantityTypeIdentifier.bodyMassIndex — from smart scales / Health Auto Export
+  // body_mass_index: only include if > 0 (empty = no new data)
   const bmiMetric = byName.get('body_mass_index') ?? byName.get('bmi');
   const bmiVal = lastQty(bmiMetric) ?? lastAvg(bmiMetric);
-  if (bmiVal != null && bmiVal >= 0) updates.bodyMassIndex = Math.round(bmiVal * 10) / 10;
+  if (bmiVal != null && bmiVal > 0) updates.bodyMassIndex = Math.round(bmiVal * 10) / 10;
 
-  // body_fat_percentage: HKQuantityTypeIdentifier.bodyFatPercentage — Apple stores 0–1; export may be % or decimal
+  // body_fat_percentage: only include if > 0 — Apple allows 0 but it's not physiologically realistic; 0 in export = empty/no reading
   const bodyFatMetric = byName.get('body_fat_percentage') ?? byName.get('body_fat') ?? byName.get('bodyFatPercentage');
   const bodyFatVal = lastQty(bodyFatMetric) ?? lastAvg(bodyFatMetric);
-  if (bodyFatVal != null && bodyFatVal >= 0) {
+  if (bodyFatVal != null && bodyFatVal > 0) {
     const pct = bodyFatVal <= 1 ? bodyFatVal * 100 : bodyFatVal; // 0.22 → 22 or already 22
-    updates.bodyFatPercent = Math.round(pct * 10) / 10;
+    const rounded = Math.round(pct * 10) / 10;
+    if (rounded > 0) updates.bodyFatPercent = rounded;
   }
 
-  // lean_body_mass: HKQuantityTypeIdentifier.leanBodyMass — kg or lb
+  // lean_body_mass: only include if > 0 (empty = no new data)
   const leanMassMetric = byName.get('lean_body_mass') ?? byName.get('leanBodyMass');
   const leanMassVal = lastQty(leanMassMetric) ?? lastAvg(leanMassMetric);
-  if (leanMassVal != null && leanMassVal >= 0) {
+  if (leanMassVal != null && leanMassVal > 0) {
     const units = normUnits(leanMassMetric?.units);
     const kg = units.includes('lb') ? leanMassVal * 0.453592 : leanMassVal;
-    updates.leanBodyMassKg = Math.round(kg * 100) / 100;
+    const rounded = Math.round(kg * 100) / 100;
+    if (rounded > 0) updates.leanBodyMassKg = rounded;
   }
 
   // heart_rate: HKQuantityTypeIdentifier.heartRate — count/time (bpm)
@@ -224,11 +229,17 @@ export async function POST(request: NextRequest) {
     if (body.totalCalories !== undefined) updates.totalCalories = Math.max(0, parseNumber(body.totalCalories) ?? 0);
     if (body.distanceKm !== undefined) updates.distanceKm = Math.max(0, parseNumber(body.distanceKm) ?? 0);
     if (body.flightsClimbed !== undefined) updates.flightsClimbed = Math.max(0, Math.floor(parseNumber(body.flightsClimbed) ?? 0));
-    if (body.heightCm !== undefined) updates.heightCm = Math.max(0, parseNumber(body.heightCm) ?? 0);
-    if (body.weightKg !== undefined) updates.weightKg = Math.max(0, parseNumber(body.weightKg) ?? 0);
-    if (body.bodyMassIndex !== undefined) updates.bodyMassIndex = Math.max(0, parseNumber(body.bodyMassIndex) ?? 0);
-    if (body.bodyFatPercent !== undefined) updates.bodyFatPercent = Math.max(0, Math.min(100, parseNumber(body.bodyFatPercent) ?? 0));
-    if (body.leanBodyMassKg !== undefined) updates.leanBodyMassKg = Math.max(0, parseNumber(body.leanBodyMassKg) ?? 0);
+    // Only include body metrics when value > 0 — empty/zero = no new data, don't stamp "just now"
+    const heightVal = body.heightCm !== undefined ? Math.max(0, parseNumber(body.heightCm) ?? 0) : undefined;
+    if (heightVal != null && heightVal > 0) updates.heightCm = heightVal;
+    const weightVal = body.weightKg !== undefined ? Math.max(0, parseNumber(body.weightKg) ?? 0) : undefined;
+    if (weightVal != null && weightVal > 0) updates.weightKg = weightVal;
+    const bmiVal = body.bodyMassIndex !== undefined ? Math.max(0, parseNumber(body.bodyMassIndex) ?? 0) : undefined;
+    if (bmiVal != null && bmiVal > 0) updates.bodyMassIndex = bmiVal;
+    const bodyFatVal = body.bodyFatPercent !== undefined ? Math.max(0, Math.min(100, parseNumber(body.bodyFatPercent) ?? 0)) : undefined;
+    if (bodyFatVal != null && bodyFatVal > 0) updates.bodyFatPercent = bodyFatVal;
+    const leanVal = body.leanBodyMassKg !== undefined ? Math.max(0, parseNumber(body.leanBodyMassKg) ?? 0) : undefined;
+    if (leanVal != null && leanVal > 0) updates.leanBodyMassKg = leanVal;
     if (body.heartRate !== undefined) updates.heartRate = Math.max(0, Math.floor(parseNumber(body.heartRate) ?? 0));
     if (body.restingHeartRate !== undefined) updates.restingHeartRate = Math.max(0, Math.floor(parseNumber(body.restingHeartRate) ?? 0));
     if (Object.keys(updates).length === 0) {

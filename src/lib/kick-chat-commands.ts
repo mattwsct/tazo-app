@@ -3,7 +3,6 @@
  */
 
 import { getHeartrateStats, getStreamStartedAt } from '@/utils/stats-storage';
-import { getUserPoints, getLeaderboardTop } from '@/utils/leaderboard-storage';
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
@@ -21,6 +20,8 @@ import {
   getAltitudeResponse,
   getForecastResponse,
   getMapResponse,
+  getFollowersResponse,
+  getSubsResponse,
 } from '@/lib/chat-response-helpers';
 import {
   getActiveGame,
@@ -42,7 +43,8 @@ import {
 export const KICK_CHAT_COMMANDS = [
   'ping',
   'uptime',
-  'points',
+  'followers',
+  'subs',
   'leaderboard',
   'heartrate',
   'hr',
@@ -68,8 +70,6 @@ export const KICK_CHAT_COMMANDS = [
   'split',
   'refill',
   'chips',
-  'gambleboard',
-  'chiptop',
   'coinflip',
   'flip',
   'slots',
@@ -90,8 +90,9 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   const arg = parts[1];
   if (cmd === 'ping') return { cmd: 'ping' };
   if (cmd === 'uptime') return { cmd: 'uptime' };
-  if (cmd === 'points' || cmd === 'pts') return { cmd: 'points' };
-  if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard' };
+  if (cmd === 'followers') return { cmd: 'followers' };
+  if (cmd === 'subs' || cmd === 'subscribers') return { cmd: 'subs' };
+  if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top' || cmd === 'gambleboard' || cmd === 'chiptop' || cmd === 'gambletop') return { cmd: 'leaderboard' };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
   if (cmd === 'steps') return { cmd: 'steps' };
   if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
@@ -113,7 +114,6 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'split') return { cmd: 'split' };
   if (cmd === 'refill' || cmd === 'rebuy' || cmd === 'rebuys') return { cmd: 'refill' };
   if (cmd === 'chips') return { cmd: 'chips', arg };
-  if (cmd === 'gambleboard' || cmd === 'chiptop' || cmd === 'gambletop') return { cmd: 'gambleboard' };
   if (cmd === 'coinflip' || cmd === 'flip') return { cmd: 'coinflip', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'slots' || cmd === 'spin') return { cmd: 'slots', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'roulette') return { cmd: 'roulette', arg: parts.slice(1).join(' ') };
@@ -144,16 +144,13 @@ export async function handleKickChatCommand(
     parts.push(`${m % 60}m`);
     return `⏱️ ${parts.join(' ')}`;
   }
-  if (cmd === 'points') {
-    if (!user) return null;
-    const pts = await getUserPoints(user);
-    return `📊 You have ${pts} points this stream. Chat, vote in polls, sub, gift, or tip to earn more!`;
-  }
   if (cmd === 'leaderboard') {
-    const top = await getLeaderboardTop(5);
-    if (top.length === 0) return '📊 No points yet this stream. Chat, vote in polls, sub, gift, or tip to earn!';
-    const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.points} pts`).join(' | ');
-    return `📊 Top: ${lines}`;
+    const gamblingOn = await isGamblingEnabled();
+    if (!gamblingOn) return '🃏 Gambling is disabled for this stream.';
+    const top = await getGamblingLeaderboardTop(5);
+    if (top.length === 0) return '🃏 No chips yet this stream. !deal <amount> to play blackjack — everyone starts with 100 chips.';
+    const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.chips}`).join(' | ');
+    return `🃏 Top chips (resets each stream): ${lines}`;
   }
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();
@@ -195,9 +192,11 @@ export async function handleKickChatCommand(
   if (cmd === 'altitude') return getAltitudeResponse();
   if (cmd === 'forecast') return getForecastResponse();
   if (cmd === 'map') return getMapResponse();
+  if (cmd === 'followers') return getFollowersResponse();
+  if (cmd === 'subs') return getSubsResponse();
 
   // Gambling (all require gambling enabled)
-  const gamblingCmds = ['refill', 'chips', 'gambleboard', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'gamba', 'gamble'];
+  const gamblingCmds = ['refill', 'chips', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'gamba', 'gamble'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return '🃏 Gambling is disabled for this stream.';
@@ -214,12 +213,6 @@ export async function handleKickChatCommand(
       return `🃏 You have ${chips} chips (resets each stream). Chat to earn 10 per 10 min. !deal !slots !roulette !coinflip !dice. At 0? !refill for a rebuy (1 per stream).`;
     }
     return `🃏 ${targetUser} has ${chips} chips (resets each stream).`;
-  }
-  if (cmd === 'gambleboard') {
-    const top = await getGamblingLeaderboardTop(5);
-    if (top.length === 0) return '🃏 No chips yet this stream. !deal <amount> to play blackjack — everyone starts with 100 chips.';
-    const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.chips}`).join(' | ');
-    return `🃏 Top chips (resets each stream): ${lines}`;
   }
   if (cmd === 'deal' || cmd === 'bj') {
     if (!user) return null;

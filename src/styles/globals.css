@@ -373,7 +373,7 @@ body.overlay-page {
   line-height: 1.35;
 }
 
-.leaderboard-points {
+.leaderboard-chips {
   flex-shrink: 0;
   color: rgba(251, 191, 36, 0.95);
 }

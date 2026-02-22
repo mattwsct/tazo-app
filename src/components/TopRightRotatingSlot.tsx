@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useMemo } from 'react';
+import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
 const CYCLE_DURATION_MS = 30000;
-const CROSSFADE_DURATION_MS = 500;
 
 type SlotType = 'temp' | 'condition' | 'altitude' | 'speed';
 
@@ -26,12 +26,6 @@ export default function TopRightRotatingSlot({
   speedDisplay,
   showWeather,
 }: TopRightRotatingSlotProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [displayedIndex, setDisplayedIndex] = useState(0);
-  const [outgoingIndex, setOutgoingIndex] = useState<number | null>(null);
-  const transitionRef = useRef<NodeJS.Timeout | null>(null);
-  const slidesRef = useRef<SlotType[]>([]);
-
   const slides = useMemo<SlotType[]>(() => {
     const s: SlotType[] = [];
     if (showWeather && weatherDisplay) s.push('temp');
@@ -41,52 +35,7 @@ export default function TopRightRotatingSlot({
     return s;
   }, [showWeather, weatherDisplay, altitudeDisplay, speedDisplay]);
 
-  const slidesKey = slides.join(',');
-  useEffect(() => {
-    slidesRef.current = slides;
-  }, [slidesKey, slides]);
-
-  useEffect(() => {
-    if (slides.length === 0) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- clamp index when slides change
-    setActiveIndex((prev) => Math.min(prev, Math.max(0, slides.length - 1)));
-  }, [slides.length, slides]);
-
-  useEffect(() => {
-    if (slides.length <= 1) return;
-
-    const tick = () => {
-      const current = slidesRef.current;
-      if (current.length <= 1) return;
-
-      setActiveIndex((prev) => {
-        const idx = Math.min(prev, current.length - 1);
-        return (idx + 1) % current.length;
-      });
-    };
-
-    const id = setInterval(tick, CYCLE_DURATION_MS);
-    return () => clearInterval(id);
-  }, [slides.length]);
-
-  useEffect(() => {
-    if (activeIndex === displayedIndex && outgoingIndex === null) return;
-    if (slides.length === 0) return;
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- crossfade transition, timeout handles async
-    setOutgoingIndex(displayedIndex);
-
-    if (transitionRef.current) clearTimeout(transitionRef.current);
-    transitionRef.current = setTimeout(() => {
-      transitionRef.current = null;
-      setDisplayedIndex(activeIndex);
-      setOutgoingIndex(null);
-    }, CROSSFADE_DURATION_MS);
-
-    return () => {
-      if (transitionRef.current) clearTimeout(transitionRef.current);
-    };
-  }, [activeIndex, displayedIndex, outgoingIndex, slides.length]);
+  const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
 
   if (slides.length === 0) return null;
 

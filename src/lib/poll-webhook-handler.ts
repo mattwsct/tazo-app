@@ -4,7 +4,7 @@
 
 import { kv } from '@vercel/kv';
 import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
-import { addPollPoints } from '@/utils/leaderboard-storage';
+import { setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 import {
   parsePollCommand,
   parsePollDurationVariant,
@@ -178,6 +178,32 @@ export interface HandleChatPollResult {
   continueToPing?: boolean;
 }
 
+/** Send a chat reply, swallowing errors. Returns the sent message (for extracting message ID). */
+async function replyChat(
+  token: string | null,
+  msg: string,
+  replyTo?: string
+): Promise<{ message_id?: string; id?: string } | null> {
+  if (!token) return null;
+  try {
+    return (await sendKickChatMessage(token, msg, replyTo ? { replyToMessageId: replyTo } : undefined)) as { message_id?: string; id?: string } | null;
+  } catch { return null; }
+}
+
+/** Start a queued poll and announce it in chat. */
+async function startQueuedPoll(queued: QueuedPoll, token: string | null): Promise<void> {
+  const state: PollState = {
+    id: `poll_${Date.now()}`,
+    question: queued.question,
+    options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
+    startedAt: Date.now(),
+    durationSeconds: queued.durationSeconds,
+    status: 'active',
+  };
+  await setPollState(state);
+  await replyChat(token, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
+}
+
 export async function handleChatPoll(
   content: string,
   senderUsername: string,
@@ -194,105 +220,53 @@ export async function handleChatPoll(
   const isPollStatus = contentLower === '!pollstatus' || contentLower === '!poll status';
   const isEndPoll = contentLower === '!endpoll';
 
-  // --- !endpoll: mods and broadcaster only. End current poll and start next queued. ---
+  const needsChat = isEndPoll || isPollStatus || isBarePoll || isPollCmd ||
+    (initialState?.status === 'winner') || (initialState?.status === 'active');
+  const token = needsChat ? await getValidAccessToken() : null;
+  const messageId = (payload.id ?? payload.message_id) as string | undefined;
+
+  // --- !endpoll: mods and broadcaster only ---
   if (isEndPoll) {
     const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
     const roles = getSenderRoles(payload.sender);
-    const senderLower = senderUsername.toLowerCase();
-    const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
-    const isModOrBroadcaster = roles.isMod || senderLower === broadcasterLower;
+    const isModOrBroadcaster = roles.isMod || senderUsername.toLowerCase() === (broadcasterSlug?.toLowerCase() ?? '');
     if (!isModOrBroadcaster) {
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            'Only mods and broadcaster can end polls.',
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
+      await replyChat(token, 'Only mods and broadcaster can end polls.', messageId);
       return { handled: true };
     }
-    const currentState = initialState;
-    if (!currentState || currentState.status !== 'active') {
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            'No poll active.',
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
+    if (!initialState || initialState.status !== 'active') {
+      await replyChat(token, 'No poll active.', messageId);
       return { handled: true };
     }
     await setPollState(null);
-    const accessToken = await getValidAccessToken();
-    const messageId = (payload.id ?? payload.message_id) as string | undefined;
-    if (accessToken) {
-      try {
-        await sendKickChatMessage(
-          accessToken,
-          'Poll ended early.',
-          messageId ? { replyToMessageId: messageId } : undefined
-        );
-      } catch { /* ignore */ }
-    }
+    await replyChat(token, 'Poll ended early.', messageId);
     const queued = await popPollQueue();
-    if (queued) {
-      const state: PollState = {
-        id: `poll_${Date.now()}`,
-        question: queued.question,
-        options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
-        startedAt: Date.now(),
-        durationSeconds: queued.durationSeconds,
-        status: 'active',
-      };
-      await setPollState(state);
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(accessToken, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
-        } catch { /* ignore */ }
-      }
-    }
+    if (queued) await startQueuedPoll(queued, token);
     return { handled: true };
   }
 
-  // --- !pollstatus: show current poll or "no poll active" ---
+  // --- !pollstatus ---
   if (isPollStatus) {
-    const state = initialState;
-    const accessToken = await getValidAccessToken();
-    if (!accessToken) return { handled: true };
-    const messageId = (payload.id ?? payload.message_id) as string | undefined;
-    if (state?.status === 'active') {
-      const labels = state.options.map((o) => `'${o.label.toLowerCase()}'`);
+    if (!token) return { handled: true };
+    if (initialState?.status === 'active') {
+      const labels = initialState.options.map((o) => `'${o.label.toLowerCase()}'`);
       const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
-      const elapsed = (Date.now() - state.startedAt) / 1000;
-      const remaining = Math.max(0, Math.ceil(state.durationSeconds - elapsed));
+      const elapsed = (Date.now() - initialState.startedAt) / 1000;
+      const remaining = Math.max(0, Math.ceil(initialState.durationSeconds - elapsed));
       const timeStr = remaining === 0 ? 'ending soon' : `${remaining}s left`;
-      const msg = `Poll: ${state.question} Type ${optionStr} to vote. (${timeStr})`;
-      try {
-        await sendKickChatMessage(accessToken, msg, messageId ? { replyToMessageId: messageId } : undefined);
-      } catch { /* ignore */ }
+      await replyChat(token, `Poll: ${initialState.question} Type ${optionStr} to vote. (${timeStr})`, messageId);
     } else {
-      try {
-        await sendKickChatMessage(accessToken, 'No poll active.', messageId ? { replyToMessageId: messageId } : undefined);
-      } catch { /* ignore */ }
+      await replyChat(token, 'No poll active.', messageId);
     }
     return { handled: true };
   }
 
-  // --- If winner display time passed, clear and start next queued poll ---
-  const currentStateBefore = initialState;
+  // --- Winner display expired: clear and start next queued poll ---
   if (
     !isPollCmd &&
-    currentStateBefore?.status === 'winner' &&
-    currentStateBefore.winnerDisplayUntil != null &&
-    Date.now() >= currentStateBefore.winnerDisplayUntil
+    initialState?.status === 'winner' &&
+    initialState.winnerDisplayUntil != null &&
+    Date.now() >= initialState.winnerDisplayUntil
   ) {
     if (!(await tryAcquirePollEndLock())) return { handled: true };
     if (process.env.NODE_ENV === 'development') {
@@ -304,38 +278,14 @@ export async function handleChatPoll(
       if (process.env.NODE_ENV === 'development') {
         console.log('[poll] webhook: started queued poll', queued.question?.slice(0, 40));
       }
-      const state: PollState = {
-        id: `poll_${Date.now()}`,
-        question: queued.question,
-        options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
-        startedAt: Date.now(),
-        durationSeconds: queued.durationSeconds,
-        status: 'active',
-      };
-      await setPollState(state);
-      const accessToken = await getValidAccessToken();
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(accessToken, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
-        } catch { /* ignore */ }
-      }
+      await startQueuedPoll(queued, token);
     }
     return { handled: true };
   }
 
-  // --- !poll with no args: show usage (no default/random poll) ---
+  // --- !poll with no args: show usage ---
   if (isBarePoll) {
-    const accessToken = await getValidAccessToken();
-    const messageId = (payload.id ?? payload.message_id) as string | undefined;
-    if (accessToken) {
-      try {
-        await sendKickChatMessage(
-          accessToken,
-          'Usage: !poll Question? Option1, Option2 — or !poll Food? Pizza burger chips (no options = Yes/No)',
-          messageId ? { replyToMessageId: messageId } : undefined
-        );
-      } catch { /* ignore */ }
-    }
+    await replyChat(token, 'Usage: !poll Question? Option1, Option2 — or !poll Food? Pizza burger chips (no options = Yes/No)', messageId);
     return { handled: true };
   }
 
@@ -347,81 +297,19 @@ export async function handleChatPoll(
 
     const effectiveDuration = durationVariant?.duration ?? settings.durationSeconds;
 
-    if (parsed.options.length > 5) {
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            'Maximum 5 options allowed.',
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
-      return { handled: true };
-    }
+    const validationError =
+      parsed.options.length > 5 ? 'Maximum 5 options allowed.' :
+      hasDuplicateOptions(parsed.options) ? 'Duplicate options are not allowed (e.g. "yes, yes"). Use distinct options.' :
+      pollExceedsLength(parsed.question, parsed.options) ? `Question max ${POLL_QUESTION_MAX_LENGTH} chars, each option max ${POLL_OPTION_MAX_LENGTH} chars.` :
+      pollContainsInvalidChars(parsed.question, parsed.options) ? 'Question and options cannot contain control characters or invisible/special Unicode.' :
+      pollContainsBlockedContent(parsed.question, parsed.options) ? 'Poll rejected: question or options contain inappropriate content.' :
+      null;
 
-    if (hasDuplicateOptions(parsed.options)) {
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            'Duplicate options are not allowed (e.g. "yes, yes"). Use distinct options.',
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
-      return { handled: true };
-    }
-
-    if (pollExceedsLength(parsed.question, parsed.options)) {
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            `Question max ${POLL_QUESTION_MAX_LENGTH} chars, each option max ${POLL_OPTION_MAX_LENGTH} chars.`,
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
-      return { handled: true };
-    }
-
-    if (pollContainsInvalidChars(parsed.question, parsed.options)) {
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            'Question and options cannot contain control characters or invisible/special Unicode.',
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
-      return { handled: true };
-    }
-
-    if (pollContainsBlockedContent(parsed.question, parsed.options)) {
-      if (process.env.NODE_ENV === 'development') {
+    if (validationError) {
+      if (validationError.startsWith('Poll rejected') && process.env.NODE_ENV === 'development') {
         console.log('[poll] webhook: rejected (content filter)', { question: parsed.question?.slice(0, 60) });
       }
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            'Poll rejected: question or options contain inappropriate content.',
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
+      await replyChat(token, validationError, messageId);
       return { handled: true };
     }
 
@@ -437,23 +325,12 @@ export async function handleChatPoll(
           rawSender: JSON.stringify(payload.sender).slice(0, 300),
         });
       }
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            "You don't have permission to start polls.",
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
+      await replyChat(token, "You don't have permission to start polls.", messageId);
       return { handled: true };
     }
 
-    const currentState = initialState;
-    const hasActive = currentState && currentState.status === 'active';
-    const hasWinner = currentState && currentState.status === 'winner';
+    const hasActive = initialState && initialState.status === 'active';
+    const hasWinner = initialState && initialState.status === 'winner';
 
     if (hasActive || hasWinner) {
       const queue = await getPollQueue();
@@ -462,7 +339,7 @@ export async function handleChatPoll(
         if (process.env.NODE_ENV === 'development') {
           console.log('[poll] webhook: winner+empty queue, starting immediately (skip queue msg)');
         }
-        void addPollPoints(senderUsername, 'create');
+        void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
         await setPollState(null);
         const state: PollState = {
           id: `poll_${Date.now()}`,
@@ -473,39 +350,18 @@ export async function handleChatPoll(
           status: 'active',
         };
         await setPollState(state);
-        const accessToken = await getValidAccessToken();
-        const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
-        if (accessToken) {
-          try {
-            const sent = await sendKickChatMessage(
-              accessToken,
-              buildPollStartMessage(parsed.question, parsed.options, effectiveDuration),
-              triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
-            );
-            const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
-            if (msgId) {
-              state.startMessageId = String(msgId);
-              await setPollState(state);
-            }
-          } catch { /* ignore */ }
+        const sent = await replyChat(token, buildPollStartMessage(parsed.question, parsed.options, effectiveDuration), messageId);
+        const msgId = sent?.message_id ?? sent?.id;
+        if (msgId) {
+          state.startMessageId = String(msgId);
+          await setPollState(state);
         }
         return { handled: true };
       }
 
       const maxQueued = Math.max(1, settings.maxQueuedPolls ?? 5);
-
       if (queue.length >= maxQueued) {
-        const accessToken = await getValidAccessToken();
-        const messageId = (payload.id ?? payload.message_id) as string | undefined;
-        if (accessToken) {
-          try {
-            await sendKickChatMessage(
-              accessToken,
-              `Too many polls queued (max ${maxQueued}). Try again later.`,
-              messageId ? { replyToMessageId: messageId } : undefined
-            );
-          } catch { /* ignore */ }
-        }
+        await replyChat(token, `Too many polls queued (max ${maxQueued}). Try again later.`, messageId);
         return { handled: true };
       }
 
@@ -518,42 +374,18 @@ export async function handleChatPoll(
       await setPollQueue(newQueue);
 
       const position = newQueue.length;
-      const estSec = estimateSecondsUntilStart(
-        position,
-        currentState,
-        queue,
-        settings.winnerDisplaySeconds,
-        effectiveDuration
-      );
+      const estSec = estimateSecondsUntilStart(position, initialState, queue, settings.winnerDisplaySeconds, effectiveDuration);
       if (process.env.NODE_ENV === 'development') {
-        console.log('[poll] webhook: queued poll', {
-          position,
-          question: parsed.question?.slice(0, 40),
-          estSec,
-          hasActive,
-          hasWinner,
-        });
+        console.log('[poll] webhook: queued poll', { position, question: parsed.question?.slice(0, 40), estSec, hasActive, hasWinner });
       }
-      const accessToken = await getValidAccessToken();
-      const messageId = (payload.id ?? payload.message_id) as string | undefined;
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            `Poll queued (#${position}). Estimated start: ${formatSecondsEstimate(estSec)}.`,
-            messageId ? { replyToMessageId: messageId } : undefined
-          );
-        } catch { /* ignore */ }
-      }
+      await replyChat(token, `Poll queued (#${position}). Estimated start: ${formatSecondsEstimate(estSec)}.`, messageId);
       return { handled: true };
     }
 
     if (process.env.NODE_ENV === 'development') {
       console.log('[poll] webhook: starting new poll (no active/winner)', parsed.question?.slice(0, 40));
     }
-    void addPollPoints(senderUsername, 'create');
-    // Start new poll
-    const triggerMsgId = (payload.id ?? payload.message_id) as string | undefined;
+    void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
     const state: PollState = {
       id: `poll_${Date.now()}`,
       question: parsed.question,
@@ -563,78 +395,42 @@ export async function handleChatPoll(
       status: 'active',
     };
     await setPollState(state);
-    const accessToken = await getValidAccessToken();
-    if (accessToken) {
-      try {
-        const sent = await sendKickChatMessage(
-          accessToken,
-          buildPollStartMessage(parsed.question, parsed.options, effectiveDuration),
-          triggerMsgId ? { replyToMessageId: triggerMsgId } : undefined
-        );
-        const msgId = (sent as { message_id?: string; id?: string })?.message_id ?? (sent as { message_id?: string; id?: string })?.id;
-        if (msgId) {
-          state.startMessageId = String(msgId);
-          await setPollState(state);
-        }
-      } catch { /* ignore */ }
+    const sent = await replyChat(token, buildPollStartMessage(parsed.question, parsed.options, effectiveDuration), messageId);
+    const msgId = sent?.message_id ?? sent?.id;
+    if (msgId) {
+      state.startMessageId = String(msgId);
+      await setPollState(state);
     }
     return { handled: true };
   }
 
   // --- Vote or check poll end ---
-  const currentState = initialState;
-  if (!currentState || currentState.status !== 'active') {
+  if (!initialState || initialState.status !== 'active') {
     return { handled: false };
   }
 
   const now = Date.now();
-  const elapsed = (now - currentState.startedAt) / 1000;
+  const elapsed = (now - initialState.startedAt) / 1000;
 
-  if (elapsed >= currentState.durationSeconds) {
-    if (!(await tryAcquirePollEndLock())) return { handled: true }; // Another process is ending this poll
+  if (elapsed >= initialState.durationSeconds) {
+    if (!(await tryAcquirePollEndLock())) return { handled: true };
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('[poll] webhook: ending poll (vote/msg triggered)', { elapsed, duration: currentState.durationSeconds });
+      console.log('[poll] webhook: ending poll (vote/msg triggered)', { elapsed, duration: initialState.durationSeconds });
     }
-    const { winnerMessage, topVoter } = computePollResult(currentState);
-    const accessToken = await getValidAccessToken();
-    if (accessToken) {
-      try {
-        await sendKickChatMessage(
-          accessToken,
-          winnerMessage,
-          currentState.startMessageId ? { replyToMessageId: currentState.startMessageId } : undefined
-        );
-      } catch { /* ignore */ }
-    }
+    const { winnerMessage, topVoter } = computePollResult(initialState);
+    await replyChat(token, winnerMessage, initialState.startMessageId);
     const queued = await popPollQueue();
     if (queued) {
-      const newState: PollState = {
-        id: `poll_${Date.now()}`,
-        question: queued.question,
-        options: queued.options.map((o) => ({ ...o, votes: 0, voters: {} })),
-        startedAt: Date.now(),
-        durationSeconds: queued.durationSeconds,
-        status: 'active',
-      };
-      await setPollState(newState);
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(
-            accessToken,
-            buildPollStartMessage(queued.question, queued.options, queued.durationSeconds)
-          );
-        } catch { /* ignore */ }
-      }
+      await startQueuedPoll(queued, token);
       return { handled: true };
     }
-    // Race guard: another process (cron, poll-end-trigger) may have popped and started next poll
     const currentNow = await getPollState();
-    if (currentNow?.id !== currentState.id) {
+    if (currentNow?.id !== initialState.id) {
       return { handled: true };
     }
     const winnerState: PollState = {
-      ...currentState,
+      ...initialState,
       status: 'winner',
       winnerMessage,
       winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
@@ -644,15 +440,13 @@ export async function handleChatPoll(
     return { handled: true };
   }
 
-  // Try to parse as vote
-  const vote = parseVote(contentTrimmed, currentState.options);
+  const vote = parseVote(contentTrimmed, initialState.options);
   if (vote) {
-    applyVote(currentState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? false);
-    void addPollPoints(senderUsername, 'vote');
-    // Guard: poll may have ended and been replaced; don't overwrite new poll with stale voted state
+    applyVote(initialState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? false);
+    void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
     const stateNow = await getPollState();
-    if (stateNow?.id !== currentState.id) return { handled: true };
-    await setPollState(currentState);
+    if (stateNow?.id !== initialState.id) return { handled: true };
+    await setPollState(initialState);
     return { handled: true };
   }
 

@@ -314,6 +314,27 @@ Returns current altitude, highest, and lowest this stream.
 
 Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago)`
 
+### Followers
+
+```
+!followers → $(customapi https://app.tazo.wtf/api/chat/followers)
+```
+
+Returns your channel's follower count. Uses kick.com public API; cached 5 minutes. Requires Kick connected (slug stored when you load channel in admin).
+
+Example output: `👥 12,345 followers`
+
+### Subscribers
+
+```
+!subs → $(customapi https://app.tazo.wtf/api/chat/subs)
+!subscribers → $(customapi https://app.tazo.wtf/api/chat/subs)
+```
+
+Returns your channel's subscriber count if available. Note: Kick's public API may not expose subscriber count for all channels.
+
+Example output: `⭐ 1,234 subscribers`
+
 ## Wellness Commands (Health Auto Export)
 
 These commands use wellness data imported from Health Auto Export (steps, distance, flights, calories, height, weight). Steps, distance, flights, and active calories are "since stream start"; resting calories and body metrics use today's data.

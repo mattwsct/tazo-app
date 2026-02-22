@@ -5,7 +5,6 @@ import { validateEnvironment } from '@/lib/env-validator';
 import { OverlayLogger } from '@/lib/logger';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { POLL_STATE_KEY, type PollState } from '@/types/poll';
-import { getLeaderboardTop, parseExcludedBots } from '@/utils/leaderboard-storage';
 import { getGamblingLeaderboardTop } from '@/utils/blackjack-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
@@ -23,15 +22,12 @@ async function handleGET() {
     const pollState: PollState | null = rawPollState ?? null;
     const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
 
-    // Fetch leaderboard, gambling leaderboard, alerts, and stream goals when enabled
-    const showLeaderboard = merged.showLeaderboard !== false;
     const gamblingEnabled = merged.gamblingEnabled !== false;
-    const showGamblingLeaderboard = gamblingEnabled && merged.showGamblingLeaderboard === true;
+    const showLeaderboard = merged.showLeaderboard !== false && gamblingEnabled;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
-    const excludeUsernames = parseExcludedBots(merged.leaderboardExcludedBots);
-    const [leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
-      showLeaderboard ? getLeaderboardTop(merged.leaderboardTopN ?? 5, { excludeUsernames }) : [],
-      showGamblingLeaderboard ? getGamblingLeaderboardTop(merged.gamblingLeaderboardTopN ?? 5) : [],
+    const leaderboardTopN = merged.gamblingLeaderboardTopN ?? merged.leaderboardTopN ?? 5;
+    const [gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
+      showLeaderboard ? getGamblingLeaderboardTop(leaderboardTopN) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
       needGoals ? getGoalCelebration() : {},
@@ -39,8 +35,6 @@ async function handleGET() {
 
     const combinedSettings = {
       ...merged,
-      showGamblingLeaderboard,
-      leaderboardTop,
       gamblingLeaderboardTop,
       overlayAlerts,
       streamGoals,

@@ -1110,14 +1110,14 @@ export default function AdminPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        title="Clear leaderboard points only"
+                        title="Reset chips leaderboard and display names"
                         onClick={async () => {
-                          if (!confirm('Reset leaderboard? This will clear all points. Steps, distance, and wellness are unchanged.')) return;
+                          if (!confirm('Reset chips leaderboard? This will clear all chips and display names. Steps, distance, and wellness are unchanged.')) return;
                           try {
                             const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
                             const data = await r.json();
                             if (r.ok) {
-                              setToast({ type: 'saved', message: 'Leaderboard reset' });
+                              setToast({ type: 'saved', message: 'Chips leaderboard reset' });
                             } else {
                               setToast({ type: 'error', message: data.error ?? 'Reset failed' });
                             }
@@ -1127,7 +1127,7 @@ export default function AdminPage() {
                           setTimeout(() => setToast(null), 3000);
                         }}
                       >
-                        🏆 Reset leaderboard
+                        🃏 Reset chips leaderboard
                       </button>
                       <button
                         type="button"
@@ -1692,16 +1692,15 @@ export default function AdminPage() {
           </CollapsibleSection>
 
           {/* === OVERLAY === */}
-          {/* Top-left & top-right rotating slots — consolidated */}
           <CollapsibleSection
-            id="overlay-top-rotation"
-            title="🔄 Overlay: top-left & top-right rotation"
-            description={
-              <>
-                Top-left rotates Date → Steps → Distance every 7s. Top-right rotates Temp → Condition → Altitude → Speed. Enable/configure what appears in each.
-              </>
-            }
+            id="overlay"
+            title="🖥️ Overlay display"
+            description="Control what appears on the stream overlay — rotating info, leaderboard, goals, and alerts."
           >
+            <h3 className="subsection-label" style={{ marginBottom: 4 }}>Top-left &amp; top-right rotation</h3>
+            <p className="input-hint" style={{ marginBottom: 12 }}>
+              Top-left rotates Date → Steps → Distance every 7s. Top-right rotates Temp → Condition → Altitude → Speed.
+            </p>
             <div className="setting-group">
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-left (wellness — Health Auto Export)</h4>
               <div className="checkbox-group" style={{ marginBottom: 8 }}>
@@ -1756,22 +1755,14 @@ export default function AdminPage() {
                 Altitude & speed auto-show when notable (e.g. climb/descent, moving) and hide when no longer relevant.
               </p>
             </div>
-          </CollapsibleSection>
 
-          {/* Leaderboard & Overlay Alerts */}
-          <CollapsibleSection
-            id="leaderboard-alerts"
-            title="📊 Overlay: leaderboard, goals & alerts"
-            description={
-              <>
-                <strong>How it works:</strong> The bottom-right shows one thing at a time, rotating every 7 seconds — Leaderboard → Chips → Sub goal → Kicks goal (only what you enable below). New sub or kicks? It switches instantly to that goal. Alerts (subs, gifts, kicks) appear above the rotating display.
-              </>
-            }
-          >
+            <div className="setting-separator" style={{ margin: '1.25rem 0' }} />
+
+            <h3 className="subsection-label" style={{ marginBottom: 4 }}>Bottom-right: leaderboard, goals &amp; alerts</h3>
+            <p className="input-hint" style={{ marginBottom: 12 }}>
+              Rotates every 7s — Leaderboard (chips) → Sub goal → Kicks goal. Alerts (subs, gifts, kicks) appear above.
+            </p>
             <div className="setting-group">
-              <p className="input-hint" style={{ marginBottom: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.06)', borderRadius: 8 }}>
-                Enable leaderboard and/or goals below. Each rotates into view for 7 seconds. Sub/kicks goals switch immediately when someone subs or donates.
-              </p>
               <div className="checkbox-group" style={{ marginBottom: '12px' }}>
                 <label className="checkbox-label">
                   <input
@@ -1783,25 +1774,41 @@ export default function AdminPage() {
                   <span className="checkbox-text">Show rotating section — when off, carousel is hidden but sub/kicks alerts still pop up in progress bars</span>
                 </label>
             </div>
+              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.gamblingEnabled !== false}
+                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Enable gambling (chips, blackjack, slots, roulette, etc.)</span>
+                </label>
+                <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
+                  When off, !deal/!chips/!hit etc. are disabled and the chips leaderboard is hidden
+                </p>
+              </div>
+              {settings.gamblingEnabled !== false && (
+                <>
               <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                <label>Leaderboard — include in rotation?</label>
+                <label>Chips leaderboard — include in rotation?</label>
                 <select
                   className="admin-select-big"
                   value={settings.showLeaderboard !== false ? 'true' : 'false'}
                   onChange={(e) => handleSettingsChange({ showLeaderboard: e.target.value === 'true' })}
                 >
-                  <option value="true">👁️ Yes, include in rotation</option>
+                  <option value="true">🃏 Yes, include in rotation</option>
                   <option value="false">🚫 No, hidden</option>
                 </select>
               </div>
               {settings.showLeaderboard !== false && (
                 <>
                   <div className="admin-select-wrap">
-                    <label>Top N users</label>
+                    <label>Top N chips</label>
                     <select
                       className="admin-select-big"
-                      value={settings.leaderboardTopN ?? 5}
-                      onChange={(e) => handleSettingsChange({ leaderboardTopN: Number(e.target.value) })}
+                      value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
+                      onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
                     >
                       {[1, 3, 5, 10].map((n) => (
                         <option key={n} value={n}>Top {n}</option>
@@ -1819,51 +1826,12 @@ export default function AdminPage() {
                       style={{ resize: 'vertical', minHeight: 50 }}
                     />
                     <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
-                      Add bots, your own username, or anyone who should not appear or earn points
+                      Add bots, your own username, or anyone who should not appear or earn chips
                     </p>
-            </div>
+                  </div>
                 </>
               )}
-              <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.gamblingEnabled !== false}
-                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Enable blackjack (gambling chips)</span>
-                </label>
-                <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
-                  When off, !deal/!chips/!hit etc. are disabled and the chips leaderboard is hidden
-                </p>
-              </div>
-              {settings.gamblingEnabled !== false && (
-              <div className="admin-select-wrap" style={{ marginTop: '12px', marginBottom: '12px' }}>
-                <label>Gambling (chips) leaderboard — include in rotation?</label>
-                <select
-                  className="admin-select-big"
-                  value={settings.showGamblingLeaderboard === true ? 'true' : 'false'}
-                  onChange={(e) => handleSettingsChange({ showGamblingLeaderboard: e.target.value === 'true' })}
-                >
-                  <option value="true">🃏 Yes, include in rotation</option>
-                  <option value="false">🚫 No, hidden</option>
-                </select>
-            </div>
-              )}
-              {settings.gamblingEnabled !== false && settings.showGamblingLeaderboard === true && (
-                <div className="admin-select-wrap">
-                  <label>Top N chips</label>
-                  <select
-                    className="admin-select-big"
-                    value={settings.gamblingLeaderboardTopN ?? 5}
-                    onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
-                  >
-                    {[1, 3, 5, 10].map((n) => (
-                      <option key={n} value={n}>Top {n}</option>
-                    ))}
-                  </select>
-                </div>
+                </>
               )}
               {settings.gamblingEnabled !== false && (
                 <>
@@ -2396,38 +2364,37 @@ export default function AdminPage() {
                       </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="health-data" title="⚖️ Body metrics (manual entry)" description="Weight and BMI — add missing data before your smart scale or Health Auto Export sends it.">
+          <CollapsibleSection id="data-tools" title="⚙️ Body metrics & data tools" description="Manual body metric entry and data reset options.">
             <HealthDataSection />
-          </CollapsibleSection>
 
-          <CollapsibleSection id="advanced-data" title="⚙️ Advanced / Data" defaultCollapsed={true} description="Less frequently used data reset options.">
-            <div className="setting-group">
-              <p className="input-hint" style={{ marginBottom: 12 }}>
-                Reset specific data stores. Use when auto-reset fails or for targeted cleanup.
-              </p>
-              <button
-                type="button"
-                className="btn btn-secondary btn-small"
-                title="Reset wellness milestones only"
-                onClick={async () => {
-                  if (!confirm('Reset wellness milestones? Leaderboard, steps, distance unchanged.')) return;
-                  try {
-                    const r = await authenticatedFetch('/api/reset-wellness-session', { method: 'POST' });
-                    const data = await r.json();
-                    if (r.ok) {
-                      setToast({ type: 'saved', message: 'Wellness milestones reset' });
-                    } else {
-                      setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                    }
-                  } catch {
-                    setToast({ type: 'error', message: 'Reset failed' });
+            <div className="setting-separator" style={{ margin: '1.25rem 0' }} />
+
+            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Data resets</h3>
+            <p className="input-hint" style={{ marginBottom: 12 }}>
+              Reset specific data stores. Use when auto-reset fails or for targeted cleanup.
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              title="Reset wellness milestones only"
+              onClick={async () => {
+                if (!confirm('Reset wellness milestones? Leaderboard, steps, distance unchanged.')) return;
+                try {
+                  const r = await authenticatedFetch('/api/reset-wellness-session', { method: 'POST' });
+                  const data = await r.json();
+                  if (r.ok) {
+                    setToast({ type: 'saved', message: 'Wellness milestones reset' });
+                  } else {
+                    setToast({ type: 'error', message: data.error ?? 'Reset failed' });
                   }
-                  setTimeout(() => setToast(null), 3000);
-                }}
-              >
-                🧘 Reset wellness
-              </button>
-            </div>
+                } catch {
+                  setToast({ type: 'error', message: 'Reset failed' });
+                }
+                setTimeout(() => setToast(null), 3000);
+              }}
+            >
+              🧘 Reset wellness
+            </button>
           </CollapsibleSection>
         </div>
       </main>

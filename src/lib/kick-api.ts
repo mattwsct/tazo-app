@@ -288,6 +288,87 @@ export async function getKickEventSubscriptions(accessToken: string): Promise<un
   return data.data ?? [];
 }
 
+/** Kick website API (kick.com) - public channel data. Cached 5 min in KV. */
+const KICK_CHANNEL_STATS_KEY = 'kick_channel_stats_cache';
+const KICK_CHANNEL_STATS_TTL_SEC = 300;
+
+export interface KickChannelStats {
+  followers: number | null;
+  subscribers: number | null;
+  slug: string | null;
+}
+
+/** Fetch follower and subscriber counts for the broadcaster's channel. Uses kick.com public API; cached 5 min. */
+export async function getKickChannelStats(): Promise<KickChannelStats> {
+  let slug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+  if (!slug?.trim()) {
+    // Fallback: fetch slug from OAuth channels if we have a token
+    const accessToken = await getValidAccessToken();
+    if (accessToken) {
+      try {
+        const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const ch = (data.data ?? [])[0];
+          slug = ch?.slug ?? null;
+          if (slug && typeof slug === 'string') {
+            await kv.set(KICK_BROADCASTER_SLUG_KEY, slug);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!slug?.trim()) return { followers: null, subscribers: null, slug: null };
+  }
+
+  const cacheKey = `${KICK_CHANNEL_STATS_KEY}:${slug}`;
+  try {
+    const cached = await kv.get<{ followers: number; subscribers: number; at: number }>(cacheKey);
+    if (cached && cached.at && Date.now() - cached.at < KICK_CHANNEL_STATS_TTL_SEC * 1000) {
+      return { followers: cached.followers ?? null, subscribers: cached.subscribers ?? null, slug };
+    }
+  } catch {
+    // ignore cache errors
+  }
+
+  try {
+    const res = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'TazoApp/1.0 (stream-integration)',
+      },
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return { followers: null, subscribers: null, slug };
+
+    const data = (await res.json()) as Record<string, unknown>;
+    const followers =
+      typeof data.followers_count === 'number'
+        ? data.followers_count
+        : typeof (data as { followersCount?: number }).followersCount === 'number'
+          ? (data as { followersCount: number }).followersCount
+          : null;
+    const subscribers =
+      typeof data.subscribers_count === 'number'
+        ? data.subscribers_count
+        : typeof (data as { subscriber_count?: number }).subscriber_count === 'number'
+          ? (data as { subscriber_count: number }).subscriber_count
+          : typeof (data as { subscription_count?: number }).subscription_count === 'number'
+            ? (data as { subscription_count: number }).subscription_count
+            : null;
+
+    const toCache = { followers: followers ?? 0, subscribers: subscribers ?? 0, at: Date.now() };
+    await kv.set(cacheKey, toCache, { ex: KICK_CHANNEL_STATS_TTL_SEC });
+
+    return { followers, subscribers, slug };
+  } catch {
+    return { followers: null, subscribers: null, slug };
+  }
+}
+
 /** Fetch gift sub leaderboard. Returns Map<username_lowercase, total_subs>. Requires kicks:read scope. */
 export async function getKickSubscriptionLeaderboard(accessToken: string): Promise<Map<string, number>> {
   const map = new Map<string, number>();

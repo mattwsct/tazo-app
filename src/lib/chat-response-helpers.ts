@@ -4,6 +4,7 @@
 
 import { kv } from '@vercel/kv';
 import { getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
+import { getKickChannelStats } from '@/lib/kick-api';
 import { getLocationData, getPersistentLocation } from '@/utils/location-cache';
 import { fetchForecast, getWeatherEmoji } from '@/utils/weather-chat';
 import { formatLocation } from '@/utils/location-utils';
@@ -166,4 +167,18 @@ export async function getMapResponse(): Promise<string> {
     return `🗺️ ${mapUrl}`;
   }
   return '🗺️ Map is hidden';
+}
+
+export async function getFollowersResponse(): Promise<string> {
+  const stats = await getKickChannelStats();
+  if (stats.followers == null) return '👥 Follower count unavailable. Connect Kick and fetch channel data first.';
+  const n = stats.followers.toLocaleString();
+  return `👥 ${n} followers`;
+}
+
+export async function getSubsResponse(): Promise<string> {
+  const stats = await getKickChannelStats();
+  if (stats.subscribers == null) return '⭐ Subscriber count unavailable. Connect Kick and fetch channel data first.';
+  const n = stats.subscribers.toLocaleString();
+  return `⭐ ${n} subscribers`;
 }

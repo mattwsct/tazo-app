@@ -18,6 +18,7 @@ import { kv } from '@vercel/kv';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { OverlaySettings } from '@/types/settings';
 import { getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
+import { getFollowersResponse, getSubsResponse } from '@/lib/chat-response-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -284,6 +285,9 @@ export async function GET(
 
     return txtResponse(parts.join(' | '));
   }
+
+  if (route === 'followers') return txtResponse(await getFollowersResponse());
+  if (route === 'subs' || route === 'subscribers') return txtResponse(await getSubsResponse());
 
   // Wellness routes (no RTIRL required)
   const {

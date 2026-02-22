@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { onStreamStarted } from '@/utils/stats-storage';
-import { resetLeaderboardOnStreamStart } from '@/utils/leaderboard-storage';
 import {
   getWellnessData,
   resetStepsSession,
@@ -29,7 +28,6 @@ export async function POST(request: NextRequest) {
 
   try {
     await onStreamStarted();
-    await resetLeaderboardOnStreamStart();
 
     const wellness = await getWellnessData();
     await Promise.all([

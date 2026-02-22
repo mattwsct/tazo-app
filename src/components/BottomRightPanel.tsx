@@ -8,7 +8,7 @@ const ALERT_DISPLAY_MS = 8000;
 const CYCLE_DURATION_MS = 30000; // Time each slide is shown before fading to next
 const CROSSFADE_DURATION_MS = 500; // Fade out + fade in overlap
 
-type SlideType = 'leaderboard' | 'chips' | 'subs' | 'kicks';
+type SlideType = 'leaderboard' | 'subs' | 'kicks';
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -41,12 +41,10 @@ export default function BottomRightPanel({
   const totalVotes = poll?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
   const showPoll = isPollActive && totalVotes >= 0;
 
-  const showLeaderboard = settings.showLeaderboard !== false;
-  const showGamblingLeaderboard = settings.showGamblingLeaderboard === true;
+  const gamblingEnabled = settings.gamblingEnabled !== false;
+  const showLeaderboard = settings.showLeaderboard !== false && gamblingEnabled;
   const showGoalsRotation = settings.showGoalsRotation !== false;
-  const leaderboardTopN = settings.leaderboardTopN ?? 5;
-  const leaderboardTop = settings.leaderboardTop ?? [];
-  const gamblingLeaderboardTopN = settings.gamblingLeaderboardTopN ?? 5;
+  const leaderboardTopN = settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5;
   const gamblingLeaderboardTop = settings.gamblingLeaderboardTop ?? [];
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
@@ -55,10 +53,9 @@ export default function BottomRightPanel({
   const showKicksGoal = settings.showKicksGoal && (settings.kicksGoalTarget ?? 0) > 0;
   const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0 };
 
-  // Build ordered slides (leaderboard, chips, subs, kicks) - only include enabled ones
-  const slides = (['leaderboard', 'chips', 'subs', 'kicks'] as SlideType[]).filter((s) => {
+  // Build ordered slides: leaderboard (chips), subs, kicks — only include enabled ones
+  const slides = (['leaderboard', 'subs', 'kicks'] as SlideType[]).filter((s) => {
     if (s === 'leaderboard') return showLeaderboard;
-    if (s === 'chips') return showGamblingLeaderboard;
     if (s === 'subs') return showSubGoal;
     if (s === 'kicks') return showKicksGoal;
     return false;
@@ -237,34 +234,15 @@ export default function BottomRightPanel({
 
   const renderLeaderboard = () => (
     <div className="overlay-box leaderboard-box">
-      <div className="leaderboard-title">🏆 Leaderboard</div>
-      <div className="leaderboard-entries">
-        {leaderboardTop.length > 0 ? (
-          leaderboardTop.slice(0, leaderboardTopN).map((u, i) => (
-            <div key={u.username} className="leaderboard-entry">
-              <span className="leaderboard-rank">#{i + 1}</span>
-              <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
-              <span className="leaderboard-points">{u.points} pts</span>
-            </div>
-          ))
-        ) : (
-          <div className="leaderboard-entry leaderboard-empty">No points yet — chat to earn!</div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderChipsLeaderboard = () => (
-    <div className="overlay-box leaderboard-box">
       <div className="leaderboard-title">🃏 Top Chips</div>
       <div className="leaderboard-subtitle">Resets each stream</div>
       <div className="leaderboard-entries">
         {gamblingLeaderboardTop.length > 0 ? (
-          gamblingLeaderboardTop.slice(0, gamblingLeaderboardTopN).map((u, i) => (
+          gamblingLeaderboardTop.slice(0, leaderboardTopN).map((u, i) => (
             <div key={u.username} className="leaderboard-entry">
               <span className="leaderboard-rank">#{i + 1}</span>
               <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
-              <span className="leaderboard-points">{u.chips} chips</span>
+              <span className="leaderboard-chips">{u.chips} chips</span>
             </div>
           ))
         ) : (
@@ -317,7 +295,6 @@ export default function BottomRightPanel({
             {outgoingSlide && (
               <div className="bottom-right-cycling-slide cycling-slide-out" key={`out-${outgoingSlide}`}>
                 {outgoingSlide === 'leaderboard' && renderLeaderboard()}
-                {outgoingSlide === 'chips' && renderChipsLeaderboard()}
                 {outgoingSlide === 'subs' && renderSubsGoal()}
                 {outgoingSlide === 'kicks' && renderKicksGoal()}
               </div>
@@ -325,7 +302,6 @@ export default function BottomRightPanel({
             {(activeSlide || displayedSlide) && (
               <div className="bottom-right-cycling-slide cycling-slide-in" key={`in-${activeSlide ?? displayedSlide}`}>
                 {(activeSlide ?? displayedSlide) === 'leaderboard' && renderLeaderboard()}
-                {(activeSlide ?? displayedSlide) === 'chips' && renderChipsLeaderboard()}
                 {(activeSlide ?? displayedSlide) === 'subs' && renderSubsGoal()}
                 {(activeSlide ?? displayedSlide) === 'kicks' && renderKicksGoal()}
               </div>

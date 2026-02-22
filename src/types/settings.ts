@@ -30,12 +30,8 @@ export interface OverlaySettings {
   /** Comma or newline-separated usernames to exclude from leaderboard (e.g. bots, your own name). */
   leaderboardExcludedBots?: string;
   showOverlayAlerts?: boolean;
-  /** Runtime: top leaderboard entries (from get-settings). */
-  leaderboardTop?: { username: string; points: number }[];
   /** Master switch: gambling (blackjack) enabled. When false, commands disabled and chips hidden. */
   gamblingEnabled?: boolean;
-  /** Gambling (chips) leaderboard: include in rotation. Only applies when gamblingEnabled is true. */
-  showGamblingLeaderboard?: boolean;
   /** Top N for gambling leaderboard. */
   gamblingLeaderboardTopN?: number;
   /** Channel point reward title to redeem for chips (exact match, case-insensitive). Empty = disabled. */
@@ -84,7 +80,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   leaderboardTopN: 5,
   leaderboardExcludedBots: '',
   gamblingEnabled: true,
-  showGamblingLeaderboard: false,
   gamblingLeaderboardTopN: 5,
   chipRewardTitle: 'Buy Chips',
   chipRewardChips: 50,
@@ -98,8 +93,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 };
 
 // Valid settings schema for validation
-// Note: 'pollState', 'leaderboardTop', 'gamblingLeaderboardTop', 'overlayAlerts', 'streamGoals', 'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil' are runtime, not persisted
-export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'leaderboardTop' | 'gamblingLeaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'subGoalCelebrationUntil' | 'kicksGoalCelebrationUntil'>, 'boolean' | 'string' | 'number'> = {
+// Note: 'pollState', 'gamblingLeaderboardTop', 'overlayAlerts', 'streamGoals', 'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil' are runtime, not persisted
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'gamblingLeaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'subGoalCelebrationUntil' | 'kicksGoalCelebrationUntil'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   customLocation: 'string',
   showCountryName: 'boolean',
@@ -115,7 +110,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   leaderboardTopN: 'number',
   leaderboardExcludedBots: 'string',
   gamblingEnabled: 'boolean',
-  showGamblingLeaderboard: 'boolean',
   gamblingLeaderboardTopN: 'number',
   chipRewardTitle: 'string',
   chipRewardChips: 'number',

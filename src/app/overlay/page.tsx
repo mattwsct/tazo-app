@@ -1612,8 +1612,7 @@ function OverlayPage() {
 
         {/* Bottom Right: To-Do, Poll, Leaderboard, Alerts */}
         {settings.pollState ||
-        settings.showLeaderboard !== false ||
-        settings.showGamblingLeaderboard === true ||
+        (settings.showLeaderboard !== false && settings.gamblingEnabled !== false) ||
         settings.showOverlayAlerts !== false ? (
           <BottomRightPanel settings={settings} refreshSettings={refreshSettings}>
             {settings.pollState && (() => {

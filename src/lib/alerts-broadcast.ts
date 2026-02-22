@@ -7,7 +7,6 @@
 import { kv } from '@vercel/kv';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { broadcastSettings } from '@/lib/settings-broadcast';
-import { getLeaderboardTop, parseExcludedBots } from '@/utils/leaderboard-storage';
 import { getGamblingLeaderboardTop } from '@/utils/blackjack-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
@@ -24,18 +23,16 @@ export async function broadcastAlertsAndLeaderboard(): Promise<void> {
       ...(settings && typeof settings === 'object' ? settings : {}),
       pollState: rawPoll ?? null,
     });
-    const showLeaderboard = merged.showLeaderboard !== false;
     const gamblingEnabled = merged.gamblingEnabled !== false;
-    const showGamblingLeaderboard = gamblingEnabled && merged.showGamblingLeaderboard === true;
+    const showLeaderboard = merged.showLeaderboard !== false && gamblingEnabled;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
-    const excludeUsernames = parseExcludedBots(merged.leaderboardExcludedBots);
-    const [leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals] = await Promise.all([
-      showLeaderboard ? getLeaderboardTop(merged.leaderboardTopN ?? 5, { excludeUsernames }) : [],
-      showGamblingLeaderboard ? getGamblingLeaderboardTop(merged.gamblingLeaderboardTopN ?? 5) : [],
+    const leaderboardTopN = merged.gamblingLeaderboardTopN ?? merged.leaderboardTopN ?? 5;
+    const [gamblingLeaderboardTop, overlayAlerts, streamGoals] = await Promise.all([
+      showLeaderboard ? getGamblingLeaderboardTop(leaderboardTopN) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
     ]);
-    const combined = { ...merged, showGamblingLeaderboard, leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals };
+    const combined = { ...merged, gamblingLeaderboardTop, overlayAlerts, streamGoals };
     await broadcastSettings(combined);
   } catch (err) {
     if (process.env.NODE_ENV === 'development') {

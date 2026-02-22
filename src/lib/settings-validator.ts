@@ -43,7 +43,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
   }
 
   // Log any rejected keys (potential malicious entries)
-  const allowedNonSchema = ['pollState', 'leaderboardTop', 'gamblingLeaderboardTop', 'overlayAlerts'];
+  const allowedNonSchema = ['pollState', 'gamblingLeaderboardTop', 'overlayAlerts'];
   for (const key of Object.keys(settings)) {
     if (!(key in SETTINGS_CONFIG) && !allowedNonSchema.includes(key)) {
       rejectedKeys.push(key);
@@ -77,7 +77,7 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const settingsObj = settings as Record<string, unknown>;
 
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in SETTINGS_CONFIG) && !['pollState', 'leaderboardTop', 'gamblingLeaderboardTop', 'overlayAlerts'].includes(key)) {
+    if (!(key in SETTINGS_CONFIG) && !['pollState', 'gamblingLeaderboardTop', 'overlayAlerts'].includes(key)) {
       maliciousKeys.push(key);
     }
   }
