@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 
 export const STORAGE_KEY = 'admin_sections_collapsed';
 export const COLLAPSE_ALL_EVENT = 'admin-collapse-sections';
@@ -26,15 +26,16 @@ export function saveCollapsed(map: Record<string, boolean>) {
   }
 }
 
+/** Must match actual CollapsibleSection id props in admin page */
 export const ADMIN_SECTION_IDS = [
   'connection',
   'location-map',
   'stream-title',
-  'weather-altitude-speed',
-  'steps-distance',
+  'overlay-top-rotation',
   'leaderboard-alerts',
   'poll',
   'message-templates',
+  'wellness-data',
   'advanced-data',
 ] as const;
 
@@ -60,12 +61,21 @@ export default function CollapsibleSection({
   children: React.ReactNode;
   defaultCollapsed?: boolean;
 }) {
-  const [collapsed, setCollapsedState] = useState<boolean>(() => {
+  const [collapsed, setCollapsedState] = useState<boolean>(defaultCollapsed);
+  const hasHydratedRef = useRef(false);
+
+  // Sync from localStorage on mount (client-only; SSR uses defaultCollapsed)
+  useLayoutEffect(() => {
+    if (hasHydratedRef.current) return;
+    hasHydratedRef.current = true;
     const stored = loadCollapsed();
-    return id in stored ? stored[id] : defaultCollapsed;
-  });
+    if (id in stored) {
+      setCollapsedState(stored[id]);
+    }
+  }, [id]);
 
   useEffect(() => {
+    if (!hasHydratedRef.current) return;
     const stored = loadCollapsed();
     const next = { ...stored, [id]: collapsed };
     saveCollapsed(next);

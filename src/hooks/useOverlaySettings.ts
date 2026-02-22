@@ -61,6 +61,7 @@ export function useOverlaySettings(): [
             setSettings((prev) => ({
               ...merged,
               leaderboardTop: Array.isArray(merged.leaderboardTop) && merged.leaderboardTop.length > 0 ? merged.leaderboardTop : (prev.leaderboardTop ?? []),
+              gamblingLeaderboardTop: Array.isArray(merged.gamblingLeaderboardTop) && merged.gamblingLeaderboardTop.length > 0 ? merged.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: merged.streamGoals ?? prev.streamGoals,
             }));
@@ -112,12 +113,14 @@ export function useOverlaySettings(): [
             setSettings((prev) => ({
               ...data,
               leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
+              gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
             }));
-          } else if (data && (data.leaderboardTop || data.overlayAlerts || data.streamGoals || 'subGoalCelebrationUntil' in data || 'kicksGoalCelebrationUntil' in data)) {
+          } else if (data && (data.leaderboardTop || data.gamblingLeaderboardTop || data.overlayAlerts || data.streamGoals || 'subGoalCelebrationUntil' in data || 'kicksGoalCelebrationUntil' in data)) {
             setSettings((prev) => ({
               ...prev,
               leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
+              gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: data.streamGoals ?? prev.streamGoals,
               subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
@@ -143,6 +146,7 @@ export function useOverlaySettings(): [
         setSettings((prev) => ({
           ...prev,
           leaderboardTop: Array.isArray(data.leaderboardTop) && data.leaderboardTop.length > 0 ? data.leaderboardTop : (prev.leaderboardTop ?? []),
+          gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
           overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
           streamGoals: data.streamGoals ?? prev.streamGoals,
           subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,

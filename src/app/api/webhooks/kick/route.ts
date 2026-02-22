@@ -7,6 +7,7 @@ import {
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { handleChatPoll } from '@/lib/poll-webhook-handler';
+import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
@@ -21,6 +22,7 @@ import {
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
 import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPoints, addGiftSubPoints, addKicksPoints } from '@/utils/leaderboard-storage';
+import { resetGamblingOnStreamStart } from '@/utils/blackjack-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetHandwashingSession, resetFlightsSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
@@ -141,6 +143,7 @@ export async function POST(request: NextRequest) {
   if (eventNorm === 'livestream.status.updated' && payload.is_live === true) {
     void onStreamStarted();
     void resetLeaderboardOnStreamStart();
+    void resetGamblingOnStreamStart();
     void (async () => {
       try {
         const wellness = await getWellnessData();
@@ -169,9 +172,25 @@ export async function POST(request: NextRequest) {
     const pollResult = await handleChatPoll(content, sender, payload);
     if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
 
+    const titleResult = await handleStreamTitleCommand(content, sender, payload);
+    if (titleResult.handled) {
+      if (titleResult.reply) {
+        const accessToken = await getValidAccessToken();
+        if (accessToken) {
+          const messageId = (payload.id ?? payload.message_id) as string | undefined;
+          try {
+            await sendKickChatMessage(accessToken, titleResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
+          } catch (err) {
+            console.error('[Kick webhook] !title reply failed:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
     const parsed = parseKickChatMessage(content);
     if (!parsed) return NextResponse.json({ received: true }, { status: 200 });
-    const response = await handleKickChatCommand(parsed.cmd, sender);
+    const response = await handleKickChatCommand(parsed, sender);
     if (!response) return NextResponse.json({ received: true }, { status: 200 });
     const accessToken = await getValidAccessToken();
     if (!accessToken) return NextResponse.json({ received: true }, { status: 200 });

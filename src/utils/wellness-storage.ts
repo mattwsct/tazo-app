@@ -92,7 +92,7 @@ export interface DistanceSession {
 }
 
 export interface HandwashingSession {
-  accumulated: number;  // handwashing events since stream start (survives midnight)
+  accumulated: number;  // total handwashing duration in seconds since stream start (Apple Health: duration per event, not count)
   lastKnown: number;
 }
 
@@ -112,7 +112,7 @@ export interface WellnessData {
   distanceKm?: number;
   flightsClimbed?: number;
   standHours?: number;
-  handwashingCount?: number;  // Handwashing events (from Health Auto Export)
+  handwashingCount?: number;  // Total handwashing duration in seconds (Apple Health: HKCategoryType handwashingEvent stores duration per event)
   weightKg?: number;         // Body mass in kg (from Health Auto Export)
   heartRate?: number;        // From Apple Health (resting etc) — live BPM stays in stats from Pulsoid
   restingHeartRate?: number;

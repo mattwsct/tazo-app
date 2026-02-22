@@ -26,10 +26,10 @@ import {
   setWellnessMilestoneLastSent,
 } from '@/utils/wellness-storage';
 import { getCountryFlagEmoji } from '@/utils/chat-utils';
+import { formatDuration } from '@/utils/wellness-chat';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
-import { formatLocationForStreamTitle, buildStreamTitle } from '@/utils/stream-title-utils';
-import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
+import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
@@ -78,8 +78,8 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-    kv.get<{ locationDisplay?: string }>(OVERLAY_SETTINGS_KEY),
-    kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; locationDisplay?: StreamTitleLocationDisplay; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
+    kv.get<{ locationDisplay?: string; customLocation?: string }>(OVERLAY_SETTINGS_KEY),
+    kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
     kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY),
@@ -127,8 +127,14 @@ export async function GET(request: NextRequest) {
 
       if (persistent?.location && intervalOk) {
         const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
-        const displayForTitle = (streamTitleSettings?.locationDisplay as StreamTitleLocationDisplay) ?? 'state';
-        const formattedForTitle = includeLocationInTitle ? formatLocationForStreamTitle(persistent.location, displayForTitle) : '';
+        const displayForTitle = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
+        const customLoc = (overlaySettings?.customLocation as string) ?? '';
+        const formattedForTitle = getStreamTitleLocationPart(
+          persistent.location,
+          displayForTitle,
+          customLoc,
+          includeLocationInTitle
+        );
         const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) || 'city';
         let formattedForChat: string | null = null;
         if (displayMode !== 'hidden') {
@@ -332,13 +338,13 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    // Handwashing: notify each time completed (every wash), not at milestones
+    // Handwashing: notify when total duration increases (duration in seconds, not count)
     const handwashingToggle = storedAlert?.chatBroadcastWellnessHandwashing === true;
     if (handwashingToggle && handwashingSince > 0) {
       const lastHandwashing = milestonesLast.handwashing ?? 0;
       if (handwashingSince > lastHandwashing) {
         const n = handwashingSince;
-        const msg = `🧼 ${n} hand wash${n === 1 ? '' : 'es'} completed this stream!`;
+        const msg = `🧼 ${formatDuration(n)} handwashing this stream!`;
         try {
           await sendKickChatMessage(accessToken, msg);
           sent++;

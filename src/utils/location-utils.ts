@@ -77,10 +77,10 @@ export function getLocationForPersistence(location: LocationData | null): Locati
 
 // === 🎯 LOCATION PRECISION LEVELS ===
 
-type LocationPrecision = 'neighbourhood' | 'city' | 'state';
+type LocationPrecision = 'city' | 'state';
 
 // Category types to track which location category was used
-type LocationCategory = 'neighbourhood' | 'city' | 'county' | 'state' | 'country';
+type LocationCategory = 'city' | 'county' | 'state' | 'country';
 
 
 // === 🔍 SIMPLE FILTERING ===
@@ -204,10 +204,6 @@ function getLocationByPrecision(
   // === CATEGORY DEFINITIONS ===
   // Each category contains specific fields from LocationIQ API, ordered by priority
   
-  // NEIGHBOURHOOD: Smallest local areas within cities (ordered from most specific to least specific)
-  // Fields: neighbourhood (most specific) → quarter → ward → suburb → district → borough (least specific)
-  const neighbourhoodFields: (keyof LocationData)[] = ['neighbourhood', 'quarter', 'ward', 'suburb', 'district', 'borough'];
-  
   // CITY: Settlements and urban areas (ordered from most appropriate to least appropriate)
   // Fields: city (most appropriate) → municipality → town → county → village → hamlet (least appropriate)
   // NOTE: Suburb is NOT included - it's a neighbourhood field, not a city field
@@ -220,26 +216,18 @@ function getLocationByPrecision(
   // Priority: state → province (prefectures) → region
   const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
   
-  // Fallback hierarchy: neighbourhood → city → state → country
-  // Each precision level tries its category first, then falls back to next broadest if no valid names exist
-  
-  // Define fallback chains for each precision level
+  // Fallback hierarchy: city → state → country
   const fallbackChains: Record<LocationPrecision, (keyof LocationData)[][]> = {
-    neighbourhood: [neighbourhoodFields, cityFields, stateFields],
     city: [cityFields, stateFields],
     state: [stateFields],
   };
   
   const chain = fallbackChains[precision] || [];
   
-  // Try each level in the fallback chain
   for (let i = 0; i < chain.length; i++) {
     const name = tryFields(chain[i]);
     if (name) {
-      // Map field groups to categories
-      const category: LocationCategory = 
-        i === 0 && precision === 'neighbourhood' ? 'neighbourhood' :
-        (chain[i] === cityFields ? 'city' : 'state');
+      const category: LocationCategory = chain[i] === cityFields ? 'city' : 'state';
       return { name, category };
     }
   }
@@ -379,7 +367,7 @@ export function getBestCityName(location: LocationData): string {
  */
 export function formatLocation(
   location: LocationData | null, 
-  displayMode: 'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden' = 'neighbourhood'
+  displayMode: 'city' | 'state' | 'country' | 'custom' | 'hidden' = 'city'
 ): LocationDisplay {
   if (!location || displayMode === 'hidden') return { primary: '', secondary: undefined };
   
@@ -405,12 +393,10 @@ export function formatLocation(
     const countryInfo = getCountry(location);
     const secondaryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
     
-    // If no state found (e.g. Vietnam has no state/province in LocationIQ), fall back to neighbourhood or city
-    // so we show useful data instead of jumping straight to country-only
+    // If no state found (e.g. Vietnam has no state/province in LocationIQ), fall back to city
     if (!primary) {
-      const neighbourhoodResult = getLocationByPrecision(location, 'neighbourhood');
       const cityResult = getLocationByPrecision(location, 'city');
-      primary = neighbourhoodResult.name || cityResult.name;
+      primary = cityResult.name;
       if (primary && secondaryDisplay) {
         return { primary, secondary: secondaryDisplay, countryCode: location.countryCode || '' };
       }
@@ -444,12 +430,8 @@ export function formatLocation(
   const countryInfo = getCountry(location);
   
   // If no primary location found, still show next broadest category on line 2 if available
-  // Use the requested display mode to determine what should be on the second line
-  // This ensures fallback logic works correctly: if neighbourhood was requested but not found,
-  // second line should still show city (next broadest after neighbourhood), not what was actually found
   if (!primary) {
-    const requestedCategory = displayMode === 'neighbourhood' ? 'neighbourhood' : 
-                              displayMode === 'city' ? 'city' : 
+    const requestedCategory = displayMode === 'city' ? 'city' : 
                               displayMode === 'state' ? 'state' : 'country';
     const nextBroadestCategory = getNextBroadestCategory(location, requestedCategory, '');
     if (nextBroadestCategory) {
@@ -527,9 +509,8 @@ function getNextBroadestCategory(
   const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
   const tryCountry = () => countryDisplay && !hasOverlappingNames(primaryName, countryDisplay) ? countryDisplay : undefined;
 
-  // Fallback chain per category: neighbourhood→[city,state,country], city/county→[state,country], state→[country]
+  // Fallback chain per category: city/county→[state,country], state→[country]
   const chains: Record<LocationCategory, (keyof LocationData)[][]> = {
-    neighbourhood: [cityFields, stateFields],
     city: [stateFields],
     county: [stateFields],
     state: [],

@@ -41,7 +41,6 @@ import {
   hasCompleteLocationData,
   formatCountryCode,
   shouldShowDisplayMode,
-  getEffectiveDisplayModeForStaleGps,
 } from '@/utils/overlay-utils';
 import {
   processGpsData,
@@ -79,7 +78,12 @@ const HeartRateMonitor = dynamic(() => import('@/components/HeartRateMonitor'), 
   loading: () => null
 });
 
-const StepCounter = dynamic(() => import('@/components/StepCounter'), {
+const TopLeftRotatingWellness = dynamic(() => import('@/components/TopLeftRotatingWellness'), {
+  ssr: false,
+  loading: () => null
+});
+
+const TopRightRotatingSlot = dynamic(() => import('@/components/TopRightRotatingSlot'), {
   ssr: false,
   loading: () => null
 });
@@ -257,6 +261,17 @@ function OverlayPage() {
   // - Show: Speed > 5 km/h for 3 consecutive RTIRL updates
   // - Hide: Speed < 5 km/h for more than 1 minute OR no GPS updates in 1 minute
   const updateMinimapVisibility = useCallback(() => {
+    // Hidden location mode → never show minimap (one setting controls both)
+    if (settings.locationDisplay === 'hidden') {
+      speedReadingsRef.current = [];
+      lowSpeedStartTimeRef.current = null;
+      if (minimapVisible) {
+        setMinimapVisible(false);
+        setMinimapOpacity(0);
+      }
+      return;
+    }
+
     const now = Date.now();
     const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
     const isGpsStale = timeSinceLastGps > MINIMAP_HIDE_DELAY; // 1 minute without GPS updates
@@ -341,7 +356,7 @@ function OverlayPage() {
         clearTimer(minimapFadeTimeoutRef);
       }
     }
-  }, [settings.showMinimap, settings.minimapSpeedBased, minimapVisible, currentSpeed]);
+  }, [settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, minimapVisible, currentSpeed]);
 
   // Track the last locationDisplay value to detect actual changes
   const lastLocationDisplayRef = useRef<string | undefined>(undefined);
@@ -367,15 +382,7 @@ function OverlayPage() {
     // Use effective mode (staleness broadening) so fallback matches useMemo behavior
     if (hasCompleteData && settings.locationDisplay !== 'hidden') {
       try {
-        const sourceTimestamp = lastLocationSourceTimestampRef.current > 0 ? lastLocationSourceTimestampRef.current : lastGpsTimestamp.current;
-        const gpsAgeMs = sourceTimestamp > 0 ? Date.now() - sourceTimestamp : Number.MAX_SAFE_INTEGER;
-        const effectiveMode = getEffectiveDisplayModeForStaleGps(
-          settings.locationDisplay,
-          gpsAgeMs,
-          settings.broadenLocationWhenStale !== false,
-          settings.locationStaleMaxFallback ?? 'country'
-        );
-        const formatted = formatLocation(lastRawLocation.current!, effectiveMode);
+        const formatted = formatLocation(lastRawLocation.current!, settings.locationDisplay);
         // Log only when locationDisplay actually changes (reduced verbosity)
         // Force update location state to trigger re-render with new format
         setLocation({
@@ -1291,20 +1298,9 @@ function OverlayPage() {
     }
     
     // If we have raw location data, re-format it with current settings to ensure display mode changes are reflected immediately
-    // Broaden display when GPS is stale (e.g. underground train through many neighbourhoods)
-    // Use lastLocationSourceTimestampRef (updated by both RTIRL and browser/persistent) so browser-set location is treated as fresh
     if (hasCompleteLocationData(lastRawLocation.current)) {
       try {
-        const sourceTimestamp = lastLocationSourceTimestampRef.current > 0 ? lastLocationSourceTimestampRef.current : lastGpsTimestamp.current;
-        // When timestamp is 0 (missing), treat as very old so staleness broadening triggers
-        const gpsAgeMs = sourceTimestamp > 0 ? Date.now() - sourceTimestamp : Number.MAX_SAFE_INTEGER;
-        const effectiveMode = getEffectiveDisplayModeForStaleGps(
-          settings.locationDisplay,
-          gpsAgeMs,
-          settings.broadenLocationWhenStale !== false,
-          settings.locationStaleMaxFallback ?? 'country'
-        );
-        const formatted = formatLocation(lastRawLocation.current, effectiveMode);
+        const formatted = formatLocation(lastRawLocation.current, settings.locationDisplay);
         return {
           primary: formatted.primary || '',
           secondary: formatted.secondary,
@@ -1328,7 +1324,7 @@ function OverlayPage() {
     
     // No location data yet - return null so UI stays blank
     return null;
-  }, [location, settings.locationDisplay, settings.customLocation, settings.broadenLocationWhenStale, settings.locationStaleMaxFallback, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
+  }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
 
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
   // Recalculates when sunriseSunset, timezone, or staleCheckTime changes
@@ -1565,15 +1561,12 @@ function OverlayPage() {
               </div>
             )}
 
-            {/* Only show date when we have a valid timezone (not UTC) */}
-            {isValidTimezone(timezone) && timeDisplay.date && (
-              <div className="date date-left date-line">
-                {timeDisplay.date}
-              </div>
-            )}
-            
             <ErrorBoundary fallback={null}>
-              <StepCounter settings={settings} />
+              <TopLeftRotatingWellness
+                date={timeDisplay.date ?? null}
+                timezoneValid={isValidTimezone(timezone)}
+                settings={settings}
+              />
             </ErrorBoundary>
             <ErrorBoundary fallback={<div className="heart-rate-line">Heart rate unavailable</div>}>
               <HeartRateMonitor pulsoidToken={API_KEYS.PULSOID} />
@@ -1617,53 +1610,18 @@ function OverlayPage() {
               </>
             )}
             
-            {/* Weather - show if we have weather data (already checked that locationDisplay !== 'hidden' above) */}
-            {weatherDisplay && settings.showWeather && (
-              <div className="weather weather-line">
-                <div className="weather-text-group">
-                  <div className="weather-temperature">
-                    {weatherDisplay.temperature}
-                  </div>
-                  {(weatherDisplay.icon || weatherDisplay.description) && (
-                    <div className="weather-condition-group">
-                      {weatherDisplay.description && (
-                        <span className="weather-description-text">
-                          {weatherDisplay.description}
-                        </span>
-                      )}
-                      {weatherDisplay.icon && (
-                        <span className="weather-icon-inline">
-                          {weatherDisplay.icon}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Altitude & Speed - grouped together */}
-            {(altitudeDisplay || speedDisplay) && (
-              <div className="movement-data-group">
-                {altitudeDisplay && (
-                  <div className="weather weather-line movement-data-line">
-                    <div className="weather-temperature">
-                      {altitudeDisplay.formatted}
-                    </div>
-                  </div>
-                )}
-                {speedDisplay && (
-                  <div className="weather weather-line movement-data-line">
-                    <div className="weather-temperature">
-                      {speedDisplay.formatted}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Rotating slot: temp, condition (when notable), altitude (when visible), speed (when visible) */}
+            <ErrorBoundary fallback={null}>
+              <TopRightRotatingSlot
+                weatherDisplay={weatherDisplay}
+                altitudeDisplay={altitudeDisplay}
+                speedDisplay={speedDisplay}
+                showWeather={settings.showWeather}
+              />
+            </ErrorBoundary>
           </div>
           
-          {/* Minimap */}
+          {/* Minimap — parent block only renders when locationDisplay !== 'hidden' */}
           {mapCoords && minimapVisible && (
             <div 
               className="minimap" 
@@ -1676,6 +1634,7 @@ function OverlayPage() {
                     lon={mapCoords[1]} 
                     isVisible={minimapVisible}
                     zoomLevel={settings.mapZoomLevel}
+                    locationDisplay={settings.locationDisplay}
                     isNight={settings.minimapTheme === 'auto' ? isNightTime : settings.minimapTheme === 'dark'}
                   />
                 </ErrorBoundary>
@@ -1691,6 +1650,7 @@ function OverlayPage() {
         {/* Bottom Right: To-Do, Poll, Leaderboard, Alerts */}
         {settings.pollState ||
         settings.showLeaderboard !== false ||
+        settings.showGamblingLeaderboard === true ||
         settings.showOverlayAlerts !== false ? (
           <BottomRightPanel settings={settings} refreshSettings={refreshSettings}>
             {settings.pollState && (() => {

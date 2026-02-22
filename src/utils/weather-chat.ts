@@ -52,6 +52,26 @@ export function isPoorAirQuality(aqi: number | null | undefined): boolean {
   return typeof aqi === 'number' && aqi >= AQI_POOR_THRESHOLD;
 }
 
+const AQI_LABELS: Record<number, string> = {
+  1: 'Good',
+  2: 'Fair',
+  3: 'Moderate',
+  4: 'Poor',
+  5: 'Very Poor',
+};
+
+export function formatUvResponse(uvIndex: number | null | undefined): string {
+  if (typeof uvIndex !== 'number' || uvIndex < 0) return '☀️ UV data unavailable.';
+  const level = uvIndex >= 11 ? 'Extreme' : uvIndex >= 8 ? 'Very high' : uvIndex >= 6 ? 'High' : uvIndex >= 3 ? 'Moderate' : 'Low';
+  return `☀️ UV index ${uvIndex} (${level}).${uvIndex >= 6 ? ' Wear sunscreen!' : ''}`;
+}
+
+export function formatAqiResponse(aqi: number | null | undefined): string {
+  if (typeof aqi !== 'number' || aqi < 1 || aqi > 5) return '💨 Air quality data unavailable.';
+  const label = AQI_LABELS[aqi] || 'Unknown';
+  return `💨 Air quality AQI ${aqi} (${label}).${aqi >= 4 ? ' Consider limiting outdoor exercise.' : ''}`;
+}
+
 /**
  * Checks if weather condition description is notable (affects IRL streaming).
  * Used for overlay auto-display and chat broadcast — we only broadcast on notable changes, not when clearing.

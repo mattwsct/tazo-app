@@ -9,6 +9,8 @@ import {
   formatTemperature,
   getNotableConditions,
   fetchForecast,
+  formatUvResponse,
+  formatAqiResponse,
 } from '@/utils/weather-chat';
 import { getLocationData, getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
@@ -346,13 +348,12 @@ export async function GET(
         }
         
         // Fallback: if formatLocation returned empty, try to get any available location name
-        // This handles edge cases where formatLocation filters out valid names
+        // This handles edge cases where formatLocation filters out valid names (city→state→country order)
         const fallbackParts: string[] = [];
-        if (rawLocation.neighbourhood) fallbackParts.push(rawLocation.neighbourhood);
-        else if (rawLocation.suburb) fallbackParts.push(rawLocation.suburb);
-        else if (rawLocation.city) fallbackParts.push(rawLocation.city);
+        if (rawLocation.city) fallbackParts.push(rawLocation.city);
         else if (rawLocation.town) fallbackParts.push(rawLocation.town);
         else if (rawLocation.municipality) fallbackParts.push(rawLocation.municipality);
+        else if (rawLocation.suburb) fallbackParts.push(rawLocation.suburb);
         else if (rawLocation.state) fallbackParts.push(rawLocation.state);
         else if (rawLocation.province) fallbackParts.push(rawLocation.province);
         
@@ -426,6 +427,20 @@ export async function GET(
       }
 
       return txtResponse(parts.join(' · '));
+    }
+
+    // UV index route
+    if (route === 'uv') {
+      const freshData = locationData || await getLocationData();
+      if (!freshData?.weather) return txtResponse(formatUvResponse(null));
+      return txtResponse(formatUvResponse(freshData.weather.uvIndex));
+    }
+
+    // AQI route
+    if (route === 'aqi') {
+      const freshData = locationData || await getLocationData();
+      if (!freshData?.weather) return txtResponse(formatAqiResponse(null));
+      return txtResponse(formatAqiResponse(freshData.weather.aqi));
     }
 
     // Forecast route - fetch fresh (not cached, needs full forecast data)

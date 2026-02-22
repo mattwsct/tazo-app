@@ -1,15 +1,45 @@
 /**
  * Format location for stream title display.
- * Avoids duplication like "Tokyo, Tokyo, Japan" — same logic as overlay page.
+ * One setting (locationDisplay) drives overlay, chat, stream title, and minimap.
+ * - hidden: no location in stream title, minimap hidden
+ * - custom: custom text on overlay AND stream title
+ * - city/state/country: GPS-based precision
  */
 
 import type { LocationData } from './location-utils';
 import { formatCountryName, stripTrailingNumbers } from './location-utils';
 import { getCountryFlagEmoji, getCountryNameFromCode } from './chat-utils';
 import { hasOverlappingNames } from './string-utils';
+import type { LocationDisplayMode } from '@/types/settings';
 
-/** city = city+state (or city+country if no state); state = state+country; country = country only */
-export type StreamTitleLocationDisplay = 'city' | 'state' | 'country';
+/**
+ * Get the location part to append to stream title (or '').
+ * Combines includeInTitle check with getLocationForStreamTitle.
+ */
+export function getStreamTitleLocationPart(
+  rawLocation: LocationData | null | undefined,
+  locationDisplay: LocationDisplayMode,
+  customLocation: string | undefined,
+  includeInTitle: boolean
+): string {
+  return includeInTitle ? getLocationForStreamTitle(rawLocation, locationDisplay, customLocation ?? '') : '';
+}
+
+/**
+ * Get effective location string for stream title.
+ * - hidden: '' (never show location)
+ * - custom: customLocation text
+ * - city/state/country: GPS-formatted
+ */
+export function getLocationForStreamTitle(
+  rawLocation: LocationData | null | undefined,
+  locationDisplay: LocationDisplayMode,
+  customLocation?: string
+): string {
+  if (locationDisplay === 'hidden') return '';
+  if (locationDisplay === 'custom') return (customLocation ?? '').trim();
+  return formatLocationForStreamTitle(rawLocation, locationDisplay);
+}
 
 /** Extract custom title from full Kick stream title (removes location part — flag prefix). */
 export function parseStreamTitleToCustom(fullTitle: string): string {
@@ -40,7 +70,7 @@ export function buildStreamTitle(custom: string, location: string): string {
 
 export function formatLocationForStreamTitle(
   rawLocation: LocationData | null | undefined,
-  display: StreamTitleLocationDisplay
+  display: 'city' | 'state' | 'country'
 ): string {
   if (!rawLocation) return '';
 

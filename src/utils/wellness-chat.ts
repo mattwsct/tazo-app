@@ -55,10 +55,17 @@ export async function getWellnessFlightsResponse(): Promise<string> {
   return `🪜 ${flights} flight${flights === 1 ? '' : 's'} climbed this stream`;
 }
 
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m} min ${s} sec` : `${m} min`;
+}
+
 export async function getWellnessHandwashingResponse(): Promise<string> {
-  const n = await getHandwashingSinceStreamStart();
-  if (n <= 0) return '🧼 No hand washes recorded this stream yet.';
-  return `🧼 ${n} hand wash${n === 1 ? '' : 'es'} this stream`;
+  const sec = await getHandwashingSinceStreamStart();
+  if (sec <= 0) return '🧼 No handwashing time recorded this stream yet.';
+  return `🧼 ${formatDuration(sec)} handwashing this stream`;
 }
 
 export async function getWellnessHeartRateResponse(): Promise<string | null> {
@@ -90,7 +97,7 @@ export async function getWellnessSummaryResponse(): Promise<string> {
   if (steps > 0) parts.push(`👟 ${steps.toLocaleString()} steps`);
   if (distance > 0) parts.push(`🚶 ${formatDistance(distance)}`);
   if (flights > 0) parts.push(`🪜 ${flights} flight${flights === 1 ? '' : 's'}`);
-  if (handwashing > 0) parts.push(`🧼 ${handwashing} wash${handwashing === 1 ? '' : 'es'}`);
+  if (handwashing > 0) parts.push(`🧼 ${formatDuration(handwashing)} handwashing`);
   if ((wellness?.standHours ?? 0) > 0) parts.push(`🧍 ${wellness!.standHours} stand hr`);
   if ((wellness?.activeCalories ?? 0) > 0) parts.push(`🔥 ${wellness!.activeCalories} active cal`);
   if ((wellness?.heartRate ?? 0) > 0 || (wellness?.restingHeartRate ?? 0) > 0) {

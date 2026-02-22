@@ -4,6 +4,18 @@
  * Supports two formats:
  * 1. Flat: { steps, activeCalories, restingCalories, ... }
  * 2. Health Auto Export: { data: { metrics: [{ name, units, data: [{ qty, date, ... }] }] } }
+ *
+ * Apple Health / HealthKit data types and units (Health Auto Export respects user unit prefs):
+ * - step_count: HKQuantityType stepCount — count
+ * - active_energy: activeEnergyBurned — kJ or kcal
+ * - basal_energy_burned: basalEnergyBurned — kJ or kcal
+ * - apple_stand_hour: stand hours count
+ * - walking_running_distance: distanceWalkingRunning — m, km, or mi (Apple native: m)
+ * - handwashing: HKCategoryType handwashingEvent — duration per event (s or min), NOT count
+ * - flights_climbed: flightsClimbed — count
+ * - body_mass: bodyMass — kg or lb
+ * - heart_rate, resting_heart_rate: bpm
+ * - heart_rate_variability_sdnn: ms (SD of NN intervals)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -32,6 +44,33 @@ interface HealthMetric {
   data?: Array<{ qty?: number; date?: string; Avg?: number; Min?: number; Max?: number }>;
 }
 
+/** Normalize units string for comparison (lowercase, strip whitespace) */
+function normUnits(u: string | undefined): string {
+  return (u ?? '').toLowerCase().trim();
+}
+
+/** Parse energy to kcal. Health Auto Export / Apple Health: kJ or kcal (user preference). 1 kcal = 4.184 kJ. */
+function energyToKcal(val: number, units: string | undefined): number {
+  const u = normUnits(units);
+  if (u.includes('kcal') || u.includes('cal') || u === 'c') return val;
+  return val * 0.239; // kJ → kcal
+}
+
+/** Parse distance to km. Apple Health stores meters; Health Auto Export may export m, km, or mi per user preference. */
+function distanceToKm(val: number, units: string | undefined): number {
+  const u = normUnits(units);
+  if (u.includes('km')) return val;
+  if (u.includes('mi') || u.includes('mile')) return val * 1.60934;
+  return val / 1000; // default: meters (Apple Health native unit)
+}
+
+/** Parse handwashing to seconds. Apple Health: HKCategoryType handwashingEvent stores duration per event (start–end). */
+function handwashingToSeconds(val: number, units: string | undefined): number {
+  const u = normUnits(units);
+  if (u.includes('min') && !u.includes('sec')) return val * 60;
+  return val; // sec or unspecified: assume seconds
+}
+
 function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessData> {
   const data = body.data as { metrics?: HealthMetric[] } | undefined;
   const metrics = data?.metrics;
@@ -58,55 +97,70 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
     return typeof last?.qty === 'number' ? last.qty : undefined;
   };
 
+  // step_count: HKQuantityTypeIdentifier.stepCount — count (no unit conversion)
   const stepCount = byName.get('step_count');
   if (stepCount) {
     const total = Math.round(sumQty(stepCount));
     if (total >= 0) updates.steps = total;
   }
 
+  // active_energy: HKQuantityTypeIdentifier.activeEnergyBurned — kJ or kcal (user pref)
   const activeEnergy = byName.get('active_energy');
   if (activeEnergy) {
-    const kJ = sumQty(activeEnergy);
-    updates.activeCalories = Math.max(0, Math.round(kJ * 0.239));
+    const raw = sumQty(activeEnergy);
+    updates.activeCalories = Math.max(0, Math.round(energyToKcal(raw, activeEnergy.units)));
   }
 
+  // basal_energy_burned / resting_energy: HKQuantityTypeIdentifier.basalEnergyBurned — kJ or kcal
   const basalEnergy = byName.get('basal_energy_burned') ?? byName.get('resting_energy');
   if (basalEnergy) {
-    const kJ = sumQty(basalEnergy);
-    updates.restingCalories = Math.max(0, Math.round(kJ * 0.239));
+    const raw = sumQty(basalEnergy);
+    updates.restingCalories = Math.max(0, Math.round(energyToKcal(raw, basalEnergy.units)));
   }
 
   if (updates.activeCalories != null || updates.restingCalories != null) {
     updates.totalCalories = (updates.activeCalories ?? 0) + (updates.restingCalories ?? 0);
   }
 
+  // apple_stand_hour: count of hours stood (HKActivitySummary / category samples)
   const standHour = byName.get('apple_stand_hour');
   if (standHour) updates.standHours = Math.max(0, Math.round(sumQty(standHour)));
 
+  // walking_running_distance: HKQuantityTypeIdentifier.distanceWalkingRunning — Apple stores meters; export may be m, km, mi
   const walkingDist = byName.get('walking_running_distance');
-  if (walkingDist) updates.distanceKm = Math.max(0, Math.round(sumQty(walkingDist) * 1000) / 1000);
+  if (walkingDist) {
+    const raw = sumQty(walkingDist);
+    const km = distanceToKm(raw, walkingDist.units);
+    updates.distanceKm = Math.max(0, Math.round(km * 1000) / 1000);
+  }
 
+  // handwashing: HKCategoryTypeIdentifier.handwashingEvent — duration (seconds) per event, not count
   const handwashing = byName.get('handwashing');
-  if (handwashing) updates.handwashingCount = Math.max(0, Math.round(sumQty(handwashing)));
+  if (handwashing) {
+    const raw = sumQty(handwashing);
+    const sec = handwashingToSeconds(raw, handwashing.units);
+    updates.handwashingCount = Math.max(0, Math.round(sec));
+  }
 
+  // flights_climbed: HKQuantityTypeIdentifier.flightsClimbed — count
   const flights = byName.get('flights_climbed');
   if (flights) {
     const total = Math.max(0, Math.round(sumQty(flights)));
     updates.flightsClimbed = total;
   }
 
-  // Body mass: HealthKit uses body_mass; some exporters use mass or weight.
-  // Assume kg (Apple Health standard). If units are 'lb', convert: qty * 0.453592
-  const bodyMass = byName.get('body_mass') ?? byName.get('mass') ?? byName.get('weight');
+  // body_mass: HKQuantityTypeIdentifier.bodyMass — kg or lb. Also weight_body_mass (Health Auto Export).
+  const bodyMass = byName.get('body_mass') ?? byName.get('weight_body_mass') ?? byName.get('mass') ?? byName.get('weight');
   if (bodyMass) {
     const raw = lastQty(bodyMass);
     if (raw != null && raw >= 0) {
-      const units = (bodyMass.units || '').toLowerCase();
-      const kg = units === 'lb' || units === 'lbs' ? raw * 0.453592 : raw;
+      const units = normUnits(bodyMass.units);
+      const kg = units.includes('lb') ? raw * 0.453592 : raw;
       updates.weightKg = Math.round(kg * 100) / 100;
     }
   }
 
+  // heart_rate: HKQuantityTypeIdentifier.heartRate — count/time (bpm)
   const hr = byName.get('heart_rate');
   const bpm = lastAvg(hr);
   if (bpm != null && bpm >= 0) updates.heartRate = Math.round(bpm);
@@ -115,6 +169,7 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   const restingBpm = lastAvg(restingHr) ?? lastQty(restingHr);
   if (restingBpm != null && restingBpm >= 0) updates.restingHeartRate = Math.round(restingBpm);
 
+  // heart_rate_variability_sdnn: standard deviation of NN intervals, typically in ms
   const hrvMetric = byName.get('heart_rate_variability_sdnn') ?? byName.get('heart_rate_variability');
   const hrvVal = lastAvg(hrvMetric) ?? lastQty(hrvMetric);
   if (hrvVal != null && hrvVal >= 0) updates.hrv = Math.round(hrvVal);

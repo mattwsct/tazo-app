@@ -84,7 +84,7 @@ export function extractAltitude(payload: RTIRLPayload): number | null {
   return null;
 }
 
-const HASH_EXCLUDE = new Set(['leaderboardTop', 'overlayAlerts', 'pollState']);
+const HASH_EXCLUDE = new Set(['leaderboardTop', 'gamblingLeaderboardTop', 'overlayAlerts', 'pollState']);
 
 /**
  * Create a stable hash from settings (sorts keys for consistency)

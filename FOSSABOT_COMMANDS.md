@@ -69,6 +69,15 @@ Example output: `☀️ Today 20-25°C/68-77°F · 🌧️ Tomorrow 15-18°C/59-
 !time New York → $(customapi https://app.tazo.wtf/api/chat/time?q=$(querystring))
 ```
 
+### UV Index & Air Quality
+
+```
+!uv → $(customapi https://app.tazo.wtf/api/chat/uv)
+!aqi → $(customapi https://app.tazo.wtf/api/chat/aqi)
+```
+
+Returns UV index and air quality (AQI) at current location. Uses location from overlay/RTIRL.
+
 ### Sunrise/Sunset
 
 ```
@@ -318,7 +327,7 @@ Example outputs:
 - `🪜 25 flights climbed this stream`
 - `🧍 4 stand hours today`
 - `🔥 450 active, 1,200 resting cal today`
-- `🧼 3 hand washes this stream`
+- `🧼 2 min 15 sec handwashing this stream`
 - `⚖️ 75.2 kg (165.8 lbs)`
 - `📊 12,450 steps · 8.2 km (5.1 mi) · 3 washes · 4 stand hr · 450 active cal · 75.2 kg`
 

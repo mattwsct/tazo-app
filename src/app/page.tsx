@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, LocationStaleMaxFallback, MapZoomLevel, DisplayMode } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
   TEMPLATE_GROUP_CONFIG,
@@ -11,8 +11,7 @@ import {
   DEFAULT_KICK_MESSAGE_ENABLED,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled, KickMessageTemplateEnabled } from '@/types/kick-messages';
-import { formatLocationForStreamTitle, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
-import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
+import { getLocationForStreamTitle, getStreamTitleLocationPart, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 import CollapsibleSection, { collapseAllSections } from '@/components/CollapsibleSection';
@@ -24,6 +23,130 @@ function formatLocationAge(ms: number): string {
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h`;
+}
+
+const HEALTH_FIELDS: { key: string; label: string; unit: string; sessionKey?: string }[] = [
+  { key: 'steps', label: 'Steps (today)', unit: '', sessionKey: 'stepsSinceStreamStart' },
+  { key: 'distanceKm', label: 'Distance (today)', unit: 'km', sessionKey: 'distanceSinceStreamStart' },
+  { key: 'weightKg', label: 'Weight', unit: 'kg' },
+  { key: 'activeCalories', label: 'Active calories', unit: 'kcal' },
+  { key: 'restingCalories', label: 'Resting calories', unit: 'kcal' },
+  { key: 'totalCalories', label: 'Total calories', unit: 'kcal' },
+  { key: 'standHours', label: 'Stand hours', unit: 'hr' },
+  { key: 'flightsClimbed', label: 'Flights climbed', unit: '', sessionKey: 'flightsSinceStreamStart' },
+  { key: 'handwashingCount', label: 'Handwashing', unit: 'sec', sessionKey: 'handwashingSinceStreamStart' },
+  { key: 'sleepHours', label: 'Sleep', unit: 'hr' },
+  { key: 'heartRate', label: 'Heart rate', unit: 'bpm' },
+  { key: 'restingHeartRate', label: 'Resting HR', unit: 'bpm' },
+  { key: 'hrv', label: 'HRV', unit: 'ms' },
+];
+
+function HealthDataSection() {
+  const [data, setData] = useState<Record<string, number | string>>({});
+  const [edited, setEdited] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ type: 'saved' | 'error'; message: string } | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/wellness', { credentials: 'include' });
+      const d = await r.json();
+      if (r.ok) {
+        const out: Record<string, number | string> = {};
+        for (const f of HEALTH_FIELDS) {
+          const val = d[f.key] ?? d[f.sessionKey ?? ''];
+          out[f.key] = typeof val === 'number' ? val : '';
+        }
+        out.updatedAt = d.updatedAt ?? 0;
+        setData(out);
+        setEdited({});
+      }
+    } catch {
+      setToast({ type: 'error', message: 'Failed to fetch' });
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleSave = useCallback(async () => {
+    const updates: Record<string, number> = {};
+    for (const f of HEALTH_FIELDS) {
+      const raw = edited[f.key] ?? (typeof data[f.key] === 'number' ? String(data[f.key]) : '');
+      if (raw.trim() === '') continue;
+      const n = parseFloat(raw);
+      if (!Number.isNaN(n) && n >= 0) updates[f.key] = n;
+    }
+    if (Object.keys(updates).length === 0) {
+      setToast({ type: 'error', message: 'Enter at least one value' });
+      setTimeout(() => setToast(null), 2000);
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await authenticatedFetch('/api/wellness/update', {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      });
+      if (r.ok) {
+        setToast({ type: 'saved', message: 'Saved!' });
+        fetchData();
+      } else {
+        const err = await r.json();
+        setToast({ type: 'error', message: err.error ?? 'Save failed' });
+      }
+    } catch {
+      setToast({ type: 'error', message: 'Save failed' });
+    }
+    setSaving(false);
+    setTimeout(() => setToast(null), 2500);
+  }, [edited, data, fetchData]);
+
+  if (loading) return <p className="input-hint">Loading health data…</p>;
+
+  const fmt = (v: unknown) => (v === '' || v == null || v === 0 ? '' : String(v));
+  const updatedAt = typeof data.updatedAt === 'number' ? data.updatedAt : 0;
+
+  return (
+    <div className="setting-group">
+      <p className="input-hint" style={{ marginBottom: 12 }}>
+        Last updated: {updatedAt ? new Date(updatedAt).toLocaleString() : 'Never'} · Edit and Save to add missing data.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px 20px', marginBottom: 16 }}>
+        {HEALTH_FIELDS.map((f) => {
+          const val = edited[f.key] ?? fmt(data[f.key]);
+          return (
+            <div key={f.key}>
+              <label style={{ display: 'block', fontSize: '0.85em', marginBottom: 4, opacity: 0.9 }}>{f.label}</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={val}
+                onChange={(e) => setEdited((p) => ({ ...p, [f.key]: e.target.value }))}
+                placeholder="—"
+                className="admin-input"
+                style={{ width: '100%', maxWidth: 120 }}
+              />
+              {f.unit && <span style={{ marginLeft: 4, fontSize: '0.85em', opacity: 0.7 }}>{f.unit}</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button type="button" className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : '💾 Save'}
+        </button>
+        <button type="button" className="btn btn-secondary btn-small" onClick={fetchData}>
+          🔄 Refresh
+        </button>
+        {toast && <span style={{ opacity: 0.9 }}>{toast.message}</span>}
+      </div>
+    </div>
+  );
 }
 
 const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
@@ -105,7 +228,6 @@ export default function AdminPage() {
   const [kickChatBroadcastWellnessActiveCalories, setKickChatBroadcastWellnessActiveCalories] = useState(false);
   const [kickChatBroadcastWellnessHandwashing, setKickChatBroadcastWellnessHandwashing] = useState(false);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
-  const [kickStreamTitleLocationDisplay, setKickStreamTitleLocationDisplay] = useState<StreamTitleLocationDisplay>('state');
   const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleIncludeLocation, setKickStreamTitleIncludeLocation] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
@@ -122,6 +244,9 @@ export default function AdminPage() {
   const [kickPollEveryoneCanStart, setKickPollEveryoneCanStart] = useState(false);
   const [kickPollModsCanStart, setKickPollModsCanStart] = useState(true);
   const [kickPollVipsCanStart, setKickPollVipsCanStart] = useState(false);
+  const [wellnessData, setWellnessData] = useState<Record<string, string | number | undefined>>({});
+  const [wellnessLoading, setWellnessLoading] = useState(false);
+  const [wellnessSaving, setWellnessSaving] = useState(false);
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
@@ -293,7 +418,6 @@ export default function AdminPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.settings) {
-          setKickStreamTitleLocationDisplay((d.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state');
           setKickStreamTitleAutoUpdate(d.settings.autoUpdateLocation !== false);
         }
         if (d.stream_title != null) {
@@ -334,12 +458,13 @@ export default function AdminPage() {
     [kickTemplateEnabled]
   );
 
-  const lastPushedLocationRef = useRef<string | null>(null);
   const kickStreamTitleCustomRef = useRef(kickStreamTitleCustom);
-  const kickStreamTitleLocationDisplayRef = useRef(kickStreamTitleLocationDisplay);
+  const locationDisplayRef = useRef(settings.locationDisplay);
+  const customLocationRef = useRef(settings.customLocation ?? '');
   const kickStreamTitleIncludeLocationRef = useRef(kickStreamTitleIncludeLocation);
   kickStreamTitleCustomRef.current = kickStreamTitleCustom;
-  kickStreamTitleLocationDisplayRef.current = kickStreamTitleLocationDisplay;
+  locationDisplayRef.current = settings.locationDisplay;
+  customLocationRef.current = settings.customLocation ?? '';
   kickStreamTitleIncludeLocationRef.current = kickStreamTitleIncludeLocation;
 
   const fetchLocationData = useCallback(async () => {
@@ -349,8 +474,8 @@ export default function AdminPage() {
       const raw = locData?.rawLocation ?? locData?.location;
       if (raw) {
         setKickStreamTitleRawLocation(raw);
-        const display = kickStreamTitleLocationDisplayRef.current;
-        setKickStreamTitleLocation(formatLocationForStreamTitle(raw, display));
+        const loc = getLocationForStreamTitle(raw, locationDisplayRef.current, customLocationRef.current);
+        setKickStreamTitleLocation(loc);
         if (locData?.location?.primary !== undefined) {
           setStoredLocation({
             primary: locData.location.primary,
@@ -370,69 +495,14 @@ export default function AdminPage() {
     }
   }, []);
 
-  const tryAutoPushStreamTitle = useCallback(async () => {
-    if (!kickStatus?.connected || !kickStreamTitleAutoUpdate) return;
-    try {
-      const channelRes = await authenticatedFetch('/api/kick-channel');
-      const channelData = await channelRes.json();
-      if (!channelData.is_live) return;
-      const currentKickTitle = channelData.stream_title ?? '';
-      const parsedCustom = parseStreamTitleToCustom(currentKickTitle);
-      if (parsedCustom) {
-        kickStreamTitleCustomRef.current = parsedCustom;
-        setKickStreamTitleCustom(parsedCustom);
-      }
-      const locRes = await fetch('/api/location', { credentials: 'include' });
-      const locData = await locRes.json();
-      const raw = locData?.rawLocation ?? locData?.location;
-      if (!raw) return;
-      const display = kickStreamTitleLocationDisplayRef.current;
-      const formatted = formatLocationForStreamTitle(raw, display);
-      setKickStreamTitleRawLocation(raw);
-      setKickStreamTitleLocation(formatted);
-      const custom = kickStreamTitleCustomRef.current.trim();
-      const includeLocation = kickStreamTitleIncludeLocationRef.current;
-      const locationPart = includeLocation ? formatted : '';
-      const newFullTitle = buildStreamTitle(custom, locationPart);
-      if (newFullTitle === currentKickTitle.trim()) return;
-      const r = await authenticatedFetch('/api/kick-channel', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stream_title: newFullTitle,
-            settings: {
-              customTitle: custom,
-              locationDisplay: display,
-              autoUpdateLocation: true,
-              includeLocationInTitle: includeLocation,
-            },
-        }),
-      });
-      if (r.ok) {
-        lastPushedLocationRef.current = formatted;
-        setToast({ type: 'saved', message: 'Saved!' });
-        setTimeout(() => setToast(null), 2000);
-      }
-    } catch {
-      // Silently ignore auto-push failures
-    }
-  }, [kickStatus?.connected, kickStreamTitleAutoUpdate]);
-
   useEffect(() => {
     fetchLocationData();
   }, [fetchLocationData]);
 
   useEffect(() => {
-    if (!kickStreamTitleAutoUpdate) return;
-    const interval = setInterval(tryAutoPushStreamTitle, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [kickStreamTitleAutoUpdate, tryAutoPushStreamTitle]);
-
-  useEffect(() => {
-    if (kickStreamTitleRawLocation) {
-      setKickStreamTitleLocation(formatLocationForStreamTitle(kickStreamTitleRawLocation, kickStreamTitleLocationDisplay));
-    }
-  }, [kickStreamTitleLocationDisplay, kickStreamTitleRawLocation]);
+    const loc = getLocationForStreamTitle(kickStreamTitleRawLocation, settings.locationDisplay, settings.customLocation ?? '');
+    setKickStreamTitleLocation(loc);
+  }, [settings.locationDisplay, settings.customLocation, kickStreamTitleRawLocation]);
 
   const fetchKickStreamTitle = useCallback(async () => {
     setKickStreamTitleLoading(true);
@@ -440,7 +510,6 @@ export default function AdminPage() {
       const r = await authenticatedFetch('/api/kick-channel');
       const data = await r.json();
       if (data.settings) {
-        setKickStreamTitleLocationDisplay((data.settings.locationDisplay as StreamTitleLocationDisplay) ?? 'state');
         setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
         setKickStreamTitleIncludeLocation((data.settings as { includeLocationInTitle?: boolean }).includeLocationInTitle !== false);
       }
@@ -467,7 +536,12 @@ export default function AdminPage() {
   const updateKickStreamTitle = useCallback(async () => {
     if (!kickStatus?.connected) return;
     setKickStreamTitleSaving(true);
-    const locationPart = kickStreamTitleIncludeLocation ? (kickStreamTitleLocation || '') : '';
+    const locationPart = getStreamTitleLocationPart(
+      kickStreamTitleRawLocation,
+      settings.locationDisplay,
+      settings.customLocation ?? '',
+      kickStreamTitleIncludeLocation
+    );
     const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart);
     try {
       const r = await authenticatedFetch('/api/kick-channel', {
@@ -477,7 +551,6 @@ export default function AdminPage() {
           stream_title: fullTitle.trim(),
           settings: {
             customTitle: kickStreamTitleCustom,
-            locationDisplay: kickStreamTitleLocationDisplay,
             autoUpdateLocation: kickStreamTitleAutoUpdate,
             includeLocationInTitle: kickStreamTitleIncludeLocation,
           },
@@ -485,7 +558,6 @@ export default function AdminPage() {
       });
       const data = await r.json();
       if (r.ok) {
-        lastPushedLocationRef.current = kickStreamTitleLocation || null;
         setToast({ type: 'saved', message: 'Saved!' });
       } else {
         setToast({ type: 'error', message: data.error ?? 'Failed to update' });
@@ -495,7 +567,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleLocation, kickStreamTitleLocationDisplay, kickStreamTitleAutoUpdate, kickStreamTitleIncludeLocation]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleAutoUpdate, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation]);
 
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
@@ -1171,46 +1243,27 @@ export default function AdminPage() {
               </div>
 
               <div className="admin-select-wrap">
-                <label>Overlay display — granularity for overlay and chat (!location)</label>
-                <select
-                  className="admin-select-big"
-                  value={settings.locationDisplay}
-                  onChange={(e) => handleSettingsChange({ locationDisplay: e.target.value as LocationDisplayMode })}
-                >
-                  <option value="neighbourhood">🏘️ Neighbourhood</option>
-                  <option value="city">🏙️ City</option>
-                  <option value="state">🗺️ State</option>
-                  <option value="country">🌍 Country</option>
-                  <option value="custom">✏️ Custom</option>
-                  <option value="hidden">🚫 Hidden</option>
-                </select>
-              </div>
-              <label className="checkbox-label" style={{ marginTop: '12px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={settings.broadenLocationWhenStale !== false}
-                  onChange={(e) => handleSettingsChange({ broadenLocationWhenStale: e.target.checked })}
-                  className="checkbox-input"
-                  style={{ marginTop: 3 }}
-                />
-                <span className="checkbox-text">
-                  Broaden when GPS stale (neighbourhood→city→state→country) — when off, always use selected display mode
-                </span>
-              </label>
-              {settings.broadenLocationWhenStale !== false && (
-                <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
-                  <label>Max fallback when very stale</label>
-                  <select
-                    className="admin-select-big"
-                    value={settings.locationStaleMaxFallback ?? 'country'}
-                    onChange={(e) => handleSettingsChange({ locationStaleMaxFallback: e.target.value as LocationStaleMaxFallback })}
-                  >
-                    <option value="city">City (never beyond city)</option>
-                    <option value="state">State (always state+country)</option>
-                    <option value="country">Country (allow country-only)</option>
-                  </select>
+                <label>Location — overlay, chat (!location), stream title, minimap</label>
+                <div className="option-buttons" role="group" aria-label="Location display">
+                  {(['city', 'state', 'country', 'custom', 'hidden'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`option-btn ${settings.locationDisplay === mode ? 'active' : ''}`}
+                      onClick={() => handleSettingsChange({ locationDisplay: mode })}
+                    >
+                      {mode === 'city' && '🏙️ City'}
+                      {mode === 'state' && '🗺️ State'}
+                      {mode === 'country' && '🌍 Country'}
+                      {mode === 'custom' && '✏️ Custom'}
+                      {mode === 'hidden' && '🚫 Hidden'}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
+              <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
+                One setting for all. Custom = your text on overlay + stream title. Hidden = no location, no map.
+              </p>
               {settings.locationDisplay === 'custom' && (
                 <div className="custom-location-input" style={{ marginTop: '12px' }}>
                   <label className="input-label">Custom Location Text</label>
@@ -1241,37 +1294,56 @@ export default function AdminPage() {
             </div>
             <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <label className="group-label">Map</label>
-              <div className="admin-select-wrap">
-                <label>Map display</label>
-                <select
-                  className="admin-select-big"
-                  value={settings.showMinimap ? 'always' : settings.minimapSpeedBased ? 'speed' : 'hidden'}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === 'always') handleSettingsChange({ showMinimap: true, minimapSpeedBased: false });
-                    else if (v === 'speed') handleSettingsChange({ showMinimap: false, minimapSpeedBased: true });
-                    else handleSettingsChange({ showMinimap: false, minimapSpeedBased: false });
-                  }}
-                >
-                  <option value="always">👁️ Always show</option>
-                  <option value="speed">🏃 Auto on movement</option>
-                  <option value="hidden">🚫 Hidden</option>
-                </select>
+              {settings.locationDisplay === 'hidden' && (
+                <p className="input-hint" style={{ marginBottom: 8, fontSize: '0.85em' }}>
+                  Map is hidden when location is Hidden (one setting).
+                </p>
+              )}
+              <div className="admin-select-wrap" style={{ opacity: settings.locationDisplay === 'hidden' ? 0.6 : 1 }}>
+                <label>Map display (when location not Hidden)</label>
+                <div className="option-buttons" role="group" aria-label="Map display">
+                  <button
+                    type="button"
+                    className={`option-btn ${settings.showMinimap ? 'active' : ''}`}
+                    onClick={() => handleSettingsChange({ showMinimap: true, minimapSpeedBased: false })}
+                    disabled={settings.locationDisplay === 'hidden'}
+                  >
+                    👁️ Always
+                  </button>
+                  <button
+                    type="button"
+                    className={`option-btn ${settings.minimapSpeedBased ? 'active' : ''}`}
+                    onClick={() => handleSettingsChange({ showMinimap: false, minimapSpeedBased: true })}
+                    disabled={settings.locationDisplay === 'hidden'}
+                  >
+                    🏃 On movement
+                  </button>
+                  <button
+                    type="button"
+                    className={`option-btn ${!settings.showMinimap && !settings.minimapSpeedBased ? 'active' : ''}`}
+                    onClick={() => handleSettingsChange({ showMinimap: false, minimapSpeedBased: false })}
+                    disabled={settings.locationDisplay === 'hidden'}
+                  >
+                    🚫 Hidden
+                  </button>
+                </div>
               </div>
               <div className="admin-select-wrap">
                 <label>Map zoom</label>
-                <select
-                  className="admin-select-big"
-                  value={settings.mapZoomLevel}
-                  onChange={(e) => handleSettingsChange({ mapZoomLevel: e.target.value as MapZoomLevel })}
-                >
-                  <option value="neighbourhood">🏘️ Neighbourhood</option>
-                  <option value="city">🏙️ City</option>
-                  <option value="state">🗺️ State</option>
-                  <option value="country">🌍 Country</option>
-                  <option value="ocean">🌊 Ocean</option>
-                  <option value="continental">🌎 Continental</option>
-                </select>
+                <div className="option-buttons" role="group" aria-label="Map zoom">
+                  {(['match', 'ocean', 'continental'] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      className={`option-btn ${settings.mapZoomLevel === level ? 'active' : ''}`}
+                      onClick={() => handleSettingsChange({ mapZoomLevel: level })}
+                    >
+                      {level === 'match' && '📍 Same as location'}
+                      {level === 'ocean' && '🌊 Ocean'}
+                      {level === 'continental' && '🌎 Continental'}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="admin-select-wrap">
                 <label>Map theme</label>
@@ -1333,18 +1405,9 @@ export default function AdminPage() {
                     ? buildStreamTitle(kickStreamTitleCustom, kickStreamTitleLocation)
                     : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>}
                 </div>
-                <div className="admin-select-wrap">
-                  <label>Display granularity</label>
-                  <select
-                    className="admin-select-big"
-                    value={kickStreamTitleLocationDisplay}
-                    onChange={(e) => setKickStreamTitleLocationDisplay(e.target.value as StreamTitleLocationDisplay)}
-                  >
-                    <option value="city">🏙️ City</option>
-                    <option value="state">🗺️ State</option>
-                    <option value="country">🌍 Country</option>
-                  </select>
-                </div>
+                <p className="input-hint" style={{ marginBottom: '8px', fontSize: '0.85em' }}>
+                  Same setting as overlay: Custom = your custom text; Hidden = no location, no minimap.
+                </p>
                 <label className="checkbox-label-row" style={{ marginTop: '12px' }}>
                   <input
                     type="checkbox"
@@ -1353,7 +1416,12 @@ export default function AdminPage() {
                       const checked = e.target.checked;
                       setKickStreamTitleIncludeLocation(checked);
                       if (kickStatus?.connected) {
-                        const locationPart = checked ? (kickStreamTitleLocation || '') : '';
+                        const locationPart = getStreamTitleLocationPart(
+                          kickStreamTitleRawLocation,
+                          settings.locationDisplay,
+                          settings.customLocation ?? '',
+                          checked
+                        );
                         const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart);
                         try {
                           const r = await authenticatedFetch('/api/kick-channel', {
@@ -1363,7 +1431,6 @@ export default function AdminPage() {
                               stream_title: fullTitle.trim(),
                               settings: {
                                 customTitle: kickStreamTitleCustom,
-                                locationDisplay: kickStreamTitleLocationDisplay,
                                 autoUpdateLocation: kickStreamTitleAutoUpdate,
                                 includeLocationInTitle: checked,
                               },
@@ -1391,7 +1458,7 @@ export default function AdminPage() {
                     onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
                     className="checkbox-input"
                   />
-                  Auto-push stream title when live and location changes (uses interval below)
+                  Auto-push stream title when live and location changes (server cron every 2 min)
                 </label>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1645,7 +1712,7 @@ export default function AdminPage() {
                   <label className="checkbox-label-row broadcast-checkbox-item">
                     <input type="checkbox" checked={kickChatBroadcastWellnessHandwashing} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessHandwashing(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessHandwashing: c } }); }} className="checkbox-input" />
                     <span className="radio-icon">🧼</span>
-                    <span>Hand washing</span>
+                    <span>Handwashing (time spent)</span>
                   </label>
                 </div>
               </div>
@@ -1654,10 +1721,37 @@ export default function AdminPage() {
           </CollapsibleSection>
 
           {/* === OVERLAY === */}
-          {/* Weather, altitude & speed — overlay data displays (shared Always/Auto/Hidden pattern) */}
-          <CollapsibleSection id="weather-altitude-speed" title="🌤️ Overlay: weather, altitude & speed">
+          {/* Top-left & top-right rotating slots — consolidated */}
+          <CollapsibleSection
+            id="overlay-top-rotation"
+            title="🔄 Overlay: top-left & top-right rotation"
+            description={
+              <>
+                Top-left rotates Date → Steps → Distance every 7s. Top-right rotates Temp → Condition → Altitude → Speed. Enable/configure what appears in each.
+              </>
+            }
+          >
             <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-left (wellness — Health Auto Export)</h4>
+              <div className="checkbox-group" style={{ marginBottom: 8 }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showSteps ?? true}
+                    onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Steps</span>
+                </label>
+              </div>
+              <p className="input-hint" style={{ fontSize: '0.85em', marginTop: 4 }}>
+                Date from timezone. All rotate every 7s.
+              </p>
+            </div>
+
+            <div className="setting-group" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-right (location data)</h4>
+              <div className="checkbox-group" style={{ marginBottom: 12 }}>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -1665,62 +1759,62 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Show temp</span>
+                  <span className="checkbox-text">Temp</span>
                 </label>
               </div>
+              {settings.showWeather && (
+                <div className="admin-select-wrap" style={{ marginBottom: 12 }}>
+                  <label>Weather conditions</label>
+                  <div className="option-buttons" role="group">
+                    {(['always', 'auto', 'hidden'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`option-btn ${(settings.weatherConditionDisplay || 'auto') === mode ? 'active' : ''}`}
+                        onClick={() => handleSettingsChange({ weatherConditionDisplay: mode })}
+                      >
+                        {mode === 'always' && '👁️ Always'}
+                        {mode === 'auto' && '🌧️ Auto'}
+                        {mode === 'hidden' && '🚫 Hidden'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="admin-select-wrap">
-                <label>Weather conditions</label>
-                <select
-                  className="admin-select-big"
-                  value={settings.weatherConditionDisplay || 'auto'}
-                  onChange={(e) => handleSettingsChange({ weatherConditionDisplay: e.target.value as DisplayMode })}
-                >
-                  <option value="always">👁️ Always show</option>
-                  <option value="auto">🌧️ Auto (rain, storms, snow)</option>
-                  <option value="hidden">🚫 Hidden</option>
-                </select>
+                <label>Altitude</label>
+                <div className="option-buttons" role="group">
+                  {(['always', 'auto', 'hidden'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`option-btn ${(settings.altitudeDisplay || 'auto') === mode ? 'active' : ''}`}
+                      onClick={() => handleSettingsChange({ altitudeDisplay: mode })}
+                    >
+                      {mode === 'always' && '👁️ Always'}
+                      {mode === 'auto' && '📈 Auto'}
+                      {mode === 'hidden' && '🚫 Hidden'}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            
-            <div className="admin-select-wrap">
-              <label>Altitude</label>
-              <select
-                className="admin-select-big"
-                value={settings.altitudeDisplay || 'auto'}
-                onChange={(e) => handleSettingsChange({ altitudeDisplay: e.target.value as DisplayMode })}
-              >
-                <option value="always">👁️ Always show</option>
-                <option value="auto">📈 Auto (≥50m change)</option>
-                <option value="hidden">🚫 Hidden</option>
-              </select>
-            </div>
-            
-            <div className="admin-select-wrap">
-              <label>Speed</label>
-              <select
-                className="admin-select-big"
-                value={settings.speedDisplay || 'auto'}
-                onChange={(e) => handleSettingsChange({ speedDisplay: e.target.value as DisplayMode })}
-              >
-                <option value="always">👁️ Always show</option>
-                <option value="auto">🏃 Auto (≥10 km/h)</option>
-                <option value="hidden">🚫 Hidden</option>
-              </select>
-            </div>
-          </CollapsibleSection>
-
-          {/* Steps (Health Auto Export) */}
-          <CollapsibleSection id="steps-distance" title="👟 Overlay: steps">
-            <div className="setting-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={settings.showSteps ?? true}
-                  onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })}
-                  className="checkbox-input"
-                />
-                <span className="checkbox-text">Show steps</span>
-              </label>
+              <div className="admin-select-wrap">
+                <label>Speed</label>
+                <div className="option-buttons" role="group">
+                  {(['always', 'auto', 'hidden'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`option-btn ${(settings.speedDisplay || 'auto') === mode ? 'active' : ''}`}
+                      onClick={() => handleSettingsChange({ speedDisplay: mode })}
+                    >
+                      {mode === 'always' && '👁️ Always'}
+                      {mode === 'auto' && '🏃 Auto'}
+                      {mode === 'hidden' && '🚫 Hidden'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </CollapsibleSection>
 
@@ -1730,7 +1824,7 @@ export default function AdminPage() {
             title="📊 Overlay: leaderboard, goals & alerts"
             description={
               <>
-                <strong>How it works:</strong> The bottom-right shows one thing at a time, rotating every 7 seconds — Leaderboard → Sub goal → Kicks goal (only what you enable below). New sub or kicks? It switches instantly to that goal. Alerts (subs, gifts, kicks) appear above the rotating display.
+                <strong>How it works:</strong> The bottom-right shows one thing at a time, rotating every 7 seconds — Leaderboard → Chips → Sub goal → Kicks goal (only what you enable below). New sub or kicks? It switches instantly to that goal. Alerts (subs, gifts, kicks) appear above the rotating display.
               </>
             }
           >
@@ -1769,7 +1863,7 @@ export default function AdminPage() {
                       value={settings.leaderboardTopN ?? 5}
                       onChange={(e) => handleSettingsChange({ leaderboardTopN: Number(e.target.value) })}
                     >
-                      {[1, 3, 4, 5, 7, 10].map((n) => (
+                      {[1, 3, 5, 10].map((n) => (
                         <option key={n} value={n}>Top {n}</option>
                       ))}
                     </select>
@@ -1789,6 +1883,31 @@ export default function AdminPage() {
                     </p>
                   </div>
                 </>
+              )}
+              <div className="admin-select-wrap" style={{ marginTop: '16px', marginBottom: '12px' }}>
+                <label>Gambling (chips) leaderboard — include in rotation?</label>
+                <select
+                  className="admin-select-big"
+                  value={settings.showGamblingLeaderboard === true ? 'true' : 'false'}
+                  onChange={(e) => handleSettingsChange({ showGamblingLeaderboard: e.target.value === 'true' })}
+                >
+                  <option value="true">🃏 Yes, include in rotation</option>
+                  <option value="false">🚫 No, hidden</option>
+                </select>
+              </div>
+              {settings.showGamblingLeaderboard === true && (
+                <div className="admin-select-wrap">
+                  <label>Top N chips</label>
+                  <select
+                    className="admin-select-big"
+                    value={settings.gamblingLeaderboardTopN ?? 5}
+                    onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
+                  >
+                    {[1, 3, 5, 10].map((n) => (
+                      <option key={n} value={n}>Top {n}</option>
+                    ))}
+                  </select>
+                </div>
               )}
               <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
                 <label className="checkbox-label">
@@ -2292,6 +2411,10 @@ export default function AdminPage() {
                   </button>
                 </div>
                 </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="health-data" title="🏃 Health data (manual entry)" description="Current values from Health Auto Export. Add missing data (e.g. weight) before your next export sends it.">
+            <HealthDataSection />
           </CollapsibleSection>
 
           <CollapsibleSection id="advanced-data" title="⚙️ Advanced / Data" defaultCollapsed={true} description="Less frequently used data reset options.">

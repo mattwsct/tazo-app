@@ -8,6 +8,7 @@ import { kv } from '@vercel/kv';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { broadcastSettings } from '@/lib/settings-broadcast';
 import { getLeaderboardTop, parseExcludedBots } from '@/utils/leaderboard-storage';
+import { getGamblingLeaderboardTop } from '@/utils/blackjack-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 import { POLL_STATE_KEY } from '@/types/poll';
@@ -24,14 +25,16 @@ export async function broadcastAlertsAndLeaderboard(): Promise<void> {
       pollState: rawPoll ?? null,
     });
     const showLeaderboard = merged.showLeaderboard !== false;
+    const showGamblingLeaderboard = merged.showGamblingLeaderboard === true;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
     const excludeUsernames = parseExcludedBots(merged.leaderboardExcludedBots);
-    const [leaderboardTop, overlayAlerts, streamGoals] = await Promise.all([
+    const [leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals] = await Promise.all([
       showLeaderboard ? getLeaderboardTop(merged.leaderboardTopN ?? 5, { excludeUsernames }) : [],
+      showGamblingLeaderboard ? getGamblingLeaderboardTop(merged.gamblingLeaderboardTopN ?? 5) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
     ]);
-    const combined = { ...merged, leaderboardTop, overlayAlerts, streamGoals };
+    const combined = { ...merged, leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals };
     await broadcastSettings(combined);
   } catch (err) {
     if (process.env.NODE_ENV === 'development') {

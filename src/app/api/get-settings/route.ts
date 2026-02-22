@@ -6,6 +6,7 @@ import { OverlayLogger } from '@/lib/logger';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { POLL_STATE_KEY, type PollState } from '@/types/poll';
 import { getLeaderboardTop, parseExcludedBots } from '@/utils/leaderboard-storage';
+import { getGamblingLeaderboardTop } from '@/utils/blackjack-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 import { getGoalCelebration } from '@/utils/stream-goals-celebration';
@@ -22,12 +23,14 @@ async function handleGET() {
     const pollState: PollState | null = rawPollState ?? null;
     const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
 
-    // Fetch leaderboard, alerts, and stream goals when enabled
+    // Fetch leaderboard, gambling leaderboard, alerts, and stream goals when enabled
     const showLeaderboard = merged.showLeaderboard !== false;
+    const showGamblingLeaderboard = merged.showGamblingLeaderboard === true;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
     const excludeUsernames = parseExcludedBots(merged.leaderboardExcludedBots);
-    const [leaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
+    const [leaderboardTop, gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
       showLeaderboard ? getLeaderboardTop(merged.leaderboardTopN ?? 5, { excludeUsernames }) : [],
+      showGamblingLeaderboard ? getGamblingLeaderboardTop(merged.gamblingLeaderboardTopN ?? 5) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
       needGoals ? getGoalCelebration() : {},
@@ -36,6 +39,7 @@ async function handleGET() {
     const combinedSettings = {
       ...merged,
       leaderboardTop,
+      gamblingLeaderboardTop,
       overlayAlerts,
       streamGoals,
       subGoalCelebrationUntil: (celebration as { subsUntil?: number }).subsUntil,

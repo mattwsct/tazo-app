@@ -1,8 +1,9 @@
 /**
  * Leaderboard storage: per-stream points, reset on stream start.
  * Uses Redis sorted set for O(log n) leaderboard queries.
- * Point weights: chat=1 (every message), first chatter=25, poll vote=2, create poll=10,
+ * Point weights: chat=1 (every message, rate-limited), first chatter=25, poll vote=2, create poll=10,
  * follow=5, new sub=15, resub=10, gift sub=12 each, kicks: 10 pts per 100 kicks ($1).
+ * Chat points: max 1 pt per CHAT_COOLDOWN_MS to prevent spam bots from racing up the leaderboard.
  */
 
 import { kv } from '@vercel/kv';
@@ -11,6 +12,10 @@ import { getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
 const LEADERBOARD_SCORES_KEY = 'leaderboard_scores';
 const LEADERBOARD_FIRST_CHATTER_KEY = 'leaderboard_first_chatter';
 const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
+const LEADERBOARD_CHAT_LAST_AT_KEY = 'leaderboard_chat_last_at';
+
+/** Min ms between chat points per user (prevents spam from racing up leaderboard) */
+const CHAT_COOLDOWN_MS = 30_000;
 
 export const POINT_WEIGHTS = {
   chat: 1,
@@ -54,9 +59,12 @@ export async function getLeaderboardExclusions(): Promise<Set<string>> {
 /** Reset leaderboard when stream starts (called from onStreamStarted flow). */
 export async function resetLeaderboardOnStreamStart(): Promise<void> {
   try {
-    await kv.del(LEADERBOARD_SCORES_KEY);
-    await kv.del(LEADERBOARD_FIRST_CHATTER_KEY);
-    await kv.del(LEADERBOARD_DISPLAY_NAMES_KEY);
+    await Promise.all([
+      kv.del(LEADERBOARD_SCORES_KEY),
+      kv.del(LEADERBOARD_FIRST_CHATTER_KEY),
+      kv.del(LEADERBOARD_DISPLAY_NAMES_KEY),
+      kv.del(LEADERBOARD_CHAT_LAST_AT_KEY),
+    ]);
     console.log('[Leaderboard] Reset on stream start at', new Date().toISOString());
   } catch (e) {
     console.warn('[Leaderboard] Failed to reset on stream start:', e);
@@ -83,12 +91,19 @@ async function setDisplayName(normalized: string, display: string): Promise<void
   } catch { /* ignore */ }
 }
 
-/** Add points for a chat message (1 pt per message; first chatter gets +25). */
+/** Add points for a chat message (1 pt per message, max 1 per 30s; first chatter gets +25). */
 export async function addChatPoints(username: string): Promise<{ points: number; isFirstChatter: boolean }> {
   const user = normalizeUsername(username);
   const excluded = await getLeaderboardExclusions();
   if (excluded.has(user)) return { points: 0, isFirstChatter: false };
   await ensureSessionStarted();
+
+  const now = Date.now();
+  const lastAtRaw = await kv.hget<number | string>(LEADERBOARD_CHAT_LAST_AT_KEY, user);
+  const lastAt = typeof lastAtRaw === 'number' ? lastAtRaw : (typeof lastAtRaw === 'string' ? Number(lastAtRaw) : 0);
+  if (lastAt > 0 && now - lastAt < CHAT_COOLDOWN_MS) {
+    return { points: 0, isFirstChatter: false };
+  }
 
   const firstChatter = await kv.get<string>(LEADERBOARD_FIRST_CHATTER_KEY);
   const isFirstChatter = !firstChatter;
@@ -101,6 +116,7 @@ export async function addChatPoints(username: string): Promise<{ points: number;
 
   await Promise.all([
     kv.zincrby(LEADERBOARD_SCORES_KEY, points, user),
+    kv.hset(LEADERBOARD_CHAT_LAST_AT_KEY, { [user]: String(now) }),
     setDisplayName(user, username),
   ]);
 

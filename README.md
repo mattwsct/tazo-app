@@ -9,7 +9,7 @@ A modern, real-time streaming overlay for IRL streams with GPS tracking, weather
 - **💓 Heart Rate Monitor** - Pulsoid integration with smooth animated value transitions
 - **📊 Altitude & Speed** - Real-time elevation and movement speed with smart auto-display
 - **🌊 At-Sea Mode** - Automatic water body detection for cruise/ocean streaming
-- **🗺️ Smart Location Display** - City, state, or custom location names with country flags
+- **🗺️ Smart Location Display** - One setting for overlay, chat (!location), stream title, and map: city, state, or country with country flags
 - **✨ Smooth Animations** - Optimized value transitions for speed, altitude, and heart rate
 - **🎨 Clean UI** - Modern, responsive design optimized for OBS
 
@@ -62,12 +62,8 @@ npm run dev
 - **Fade transitions** - Smooth 1-second fade in/out for better visual experience
 
 ### Location Display Modes
-The overlay supports 6 location display modes, each showing different levels of geographic detail:
+One setting drives overlay, chat (`!location`), stream title, and minimap zoom. The overlay supports 5 display modes:
 
-- **Neighbourhood** - Most precise: Shows neighbourhood/suburb/district names (e.g., "Downtown", "SoHo", "Shinjuku")
-  - Falls back to city → state → country if neighbourhood data unavailable
-  - Best for: City exploration, walking tours, detailed location tracking
-  
 - **City** - City-level precision: Shows city/town/municipality names (e.g., "Austin", "Tokyo", "Paris")
   - Falls back to state → country if city data unavailable
   - Best for: General travel, transit, city-to-city movement
@@ -96,28 +92,20 @@ The overlay supports 6 location display modes, each showing different levels of 
 The location display system uses a hierarchical fallback system with duplicate name detection to ensure clean, non-redundant location displays.
 
 #### Fallback Hierarchy
-The system follows a strict hierarchy: **neighbourhood → city → state → country**
+The system follows a strict hierarchy: **city → state → country**
 
 Each precision level checks all fields within its category before falling back to the next broadest category:
 
-1. **Neighbourhood Mode** (`'neighbourhood'`):
-   - Checks: `neighbourhood`, `quarter`, `ward`, `borough`, `district`, `suburb`
-   - If no valid neighbourhood found → falls back to city
-   - If no city found → falls back to state
-   - If no state found → falls back to country
-
-2. **City Mode** (`'city'`):
-   - Checks: `city`, `municipality`, `town`, `village`, `hamlet`
+1. **City Mode** (`'city'`):
+   - Checks: `city`, `municipality`, `town`, `village`, `hamlet`, `suburb`
    - If no valid city found → falls back to state
    - If no state found → falls back to country
-   - **Important**: Never falls back to neighbourhood (would be more specific, not broader)
 
-3. **State Mode** (`'state'`):
+2. **State Mode** (`'state'`):
    - Checks: `state`, `province`, `region`, `county`
    - If no valid state found → falls back to country
-   - **Important**: Never falls back to city or neighbourhood (would be more specific)
 
-4. **Country Mode** (`'country'`):
+3. **Country Mode** (`'country'`):
    - Shows only country name (shortened if >20 characters)
    - No fallback needed (country is the broadest category)
 
@@ -125,7 +113,7 @@ Each precision level checks all fields within its category before falling back t
 
 To prevent redundant displays like "Downtown Los Angeles, Los Angeles" or "Tokyo, Tokyo Prefecture", the system checks for overlapping names:
 
-- **Primary Line**: Determined by selected precision level (neighbourhood/city/state/country)
+- **Primary Line**: Determined by selected precision level (city/state/country)
 - **Second Line**: Shows the next broadest category, but skips any names that overlap with the primary
 
 **Overlap Detection Rules**:
@@ -135,7 +123,6 @@ To prevent redundant displays like "Downtown Los Angeles, Los Angeles" or "Tokyo
 - Example: "Tokyo" overlaps with "Tokyo Prefecture" → skip state, show country instead
 
 **Second Line Logic**:
-- For **neighbourhood** primary → tries city → state → country (skipping overlaps)
 - For **city** primary → tries state → country (skipping overlaps)
 - For **state** primary → tries country only (skipping overlaps)
 - For **country** primary → no second line (country is broadest)
@@ -144,13 +131,12 @@ To prevent redundant displays like "Downtown Los Angeles, Los Angeles" or "Tokyo
 
 Location data from LocationIQ API is organized into categories (ordered from most appropriate to least appropriate):
 
-- **Neighbourhood Fields**: `neighbourhood` → `quarter` → `ward` → `suburb` → `district` → `borough`
-- **City Fields**: `city` → `municipality` → `town` → `county` → `village` → `hamlet`
+- **City Fields**: `city` → `municipality` → `town` → `suburb` → `county` → `village` → `hamlet`
 - **State Fields**: `state` → `province` → `region`
 - **Country**: `country` (with `countryCode` for flag display)
 
 **Important Notes**:
-- `suburb` is treated as a neighbourhood field, not a city field
+- `suburb` is part of the city category (used when city is unavailable)
 - `county` is part of the city category (represents metropolitan areas like Gold Coast)
 - Fields are tried in order - first valid field found is used
 - Field names vary by country but hierarchy is generally consistent worldwide
@@ -175,11 +161,8 @@ When switching display modes in the admin panel:
 4. **Duplicate Prevention**: Second line automatically adjusts to avoid duplicates
 
 **Example Scenarios**:
-- Switch from "Neighbourhood" to "City" → immediately shows city if available, or state if city unavailable
 - Switch from "City" to "State" → immediately shows state if available, or country if state unavailable
-- If location has "Downtown Los Angeles" (neighbourhood) and "Los Angeles" (city):
-  - Neighbourhood mode: "Downtown Los Angeles" (primary), "California" (state, city skipped due to overlap)
-  - City mode: "Los Angeles" (primary), "California" (state)
+- If location has "Los Angeles" (city) and "California" (state): City mode shows "Los Angeles" (primary), "California" (state)
 
 ### At-Sea Detection
 When GPS coordinates can't be reverse geocoded (ocean/remote areas):
@@ -211,11 +194,11 @@ When GPS coordinates can't be reverse geocoded (ocean/remote areas):
 
 Access at `http://localhost:3000` to configure. **Overlay** group: Location & map, Weather/altitude/speed. **Kick** group: Connection, Stream title & chat (title + broadcasts), Poll, Message templates. Related settings are grouped (e.g. location + map; stream title + chat broadcasts share interval).
 
-- **Overlay display** - Granularity for overlay and chat (`!location`): Neighbourhood, City, State, Country, Custom, or Hidden
-- **Stream title display** - Granularity for Kick stream title when &quot;Include location&quot; is on: City, State, or Country (can differ from overlay)
-  - Changes apply immediately to overlay via real-time sync
+- **Location** - One setting for overlay, chat (`!location`), stream title, and map zoom: City, State, Country, Custom, or Hidden
+  - Custom = manual text on overlay only; stream title uses city when custom/hidden
+  - Changes apply immediately via real-time sync
   - Location re-formats instantly when mode changes (uses cached location data)
-  - Each mode follows fallback hierarchy: neighbourhood → city → state → country
+  - Each mode follows fallback hierarchy: city → state → country
   - Duplicate names automatically detected and skipped on second line
   
 - **Custom Location** - Enter custom text when "Custom" mode is selected
@@ -252,11 +235,9 @@ Access at `http://localhost:3000` to configure. **Overlay** group: Location & ma
   
 - **Map Zoom** - 6 levels from Continental (1) to Neighbourhood (13)
   - Continental (1) - Trans-oceanic view
+  - **Same as location** - Zoom matches location precision (city=11, state=8, country=5)
   - Ocean (3) - Coastal view from sea
-  - Country (5) - Country view (matches "Country" location display mode)
-  - State (8) - State/province view (matches "State" location display mode)
-  - City (11) - Whole city view (matches "City" location display mode)
-  - Neighbourhood (13) - Streets & buildings (matches "Neighbourhood" location display mode)
+  - Continental (1) - Wide continental view
 
 ### Settings Sync Mechanism
 Settings changes propagate to overlay in real-time via:
@@ -275,7 +256,7 @@ Settings changes propagate to overlay in real-time via:
   - `/api/location` - GET/POST, persistent location (overlay reads and updates)
   - `/api/location/browser` - POST only, admin sets location from browser geolocation (requires auth)
   - `/api/wellness` - GET only, wellness data (steps, calories, sleep, distance, handwashing) for overlay, plus stepsSinceStreamStart, distanceSinceStreamStart, handwashingSinceStreamStart
-  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header). Chat broadcast milestones (steps, distance, stand hours, active calories, hand washing) when enabled in admin. **Deduplication**: Rapid or duplicate pushes (e.g. same step count twice within 60s) are skipped to avoid double-counting. A lower value shortly after a higher one is treated as out-of-order and skipped. **Note**: iOS typically updates health data infrequently (15–30+ min via background refresh); overlay polls wellness every 60s.
+  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header). Chat broadcast milestones (steps, distance, stand hours, active calories, handwashing duration) when enabled in admin. **Apple Health units**: Energy (kJ or kcal), distance (m/km/mi), handwashing = duration in seconds (HKCategoryType handwashingEvent), not count. Import parses `units` per metric. **Deduplication**: Rapid or duplicate pushes (e.g. same step count twice within 60s) are skipped to avoid double-counting. A lower value shortly after a higher one is treated as out-of-order and skipped. **Note**: iOS typically updates health data infrequently (15–30+ min via background refresh); overlay polls wellness every 60s.
   - `/api/stats/update` - POST only, overlay sends speed/altitude/heart rate for chat commands
 - **Authenticated only (admin panel)**
   - `/api/save-settings` - POST only
@@ -468,7 +449,7 @@ npm run test:watch  # Run tests in watch mode
 
 Location and weather are always shown based on the latest RTIRL data. Use the "Hidden" option in the Location Display mode to manually hide both location and weather when needed (e.g., during flights).
 
-- **Location Display Modes**: Neighbourhood, City, State, Country, Custom, or Hidden
+- **Location Display Modes**: City, State, Country, Custom, or Hidden (one setting for overlay, chat, stream title, map)
 - **Hidden Mode**: Hides both location and weather display (useful for flights, privacy, etc.)
 - **Weather**: Updates every 5 minutes automatically
 - **Timezone**: Always updates from RTIRL/LocationIQ/OpenWeatherMap to ensure accurate time/date display
@@ -476,16 +457,11 @@ Location and weather are always shown based on the latest RTIRL data. Use the "H
 ### Common Scenarios
 - **Flying**: High speed (>200 km/h), infrequent location updates (1km threshold), country-level display recommended
 - **Cruising**: International waters, water body detection critical, show nearest country, ocean zoom level
-- **City Exploration**: Frequent updates (10m threshold), detailed location names, neighborhood-level display recommended
+- **City Exploration**: Frequent updates (10m threshold), detailed location names, city-level display recommended
 - **Transit**: Medium speed (50-200 km/h), moderate update frequency (100m threshold), city-level display recommended
 - **Walking**: Low speed (<50 km/h), frequent updates (10m threshold), neighborhood or city display
 
 ### Location Display Mode Selection Guide
-- **Neighbourhood**: Use when you want maximum detail (e.g., "Downtown", "SoHo", "Shinjuku")
-  - Best for: Walking tours, city exploration, detailed location tracking
-  - Falls back to city → state → country if neighbourhood data unavailable
-  - Second line shows city (or state/country if city overlaps with neighbourhood)
-  
 - **City**: Use for general city-level tracking (e.g., "Austin", "Tokyo", "Paris")
   - Best for: General travel, transit, city-to-city movement
   - Most commonly used mode
@@ -609,9 +585,8 @@ All API limits are enforced client-side to prevent quota exhaustion:
   - No need to wait for new GPS update to see display mode change
   - Falls back gracefully if formatting fails (keeps existing display)
   - **Fallback Logic**: Each precision level checks all fields in its category before falling back
-    - Neighbourhood: checks neighbourhood fields → city → state → country
-    - City: checks city fields → state → country (never neighbourhood)
-    - State: checks state fields → country (never city/neighbourhood)
+    - City: checks city fields → state → country
+    - State: checks state fields → country
   - **Duplicate Detection**: Second line skips names that overlap with primary line
     - Uses `hasOverlappingNames()` to check if one name contains another
     - Checks all fields within category before moving to next category
@@ -658,7 +633,6 @@ All API limits are enforced client-side to prevent quota exhaustion:
    - **GPS Freshness** (15 min): When to hide location/weather/minimap (GPS update age)
    - **Data Validity** (30 min): How long cached data remains usable (weather/location cache)
    - **GPS Stale** (10 sec): When GPS data is considered stale (no updates received)
-   - **Broaden when stale** (if enabled): neighbourhood→city at 5 min; city→state at 10 min; state→country at 15 min. **Max fallback** dropdown: choose whether to stop at city, state (always state+country), or country (allow country-only) when very stale. Browser-set location without timestamp is treated as very old so broadening triggers immediately.
    - **Important**: Data can be valid (cached) even if GPS is stale - this allows instant re-display
    - **See "GPS Staleness Behavior" section above for complete details on how staleness is handled**
 
@@ -667,9 +641,8 @@ All API limits are enforced client-side to prevent quota exhaustion:
    - **Check**: `WALKING_PACE_THRESHOLD = 5` in overlay page code
 
 7. **Location Display Modes**
-   - **Actual modes**: `'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden'`
-   - **Note**: Uses British spelling `'neighbourhood'` (not `'neighborhood'`)
-   - **Fallback hierarchy**: neighbourhood → city → state → country
+   - **Actual modes**: `'city' | 'state' | 'country' | 'custom' | 'hidden'`
+   - **Fallback hierarchy**: city → state → country
    - **Check**: `LocationDisplayMode` type in `src/types/settings.ts`
    - **Duplicate detection**: Second line skips overlapping names (e.g., "Downtown Los Angeles" + "Los Angeles" → shows state instead)
 
@@ -758,13 +731,21 @@ Edit templates in the admin panel **Message templates** section. Use the toggles
 
 ### Chat commands
 
-Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. **Wellness commands** (from Health Auto Export): `!steps`, `!distance` (since stream start), `!stand`, `!calories`, `!handwashing`, `!weight`, `!wellness` (summary). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
+Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). **`!title`** (broadcaster and mods only): set stream title with optional location. Example: `!title Walking around Austin` — updates the title and appends location (city/state/country) if "Include location in stream title" is on. `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. **Wellness commands** (from Health Auto Export): `!steps`, `!distance` (since stream start), `!stand`, `!calories`, `!handwashing`, `!weight`, `!wellness` (summary). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
 
 **Leaderboard commands**: `!points` or `!pts` returns your points for the current stream. `!leaderboard` or `!lb` or `!top` returns the top 5 users. Points reset when the stream starts. **Point weights**: chat 1 (every message), first chatter 25, poll vote 2, create poll 10, follow 5, new sub 15, resub 10, gift sub 12 each, kicks 10 pts per 100 kicks ($1).
 
+**Blackjack**: Separate gambling chips (start with 100 each stream). Chips and gambling leaderboard reset when the stream starts. `!chips` — check balance. `!deal 5` or `!bj 5` — start a hand, bet 5 chips. `!hit` — draw a card. `!stand` — end your turn (dealer plays). `!gambleboard` or `!chiptop` — top 5 by chips. Inactive hands auto-stand after 90 seconds. Bet min 1, max 50. Blackjack pays 1.5×.
+
+### Top overlay rotating displays
+
+**Top-left**: Time (fixed) + rotating slot every 7s (Date → Steps) + Heart rate (fixed). Only items with data are included; respects showSteps. Wellness data from Health Auto Export. Steps hidden if data older than 2h (staleness check).
+
+**Top-right**: Location (fixed) + rotating slot every 7s (Temp → Weather condition when notable → Altitude when visible → Speed when above threshold). Weather condition only shown when notable in auto mode; altitude/speed follow their display modes.
+
 ### Leaderboard, goals & alerts (bottom-right rotation)
 
-The bottom-right overlay area shows **leaderboard**, **sub goal**, and **kicks goal** in a rotating carousel on top, with the **poll** stacked below when active. Both are visible at once so they don’t interfere. The carousel cycles through enabled slides (leaderboard, subs goal, kicks goal) every 7 seconds with crossfade transitions. Sub/resub/giftSub alerts appear **inside** the subs goal bar (e.g. "🎉 New sub — username"); kicks alerts appear inside the kicks goal bar. The relevant slide switches immediately when an alert fires, shows the alert for ~8s, then fades back to the progress display and rotation continues. **Auto-increment**: When a goal is reached, the bar stays at 100% for ~15s so gifters see the full bar, then the target auto-increments by the configured amount (default subs +10, kicks +1000). Configure increment amounts in admin. Admin **Leaderboard, goals & alerts** section: include leaderboard in rotation, subs/kicks goal toggles with targets, auto-increment amounts, overlay alerts toggle, top N (3–10), and **Test alert** buttons. Uses the same space as poll. Vercel KV for per-stream points and recent alerts.
+The bottom-right overlay area shows **leaderboard**, **chips (gambling)**, **sub goal**, and **kicks goal** in a rotating carousel on top, with the **poll** stacked below when active. Both are visible at once so they don’t interfere. The carousel cycles through enabled slides (leaderboard, subs goal, kicks goal) every 7 seconds with crossfade transitions. Sub/resub/giftSub alerts appear **inside** the subs goal bar (e.g. "🎉 New sub — username"); kicks alerts appear inside the kicks goal bar. The relevant slide switches immediately when an alert fires, shows the alert for ~8s, then fades back to the progress display and rotation continues. **Auto-increment**: When a goal is reached, the bar stays at 100% for ~15s so gifters see the full bar, then the target auto-increments by the configured amount (default subs +10, kicks +1000). Configure increment amounts in admin. Admin **Leaderboard, goals & alerts** section: include leaderboard in rotation, subs/kicks goal toggles with targets, auto-increment amounts, overlay alerts toggle, top N (3–10), and **Test alert** buttons. Uses the same space as poll. Vercel KV for per-stream points and recent alerts.
 
 ### Chat poll
 
@@ -841,7 +822,7 @@ The overlay app also provides chat command APIs for Fossabot integration. All co
 
 - **Social Media**: `/api/chat/instagram`, `/api/chat/twitter`, `/api/chat/kick`, etc.
 - **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
-- **Weather**: `/api/chat/forecast`, `/api/chat/sun`
+- **Weather**: `/api/chat/forecast`, `/api/chat/sun`, `/api/chat/uv`, `/api/chat/aqi`
 - **Wellness** (Health Auto Export): `/api/chat/steps`, `/api/chat/distance`, `/api/chat/stand`, `/api/chat/calories`, `/api/chat/handwashing`, `/api/chat/weight`, `/api/chat/wellness`
 - **Heart rate**: `/api/chat/heartrate` — Pulsoid live when connected, falls back to Apple Health (Health Auto Export) when not
 - **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/tips`, `/api/chat/emergency`, `/api/chat/flirt`, `/api/chat/sex`, `/api/chat/insults` (optionally specify country code: `?q=JP`, `?q=AU`, etc.)

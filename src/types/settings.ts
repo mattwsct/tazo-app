@@ -1,9 +1,9 @@
 // Centralized settings types and constants
 
-export type LocationDisplayMode = 'neighbourhood' | 'city' | 'state' | 'country' | 'custom' | 'hidden';
-/** Max level when broadening stale GPS: city = never go beyond city; state = never country-only; country = allow country-only */
-export type LocationStaleMaxFallback = 'city' | 'state' | 'country';
-export type MapZoomLevel = 'neighbourhood' | 'city' | 'state' | 'country' | 'ocean' | 'continental';
+/** Single location precision used by overlay, chat, stream title, minimap. Custom = manual overlay text only; hidden = no overlay location. */
+export type LocationDisplayMode = 'city' | 'state' | 'country' | 'custom' | 'hidden';
+/** Map zoom: match = follow location precision; ocean/continental = special wide views. */
+export type MapZoomLevel = 'match' | 'ocean' | 'continental';
 export type DisplayMode = 'always' | 'auto' | 'hidden';
 export type MinimapTheme = 'auto' | 'light' | 'dark';
 
@@ -11,10 +11,6 @@ import type { PollState } from '@/types/poll';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
-  /** When true (default), broaden location when GPS is stale. When false, always use selected display mode. */
-  broadenLocationWhenStale?: boolean;
-  /** When broadening, never go beyond this level. State = always show state+country; country = allow country-only. */
-  locationStaleMaxFallback?: LocationStaleMaxFallback;
   customLocation?: string;
   showCountryName: boolean;
   showWeather: boolean;
@@ -26,8 +22,6 @@ export interface OverlaySettings {
   altitudeDisplay: DisplayMode;
   speedDisplay: DisplayMode;
   showSteps: boolean;
-  showDistance: boolean;
-  showDistanceMiles: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
   pollState?: PollState | null;
   /** Leaderboard: include in rotation (true) or hidden (false). */
@@ -40,6 +34,12 @@ export interface OverlaySettings {
   showOverlayAlerts?: boolean;
   /** Runtime: top leaderboard entries (from get-settings). */
   leaderboardTop?: { username: string; points: number }[];
+  /** Gambling (chips) leaderboard: include in rotation. */
+  showGamblingLeaderboard?: boolean;
+  /** Top N for gambling leaderboard. */
+  gamblingLeaderboardTopN?: number;
+  /** Runtime: top chips (from get-settings). */
+  gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
   /** Sub goal: show progress bar, target count. */
@@ -65,9 +65,7 @@ export interface OverlaySettings {
 
 // Default settings (single source of truth)
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
-  locationDisplay: 'neighbourhood',
-  broadenLocationWhenStale: true,
-  locationStaleMaxFallback: 'country',
+  locationDisplay: 'city',
   customLocation: '',
   showCountryName: true,
   showWeather: true,
@@ -75,16 +73,16 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showMinimap: false,
   minimapSpeedBased: false,
   minimapTheme: 'auto',
-  mapZoomLevel: 'city',
+  mapZoomLevel: 'match',
   altitudeDisplay: 'auto',
   speedDisplay: 'auto',
   showSteps: true,
-  showDistance: false, // Distance display removed from overlay
-  showDistanceMiles: true,
   showLeaderboard: true,
   showGoalsRotation: true,
   leaderboardTopN: 5,
   leaderboardExcludedBots: '',
+  showGamblingLeaderboard: false,
+  gamblingLeaderboardTopN: 5,
   showOverlayAlerts: true,
   showSubGoal: false,
   subGoalTarget: 10, // ~$50 at typical sub price
@@ -95,11 +93,9 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 };
 
 // Valid settings schema for validation
-// Note: 'pollState', 'leaderboardTop', 'overlayAlerts', 'streamGoals', 'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil' are runtime, not persisted
-export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'leaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'subGoalCelebrationUntil' | 'kicksGoalCelebrationUntil'>, 'boolean' | 'string' | 'number'> = {
+// Note: 'pollState', 'leaderboardTop', 'gamblingLeaderboardTop', 'overlayAlerts', 'streamGoals', 'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil' are runtime, not persisted
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'leaderboardTop' | 'gamblingLeaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'subGoalCelebrationUntil' | 'kicksGoalCelebrationUntil'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
-  broadenLocationWhenStale: 'boolean',
-  locationStaleMaxFallback: 'string',
   customLocation: 'string',
   showCountryName: 'boolean',
   showWeather: 'boolean',
@@ -111,12 +107,12 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   altitudeDisplay: 'string',
   speedDisplay: 'string',
   showSteps: 'boolean',
-  showDistance: 'boolean',
-  showDistanceMiles: 'boolean',
   showLeaderboard: 'boolean',
   showGoalsRotation: 'boolean',
   leaderboardTopN: 'number',
   leaderboardExcludedBots: 'string',
+  showGamblingLeaderboard: 'boolean',
+  gamblingLeaderboardTopN: 'number',
   showOverlayAlerts: 'boolean',
   showSubGoal: 'boolean',
   subGoalTarget: 'number',

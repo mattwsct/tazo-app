@@ -87,11 +87,12 @@ body.overlay-page {
   display: flex;
   flex-direction: column;
   width: fit-content;
-  gap: 3px;
-  padding: var(--gap-md) var(--gap-xl) var(--gap-lg) var(--gap-xl);
-  background: rgba(0, 0, 0, 0.7);
+  gap: 4px;
+  padding: var(--gap-md) var(--gap-xl) var(--gap-md) var(--gap-xl);
+  background: rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-md);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
   color: white;
   font-weight: 600;
   align-items: flex-start;
@@ -111,6 +112,11 @@ body.overlay-page {
 
 /* Reduce perceived gap between large time and date in top-left overlay */
 .top-left .time-line + .date-line {
+  margin-top: -2px;
+}
+
+/* Tighter gap between rotating date/steps and heart rate */
+.top-left .top-left-cycling-wrapper + .heart-rate-wrapper {
   margin-top: -2px;
 }
 
@@ -135,7 +141,10 @@ body.overlay-page {
 }
 
 .top-left .overlay-box { align-items: flex-start; }
-.top-right .overlay-box { align-items: flex-end; }
+.top-right .overlay-box {
+  align-items: flex-end;
+  padding-bottom: var(--gap-sm); /* Tighter space under temp/weather */
+}
 .bottom-right .overlay-box { align-items: flex-start; }
 .overlay-box:empty { display: none; }
 
@@ -401,6 +410,56 @@ body.overlay-page {
   animation: cycling-fade-in 0.5s ease-out forwards;
 }
 
+/* === TOP-LEFT CYCLING (date, steps, distance) === */
+.top-left-cycling-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.top-left-cycling-slots {
+  display: grid;
+  grid-template: 1fr / 1fr;
+  place-items: start;
+  width: 100%;
+}
+
+.top-left-cycling-slots > * {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: fit-content;
+  min-height: 1.5em;
+}
+
+/* === TOP-RIGHT CYCLING (temp, condition, altitude, speed) === */
+.top-right-cycling-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.top-right-cycling-slots {
+  display: grid;
+  grid-template: 1fr / 1fr;
+  place-items: end;
+  width: 100%;
+}
+
+.top-right-cycling-slots > * {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: fit-content;
+  min-height: 1.5em;
+}
+
 @keyframes cycling-fade-out {
   from { opacity: 1; }
   to { opacity: 0; }
@@ -432,10 +491,11 @@ body.overlay-page {
   min-width: 280px;
   max-width: 480px;
   min-height: 64px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
   backdrop-filter: blur(8px);
 }
 

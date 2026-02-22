@@ -3,26 +3,25 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { MapZoomLevel } from '@/types/settings';
+import type { MapZoomLevel, LocationDisplayMode } from '@/types/settings';
 
 interface MapLibreMinimapProps {
   lat: number;
   lon: number;
   isVisible: boolean;
   zoomLevel: MapZoomLevel;
-  isNight?: boolean; // Pass day/night state from parent
+  /** When zoomLevel is 'match', use this to derive zoom (city/state/country). Custom/hidden → city. */
+  locationDisplay?: LocationDisplayMode;
+  isNight?: boolean;
 }
 
+const ZOOM_BY_PRECISION: Record<'city' | 'state' | 'country', number> = {
+  city: 11,
+  state: 8,
+  country: 5,
+};
 
 const MINIMAP_CONFIG = {
-  ZOOM_LEVELS: {
-    neighbourhood: 13,  // Neighbourhood - streets & buildings
-    city: 11,          // City - whole city view
-    state: 8,          // State - state/province view
-    country: 5,       // Country - country view
-    ocean: 3,          // Ocean - coastal view from sea
-    continental: 1     // Continental - trans-oceanic, see entire ocean
-  },
   MARKER_SIZE: 12,
   MARKER_COLOR: "#22c55e",
   MARKER_GLOW: "#22c55e80",
@@ -59,7 +58,14 @@ const MAP_STYLE_URLS = {
   dark: MAPTILER_STYLES.dark || FALLBACK_STYLES.dark,
 } as const;
 
-export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNight = false }: MapLibreMinimapProps) {
+function getEffectiveZoom(zoomLevel: MapZoomLevel, locationDisplay?: LocationDisplayMode): number {
+  if (zoomLevel === 'ocean') return 3;
+  if (zoomLevel === 'continental') return 1;
+  const precision = locationDisplay === 'state' ? 'state' : locationDisplay === 'country' ? 'country' : 'city';
+  return ZOOM_BY_PRECISION[precision];
+}
+
+export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, locationDisplay, isNight = false }: MapLibreMinimapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const marker = useRef<maplibregl.Marker | null>(null);
@@ -92,7 +98,7 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
         container: mapContainer.current,
         style: styleURL,
         center: [lon, lat],
-        zoom: MINIMAP_CONFIG.ZOOM_LEVELS[zoomLevel] || MINIMAP_CONFIG.ZOOM_LEVELS.city,
+        zoom: getEffectiveZoom(zoomLevel, locationDisplay),
         interactive: false, // Disable user interaction for overlay
         attributionControl: false,
         logoPosition: 'bottom-right'
@@ -253,12 +259,12 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
     };
   }, [lat, lon, mapLoaded]);
 
-  // Update zoom level when zoom level setting changes (with smooth animation)
+  // Update zoom level when zoom or location display changes
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
     try {
-      const newZoom = MINIMAP_CONFIG.ZOOM_LEVELS[zoomLevel] || MINIMAP_CONFIG.ZOOM_LEVELS.city;
+      const newZoom = getEffectiveZoom(zoomLevel, locationDisplay);
       map.current.easeTo({
         zoom: newZoom,
         duration: 800, // 0.8 second smooth zoom transition
@@ -267,7 +273,7 @@ export default function MapLibreMinimap({ lat, lon, isVisible, zoomLevel, isNigh
     } catch (error) {
       console.error('Failed to update map zoom:', error);
     }
-  }, [zoomLevel, mapLoaded]);
+  }, [zoomLevel, locationDisplay, mapLoaded]);
 
   // Update map style when isNight prop changes
   useEffect(() => {

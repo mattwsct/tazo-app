@@ -14,11 +14,8 @@ import {
   sendKickChatMessage,
 } from '@/lib/kick-api';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
-import type { StreamTitleLocationDisplay } from '@/utils/stream-title-utils';
-
 export interface StreamTitleSettings {
   customTitle: string;
-  locationDisplay: StreamTitleLocationDisplay;
   autoUpdateLocation: boolean;
   /** When false, stream title shows no location (overlay/chat still use location). */
   includeLocationInTitle?: boolean;
@@ -26,7 +23,6 @@ export interface StreamTitleSettings {
 
 export const DEFAULT_STREAM_TITLE_SETTINGS: StreamTitleSettings = {
   customTitle: '',
-  locationDisplay: 'state',
   autoUpdateLocation: true,
   includeLocationInTitle: true,
 };
@@ -42,16 +38,10 @@ export async function GET() {
 
   const accessToken = await getValidAccessToken();
   const stored = await kv.get<Record<string, unknown>>(KICK_STREAM_TITLE_SETTINGS_KEY);
-  const locDisplay = stored?.locationDisplay as string | undefined;
-  const migratedDisplay: StreamTitleLocationDisplay =
-    locDisplay === 'country' || locDisplay === 'country_only' ? 'country' :
-    locDisplay === 'state' || locDisplay === 'country_state' || locDisplay === 'state_country' ? 'state' :
-    locDisplay === 'city' || locDisplay === 'country_city' || locDisplay === 'city_state' ? 'city' :
-    DEFAULT_STREAM_TITLE_SETTINGS.locationDisplay;
   const settingsResponse: StreamTitleSettings = {
-    ...DEFAULT_STREAM_TITLE_SETTINGS,
-    ...(stored as Partial<StreamTitleSettings>),
-    locationDisplay: migratedDisplay,
+    customTitle: (stored?.customTitle as string) ?? DEFAULT_STREAM_TITLE_SETTINGS.customTitle,
+    autoUpdateLocation: (stored?.autoUpdateLocation as boolean | undefined) ?? DEFAULT_STREAM_TITLE_SETTINGS.autoUpdateLocation,
+    includeLocationInTitle: (stored?.includeLocationInTitle as boolean | undefined) ?? DEFAULT_STREAM_TITLE_SETTINGS.includeLocationInTitle,
   };
 
   if (!accessToken) {
@@ -109,11 +99,16 @@ export async function PATCH(request: NextRequest) {
   const streamTitle = typeof body.stream_title === 'string' ? body.stream_title : undefined;
   const settingsBody = body.settings as Partial<StreamTitleSettings> | undefined;
 
-  // Save settings to KV if provided
+  // Save settings to KV if provided (omit locationDisplay — uses overlay settings)
   if (settingsBody && typeof settingsBody === 'object') {
     const stored = await kv.get<Partial<StreamTitleSettings>>(KICK_STREAM_TITLE_SETTINGS_KEY);
-    const merged: StreamTitleSettings = { ...DEFAULT_STREAM_TITLE_SETTINGS, ...stored, ...settingsBody };
-    await kv.set(KICK_STREAM_TITLE_SETTINGS_KEY, merged);
+    const raw = { ...DEFAULT_STREAM_TITLE_SETTINGS, ...stored, ...settingsBody };
+    const toSave: StreamTitleSettings = {
+      customTitle: raw.customTitle ?? '',
+      autoUpdateLocation: raw.autoUpdateLocation ?? true,
+      includeLocationInTitle: raw.includeLocationInTitle ?? true,
+    };
+    await kv.set(KICK_STREAM_TITLE_SETTINGS_KEY, toSave);
   }
 
   if (streamTitle === undefined) {
