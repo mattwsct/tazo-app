@@ -255,6 +255,7 @@ export async function POST(request: NextRequest) {
     } catch { /* ignore */ }
   };
 
+  let chipRewardMessageSent = false;
   if (eventNorm === 'channel.reward.redemption.updated') {
     const reward = payload.reward as { title?: string; name?: string } | undefined;
     const rewardTitle = (reward?.title ?? reward?.name ?? '').trim();
@@ -288,6 +289,7 @@ export async function POST(request: NextRequest) {
             if (token) {
               try {
                 await sendKickChatMessage(token, `🃏 @${redeemer} redeemed channel points for chips! +${added} chips added.`);
+                chipRewardMessageSent = true;
               } catch (err) {
                 console.warn('[Kick webhook] Chip redemption chat message failed:', err instanceof Error ? err.message : String(err));
               }
@@ -401,7 +403,9 @@ export async function POST(request: NextRequest) {
   };
 
   let message: string | null;
-  if (eventNorm === 'channel.reward.redemption.updated') {
+  if (eventNorm === 'channel.reward.redemption.updated' && chipRewardMessageSent) {
+    message = null;
+  } else if (eventNorm === 'channel.reward.redemption.updated') {
     const redemptionId = String(payload.id ?? '');
     const seenKey = redemptionId ? `${KICK_REWARD_SEEN_PREFIX}${redemptionId}` : null;
     const alreadySeen = !!seenKey && (await kv.get(seenKey));
