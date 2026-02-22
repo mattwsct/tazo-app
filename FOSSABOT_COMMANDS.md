@@ -272,6 +272,16 @@ Returns a list of all available country codes and names for use with other trave
 
 ## Stats Commands
 
+### Uptime
+
+```
+!uptime → $(customapi https://app.tazo.wtf/api/chat/uptime)
+```
+
+Returns how long the stream has been live. Resets when you go live.
+
+Example output: `⏱️ 11h 32m` or `⏱️ 1d 5h 12m`
+
 ### Heart Rate
 
 ```
@@ -306,25 +316,27 @@ Example output: `Current: 150 m | Highest: 450 m (3h ago) | Lowest: 50 m (5h ago
 
 ## Wellness Commands (Health Auto Export)
 
-These commands use wellness data imported from Health Auto Export (steps, distance, flights, calories, weight). Steps, distance, and flights are "since stream start"; others use today's data.
+These commands use wellness data imported from Health Auto Export (steps, distance, flights, calories, height, weight). Steps, distance, flights, and active calories are "since stream start"; resting calories and body metrics use today's data.
 
 ```
 !steps → $(customapi https://app.tazo.wtf/api/chat/steps)
 !distance → $(customapi https://app.tazo.wtf/api/chat/distance)
 !flights → $(customapi https://app.tazo.wtf/api/chat/flights)
 !calories → $(customapi https://app.tazo.wtf/api/chat/calories)
+!height → $(customapi https://app.tazo.wtf/api/chat/height)
 !weight → $(customapi https://app.tazo.wtf/api/chat/weight)
 !wellness → $(customapi https://app.tazo.wtf/api/chat/wellness)
 ```
 
-**Aliases:** `!dist` for distance, `!cal` for calories, `!stairs` for flights, `!wt` for weight.
+**Aliases:** `!dist` for distance, `!cal` for calories, `!stairs` for flights, `!ht` for height, `!wt` for weight.
 
 Example outputs:
 - `👟 12,450 steps this stream`
 - `🚶 8.2 km (5.1 mi) walked/run this stream`
 - `🪜 25 flights climbed this stream`
 - `🔥 450 active, 1,200 resting cal today`
-- `⚖️ 75.2 kg (165.8 lbs)`
+- `📏 180 cm (5'11")`
+- `⚖️ 75.2 kg (165.8 lbs) · BMI 23.5 · Body fat 21.6%`
 - `📊 12,450 steps · 8.2 km (5.1 mi) · 25 flights · 450 active cal · 75.2 kg`
 
 ## Fun Commands

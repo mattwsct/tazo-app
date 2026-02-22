@@ -1,6 +1,6 @@
 /**
  * POST /api/reset-wellness-session
- * Resets only wellness session: steps, distance, flights accumulated,
+ * Resets only wellness session: steps, distance, flights, active calories accumulated,
  * last-import dedup state, and wellness milestones.
  * Does not reset leaderboard or stream_started_at.
  * Requires admin auth.
@@ -12,6 +12,7 @@ import {
   resetStepsSession,
   resetDistanceSession,
   resetFlightsSession,
+  resetActiveCaloriesSession,
   resetWellnessLastImport,
   resetWellnessMilestonesOnStreamStart,
 } from '@/utils/wellness-storage';
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
       resetStepsSession(wellness?.steps ?? 0),
       resetDistanceSession(wellness?.distanceKm ?? 0),
       resetFlightsSession(wellness?.flightsClimbed ?? 0),
+      resetActiveCaloriesSession(wellness?.activeCalories ?? 0),
       resetWellnessLastImport(),
       resetWellnessMilestonesOnStreamStart(),
     ]);

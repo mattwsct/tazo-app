@@ -1132,9 +1132,9 @@ export default function AdminPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        title="Reset steps, distance, flights for current stream — leaderboard unchanged"
+                        title="Reset steps, distance, flights, active calories for current stream — leaderboard unchanged"
                         onClick={async () => {
-                          if (!confirm('Reset stream session? Clears leaderboard, steps, distance, flights, stream goals, and wellness milestones. Use when auto-reset fails or for a clean start.')) return;
+                          if (!confirm('Reset stream session? Clears leaderboard, steps, distance, flights, active calories, stream goals, and wellness milestones. Use when auto-reset fails or for a clean start.')) return;
                           try {
                             const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
                             const data = await r.json();

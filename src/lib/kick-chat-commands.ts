@@ -2,13 +2,14 @@
  * Kick chat command handlers: !ping, !heartrate / !hr, wellness commands, blackjack
  */
 
-import { getHeartrateStats } from '@/utils/stats-storage';
+import { getHeartrateStats, getStreamStartedAt } from '@/utils/stats-storage';
 import { getUserPoints, getLeaderboardTop } from '@/utils/leaderboard-storage';
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
   getWellnessCaloriesResponse,
   getWellnessFlightsResponse,
+  getWellnessHeightResponse,
   getWellnessWeightResponse,
   getWellnessSummaryResponse,
   getWellnessHeartRateResponse,
@@ -19,6 +20,7 @@ import { getActiveGame, deal as blackjackDeal, hit as blackjackHit, stand as bla
 
 export const KICK_CHAT_COMMANDS = [
   'ping',
+  'uptime',
   'points',
   'leaderboard',
   'heartrate',
@@ -28,6 +30,7 @@ export const KICK_CHAT_COMMANDS = [
   'stand',
   'calories',
   'flights',
+  'height',
   'weight',
   'wellness',
   'uv',
@@ -52,6 +55,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   const cmd = parts[0]?.toLowerCase();
   const arg = parts[1];
   if (cmd === 'ping') return { cmd: 'ping' };
+  if (cmd === 'uptime') return { cmd: 'uptime' };
   if (cmd === 'points' || cmd === 'pts') return { cmd: 'points' };
   if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard' };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
@@ -60,6 +64,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'stand') return { cmd: 'stand' };
   if (cmd === 'calories' || cmd === 'cal') return { cmd: 'calories' };
   if (cmd === 'flights' || cmd === 'stairs') return { cmd: 'flights' };
+  if (cmd === 'height' || cmd === 'ht') return { cmd: 'height' };
   if (cmd === 'weight' || cmd === 'wt') return { cmd: 'weight' };
   if (cmd === 'wellness') return { cmd: 'wellness' };
   if (cmd === 'uv') return { cmd: 'uv' };
@@ -82,6 +87,20 @@ export async function handleKickChatCommand(
   const user = senderUsername?.trim() ?? '';
 
   if (cmd === 'ping') return '🏓 Pong!';
+  if (cmd === 'uptime') {
+    const startedAt = await getStreamStartedAt();
+    if (!startedAt) return '⏱️ No stream session. Uptime resets when you go live.';
+    const ms = Date.now() - startedAt;
+    const sec = Math.floor(ms / 1000);
+    const m = Math.floor(sec / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    const parts: string[] = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h % 24 > 0) parts.push(`${h % 24}h`);
+    parts.push(`${m % 60}m`);
+    return `⏱️ ${parts.join(' ')}`;
+  }
   if (cmd === 'points') {
     if (!user) return null;
     const pts = await getUserPoints(user);
@@ -118,6 +137,7 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'calories') return getWellnessCaloriesResponse();
   if (cmd === 'flights') return getWellnessFlightsResponse();
+  if (cmd === 'height') return getWellnessHeightResponse();
   if (cmd === 'weight') return getWellnessWeightResponse();
   if (cmd === 'wellness') return getWellnessSummaryResponse();
   if (cmd === 'uv') {

@@ -255,8 +255,8 @@ Settings changes propagate to overlay in real-time via:
   - `/api/settings-stream` - GET only (SSE), read-only
   - `/api/location` - GET/POST, persistent location (overlay reads and updates)
   - `/api/location/browser` - POST only, admin sets location from browser geolocation (requires auth)
-  - `/api/wellness` - GET only, wellness data (steps, calories, distance, flights) for overlay, plus stepsSinceStreamStart, distanceSinceStreamStart, flightsSinceStreamStart
-  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header). Chat broadcast milestones (steps, distance, flights, active calories) when enabled in admin. **Apple Health units**: Energy (kJ or kcal), distance (m/km/mi). Import parses `units` per metric. **Deduplication**: Rapid or duplicate pushes (e.g. same step count twice within 60s) are skipped to avoid double-counting. A lower value shortly after a higher one is treated as out-of-order and skipped. **Note**: iOS typically updates health data infrequently (15–30+ min via background refresh); overlay polls wellness every 60s.
+  - `/api/wellness` - GET only, wellness data for overlay, plus stepsSinceStreamStart, distanceSinceStreamStart, flightsSinceStreamStart, activeCaloriesSinceStreamStart
+  - `/api/wellness/import` - POST only, Health Auto Export sends data (X-Wellness-Secret header). Chat broadcast milestones (steps, distance, flights, active calories) when enabled in admin. **Apple Health units**: Energy (kJ or kcal), distance (m/km/mi). Import parses `units` per metric. **Calories**: Active calories are **since stream start** (same as steps/distance/flights). Resting calories remain today's total. Metric names: `active_energy`, `activeEnergyBurned`, or `active_energy_burned`. Low active cal (e.g. 14 in a long stream) can occur because: (1) iOS syncs Health data infrequently (15–30+ min); (2) Apple Watch may not have synced to iPhone yet; (3) very sedentary activity burns little active energy. **Deduplication**: Rapid or duplicate pushes (e.g. same step count twice within 60s) are skipped to avoid double-counting. **Note**: Overlay polls wellness every 60s.
   - `/api/stats/update` - POST only, overlay sends speed/altitude/heart rate for chat commands
 - **Authenticated only (admin panel)**
   - `/api/save-settings` - POST only
@@ -731,7 +731,7 @@ Edit templates in the admin panel **Message templates** section. Use the toggles
 
 ### Chat commands
 
-Type `!ping` in Kick chat and the bot replies with Pong! (use to verify webhooks). **`!title`** (broadcaster and mods only): set stream title with optional location. Example: `!title Walking around Austin` — updates the title and appends location (city/state/country) if "Include location in stream title" is on. `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. **Wellness commands** (from Health Auto Export): `!steps`, `!distance`, `!flights` (since stream start), `!calories`, `!weight`, `!wellness` (summary). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
+Type `!ping` in Kick chat and the bot replies with Pong! `!uptime` shows how long the stream has been live. (use to verify webhooks). **`!title`** (broadcaster and mods only): set stream title with optional location. Example: `!title Walking around Austin` — updates the title and appends location (city/state/country) if "Include location in stream title" is on. `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. **Wellness commands** (from Health Auto Export): `!steps`, `!distance`, `!flights` (since stream start), `!calories`, `!height`, `!weight` (scale/body comp), `!wellness` (summary). Stream-session stats: `!heartrate`, `!speed`, `!altitude` (no unified !stats). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
 
 **Leaderboard commands**: `!points` or `!pts` returns your points for the current stream. `!leaderboard` or `!lb` or `!top` returns the top 5 users. Points reset when the stream starts. **Point weights**: chat 1 (every message), first chatter 25, poll vote 2, create poll 10, follow 5, new sub 15, resub 10, gift sub 12 each, kicks 10 pts per 100 kicks ($1).
 
@@ -821,9 +821,10 @@ The overlay app also provides chat command APIs for Fossabot integration. All co
 ### Available Commands
 
 - **Social Media**: `/api/chat/instagram`, `/api/chat/twitter`, `/api/chat/kick`, etc.
+- **Stream**: `/api/chat/uptime`
 - **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
 - **Weather**: `/api/chat/forecast`, `/api/chat/sun`, `/api/chat/uv`, `/api/chat/aqi`
-- **Wellness** (Health Auto Export): `/api/chat/steps`, `/api/chat/distance`, `/api/chat/flights`, `/api/chat/calories`, `/api/chat/weight`, `/api/chat/wellness`
+- **Wellness** (Health Auto Export): `/api/chat/steps`, `/api/chat/distance`, `/api/chat/flights`, `/api/chat/calories`, `/api/chat/height`, `/api/chat/weight`, `/api/chat/wellness`
 - **Heart rate**: `/api/chat/heartrate` — Pulsoid live when connected, falls back to Apple Health (Health Auto Export) when not
 - **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/tips`, `/api/chat/emergency`, `/api/chat/flirt`, `/api/chat/sex`, `/api/chat/insults` (optionally specify country code: `?q=JP`, `?q=AU`, etc.)
 - **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`

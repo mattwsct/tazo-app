@@ -21,6 +21,7 @@ import {
   getStepsSinceStreamStart,
   getDistanceSinceStreamStart,
   getFlightsSinceStreamStart,
+  getActiveCaloriesSinceStreamStart,
   getWellnessMilestonesLastSent,
   setWellnessMilestoneLastSent,
 } from '@/utils/wellness-storage';
@@ -298,11 +299,11 @@ export async function GET(request: NextRequest) {
     storedAlert?.chatBroadcastWellnessFlights ||
     storedAlert?.chatBroadcastWellnessActiveCalories;
   if (hasWellnessToggles && speedAltitudeLive) {
-    const [wellness, stepsSince, distanceSince, flightsSince, milestonesLast] = await Promise.all([
-      getWellnessData(),
+    const [stepsSince, distanceSince, flightsSince, activeCalSince, milestonesLast] = await Promise.all([
       getStepsSinceStreamStart(),
       getDistanceSinceStreamStart(),
       getFlightsSinceStreamStart(),
+      getActiveCaloriesSinceStreamStart(),
       getWellnessMilestonesLastSent(),
     ]);
 
@@ -364,7 +365,7 @@ export async function GET(request: NextRequest) {
     );
     await checkAndSend(
       storedAlert?.chatBroadcastWellnessActiveCalories === true,
-      wellness?.activeCalories ?? 0,
+      activeCalSince,
       WELLNESS_MILESTONES.activeCalories,
       milestonesLast.activeCalories,
       'activeCalories',

@@ -6,6 +6,7 @@ import {
   resetStepsSession,
   resetDistanceSession,
   resetFlightsSession,
+  resetActiveCaloriesSession,
   resetWellnessLastImport,
   resetWellnessMilestonesOnStreamStart,
 } from '@/utils/wellness-storage';
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/reset-stream-session
- * Manually resets stream session: leaderboard, steps, distance, flights,
+ * Manually resets stream session: leaderboard, steps, distance, flights, active calories,
  * wellness milestones, and stream_started_at. For use when auto-reset on stream start fails.
  * Requires admin auth.
  */
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       resetStepsSession(wellness?.steps ?? 0),
       resetDistanceSession(wellness?.distanceKm ?? 0),
       resetFlightsSession(wellness?.flightsClimbed ?? 0),
+      resetActiveCaloriesSession(wellness?.activeCalories ?? 0),
       resetWellnessLastImport(),
       resetWellnessMilestonesOnStreamStart(),
       resetStreamGoalsOnStreamStart(),

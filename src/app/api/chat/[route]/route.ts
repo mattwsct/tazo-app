@@ -194,6 +194,23 @@ export async function GET(
     return txtResponse(result, 200);
   }
 
+  // Uptime (stream session)
+  if (route === 'uptime') {
+    const { getStreamStartedAt } = await import('@/utils/stats-storage');
+    const startedAt = await getStreamStartedAt();
+    if (!startedAt) return txtResponse('⏱️ No stream session. Uptime resets when you go live.');
+    const ms = Date.now() - startedAt;
+    const sec = Math.floor(ms / 1000);
+    const m = Math.floor(sec / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    const parts: string[] = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h % 24 > 0) parts.push(`${h % 24}h`);
+    parts.push(`${m % 60}m`);
+    return txtResponse(`⏱️ ${parts.join(' ')}`);
+  }
+
   // Stats routes (no RTIRL required - use KV storage)
   if (route === 'heartrate' || route === 'hr') {
     const { getHeartrateStats } = await import('@/utils/stats-storage');
@@ -274,6 +291,7 @@ export async function GET(
     getWellnessDistanceResponse,
     getWellnessCaloriesResponse,
     getWellnessFlightsResponse,
+    getWellnessHeightResponse,
     getWellnessWeightResponse,
     getWellnessSummaryResponse,
   } = await import('@/utils/wellness-chat');
@@ -282,6 +300,7 @@ export async function GET(
   if (route === 'distance' || route === 'dist') return txtResponse(await getWellnessDistanceResponse());
   if (route === 'calories' || route === 'cal') return txtResponse(await getWellnessCaloriesResponse());
   if (route === 'flights' || route === 'stairs') return txtResponse(await getWellnessFlightsResponse());
+  if (route === 'height' || route === 'ht') return txtResponse(await getWellnessHeightResponse());
   if (route === 'weight' || route === 'wt') return txtResponse(await getWellnessWeightResponse());
   if (route === 'wellness') return txtResponse(await getWellnessSummaryResponse());
 

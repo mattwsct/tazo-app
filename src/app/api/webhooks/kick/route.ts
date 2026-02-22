@@ -25,7 +25,7 @@ import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPo
 import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled } from '@/utils/blackjack-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
-import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
+import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
         await resetStepsSession(wellness?.steps ?? 0);
         await resetDistanceSession(wellness?.distanceKm ?? 0);
         await resetFlightsSession(wellness?.flightsClimbed ?? 0);
+        await resetActiveCaloriesSession(wellness?.activeCalories ?? 0);
         await resetWellnessLastImport();
         await resetWellnessMilestonesOnStreamStart();
         await resetStreamGoalsOnStreamStart();

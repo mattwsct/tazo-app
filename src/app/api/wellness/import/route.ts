@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession } from '@/utils/wellness-storage';
+import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession, updateActiveCaloriesSession } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 
 export const dynamic = 'force-dynamic';
@@ -95,8 +95,8 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
     if (total >= 0) updates.steps = total;
   }
 
-  // active_energy: HKQuantityTypeIdentifier.activeEnergyBurned — kJ or kcal (user pref)
-  const activeEnergy = byName.get('active_energy');
+  // active_energy / activeEnergyBurned: HKQuantityTypeIdentifier.activeEnergyBurned — kJ or kcal (user pref)
+  const activeEnergy = byName.get('active_energy') ?? byName.get('activeEnergyBurned') ?? byName.get('active_energy_burned');
   if (activeEnergy) {
     const raw = sumQty(activeEnergy);
     updates.activeCalories = Math.max(0, Math.round(energyToKcal(raw, activeEnergy.units)));
@@ -253,6 +253,9 @@ export async function POST(request: NextRequest) {
     }
     if (updates.flightsClimbed !== undefined) {
       await updateFlightsSession(updates.flightsClimbed);
+    }
+    if (updates.activeCalories !== undefined) {
+      await updateActiveCaloriesSession(updates.activeCalories);
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

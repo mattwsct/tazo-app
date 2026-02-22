@@ -12,6 +12,7 @@ const WELLNESS_KEY = 'wellness_data';
 const WELLNESS_STEPS_SESSION_KEY = 'wellness_steps_session';
 const WELLNESS_DISTANCE_SESSION_KEY = 'wellness_distance_session';
 const WELLNESS_FLIGHTS_SESSION_KEY = 'wellness_flights_session';
+const WELLNESS_ACTIVE_CALORIES_SESSION_KEY = 'wellness_active_calories_session';
 const WELLNESS_LAST_IMPORT_KEY = 'wellness_last_import';
 
 /** Tracks last imported value+time per metric to deduplicate rapid/duplicate pushes. */
@@ -19,6 +20,7 @@ interface WellnessLastImport {
   steps?: { value: number; at: number };
   distanceKm?: { value: number; at: number };
   flightsClimbed?: { value: number; at: number };
+  activeCalories?: { value: number; at: number };
 }
 
 const DEDUP_SAME_VALUE_MS = 60_000;   // Same value within 60s → treat as duplicate
@@ -94,6 +96,14 @@ export interface FlightsSession {
   lastKnown: number;
 }
 
+export interface ActiveCaloriesSession {
+  accumulated: number;  // active cal since stream start (survives midnight)
+  lastKnown: number;
+}
+
+/** Per-metric timestamps (ms) — when each field was last updated. Falls back to updatedAt if missing. */
+export type WellnessMetricKey = 'steps' | 'distanceKm' | 'flightsClimbed' | 'activeCalories' | 'restingCalories' | 'totalCalories' | 'heightCm' | 'weightKg' | 'bodyMassIndex' | 'bodyFatPercent' | 'leanBodyMassKg' | 'heartRate' | 'restingHeartRate';
+
 export interface WellnessData {
   steps?: number;
   activeCalories?: number;
@@ -103,12 +113,14 @@ export interface WellnessData {
   flightsClimbed?: number;
   heightCm?: number;         // Height in cm (from Health Auto Export / manual)
   weightKg?: number;         // Body mass in kg (from Health Auto Export / smart scale)
-  bodyMassIndex?: number;    // BMI (from Health Auto Export / smart scale)
-  bodyFatPercent?: number;   // Body fat % (0–100, from smart scale)
+  bodyMassIndex?: number;   // BMI (from Health Auto Export / smart scale)
+  bodyFatPercent?: number;  // Body fat % (0–100, from smart scale)
   leanBodyMassKg?: number;   // Lean body mass in kg (from smart scale)
   heartRate?: number;        // From Apple Health (resting etc) — live BPM stays in stats from Pulsoid
   restingHeartRate?: number;
   updatedAt: number;
+  /** When each metric was last updated (ms). Key = metric name. Falls back to updatedAt. */
+  metricUpdatedAt?: Partial<Record<WellnessMetricKey, number>>;
 }
 
 export async function getWellnessData(): Promise<WellnessData | null> {
@@ -120,20 +132,45 @@ export async function getWellnessData(): Promise<WellnessData | null> {
   }
 }
 
+const WELLNESS_DATA_KEYS: readonly WellnessMetricKey[] = [
+  'steps', 'distanceKm', 'flightsClimbed', 'activeCalories', 'restingCalories', 'totalCalories',
+  'heightCm', 'weightKg', 'bodyMassIndex', 'bodyFatPercent', 'leanBodyMassKg', 'heartRate', 'restingHeartRate',
+];
+
 export async function updateWellnessData(updates: Partial<WellnessData>): Promise<void> {
   try {
     const existing = await kv.get<WellnessData>(WELLNESS_KEY);
     const now = Date.now();
+    const metricUpdatedAt = { ...(existing?.metricUpdatedAt ?? {}) };
+    for (const key of WELLNESS_DATA_KEYS) {
+      if (key in updates && updates[key as keyof WellnessData] !== undefined) {
+        metricUpdatedAt[key] = now;
+      }
+    }
     const merged: WellnessData = {
       ...(existing || {}),
       ...updates,
       updatedAt: now,
+      metricUpdatedAt,
     };
     await kv.set(WELLNESS_KEY, merged);
   } catch (error) {
     console.error('Failed to update wellness data:', error);
     throw error;
   }
+}
+
+/** Get the timestamp when a metric (or group) was last updated. Uses metricUpdatedAt, falls back to updatedAt. */
+export function getMetricUpdatedAt(wellness: WellnessData | null | undefined, metric: WellnessMetricKey | WellnessMetricKey[]): number {
+  if (!wellness) return 0;
+  const fallback = wellness.updatedAt ?? 0;
+  const map = wellness.metricUpdatedAt;
+  if (!map) return fallback;
+  if (Array.isArray(metric)) {
+    const timestamps = metric.map(m => map[m]).filter((t): t is number => typeof t === 'number' && t > 0);
+    return timestamps.length > 0 ? Math.max(...timestamps) : fallback;
+  }
+  return map[metric] ?? fallback;
 }
 
 // === Steps since stream start (handles daily midnight reset) ===
@@ -326,6 +363,63 @@ export async function updateFlightsSession(newFlights: number): Promise<void> {
     await setLastImportMetric('flightsClimbed', count);
   } catch (error) {
     console.error('Failed to update flights session:', error);
+    throw error;
+  }
+}
+
+// === Active calories since stream start (handles daily midnight reset) ===
+
+export async function getActiveCaloriesSession(): Promise<ActiveCaloriesSession | null> {
+  try {
+    const data = await kv.get<ActiveCaloriesSession>(WELLNESS_ACTIVE_CALORIES_SESSION_KEY);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function getActiveCaloriesSinceStreamStart(): Promise<number> {
+  const session = await getActiveCaloriesSession();
+  return session?.accumulated ?? 0;
+}
+
+/** Call when stream goes live. Resets accumulator; uses current active cal as new baseline. */
+export async function resetActiveCaloriesSession(currentActiveCal: number): Promise<void> {
+  try {
+    const session: ActiveCaloriesSession = {
+      accumulated: 0,
+      lastKnown: Math.max(0, Math.round(currentActiveCal)),
+    };
+    await kv.set(WELLNESS_ACTIVE_CALORIES_SESSION_KEY, session);
+  } catch (error) {
+    console.error('Failed to reset active calories session:', error);
+    throw error;
+  }
+}
+
+/** Call on each wellness import when activeCalories are present. Accumulates delta; treats drop as daily reset. */
+export async function updateActiveCaloriesSession(newActiveCal: number): Promise<void> {
+  try {
+    const cal = Math.max(0, Math.round(newActiveCal));
+    const now = Date.now();
+    const lastImportState = await getLastImport();
+    const existing = await getActiveCaloriesSession();
+    const lastKnown = existing?.lastKnown ?? 0;
+    const accumulated = existing?.accumulated ?? 0;
+
+    if (shouldSkipSessionUpdate(lastImportState.activeCalories, cal, lastKnown, now)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Wellness] Skipping active calories session update (duplicate/stale):', cal);
+      }
+      return;
+    }
+
+    const delta = cal >= lastKnown ? cal - lastKnown : cal;
+    const session: ActiveCaloriesSession = { accumulated: accumulated + delta, lastKnown: cal };
+    await kv.set(WELLNESS_ACTIVE_CALORIES_SESSION_KEY, session);
+    await setLastImportMetric('activeCalories', cal);
+  } catch (error) {
+    console.error('Failed to update active calories session:', error);
     throw error;
   }
 }
