@@ -1865,6 +1865,33 @@ export default function AdminPage() {
                   </select>
                 </div>
               )}
+              {settings.gamblingEnabled !== false && (
+                <>
+                  <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
+                    <label>Channel point reward name (redeem for chips)</label>
+                    <input
+                      type="text"
+                      className="text-input admin-select-big"
+                      value={settings.chipRewardTitle ?? 'Buy Chips'}
+                      onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value })}
+                      placeholder="Buy Chips"
+                    />
+                    <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
+                      Create a Kick reward with this exact name. Redemptions auto-grant chips. Leave empty to disable.
+                    </p>
+                  </div>
+                  <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                    <label>Chips per redemption</label>
+                    <input
+                      type="number"
+                      className="text-input admin-select-big"
+                      value={settings.chipRewardChips ?? 50}
+                      onChange={(e) => handleSettingsChange({ chipRewardChips: Math.max(1, parseInt(e.target.value, 10) || 50) })}
+                      min={1}
+                    />
+                  </div>
+                </>
+              )}
               <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
                 <label className="checkbox-label">
                   <input

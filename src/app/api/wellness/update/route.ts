@@ -89,7 +89,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
     }
 
-    await updateWellnessData(updates);
+    await updateWellnessData(updates, { fromManualEntry: true });
     // Only session metrics need session updates; weight/BMI are stored directly
     if (updates.steps !== undefined) await updateStepsSession(updates.steps as number);
     if (updates.distanceKm !== undefined) await updateDistanceSession(updates.distanceKm as number);

@@ -149,6 +149,17 @@ async function addChips(user: string, amount: number): Promise<void> {
   ]);
 }
 
+/** Add chips for channel point reward redemption. Returns chips added, or 0 if skipped (gambling off, excluded, or invalid). */
+export async function addChipsForReward(username: string, amount: number): Promise<number> {
+  const user = normalizeUser(username);
+  if (!(await isGamblingEnabled())) return 0;
+  const excluded = await getLeaderboardExclusions();
+  if (excluded.has(user)) return 0;
+  if (amount < 1) return 0;
+  await addChips(user, amount);
+  return amount;
+}
+
 /** Award chips for watch time (chat as heartbeat). 10 chips per 10 min, max 10 per chat (no backpay). */
 export async function addViewTimeChips(username: string): Promise<number> {
   const user = normalizeUser(username);

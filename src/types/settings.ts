@@ -38,6 +38,10 @@ export interface OverlaySettings {
   showGamblingLeaderboard?: boolean;
   /** Top N for gambling leaderboard. */
   gamblingLeaderboardTopN?: number;
+  /** Channel point reward title to redeem for chips (exact match, case-insensitive). Empty = disabled. */
+  chipRewardTitle?: string;
+  /** Chips granted per channel point redemption (when chipRewardTitle matches). */
+  chipRewardChips?: number;
   /** Runtime: top chips (from get-settings). */
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
@@ -82,6 +86,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   gamblingEnabled: true,
   showGamblingLeaderboard: false,
   gamblingLeaderboardTopN: 5,
+  chipRewardTitle: 'Buy Chips',
+  chipRewardChips: 50,
   showOverlayAlerts: true,
   showSubGoal: false,
   subGoalTarget: 10, // ~$50 at typical sub price
@@ -111,6 +117,8 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   gamblingEnabled: 'boolean',
   showGamblingLeaderboard: 'boolean',
   gamblingLeaderboardTopN: 'number',
+  chipRewardTitle: 'string',
+  chipRewardChips: 'number',
   showOverlayAlerts: 'boolean',
   showSubGoal: 'boolean',
   subGoalTarget: 'number',

@@ -22,7 +22,7 @@ import {
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
 import { resetLeaderboardOnStreamStart, addChatPoints, addFollowPoints, addSubPoints, addGiftSubPoints, addKicksPoints } from '@/utils/leaderboard-storage';
-import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled } from '@/utils/blackjack-storage';
+import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsForReward } from '@/utils/blackjack-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
@@ -240,12 +240,13 @@ export async function POST(request: NextRequest) {
 
   if (eventNorm === 'channel.reward.redemption.updated') {
     const reward = payload.reward as { title?: string; name?: string } | undefined;
+    const rewardTitle = (reward?.title ?? reward?.name ?? '').trim();
     const rewardLog = {
       at: new Date().toISOString(),
       id: payload.id,
       status: String(payload.status ?? '').toLowerCase(),
       redeemer: (payload.redeemer as { username?: string })?.username,
-      rewardTitle: reward?.title ?? reward?.name ?? '?',
+      rewardTitle: rewardTitle || '?',
       userInput: (payload.user_input as string)?.slice(0, 100) ?? null,
     };
     try {
@@ -253,6 +254,19 @@ export async function POST(request: NextRequest) {
       await kv.ltrim(KICK_REWARD_PAYLOAD_LOG_KEY, 0, REWARD_PAYLOAD_LOG_MAX - 1);
     } catch {
       /* ignore */
+    }
+    // Channel point → chips: when approved and reward title matches, grant chips
+    const status = String(payload.status ?? '').toLowerCase();
+    if (status === 'approved') {
+      const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardChips?: number }>('overlay_settings')) ?? {};
+      const configuredTitle = (settings.chipRewardTitle ?? 'Buy Chips').trim();
+      const chips = Math.max(1, Math.floor(Number(settings.chipRewardChips ?? 50)));
+      if (configuredTitle && rewardTitle.toLowerCase() === configuredTitle.toLowerCase()) {
+        const redeemer = (payload.redeemer as { username?: string })?.username;
+        if (redeemer) {
+          await addChipsForReward(redeemer, chips);
+        }
+      }
     }
   }
 

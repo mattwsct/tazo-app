@@ -137,14 +137,27 @@ const WELLNESS_DATA_KEYS: readonly WellnessMetricKey[] = [
   'heightCm', 'weightKg', 'bodyMassIndex', 'bodyFatPercent', 'leanBodyMassKg', 'heartRate', 'restingHeartRate',
 ];
 
-export async function updateWellnessData(updates: Partial<WellnessData>): Promise<void> {
+export interface UpdateWellnessOptions {
+  /** When true, do not set metric timestamps (manual admin entry — no "(X ago)" shown) */
+  fromManualEntry?: boolean;
+}
+
+export async function updateWellnessData(updates: Partial<WellnessData>, options?: UpdateWellnessOptions): Promise<void> {
   try {
     const existing = await kv.get<WellnessData>(WELLNESS_KEY);
     const now = Date.now();
     const metricUpdatedAt = { ...(existing?.metricUpdatedAt ?? {}) };
+    const fromManualEntry = options?.fromManualEntry === true;
     for (const key of WELLNESS_DATA_KEYS) {
-      if (key in updates && updates[key as keyof WellnessData] !== undefined) {
-        metricUpdatedAt[key] = now;
+      const newVal = updates[key as keyof WellnessData];
+      if (newVal === undefined) continue;
+      if (fromManualEntry) {
+        metricUpdatedAt[key] = 0;  // 0 = no timestamp, don't show "(X ago)" for manual entry
+      } else {
+        const existingVal = existing?.[key as keyof WellnessData];
+        if (newVal !== existingVal) {
+          metricUpdatedAt[key] = now;
+        }
       }
     }
     const merged: WellnessData = {
