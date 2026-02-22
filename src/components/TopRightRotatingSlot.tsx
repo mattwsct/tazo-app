@@ -18,6 +18,8 @@ interface TopRightRotatingSlotProps {
   altitudeDisplay: { formatted: string } | null;
   speedDisplay: { formatted: string } | null;
   showWeather: boolean;
+  showAltitude?: boolean;
+  showSpeed?: boolean;
 }
 
 export default function TopRightRotatingSlot({
@@ -25,15 +27,17 @@ export default function TopRightRotatingSlot({
   altitudeDisplay,
   speedDisplay,
   showWeather,
+  showAltitude = true,
+  showSpeed = true,
 }: TopRightRotatingSlotProps) {
   const slides = useMemo<SlotType[]>(() => {
     const s: SlotType[] = [];
     if (showWeather && weatherDisplay) s.push('temp');
     if (showWeather && weatherDisplay && (weatherDisplay.icon || weatherDisplay.description)) s.push('condition');
-    if (altitudeDisplay) s.push('altitude');
-    if (speedDisplay) s.push('speed');
+    if (showAltitude && altitudeDisplay) s.push('altitude');
+    if (showSpeed && speedDisplay) s.push('speed');
     return s;
-  }, [showWeather, weatherDisplay, altitudeDisplay, speedDisplay]);
+  }, [showWeather, weatherDisplay, showAltitude, altitudeDisplay, showSpeed, speedDisplay]);
 
   const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
 

@@ -1404,65 +1404,21 @@ function OverlayPage() {
     return isNight ? '🌙' : '☀️';
   }, []);
 
-  // Check if weather condition is notable (affects IRL streaming)
-  const isNotableWeatherCondition = useCallback((desc: string): boolean => {
-    const d = desc.toLowerCase();
-    
-    // Notable conditions that affect IRL streaming
-    return (
-      d.includes('rain') ||
-      d.includes('drizzle') ||
-      d.includes('storm') ||
-      d.includes('thunder') ||
-      d.includes('snow') ||
-      d.includes('sleet') ||
-      d.includes('hail') ||
-      d.includes('fog') ||
-      d.includes('mist') ||
-      d.includes('haze') ||
-      d.includes('wind') ||
-      d.includes('gale') ||
-      d.includes('hurricane') ||
-      d.includes('typhoon') ||
-      d.includes('tornado') ||
-      d.includes('blizzard') ||
-      d.includes('freezing') ||
-      d.includes('extreme')
-    );
-  }, []);
-
   const weatherDisplay = useMemo(() => {
     if (!weather) {
     // No weather data - return null (no logging to reduce console spam)
     return null;
     }
     
-    // Determine if icon and description should be shown based on display mode
-    let showIcon = false;
-    let showDescription = false;
-    
-    if (settings.weatherConditionDisplay === 'always') {
-      // Always show icon and description
-      showIcon = true;
-      showDescription = true;
-    } else if (settings.weatherConditionDisplay === 'auto') {
-      // Only show for notable conditions
-      const isNotable = isNotableWeatherCondition(weather.desc);
-      showIcon = isNotable;
-      showDescription = isNotable;
-    }
-    // 'hidden' mode: showIcon and showDescription remain false
-    
-    const icon = showIcon ? getWeatherIcon(weather.desc, settings.weatherConditionDisplay === 'always', isNightTime) : null;
-    const description = showDescription ? weather.desc : null;
+    const icon = getWeatherIcon(weather.desc, true, isNightTime);
     
     const display = {
       temperature: `${weather.temp}°C (${celsiusToFahrenheit(weather.temp)}°F)`,
-      icon: icon,
-      description: description
+      icon,
+      description: weather.desc
     };
     return display;
-  }, [weather, settings.weatherConditionDisplay, getWeatherIcon, isNotableWeatherCondition, isNightTime]);
+  }, [weather, getWeatherIcon, isNightTime]);
 
   // Animated speed value - counts through each integer (50, 51, 52...) - faster for responsiveness
   const displayedSpeed = useAnimatedValue(currentSpeed, {
@@ -1580,6 +1536,8 @@ function OverlayPage() {
                 altitudeDisplay={altitudeDisplay}
                 speedDisplay={speedDisplay}
                 showWeather={settings.showWeather}
+                showAltitude={settings.showAltitude}
+                showSpeed={settings.showSpeed}
               />
             </ErrorBoundary>
           </div>

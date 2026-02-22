@@ -24,8 +24,9 @@ const GAMBLE_INSTANT_LAST_AT_KEY = 'gamble_instant_last_at';
 const STARTING_CHIPS = 100;
 const REBUY_CHIPS = 50;
 const REBUYS_PER_STREAM = 1;
-const MIN_BET = 5;
-const MAX_BET = 50;
+const MIN_BET = 1;
+const DUEL_KEY_PREFIX = 'gamble_duel:';
+const DUEL_EXPIRE_SEC = 60;
 
 function parseKvInt(value: number | string | null | undefined, fallback = 0): number {
   if (value == null) return fallback;
@@ -292,10 +293,8 @@ export async function getActiveGame(username: string): Promise<BlackjackGame | n
 /** Start a new hand. Returns message string. */
 export async function deal(username: string, betAmount: number): Promise<string> {
   const user = normalizeUser(username);
-  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
-  if (bet < MIN_BET) return `🃏 Min bet is ${MIN_BET} chip${MIN_BET > 1 ? 's' : ''}. !deal <amount>`;
-
-  const overMaxNote = betAmount > MAX_BET ? `Max bet ${MAX_BET} chips — playing for ${bet}. ` : '';
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
+  if (bet < MIN_BET) return `🃏 Min bet is ${MIN_BET}. !deal <amount>`;
 
   const now = Date.now();
   const lastAt = parseKvInt(await kv.hget<number | string>(DEAL_COOLDOWN_KEY, user));
@@ -332,14 +331,14 @@ export async function deal(username: string, betAmount: number): Promise<string>
         addChips(user, bet),
         kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) }),
       ]);
-      return `🃏 ${overMaxNote}Push! Both have 21. ${bet} chips returned.`;
+      return `🃏 Push! Both have 21. ${bet} chips returned.`;
     }
     const win = Math.floor(bet * 1.5);
     await Promise.all([
       addChips(user, bet + win),
       kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) }),
     ]);
-    return `🃏 ${overMaxNote}Blackjack! You win ${win} chips! (bet returned + ${win} profit)`;
+    return `🃏 Blackjack! You win ${win} chips!`;
   }
 
   const game: BlackjackGame = {
@@ -357,7 +356,7 @@ export async function deal(username: string, betAmount: number): Promise<string>
 
   const dealerVis = cardDisplay(d1) + ' ?';
   const extras = isPair(playerHand) ? ' | !double (2 cards) | !split (pair)' : ' | !double (2 cards)';
-  return `🃏 ${overMaxNote}Your hand: ${playerHand.map(cardDisplay).join(' ')} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
+  return `🃏 Your hand: ${playerHand.map(cardDisplay).join(' ')} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
 }
 
 /** Double - double bet, take one card, stand. Only when 2 cards and not split. */
@@ -533,11 +532,11 @@ async function setInstantCooldown(user: string): Promise<void> {
   await kv.hset(GAMBLE_INSTANT_LAST_AT_KEY, { [user]: String(Date.now()) });
 }
 
-/** Coinflip: 50/50, 2x on win. !coinflip <amount> or !flip <amount> */
+/** Coinflip: 50/50, 2x on win. */
 export async function playCoinflip(username: string, betAmount: number): Promise<string> {
   const user = normalizeUser(username);
-  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
-  if (bet < MIN_BET) return `🎲 Min bet ${MIN_BET}. !coinflip <amount> or !flip <amount>`;
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
+  if (bet < MIN_BET) return `🎲 Min bet ${MIN_BET}. !coinflip <amount>`;
 
   const wait = await checkInstantCooldown(user);
   if (wait !== null) return `🎲 Wait ${wait}s before another game.`;
@@ -564,11 +563,11 @@ const SLOT_MULTIPLIERS: Record<(typeof SLOT_SYMBOLS)[number], number> = {
   '💎': 25,
 };
 
-/** Slots: 3 reels, match 3 = big win, match 2 = push. !slots <amount> or !spin <amount> */
+/** Slots: 3 reels, match 3 = big win, match 2 = push. */
 export async function playSlots(username: string, betAmount: number): Promise<string> {
   const user = normalizeUser(username);
-  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
-  if (bet < MIN_BET) return `🎰 Min bet ${MIN_BET}. !slots <amount> or !spin <amount>`;
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
+  if (bet < MIN_BET) return `🎰 Min bet ${MIN_BET}. !slots <amount>`;
 
   const wait = await checkInstantCooldown(user);
   if (wait !== null) return `🎰 Wait ${wait}s before another spin.`;
@@ -602,10 +601,10 @@ export async function playSlots(username: string, betAmount: number): Promise<st
 
 const ROULETTE_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
 
-/** Roulette: bet red/black (2x) or number 1-36 (36x). !roulette <red|black|1-36> <amount> */
+/** Roulette: bet red/black (2x) or number 1-36 (36x). */
 export async function playRoulette(username: string, choice: string, betAmount: number): Promise<string> {
   const user = normalizeUser(username);
-  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
   if (bet < MIN_BET) return `🎡 Min bet ${MIN_BET}. !roulette <red|black|number> <amount>`;
 
   const wait = await checkInstantCooldown(user);
@@ -652,10 +651,10 @@ export async function playRoulette(username: string, choice: string, betAmount: 
   return `🎡 [ ${spinStr} ] Wrong number — lost ${bet} chips.`;
 }
 
-/** Dice: bet high (4-6) or low (1-3). 2x on win. !dice <high|low> <amount> */
+/** Dice: bet high (4-6) or low (1-3). 2x on win. */
 export async function playDice(username: string, choice: string, betAmount: number): Promise<string> {
   const user = normalizeUser(username);
-  const bet = Math.floor(Math.min(MAX_BET, Math.max(MIN_BET, betAmount)));
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
   if (bet < MIN_BET) return `🎲 Min bet ${MIN_BET}. !dice <high|low> <amount>`;
 
   const wait = await checkInstantCooldown(user);
@@ -677,4 +676,151 @@ export async function playDice(username: string, choice: string, betAmount: numb
     return `🎲 Rolled ${roll} (${isHigh ? 'high' : 'low'}) — You win! +${bet} chips (${bet * 2} total)`;
   }
   return `🎲 Rolled ${roll} (${roll >= 4 ? 'high' : 'low'}) — Lost ${bet} chips.`;
+}
+
+// --- Crash ---
+
+/** Crash: pick a cashout target (default 2x). Crash point is random; if >= target you win target * bet. */
+export async function playCrash(username: string, betAmount: number, targetMultiplier?: number): Promise<string> {
+  const user = normalizeUser(username);
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
+  if (bet < MIN_BET) return `💥 Min bet ${MIN_BET}. !crash <amount> [multiplier]`;
+
+  const target = Math.max(1.1, targetMultiplier ?? 2);
+
+  const wait = await checkInstantCooldown(user);
+  if (wait !== null) return `💥 Wait ${wait}s before another game.`;
+
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) return `💥 Not enough chips. You have ${balance}.`;
+  await setInstantCooldown(user);
+
+  // House edge ~3%. Crash point distribution: mostly low, occasionally very high.
+  const r = Math.random();
+  const crashPoint = Math.max(1, Math.floor(100 / (1 - r * 0.97)) / 100);
+
+  const crashStr = crashPoint.toFixed(2) + 'x';
+  const targetStr = target.toFixed(2) + 'x';
+
+  if (crashPoint >= target) {
+    const win = Math.floor(bet * target);
+    await addChips(user, win);
+    return `💥 Crashed at ${crashStr} — You cashed out at ${targetStr}! +${win - bet} chips (${win} back)`;
+  }
+  return `💥 Crashed at ${crashStr} — Target was ${targetStr}. Lost ${bet} chips.`;
+}
+
+// --- War ---
+
+const WAR_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const;
+
+function warCardValue(rank: string): number {
+  return WAR_RANKS.indexOf(rank as (typeof WAR_RANKS)[number]);
+}
+
+/** War: both draw a card, higher wins. Tie = push. */
+export async function playWar(username: string, betAmount: number): Promise<string> {
+  const user = normalizeUser(username);
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
+  if (bet < MIN_BET) return `⚔️ Min bet ${MIN_BET}. !war <amount>`;
+
+  const wait = await checkInstantCooldown(user);
+  if (wait !== null) return `⚔️ Wait ${wait}s before another game.`;
+
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) return `⚔️ Not enough chips. You have ${balance}.`;
+  await setInstantCooldown(user);
+
+  const playerRankIdx = Math.floor(Math.random() * WAR_RANKS.length);
+  const dealerRankIdx = Math.floor(Math.random() * WAR_RANKS.length);
+  const playerCard = WAR_RANKS[playerRankIdx];
+  const dealerCard = WAR_RANKS[dealerRankIdx];
+  const pVal = warCardValue(playerCard);
+  const dVal = warCardValue(dealerCard);
+
+  const suitP = SUITS[Math.floor(Math.random() * SUITS.length)];
+  const suitD = SUITS[Math.floor(Math.random() * SUITS.length)];
+
+  if (pVal > dVal) {
+    await addChips(user, bet * 2);
+    return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — You win! +${bet} chips`;
+  }
+  if (pVal < dVal) {
+    return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Dealer wins. Lost ${bet} chips.`;
+  }
+  await addChips(user, bet);
+  return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Tie! ${bet} chips returned.`;
+}
+
+// --- Duel ---
+
+interface PendingDuel {
+  challenger: string;
+  challengerDisplay: string;
+  bet: number;
+  createdAt: number;
+}
+
+function duelKey(target: string): string {
+  return `${DUEL_KEY_PREFIX}${target}`;
+}
+
+/** Challenge another user. Stores a pending duel that expires after 60s. */
+export async function challengeDuel(challengerUsername: string, targetUsername: string, betAmount: number): Promise<string> {
+  const challenger = normalizeUser(challengerUsername);
+  const target = normalizeUser(targetUsername);
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
+
+  if (bet < MIN_BET) return `⚔️ Min bet ${MIN_BET}. !duel @user <amount>`;
+  if (challenger === target) return `⚔️ You can't duel yourself.`;
+
+  const wait = await checkInstantCooldown(challenger);
+  if (wait !== null) return `⚔️ Wait ${wait}s before another game.`;
+
+  const { ok, balance } = await deductChips(challenger, bet);
+  if (!ok) return `⚔️ Not enough chips. You have ${balance}.`;
+
+  const duel: PendingDuel = {
+    challenger,
+    challengerDisplay: challengerUsername.trim(),
+    bet,
+    createdAt: Date.now(),
+  };
+  await kv.set(duelKey(target), duel, { ex: DUEL_EXPIRE_SEC });
+  await setInstantCooldown(challenger);
+
+  return `⚔️ ${challengerUsername.trim()} challenges ${targetUsername.trim()} to a ${bet}-chip duel! Type !accept within 60s.`;
+}
+
+/** Accept a pending duel. Both players' chips are at stake, 50/50 winner takes all. */
+export async function acceptDuel(accepterUsername: string): Promise<string> {
+  const accepter = normalizeUser(accepterUsername);
+  const raw = await kv.get<PendingDuel>(duelKey(accepter));
+  if (!raw) return `⚔️ No pending duel. Someone can challenge you with !duel @${accepterUsername.trim()} <amount>`;
+
+  const duel = raw as PendingDuel;
+  if (Date.now() - duel.createdAt > DUEL_EXPIRE_SEC * 1000) {
+    await kv.del(duelKey(accepter));
+    await addChips(duel.challenger, duel.bet);
+    return `⚔️ Duel expired. ${duel.challengerDisplay}'s ${duel.bet} chips refunded.`;
+  }
+
+  const { ok, balance } = await deductChips(accepter, duel.bet);
+  if (!ok) {
+    await kv.del(duelKey(accepter));
+    await addChips(duel.challenger, duel.bet);
+    return `⚔️ Not enough chips (need ${duel.bet}, have ${balance}). Duel cancelled, ${duel.challengerDisplay}'s chips refunded.`;
+  }
+
+  await kv.del(duelKey(accepter));
+
+  const totalPot = duel.bet * 2;
+  const challengerWins = Math.random() < 0.5;
+  const winner = challengerWins ? duel.challenger : accepter;
+  const winnerDisplay = challengerWins ? duel.challengerDisplay : accepterUsername.trim();
+  const loserDisplay = challengerWins ? accepterUsername.trim() : duel.challengerDisplay;
+
+  await addChips(winner, totalPot);
+
+  return `⚔️ ${winnerDisplay} defeats ${loserDisplay}! +${totalPot} chips to ${winnerDisplay}!`;
 }

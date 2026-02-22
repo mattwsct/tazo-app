@@ -58,9 +58,6 @@ export async function handleStreamTitleCommand(
   // Parse custom title: everything after "!title " (case insensitive)
   const match = trimmed.match(/^!title\s+(.+)$/i);
   const customPart = match?.[1]?.trim() ?? '';
-  if (!customPart) {
-    return { handled: true, reply: 'Usage: !title Your title here' };
-  }
 
   // Use cached/persistent location only — avoid blocking on RTIRL/LocationIQ (which can hang and prevent title update)
   const [overlaySettings, streamTitleSettings, persistent, cached] = await Promise.all([
@@ -82,7 +79,18 @@ export async function handleStreamTitleCommand(
     customLoc,
     includeLocationInTitle
   );
-  const fullTitle = buildStreamTitle(customPart, locationPart);
+
+  // No text provided: set title to location only, or error if location is disabled
+  if (!customPart) {
+    if (!includeLocationInTitle) {
+      return { handled: true, reply: 'Usage: !title Your title here (location in title is disabled)' };
+    }
+    if (!locationPart) {
+      return { handled: true, reply: 'No location data available. Use !title Your title here' };
+    }
+  }
+
+  const fullTitle = customPart ? buildStreamTitle(customPart, locationPart) : locationPart!;
 
   try {
     const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
@@ -112,6 +120,6 @@ export async function handleStreamTitleCommand(
 
   return {
     handled: true,
-    reply: locationPart ? `Stream title set to "${fullTitle}"` : `Stream title set to "${customPart}"`,
+    reply: `Stream title set to "${fullTitle}"`,
   };
 }

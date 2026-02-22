@@ -4,20 +4,23 @@ import { useEffect, useState, useMemo } from 'react';
 import type { OverlaySettings } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
+import { kmToMiles } from '@/utils/unit-conversions';
 
 const POLL_INTERVAL_MS = 60000;
 const CYCLE_DURATION_MS = 30000;
 
-type SlotType = 'date' | 'steps';
+type SlotType = 'date' | 'steps' | 'distance' | 'calories';
 
 interface TopLeftRotatingWellnessProps {
   date: string | null;
   timezoneValid: boolean;
-  settings: Pick<OverlaySettings, 'showSteps'>;
+  settings: Pick<OverlaySettings, 'showSteps' | 'showDistance' | 'showCalories'>;
 }
 
 interface WellnessData {
   stepsSinceStreamStart?: number;
+  distanceSinceStreamStart?: number;
+  activeCaloriesSinceStreamStart?: number;
   updatedAt?: number;
 }
 
@@ -34,6 +37,8 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
         if (mounted) {
           setWellness({
             stepsSinceStreamStart: typeof data.stepsSinceStreamStart === 'number' ? data.stepsSinceStreamStart : undefined,
+            distanceSinceStreamStart: typeof data.distanceSinceStreamStart === 'number' ? data.distanceSinceStreamStart : undefined,
+            activeCaloriesSinceStreamStart: typeof data.activeCaloriesSinceStreamStart === 'number' ? data.activeCaloriesSinceStreamStart : undefined,
             updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
           });
         }
@@ -59,8 +64,10 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     const s: SlotType[] = [];
     if (timezoneValid && date) s.push('date');
     if (settings.showSteps !== false && stepsFresh && wellness?.stepsSinceStreamStart != null && wellness.stepsSinceStreamStart >= 0) s.push('steps');
+    if (settings.showDistance !== false && stepsFresh && wellness?.distanceSinceStreamStart != null && wellness.distanceSinceStreamStart > 0) s.push('distance');
+    if (settings.showCalories && stepsFresh && wellness?.activeCaloriesSinceStreamStart != null && wellness.activeCaloriesSinceStreamStart > 0) s.push('calories');
     return s;
-  }, [timezoneValid, date, settings.showSteps, stepsFresh, wellness]);
+  }, [timezoneValid, date, settings.showSteps, settings.showDistance, settings.showCalories, stepsFresh, wellness]);
 
   const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
 
@@ -81,6 +88,29 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
               <span className="step-counter-icon">👟</span>
               <span className="step-counter-value">{wellness!.stepsSinceStreamStart!.toLocaleString()}</span>
               <span className="step-counter-label">steps</span>
+            </div>
+          </div>
+        );
+      case 'distance': {
+        const km = wellness!.distanceSinceStreamStart!;
+        const mi = Math.round(kmToMiles(km));
+        return (
+          <div className="step-counter-wrapper">
+            <div className="step-counter-row">
+              <span className="step-counter-icon">🚶</span>
+              <span className="step-counter-value">{Math.round(km)} km</span>
+              <span className="step-counter-label">({mi} mi)</span>
+            </div>
+          </div>
+        );
+      }
+      case 'calories':
+        return (
+          <div className="step-counter-wrapper">
+            <div className="step-counter-row">
+              <span className="step-counter-icon">🔥</span>
+              <span className="step-counter-value">{wellness!.activeCaloriesSinceStreamStart!.toLocaleString()}</span>
+              <span className="step-counter-label">cal</span>
             </div>
           </div>
         );

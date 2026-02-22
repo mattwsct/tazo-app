@@ -13,7 +13,7 @@ function getUsername(obj: { username?: string | null } | null | undefined): stri
   return obj?.username ?? 'someone';
 }
 
-const OPTIONAL_PLACEHOLDERS = new Set(['lifetimeSubs']);
+const OPTIONAL_PLACEHOLDERS = new Set<string>();
 const REWARD_STATUS_DECLINED = new Set(['rejected']);
 const REWARD_STATUS_APPROVED = new Set(['accepted']);
 
@@ -60,7 +60,6 @@ export function getResubResponse(
 export function getGiftSubResponse(
   payload: KickPayload,
   templates: KickMessageTemplates,
-  extraReplacements?: Record<string, string>,
   templateEnabled?: KickMessageTemplateEnabled
 ): string | null {
   const gifter = payload.gifter;
@@ -68,8 +67,7 @@ export function getGiftSubResponse(
   const giftees = payload.giftees ?? [];
   const count = giftees.length;
   const names = giftees.map((g: { username?: string }) => g.username).filter(Boolean);
-  const base: Record<string, string> = { gifter: gifterName, lifetimeSubs: '' };
-  if (extraReplacements) Object.assign(base, extraReplacements);
+  const base: Record<string, string> = { gifter: gifterName };
   if (count === 1 && names[0]) {
     if (isTemplateDisabled(templateEnabled, 'giftSubSingle')) return null;
     return replace(templates.giftSubSingle, { ...base, name: names[0] });

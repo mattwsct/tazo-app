@@ -50,22 +50,14 @@ const MOCK_PAYLOADS: Record<keyof KickMessageTemplates, Record<string, unknown>>
   streamEnded: { is_live: false },
 };
 
-/** Build response functions for gift sub templates (lifetime subs depends on toggle) */
-function getGiftSubResponseFn(lifetimeSubs: string) {
-  return (p: unknown, t: KickMessageTemplates) =>
-    getGiftSubResponse(p as never, t, { lifetimeSubs }, undefined);
-}
-
-/** Response functions per template key (giftSub* all use getGiftSubResponse, etc.). Template tests pass undefined for templateEnabled so all are enabled. */
-function buildResponseFns(giftSubShowLifetimeSubs: boolean): Record<keyof KickMessageTemplates, (p: unknown, t: KickMessageTemplates) => string | null> {
-  const lifetimeSubs = giftSubShowLifetimeSubs ? '(5 lifetime)' : '';
+function buildResponseFns(): Record<keyof KickMessageTemplates, (p: unknown, t: KickMessageTemplates) => string | null> {
   return {
   follow: (p, t) => getFollowResponse(p as never, t, undefined),
   newSub: (p, t) => getNewSubResponse(p as never, t, undefined),
   resub: (p, t) => getResubResponse(p as never, t, undefined),
-  giftSubSingle: getGiftSubResponseFn(lifetimeSubs),
-  giftSubMulti: getGiftSubResponseFn(lifetimeSubs),
-  giftSubGeneric: getGiftSubResponseFn(lifetimeSubs),
+  giftSubSingle: (p, t) => getGiftSubResponse(p as never, t, undefined),
+  giftSubMulti: (p, t) => getGiftSubResponse(p as never, t, undefined),
+  giftSubGeneric: (p, t) => getGiftSubResponse(p as never, t, undefined),
   kicksGifted: (p, t) => getKicksGiftedResponse(p as never, t, undefined),
   kicksGiftedWithMessage: (p, t) => getKicksGiftedResponse(p as never, t, undefined),
   channelReward: (p, t) => getChannelRewardResponse(p as never, t, undefined, undefined),
@@ -86,20 +78,17 @@ export async function POST(request: NextRequest) {
   let content: string;
   let templateKey: keyof KickMessageTemplates | undefined;
   let templates: KickMessageTemplates | undefined;
-  let giftSubShowLifetimeSubs = true;
   try {
     const body = await request.json();
     content = typeof body.content === 'string' ? body.content.trim() : '';
     templateKey = body.templateKey;
     templates = body.templates;
-    if (body.alertSettings?.giftSubShowLifetimeSubs === false) giftSubShowLifetimeSubs = false;
   } catch {
     content = '';
   }
 
-  // Template test: render with mock payload
   if (templateKey && templates) {
-    const responseFns = buildResponseFns(giftSubShowLifetimeSubs);
+    const responseFns = buildResponseFns();
     const fn = responseFns[templateKey];
     const payload = MOCK_PAYLOADS[templateKey];
     if (fn && payload) {

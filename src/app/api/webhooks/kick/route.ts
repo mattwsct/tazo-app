@@ -9,6 +9,7 @@ import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-com
 import { handleChatPoll } from '@/lib/poll-webhook-handler';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
 import { handleAddChipsCommand } from '@/lib/addchips-chat-handler';
+import { handleCategoryCommand } from '@/lib/category-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
@@ -191,6 +192,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
+    const categoryResult = await handleCategoryCommand(content, sender, payload);
+    if (categoryResult.handled) {
+      if (categoryResult.reply) {
+        const accessToken = await getValidAccessToken();
+        if (accessToken) {
+          const messageId = (payload.id ?? payload.message_id) as string | undefined;
+          try {
+            await sendKickChatMessage(accessToken, categoryResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
+          } catch (err) {
+            console.error('[Kick webhook] category reply failed:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
     const addchipsResult = await handleAddChipsCommand(content, sender, payload);
     if (addchipsResult.handled) {
       if (addchipsResult.reply) {
@@ -226,14 +243,13 @@ export async function POST(request: NextRequest) {
     kv.get<Partial<KickMessageTemplates>>(KICK_MESSAGES_KEY),
     kv.get<Partial<Record<KickEventToggleKey, boolean>>>(KICK_MESSAGE_ENABLED_KEY),
     kv.get<KickMessageTemplateEnabled>(KICK_MESSAGE_TEMPLATE_ENABLED_KEY),
-    kv.get<{ minimumKicks?: number; giftSubShowLifetimeSubs?: boolean }>(KICK_ALERT_SETTINGS_KEY),
+    kv.get<{ minimumKicks?: number }>(KICK_ALERT_SETTINGS_KEY),
   ]);
 
   const templates: KickMessageTemplates = { ...DEFAULT_KICK_MESSAGES, ...storedTemplates };
   const enabled: Record<KickEventToggleKey, boolean> = { ...DEFAULT_KICK_MESSAGE_ENABLED, ...(storedEnabled ?? {}) };
   const templateEnabled: KickMessageTemplateEnabled = { ...(storedTemplateEnabled ?? {}) };
   const minimumKicks = storedAlertSettings?.minimumKicks ?? 0;
-  const giftSubShowLifetimeSubs = storedAlertSettings?.giftSubShowLifetimeSubs !== false;
 
   const toggleKey = EVENT_TYPE_TO_TOGGLE[eventNorm] ?? EVENT_TYPE_TO_TOGGLE[eventType];
   const toggleValue = toggleKey ? enabled[toggleKey] : undefined;
@@ -388,8 +404,6 @@ export async function POST(request: NextRequest) {
     templates,
     templateEnabled,
     minimumKicks,
-    giftSubShowLifetimeSubs,
-    getAccessToken: getValidAccessToken,
   };
 
   let message: string | null;

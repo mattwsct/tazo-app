@@ -288,6 +288,46 @@ export async function getKickEventSubscriptions(accessToken: string): Promise<un
   return data.data ?? [];
 }
 
+// --- Category / channel update ---
+
+export async function searchKickCategory(
+  accessToken: string,
+  name: string
+): Promise<{ id: number; name: string; slug: string } | null> {
+  const url = `${KICK_API_BASE}/public/v2/categories?name=${encodeURIComponent(name)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const items = data.data ?? [];
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const exact = items.find(
+    (c: { name?: string }) => c.name?.toLowerCase() === name.toLowerCase()
+  );
+  const cat = exact ?? items[0];
+  return { id: cat.id, name: cat.name, slug: cat.slug };
+}
+
+export async function updateChannelCategory(
+  accessToken: string,
+  categoryId: number
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ category_id: categoryId }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    return { ok: false, error: err.slice(0, 100) };
+  }
+  return { ok: true };
+}
+
 /** Kick website API (kick.com) - public channel data. Cached 5 min in KV. */
 const KICK_CHANNEL_STATS_KEY = 'kick_channel_stats_cache';
 const KICK_CHANNEL_STATS_TTL_SEC = 300;
@@ -369,31 +409,4 @@ export async function getKickChannelStats(): Promise<KickChannelStats> {
   }
 }
 
-/** Fetch gift sub leaderboard. Returns Map<username_lowercase, total_subs>. Requires kicks:read scope. */
-export async function getKickSubscriptionLeaderboard(accessToken: string): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  try {
-    const res = await fetch(`${KICK_API_BASE}/public/v1/kicks/leaderboard`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) return map;
-    const data = await res.json();
-    const entries = (data.data ?? data) as unknown[];
-    const items = Array.isArray(entries) ? entries : [];
-    for (const item of items) {
-      const user = (item as { user?: { username?: string }; username?: string }).user ?? item;
-      const username = (user as { username?: string }).username;
-      const count = (item as { count?: number; subscription_count?: number; total?: number }).count
-        ?? (item as { subscription_count?: number }).subscription_count
-        ?? (item as { total?: number }).total
-        ?? 0;
-      if (username && typeof count === 'number') {
-        map.set(username.toLowerCase(), count);
-      }
-    }
-  } catch {
-    // Ignore - leaderboard is best-effort
-  }
-  return map;
-}
 

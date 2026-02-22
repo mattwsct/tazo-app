@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS, LocationDisplayMode, MapZoomLevel, DisplayMode } from '@/types/settings';
+import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
   TEMPLATE_GROUP_CONFIG,
@@ -25,122 +25,7 @@ function formatLocationAge(ms: number): string {
   return `${hours}h`;
 }
 
-/** Manual entry for body metrics from smart scales; data persists until overwritten (no TTL). */
-const HEALTH_FIELDS: { key: string; label: string; unit: string }[] = [
-  { key: 'heightCm', label: 'Height', unit: 'cm' },
-  { key: 'weightKg', label: 'Weight', unit: 'kg' },
-  { key: 'bodyMassIndex', label: 'BMI', unit: '' },
-  { key: 'bodyFatPercent', label: 'Body fat', unit: '%' },
-  { key: 'leanBodyMassKg', label: 'Lean body mass', unit: 'kg' },
-];
 
-function HealthDataSection() {
-  const [data, setData] = useState<Record<string, number | string>>({});
-  const [edited, setEdited] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ type: 'saved' | 'error'; message: string } | null>(null);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await fetch('/api/wellness', { credentials: 'include' });
-      const d = await r.json();
-      if (r.ok) {
-        const out: Record<string, number | string> = {};
-        for (const f of HEALTH_FIELDS) {
-          const val = d[f.key];
-          out[f.key] = typeof val === 'number' ? val : '';
-        }
-        out.updatedAt = d.updatedAt ?? 0;
-        setData(out);
-        setEdited({});
-      }
-    } catch {
-      setToast({ type: 'error', message: 'Failed to fetch' });
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleSave = useCallback(async () => {
-    const updates: Record<string, number> = {};
-    for (const f of HEALTH_FIELDS) {
-      const raw = edited[f.key] ?? (typeof data[f.key] === 'number' ? String(data[f.key]) : '');
-      if (raw.trim() === '') continue;
-      const n = parseFloat(raw);
-      if (!Number.isNaN(n) && n >= 0) updates[f.key] = n;
-    }
-    if (Object.keys(updates).length === 0) {
-      setToast({ type: 'error', message: 'Enter at least one value' });
-      setTimeout(() => setToast(null), 2000);
-      return;
-    }
-    setSaving(true);
-    try {
-      const r = await authenticatedFetch('/api/wellness/update', {
-        method: 'PATCH',
-        body: JSON.stringify(updates),
-      });
-      if (r.ok) {
-        setToast({ type: 'saved', message: 'Saved!' });
-        fetchData();
-      } else {
-        const err = await r.json();
-        setToast({ type: 'error', message: err.error ?? 'Save failed' });
-      }
-    } catch {
-      setToast({ type: 'error', message: 'Save failed' });
-    }
-    setSaving(false);
-    setTimeout(() => setToast(null), 2500);
-  }, [edited, data, fetchData]);
-
-  if (loading) return <p className="input-hint">Loading health data…</p>;
-
-  const fmt = (v: unknown) => (v === '' || v == null || v === 0 ? '' : String(v));
-  const updatedAt = typeof data.updatedAt === 'number' ? data.updatedAt : 0;
-
-  return (
-    <div className="setting-group">
-      <p className="input-hint" style={{ marginBottom: 12 }}>
-        Last updated: {updatedAt ? new Date(updatedAt).toLocaleString() : 'Never'} · Edit and Save to add missing data.
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px 20px', marginBottom: 16 }}>
-        {HEALTH_FIELDS.map((f) => {
-          const val = edited[f.key] ?? fmt(data[f.key]);
-          return (
-            <div key={f.key}>
-              <label style={{ display: 'block', fontSize: '0.85em', marginBottom: 4, opacity: 0.9 }}>{f.label}</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={val}
-                onChange={(e) => setEdited((p) => ({ ...p, [f.key]: e.target.value }))}
-                placeholder="—"
-                className="admin-input"
-                style={{ width: '100%', maxWidth: 120 }}
-              />
-              {f.unit && <span style={{ marginLeft: 4, fontSize: '0.85em', opacity: 0.7 }}>{f.unit}</span>}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button type="button" className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : '💾 Save'}
-        </button>
-        <button type="button" className="btn btn-secondary btn-small" onClick={fetchData}>
-          🔄 Refresh
-        </button>
-        {toast && <span style={{ opacity: 0.9 }}>{toast.message}</span>}
-      </div>
-    </div>
-  );
-}
 
 const KICK_MESSAGE_LABELS: Record<keyof KickMessageTemplates, string> = {
   follow: 'Follow',
@@ -203,9 +88,7 @@ export default function AdminPage() {
     return t;
   });
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
-  const [kickGiftSubShowLifetimeSubs, setKickGiftSubShowLifetimeSubs] = useState(true);
   const [kickChatBroadcastStreamTitle, setKickChatBroadcastStreamTitle] = useState(false);
-  const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
   const [kickChatBroadcastWeather, setKickChatBroadcastWeather] = useState(false);
   const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
   const [kickChatBroadcastHeartrateMinBpm, setKickChatBroadcastHeartrateMinBpm] = useState(100);
@@ -219,7 +102,6 @@ export default function AdminPage() {
   const [kickChatBroadcastWellnessFlights, setKickChatBroadcastWellnessFlights] = useState(false);
   const [kickChatBroadcastWellnessActiveCalories, setKickChatBroadcastWellnessActiveCalories] = useState(false);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
-  const [kickStreamTitleAutoUpdate, setKickStreamTitleAutoUpdate] = useState(true);
   const [kickStreamTitleIncludeLocation, setKickStreamTitleIncludeLocation] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
   const [kickStreamTitleRawLocation, setKickStreamTitleRawLocation] = useState<LocationData | null>(null);
@@ -372,9 +254,7 @@ export default function AdminPage() {
         if (d.enabled) setKickMessageEnabled({ ...DEFAULT_KICK_MESSAGE_ENABLED, ...d.enabled });
         if (d.templateEnabled) setKickTemplateEnabled((prev) => ({ ...prev, ...d.templateEnabled }));
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
-        if (d.alertSettings?.giftSubShowLifetimeSubs !== undefined) setKickGiftSubShowLifetimeSubs(d.alertSettings.giftSubShowLifetimeSubs);
         if (d.alertSettings?.chatBroadcastStreamTitle !== undefined) setKickChatBroadcastStreamTitle(d.alertSettings.chatBroadcastStreamTitle);
-        if (d.alertSettings?.chatBroadcastLocation !== undefined) setKickChatBroadcastLocation(d.alertSettings.chatBroadcastLocation);
         if (d.alertSettings?.chatBroadcastWeather !== undefined) setKickChatBroadcastWeather(d.alertSettings.chatBroadcastWeather);
         if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
         if (d.alertSettings?.chatBroadcastHeartrateMinBpm != null) setKickChatBroadcastHeartrateMinBpm(d.alertSettings.chatBroadcastHeartrateMinBpm);
@@ -406,9 +286,6 @@ export default function AdminPage() {
     fetch('/api/kick-channel', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
-        if (d.settings) {
-          setKickStreamTitleAutoUpdate(d.settings.autoUpdateLocation !== false);
-        }
         if (d.stream_title != null) {
           if (d.is_live) {
             const parsed = parseStreamTitleToCustom(d.stream_title);
@@ -499,7 +376,6 @@ export default function AdminPage() {
       const r = await authenticatedFetch('/api/kick-channel');
       const data = await r.json();
       if (data.settings) {
-        setKickStreamTitleAutoUpdate(data.settings.autoUpdateLocation !== false);
         setKickStreamTitleIncludeLocation((data.settings as { includeLocationInTitle?: boolean }).includeLocationInTitle !== false);
       }
       if (data.stream_title != null) {
@@ -540,7 +416,6 @@ export default function AdminPage() {
           stream_title: fullTitle.trim(),
           settings: {
             customTitle: kickStreamTitleCustom,
-            autoUpdateLocation: kickStreamTitleAutoUpdate,
             includeLocationInTitle: kickStreamTitleIncludeLocation,
           },
         }),
@@ -556,7 +431,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleAutoUpdate, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation]);
 
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
@@ -564,10 +439,7 @@ export default function AdminPage() {
     templateEnabled?: KickMessageTemplateEnabled;
     alertSettings?: Partial<{
       minimumKicks: number;
-      giftSubShowLifetimeSubs: boolean;
       chatBroadcastStreamTitle: boolean;
-      chatBroadcastLocation: boolean;
-      chatBroadcastLocationIntervalMin: number;
       chatBroadcastWeather: boolean;
       chatBroadcastHeartrate: boolean;
       chatBroadcastHeartrateMinBpm: number;
@@ -589,10 +461,7 @@ export default function AdminPage() {
     const templateEnabled = overrides?.templateEnabled ?? kickTemplateEnabled;
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
-      giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
       chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
-      chatBroadcastLocation: kickChatBroadcastLocation,
-      chatBroadcastLocationIntervalMin: 5,
       chatBroadcastWeather: kickChatBroadcastWeather,
       chatBroadcastHeartrate: kickChatBroadcastHeartrate,
       chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
@@ -625,14 +494,11 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickGiftSubShowLifetimeSubs, kickChatBroadcastStreamTitle, kickChatBroadcastLocation, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
-    giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
     chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
-    chatBroadcastLocation: kickChatBroadcastLocation,
-    chatBroadcastLocationIntervalMin: 5,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
@@ -642,16 +508,14 @@ export default function AdminPage() {
     chatBroadcastAltitude: kickChatBroadcastAltitude,
     chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
     chatBroadcastAltitudeTimeoutMin: 5,
+    chatBroadcastWeather: kickChatBroadcastWeather,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
     chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
   });
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
-    giftSubShowLifetimeSubs: kickGiftSubShowLifetimeSubs,
     chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
-    chatBroadcastLocation: kickChatBroadcastLocation,
-    chatBroadcastLocationIntervalMin: 5,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
@@ -661,6 +525,7 @@ export default function AdminPage() {
     chatBroadcastAltitude: kickChatBroadcastAltitude,
     chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
     chatBroadcastAltitudeTimeoutMin: 5,
+    chatBroadcastWeather: kickChatBroadcastWeather,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
     chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
@@ -1016,136 +881,36 @@ export default function AdminPage() {
                         ({kickStatus.subscriptions.length} event subscriptions)
                       </span>
                     )}
-                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button type="button" className="btn btn-secondary btn-small" onClick={handleKickOAuthConnect}>
+                        🔄 Reconnect
+                      </button>
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
                         onClick={async () => {
-                          if (!confirm('Disconnect Kick? Event subscriptions and chat responses will stop.')) return;
+                          if (!confirm('Disconnect Kick?')) return;
                           try {
-                            const r = await fetch('/api/kick-oauth/disconnect', {
-                              method: 'POST',
-                              credentials: 'include',
-                            });
-                            const d = await r.json();
-                            if (r.ok) {
-                              setKickStatus({ connected: false });
-                              setToast({ type: 'saved', message: 'Disconnected' });
-                            } else {
-                              setToast({ type: 'error', message: d.error ?? 'Failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Failed to disconnect' });
-                          }
+                            const r = await fetch('/api/kick-oauth/disconnect', { method: 'POST', credentials: 'include' });
+                            if (r.ok) { setKickStatus({ connected: false }); setToast({ type: 'saved', message: 'Disconnected' }); }
+                            else { const d = await r.json(); setToast({ type: 'error', message: d.error ?? 'Failed' }); }
+                          } catch { setToast({ type: 'error', message: 'Failed' }); }
                           setTimeout(() => setToast(null), 3000);
                         }}
                       >
                         Disconnect
                       </button>
-                      <div className="admin-select-wrap" style={{ margin: 0 }}>
-                        <select
-                          aria-label="Connection actions"
-                          className="admin-select-big btn btn-secondary btn-small"
-                          style={{ padding: '6px 28px 6px 12px', minWidth: 180 }}
-                          value=""
-                          onChange={async (e) => {
-                            const action = e.target.value;
-                            if (!action) return;
-                            (e.target as HTMLSelectElement).value = '';
-                            if (action === 'fix') {
-                              try {
-                                const r = await fetch('/api/kick-oauth/subscribe', {
-                                  method: 'POST',
-                                  credentials: 'include',
-                                });
-                                const data = await r.json();
-                                if (r.ok) {
-                                  setToast({ type: 'saved', message: 'Connection fixed!' });
-                                  fetch('/api/kick-oauth/status', { credentials: 'include' })
-                                    .then((res) => res.json())
-                                    .then(setKickStatus);
-                                } else {
-                                  const err = data.error ?? '';
-                                  if (r.status === 400 || r.status === 401) {
-                                    setToast({ type: 'error', message: 'Re-opening OAuth to reconnect…' });
-                                    handleKickOAuthConnect();
-                                  } else {
-                                    setToast({ type: 'error', message: err || 'Fix failed' });
-                                  }
-                                }
-                              } catch {
-                                setToast({ type: 'error', message: 'Fix failed — try Reconnect (OAuth)' });
-                                handleKickOAuthConnect();
-                              }
-                            } else if (action === 'subscribe') {
-                              try {
-                                const r = await fetch('/api/kick-oauth/subscribe', {
-                                  method: 'POST',
-                                  credentials: 'include',
-                                });
-                                const data = await r.json();
-                                if (r.ok) {
-                                  setToast({ type: 'saved', message: 'Re-subscribed!' });
-                                  fetch('/api/kick-oauth/status', { credentials: 'include' })
-                                    .then((res) => res.json())
-                                    .then(setKickStatus);
-                                } else {
-                                  setToast({ type: 'error', message: data.error ?? 'Re-subscribe failed' });
-                                }
-                              } catch {
-                                setToast({ type: 'error', message: 'Re-subscribe failed' });
-                              }
-                            } else if (action === 'reconnect') {
-                              handleKickOAuthConnect();
-                            }
-                            setTimeout(() => setToast(null), 3000);
-                          }}
-                        >
-                          <option value="">Connection…</option>
-                          <option value="fix">🔧 Fix connection</option>
-                          <option value="subscribe">📡 Re-subscribe only</option>
-                          <option value="reconnect">🔄 Reconnect (OAuth)</option>
-                        </select>
-                      </div>
                       <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        title="Reset chips leaderboard and display names"
                         onClick={async () => {
-                          if (!confirm('Reset chips leaderboard? This will clear all chips and display names. Steps, distance, and wellness are unchanged.')) return;
-                          try {
-                            const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
-                            const data = await r.json();
-                            if (r.ok) {
-                              setToast({ type: 'saved', message: 'Chips leaderboard reset' });
-                            } else {
-                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Reset failed' });
-                          }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        🃏 Reset chips leaderboard
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        title="Reset steps, distance, flights, active calories for current stream — leaderboard unchanged"
-                        onClick={async () => {
-                          if (!confirm('Reset stream session? Clears leaderboard, steps, distance, flights, active calories, stream goals, and wellness milestones. Use when auto-reset fails or for a clean start.')) return;
+                          if (!confirm('Reset stream session? Clears steps, distance, goals, milestones.')) return;
                           try {
                             const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
                             const data = await r.json();
-                            if (r.ok) {
-                              setToast({ type: 'saved', message: 'Stream session reset' });
-                            } else {
-                              setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Reset failed' });
-                          }
+                            if (r.ok) setToast({ type: 'saved', message: 'Stream session reset' });
+                            else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                          } catch { setToast({ type: 'error', message: 'Reset failed' }); }
                           setTimeout(() => setToast(null), 3000);
                         }}
                       >
@@ -1156,11 +921,8 @@ export default function AdminPage() {
                 ) : (
                   <div className="kick-status disconnected">
                     <span className="status-dot">🔴</span>
-                    <span>Not connected to Kick</span>
-                    <p className="input-hint" style={{ marginTop: 8, marginBottom: 12 }}>
-                      Connect to receive subs, gifts, kicks, poll votes, and chat events. Required for stream title, poll, and message templates.
-                    </p>
-                    <button
+                    <span>Not connected</span>
+                    <button style={{ marginTop: 8 }}
                       type="button"
                       className="btn btn-primary"
                       onClick={handleKickOAuthConnect}
@@ -1242,9 +1004,6 @@ export default function AdminPage() {
                   ))}
                 </div>
               </div>
-              <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
-                One setting for all. Custom = your text on overlay + stream title. Hidden = no location, no map.
-              </p>
               {settings.locationDisplay === 'custom' && (
                 <div className="custom-location-input" style={{ marginTop: '12px' }}>
                   <label className="input-label">Custom Location Text</label>
@@ -1269,19 +1028,10 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
-              <p className="input-hint" style={{ marginTop: '12px', fontSize: '0.85em' }}>
-                Update uses browser location; RTIRL overwrites when it provides newer data.
-              </p>
             </div>
             <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <label className="group-label">Map</label>
-              {settings.locationDisplay === 'hidden' && (
-                <p className="input-hint" style={{ marginBottom: 8, fontSize: '0.85em' }}>
-                  Map is hidden when location is Hidden (one setting).
-                </p>
-              )}
               <div className="admin-select-wrap" style={{ opacity: settings.locationDisplay === 'hidden' ? 0.6 : 1 }}>
-                <label>Map display (when location not Hidden)</label>
                 <div className="option-buttons" role="group" aria-label="Map display">
                   <button
                     type="button"
@@ -1297,7 +1047,7 @@ export default function AdminPage() {
                     onClick={() => handleSettingsChange({ showMinimap: false, minimapSpeedBased: true })}
                     disabled={settings.locationDisplay === 'hidden'}
                   >
-                    🏃 On movement
+                    🏃 When moving (≥5 km/h)
                   </button>
                   <button
                     type="button"
@@ -1307,36 +1057,7 @@ export default function AdminPage() {
                   >
                     🚫 Hidden
                   </button>
-            </div>
-              </div>
-              <div className="admin-select-wrap">
-                <label>Map zoom</label>
-                <div className="option-buttons" role="group" aria-label="Map zoom">
-                  {(['match', 'ocean', 'continental'] as const).map((level) => (
-                    <button
-                      key={level}
-                      type="button"
-                      className={`option-btn ${settings.mapZoomLevel === level ? 'active' : ''}`}
-                      onClick={() => handleSettingsChange({ mapZoomLevel: level })}
-                    >
-                      {level === 'match' && '📍 Same as location'}
-                      {level === 'ocean' && '🌊 Ocean'}
-                      {level === 'continental' && '🌎 Continental'}
-                    </button>
-                  ))}
                 </div>
-              </div>
-              <div className="admin-select-wrap">
-                <label>Map theme</label>
-                <select
-                  className="admin-select-big"
-                  value={settings.minimapTheme || 'auto'}
-                  onChange={(e) => handleSettingsChange({ minimapTheme: e.target.value as 'auto' | 'light' | 'dark' })}
-                >
-                  <option value="auto">🌓 Auto (light day, dark night)</option>
-                  <option value="light">☀️ Light</option>
-                  <option value="dark">🌙 Dark</option>
-                </select>
               </div>
             </div>
           </CollapsibleSection>
@@ -1345,9 +1066,6 @@ export default function AdminPage() {
           <CollapsibleSection id="stream-title" title="📺 Stream title & chat broadcasts">
             <div className="setting-group">
               <h3 className="subsection-label">Stream title</h3>
-              <p className="group-label group-description">
-                Custom title + location (flag as separator). <strong>Fetch current</strong> (when live) parses from Kick. Auto-push only when <strong>live</strong>. If you get 401, use <strong>Fix connection</strong> or <strong>Reconnect (OAuth)</strong> in Kick connection above.
-              </p>
             <div className="form-stack">
               <div>
                 <label className="field-label">Custom title</label>
@@ -1364,9 +1082,6 @@ export default function AdminPage() {
               </div>
               <div>
                 <label className="field-label">Location</label>
-                <p className="input-hint" style={{ marginBottom: '8px', fontSize: '0.85em' }}>
-                  Preview when &quot;Include location&quot; is on:
-                </p>
                 <div
                   className="stream-title-location-preview"
                   style={{
@@ -1386,9 +1101,6 @@ export default function AdminPage() {
                     ? buildStreamTitle(kickStreamTitleCustom, kickStreamTitleLocation)
                     : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>}
                 </div>
-                <p className="input-hint" style={{ marginBottom: '8px', fontSize: '0.85em' }}>
-                  Same setting as overlay: Custom = your custom text; Hidden = no location, no minimap.
-                </p>
                 <label className="checkbox-label-row" style={{ marginTop: '12px' }}>
                   <input
                     type="checkbox"
@@ -1412,7 +1124,6 @@ export default function AdminPage() {
                               stream_title: fullTitle.trim(),
                               settings: {
                                 customTitle: kickStreamTitleCustom,
-                                autoUpdateLocation: kickStreamTitleAutoUpdate,
                                 includeLocationInTitle: checked,
                               },
                             }),
@@ -1430,16 +1141,7 @@ export default function AdminPage() {
                     }}
                     className="checkbox-input"
                   />
-                  Include location in stream title (when off, title does not update on new location)
-                </label>
-                <label className="checkbox-label-row">
-                  <input
-                    type="checkbox"
-                    checked={kickStreamTitleAutoUpdate}
-                    onChange={(e) => setKickStreamTitleAutoUpdate(e.target.checked)}
-                    className="checkbox-input"
-                  />
-                  Auto-push stream title when live and location changes (server cron every 2 min)
+                  Include location in stream title
                 </label>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1465,242 +1167,85 @@ export default function AdminPage() {
             
             <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h3 className="subsection-label">Chat broadcasts</h3>
-              <p className="group-label group-description">
-                Location: when live, at most every 5 min (shared with stream title). Weather: notable changes only (rain, snow, storm, fog, high UV, poor air quality) — resends on new notable change, not when clearing. Heart rate: high/very-high warnings when crossing thresholds.
-              </p>
-            <div className="broadcast-options-list">
-              <div className="broadcast-option-block">
+              <div className="broadcast-options-list">
                 <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={kickChatBroadcastStreamTitle}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setKickChatBroadcastStreamTitle(checked);
-                      saveKickMessages({ alertSettings: { chatBroadcastStreamTitle: checked } });
-                    }}
-                    className="checkbox-input"
-                  />
+                  <input type="checkbox" checked={kickChatBroadcastStreamTitle} onChange={(e) => { setKickChatBroadcastStreamTitle(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastStreamTitle: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon" aria-hidden="true">📺</span>
-                  <span>Stream title</span>
+                  <span>Stream title — on title change</span>
                 </label>
-                {kickChatBroadcastStreamTitle && (
-                  <div className="broadcast-option-detail">
-                    <span className="checkbox-label-row-sm" style={{ opacity: 0.9 }}>Posts &quot;Stream title updated to X&quot; when you update manually or when auto-push runs</span>
-            </div>
-                )}
                 <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={kickChatBroadcastLocation}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setKickChatBroadcastLocation(checked);
-                      saveKickMessages({ alertSettings: { chatBroadcastLocation: checked } });
-                    }}
-                    className="checkbox-input"
-                  />
-                  <span className="radio-icon" aria-hidden="true">📍</span>
-                  <span>Location</span>
-                </label>
-                {(kickStreamTitleAutoUpdate || kickChatBroadcastLocation) && (
-                  <div className="broadcast-option-detail">
-                    <span className="checkbox-label-row-sm" style={{ opacity: 0.9 }}>Interval (stream title + chat, when live): 5 min</span>
-                  </div>
-                )}
-              </div>
-              <div className="broadcast-option-block">
-                <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={kickChatBroadcastWeather}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setKickChatBroadcastWeather(checked);
-                      saveKickMessages({ alertSettings: { chatBroadcastWeather: checked } });
-                    }}
-                    className="checkbox-input"
-                  />
+                  <input type="checkbox" checked={kickChatBroadcastWeather} onChange={(e) => { setKickChatBroadcastWeather(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWeather: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon" aria-hidden="true">🌤️</span>
-                  <span>Weather</span>
+                  <span>Weather — rain, storm, snow, fog, etc.</span>
                 </label>
-                {kickChatBroadcastWeather && (
-                  <div className="broadcast-option-detail">
-                    <span className="checkbox-label-row-sm" style={{ opacity: 0.9 }}>Notable changes: rain, snow, storm, fog, high UV (≥6), poor air quality (AQI ≥4) — posts on each new condition, not when clearing</span>
-                  </div>
-                )}
-              </div>
-              <div className="broadcast-option-block">
                 <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={kickChatBroadcastHeartrate}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setKickChatBroadcastHeartrate(checked);
-                      saveKickMessages({ alertSettings: { chatBroadcastHeartrate: checked } });
-                    }}
-                    className="checkbox-input"
-                  />
+                  <input type="checkbox" checked={kickChatBroadcastHeartrate} onChange={(e) => { setKickChatBroadcastHeartrate(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastHeartrate: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon" aria-hidden="true">❤️</span>
-                  <span>Heart rate</span>
+                  <span>Heart rate — when exceeds thresholds below</span>
                 </label>
                 {kickChatBroadcastHeartrate && (
                   <div className="broadcast-option-detail">
                     <div className="form-row-wrap">
                       <label className="checkbox-label-row-sm">
-                        High:
-                        <input
-                          type="number"
-                          className="text-input number-input"
-                          value={kickChatBroadcastHeartrateMinBpm}
-                          onChange={(e) => {
-                            const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100));
-                            setKickChatBroadcastHeartrateMinBpm(val);
-                            scheduleKickMessagesSave();
-                          }}
-                          min={0}
-                          max={250}
-                        />
-                        BPM
+                        High: <input type="number" className="text-input number-input" value={kickChatBroadcastHeartrateMinBpm} onChange={(e) => { setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100))); scheduleKickMessagesSave(); }} min={0} max={250} /> BPM
                       </label>
                       <label className="checkbox-label-row-sm">
-                        Very high:
-                        <input
-                          type="number"
-                          className="text-input number-input"
-                          value={kickChatBroadcastHeartrateVeryHighBpm}
-                          onChange={(e) => {
-                            const val = Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120));
-                            setKickChatBroadcastHeartrateVeryHighBpm(val);
-                            scheduleKickMessagesSave();
-                          }}
-                          min={0}
-                          max={250}
-                        />
-                        BPM
+                        Very high: <input type="number" className="text-input number-input" value={kickChatBroadcastHeartrateVeryHighBpm} onChange={(e) => { setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120))); scheduleKickMessagesSave(); }} min={0} max={250} /> BPM
                       </label>
                     </div>
                   </div>
                 )}
-              </div>
-              <div className="broadcast-option-block">
                 <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={kickChatBroadcastSpeed}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setKickChatBroadcastSpeed(checked);
-                      saveKickMessages({ alertSettings: { chatBroadcastSpeed: checked } });
-                    }}
-                    className="checkbox-input"
-                  />
+                  <input type="checkbox" checked={kickChatBroadcastSpeed} onChange={(e) => { setKickChatBroadcastSpeed(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastSpeed: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon" aria-hidden="true">🚀</span>
-                  <span>Speed (new top)</span>
+                  <span>Speed — new top speed above min below</span>
                 </label>
                 {kickChatBroadcastSpeed && (
                   <div className="broadcast-option-detail">
-                    <div className="form-row-wrap">
-                      <label className="checkbox-label-row-sm">
-                        Min
-                        <input
-                          type="number"
-                          className="text-input number-input"
-                          value={kickChatBroadcastSpeedMinKmh}
-                          onChange={(e) => {
-                            const val = Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20));
-                            setKickChatBroadcastSpeedMinKmh(val);
-                            scheduleKickMessagesSave();
-                          }}
-                          min={0}
-                          max={500}
-                        />
-                        km/h
-                      </label>
-                      <span className="checkbox-label-row-sm" style={{ opacity: 0.9 }}>Timeout: 5 min</span>
-                    </div>
+                    <label className="checkbox-label-row-sm">
+                      Min <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedMinKmh} onChange={(e) => { setKickChatBroadcastSpeedMinKmh(Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20))); scheduleKickMessagesSave(); }} min={0} max={500} /> km/h
+                    </label>
                   </div>
                 )}
-              </div>
-              <div className="broadcast-option-block">
                 <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input
-                    type="checkbox"
-                    checked={kickChatBroadcastAltitude}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setKickChatBroadcastAltitude(checked);
-                      saveKickMessages({ alertSettings: { chatBroadcastAltitude: checked } });
-                    }}
-                    className="checkbox-input"
-                  />
+                  <input type="checkbox" checked={kickChatBroadcastAltitude} onChange={(e) => { setKickChatBroadcastAltitude(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastAltitude: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon" aria-hidden="true">⛰️</span>
-                  <span>Altitude (new top)</span>
+                  <span>Altitude — new top altitude above min below</span>
                 </label>
                 {kickChatBroadcastAltitude && (
                   <div className="broadcast-option-detail">
-                    <div className="form-row-wrap">
-                      <label className="checkbox-label-row-sm">
-                        Min
-                        <input
-                          type="number"
-                          className="text-input number-input"
-                          value={kickChatBroadcastAltitudeMinM}
-                          onChange={(e) => {
-                            const val = Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50));
-                            setKickChatBroadcastAltitudeMinM(val);
-                            scheduleKickMessagesSave();
-                          }}
-                          min={0}
-                          max={9000}
-                        />
-                        m
-                      </label>
-                      <span className="checkbox-label-row-sm" style={{ opacity: 0.9 }}>Timeout: 5 min</span>
-                    </div>
+                    <label className="checkbox-label-row-sm">
+                      Min <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeMinM} onChange={(e) => { setKickChatBroadcastAltitudeMinM(Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50))); scheduleKickMessagesSave(); }} min={0} max={9000} /> m
+                    </label>
                   </div>
                 )}
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input type="checkbox" checked={kickChatBroadcastWellnessSteps} onChange={(e) => { setKickChatBroadcastWellnessSteps(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessSteps: e.target.checked } }); }} className="checkbox-input" />
+                  <span className="radio-icon">👟</span>
+                  <span>Steps — at 1k, 2k, 5k, 10k…</span>
+                </label>
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input type="checkbox" checked={kickChatBroadcastWellnessDistance} onChange={(e) => { setKickChatBroadcastWellnessDistance(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessDistance: e.target.checked } }); }} className="checkbox-input" />
+                  <span className="radio-icon">🚶</span>
+                  <span>Distance — at 1, 2, 5, 10 km…</span>
+                </label>
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input type="checkbox" checked={kickChatBroadcastWellnessFlights} onChange={(e) => { setKickChatBroadcastWellnessFlights(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessFlights: e.target.checked } }); }} className="checkbox-input" />
+                  <span className="radio-icon">🪜</span>
+                  <span>Flights climbed — at 5, 10, 25, 50…</span>
+                </label>
+                <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input type="checkbox" checked={kickChatBroadcastWellnessActiveCalories} onChange={(e) => { setKickChatBroadcastWellnessActiveCalories(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessActiveCalories: e.target.checked } }); }} className="checkbox-input" />
+                  <span className="radio-icon">🔥</span>
+                  <span>Active calories — at 100, 250, 500, 1k…</span>
+                </label>
               </div>
-              <div className="broadcast-option-block" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <span className="checkbox-label-row-sm" style={{ opacity: 0.9, marginBottom: '8px', display: 'block' }}>Wellness milestones (Health Auto Export) — chat when crossing thresholds this stream:</span>
-                <div className="form-row-wrap" style={{ gap: '12px 24px' }}>
-                  <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input type="checkbox" checked={kickChatBroadcastWellnessSteps} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessSteps(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessSteps: c } }); }} className="checkbox-input" />
-                    <span className="radio-icon">👟</span>
-                    <span>Steps</span>
-                  </label>
-                  <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input type="checkbox" checked={kickChatBroadcastWellnessDistance} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessDistance(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessDistance: c } }); }} className="checkbox-input" />
-                    <span className="radio-icon">🚶</span>
-                    <span>Distance (km)</span>
-                  </label>
-                  <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input type="checkbox" checked={kickChatBroadcastWellnessFlights} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessFlights(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessFlights: c } }); }} className="checkbox-input" />
-                    <span className="radio-icon">🪜</span>
-                    <span>Flights climbed</span>
-                  </label>
-                  <label className="checkbox-label-row broadcast-checkbox-item">
-                    <input type="checkbox" checked={kickChatBroadcastWellnessActiveCalories} onChange={(e) => { const c = e.target.checked; setKickChatBroadcastWellnessActiveCalories(c); saveKickMessages({ alertSettings: { chatBroadcastWellnessActiveCalories: c } }); }} className="checkbox-input" />
-                    <span className="radio-icon">🔥</span>
-                    <span>Active calories</span>
-                  </label>
-                </div>
-              </div>
-            </div>
             </div>
           </CollapsibleSection>
 
           {/* === OVERLAY === */}
-          <CollapsibleSection
-            id="overlay"
-            title="🖥️ Overlay display"
-            description="Control what appears on the stream overlay — rotating info, leaderboard, goals, and alerts."
-          >
-            <h3 className="subsection-label" style={{ marginBottom: 4 }}>Top-left &amp; top-right rotation</h3>
-            <p className="input-hint" style={{ marginBottom: 12 }}>
-              Top-left rotates Date → Steps → Distance every 7s. Top-right rotates Temp → Condition → Altitude → Speed.
-            </p>
+          <CollapsibleSection id="overlay" title="🖥️ Overlay display">
+            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Top-left &amp; top-right rotation</h3>
             <div className="setting-group">
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-left (wellness — Health Auto Export)</h4>
               <div className="checkbox-group" style={{ marginBottom: 8 }}>
@@ -1711,17 +1256,32 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Steps</span>
+                  <span className="checkbox-text">Steps — from Health Auto Export</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showDistance ?? true}
+                    onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Distance — when walking/running detected</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showCalories ?? false}
+                    onChange={(e) => handleSettingsChange({ showCalories: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Calories — active calories when &gt; 0</span>
                 </label>
             </div>
-              <p className="input-hint" style={{ fontSize: '0.85em', marginTop: 4 }}>
-                Date from timezone. All rotate every 7s.
-              </p>
             </div>
             
             <div className="setting-group" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-right (location data)</h4>
-              <div className="checkbox-group" style={{ marginBottom: 12 }}>
+              <div className="checkbox-group" style={{ marginBottom: 8 }}>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -1729,39 +1289,32 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Temp</span>
+                  <span className="checkbox-text">Weather — temp &amp; conditions from GPS location</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showAltitude ?? true}
+                    onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Altitude — shows when ≥50m change from session start</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showSpeed ?? true}
+                    onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Speed — shows when ≥10 km/h</span>
                 </label>
               </div>
-              {settings.showWeather && (
-                <div className="admin-select-wrap" style={{ marginBottom: 12 }}>
-                  <label>Weather conditions</label>
-                  <div className="option-buttons" role="group">
-                    {(['always', 'auto', 'hidden'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        className={`option-btn ${(settings.weatherConditionDisplay || 'auto') === mode ? 'active' : ''}`}
-                        onClick={() => handleSettingsChange({ weatherConditionDisplay: mode })}
-                      >
-                        {mode === 'always' && '👁️ Always'}
-                        {mode === 'auto' && '🌧️ Auto'}
-                        {mode === 'hidden' && '🚫 Hidden'}
-                      </button>
-                    ))}
-            </div>
-            </div>
-              )}
-              <p className="input-hint" style={{ fontSize: '0.85em', marginTop: 8 }}>
-                Altitude & speed auto-show when notable (e.g. climb/descent, moving) and hide when no longer relevant.
-              </p>
             </div>
 
             <div className="setting-separator" style={{ margin: '1.25rem 0' }} />
 
-            <h3 className="subsection-label" style={{ marginBottom: 4 }}>Bottom-right: leaderboard, goals &amp; alerts</h3>
-            <p className="input-hint" style={{ marginBottom: 12 }}>
-              Rotates every 7s — Leaderboard (chips) → Sub goal → Kicks goal. Alerts (subs, gifts, kicks) appear above.
-            </p>
+            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Bottom-right: leaderboard, goals &amp; alerts</h3>
             <div className="setting-group">
               <div className="checkbox-group" style={{ marginBottom: '12px' }}>
                 <label className="checkbox-label">
@@ -1771,7 +1324,7 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Show rotating section — when off, carousel is hidden but sub/kicks alerts still pop up in progress bars</span>
+                  <span className="checkbox-text">Show rotating section</span>
                 </label>
             </div>
               <div className="checkbox-group" style={{ marginBottom: '12px' }}>
@@ -1782,41 +1335,38 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Enable gambling (chips, blackjack, slots, roulette, etc.)</span>
+                  <span className="checkbox-text">Enable gambling</span>
                 </label>
-                <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
-                  When off, !deal/!chips/!hit etc. are disabled and the chips leaderboard is hidden
-                </p>
               </div>
               {settings.gamblingEnabled !== false && (
                 <>
-              <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                <label>Chips leaderboard — include in rotation?</label>
-                <select
-                  className="admin-select-big"
-                  value={settings.showLeaderboard !== false ? 'true' : 'false'}
-                  onChange={(e) => handleSettingsChange({ showLeaderboard: e.target.value === 'true' })}
-                >
-                  <option value="true">🃏 Yes, include in rotation</option>
-                  <option value="false">🚫 No, hidden</option>
-                </select>
-              </div>
-              {settings.showLeaderboard !== false && (
-                <>
-                  <div className="admin-select-wrap">
-                    <label>Top N chips</label>
+                  <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
+                    <label>Chips leaderboard</label>
                     <select
                       className="admin-select-big"
-                      value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
-                      onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
+                      value={settings.showLeaderboard !== false ? 'true' : 'false'}
+                      onChange={(e) => handleSettingsChange({ showLeaderboard: e.target.value === 'true' })}
                     >
-                      {[1, 3, 5, 10].map((n) => (
-                        <option key={n} value={n}>Top {n}</option>
-                      ))}
+                      <option value="true">🃏 Show in rotation</option>
+                      <option value="false">🚫 Hidden</option>
                     </select>
                   </div>
+                  {settings.showLeaderboard !== false && (
+                    <div className="admin-select-wrap">
+                      <label>Top N chips</label>
+                      <select
+                        className="admin-select-big"
+                        value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
+                        onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
+                      >
+                        {[1, 3, 5, 10].map((n) => (
+                          <option key={n} value={n}>Top {n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="admin-select-wrap">
-                    <label>Usernames to exclude from leaderboard (comma or newline separated)</label>
+                    <label>Excluded users (comma separated)</label>
                     <textarea
                       className="text-input"
                       value={leaderboardExcludedBotsInput}
@@ -1825,34 +1375,22 @@ export default function AdminPage() {
                       rows={2}
                       style={{ resize: 'vertical', minHeight: 50 }}
                     />
-                    <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
-                      Add bots, your own username, or anyone who should not appear or earn chips
-                    </p>
                   </div>
-                </>
-              )}
-                </>
-              )}
-              {settings.gamblingEnabled !== false && (
-                <>
                   <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
                     <label>Channel point reward name (redeem for chips)</label>
                     <input
                       type="text"
-                      className="text-input admin-select-big"
+                      className="text-input"
                       value={settings.chipRewardTitle ?? 'Buy Chips'}
                       onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value })}
                       placeholder="Buy Chips"
                     />
-                    <p className="input-hint" style={{ marginTop: 4, fontSize: '0.85em' }}>
-                      Create a Kick reward with this exact name. Redemptions auto-grant chips. Leave empty to disable.
-                    </p>
                   </div>
                   <div className="admin-select-wrap" style={{ marginTop: 8 }}>
                     <label>Chips per redemption</label>
                     <input
                       type="number"
-                      className="text-input admin-select-big"
+                      className="text-input"
                       value={settings.chipRewardChips ?? 50}
                       onChange={(e) => handleSettingsChange({ chipRewardChips: Math.max(1, parseInt(e.target.value, 10) || 50) })}
                       min={1}
@@ -1876,7 +1414,7 @@ export default function AdminPage() {
                       <label>Sub goal target</label>
                       <input
                         type="number"
-                        className="text-input admin-select-big"
+                        className="text-input"
                         value={subGoalTargetInput}
                         onChange={(e) => handleSubGoalTargetChange(e.target.value)}
                         min={1}
@@ -1886,7 +1424,7 @@ export default function AdminPage() {
                       <label>Auto-increment amount (when goal is reached)</label>
                       <input
                         type="number"
-                        className="text-input admin-select-big"
+                        className="text-input"
                         value={subGoalIncrementInput}
                         onChange={(e) => handleSubGoalIncrementChange(e.target.value)}
                         min={1}
@@ -1896,7 +1434,7 @@ export default function AdminPage() {
                       <label>Sub goal subtext (optional second line)</label>
                 <input
                   type="text"
-                        className="text-input admin-select-big"
+                        className="text-input"
                         value={subGoalSubtextInput}
                         onChange={(e) => handleSubGoalSubtextChange(e.target.value)}
                         placeholder="e.g. 10 subs = 10 min extra stream"
@@ -1919,7 +1457,7 @@ export default function AdminPage() {
                       <label>Kicks goal target</label>
                       <input
                         type="number"
-                        className="text-input admin-select-big"
+                        className="text-input"
                         value={kicksGoalTargetInput}
                         onChange={(e) => handleKicksGoalTargetChange(e.target.value)}
                         min={1}
@@ -1929,7 +1467,7 @@ export default function AdminPage() {
                       <label>Auto-increment amount (when goal is reached)</label>
                       <input
                         type="number"
-                        className="text-input admin-select-big"
+                        className="text-input"
                         value={kicksGoalIncrementInput}
                         onChange={(e) => handleKicksGoalIncrementChange(e.target.value)}
                         min={1}
@@ -1939,7 +1477,7 @@ export default function AdminPage() {
                       <label>Kicks goal subtext (optional second line)</label>
                       <input
                         type="text"
-                        className="text-input admin-select-big"
+                        className="text-input"
                         value={kicksGoalSubtextInput}
                         onChange={(e) => handleKicksGoalSubtextChange(e.target.value)}
                         placeholder="e.g. Help me hit $50!"
@@ -1949,9 +1487,6 @@ export default function AdminPage() {
                 )}
                 {(settings.showSubGoal || settings.showKicksGoal) && (
                   <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-                    <p className="input-hint">
-                      Goals reset to 0 when stream goes live (manual overrides reset too). Override current values:
-                    </p>
                     <div className="stream-goals-override-fields">
                       {settings.showSubGoal && (
                         <div className="admin-select-wrap">
@@ -1959,7 +1494,7 @@ export default function AdminPage() {
                           <input
                             key={`subs-${settings.streamGoals?.subs ?? 0}`}
                             type="number"
-                            className="text-input admin-select-big admin-number-input"
+                            className="text-input admin-number-input"
                             defaultValue={settings.streamGoals?.subs ?? 0}
                             id="stream-goals-subs-input"
                             min={0}
@@ -1972,7 +1507,7 @@ export default function AdminPage() {
                           <input
                             key={`kicks-${settings.streamGoals?.kicks ?? 0}`}
                             type="number"
-                            className="text-input admin-select-big admin-number-input"
+                            className="text-input admin-number-input"
                             defaultValue={settings.streamGoals?.kicks ?? 0}
                             id="stream-goals-kicks-input"
                             min={0}
@@ -2062,9 +1597,6 @@ export default function AdminPage() {
 
           <CollapsibleSection id="poll" title="🗳️ Poll">
             <div className="setting-group">
-                  <p className="group-label group-description group-description-sm">
-                    Mods/broadcaster start polls with <code>!poll Question? Option1, Option2</code> or <code>!poll Food? Pizza burger chips</code> (space-separated when no commas). No options = Yes/No. Vote by typing option text (e.g. pizza, yes). Winner posts in chat and overlay. Mods and broadcaster can use <code>!endpoll</code> to end the current poll early.
-                  </p>
                   <div className="form-stack" style={{ maxWidth: 520 }}>
                     <label className="checkbox-label-row">
                           <input
@@ -2282,30 +1814,11 @@ export default function AdminPage() {
 
           <CollapsibleSection id="message-templates" title="📋 Chat message templates">
             <div className="setting-group">
-                  <p className="group-label group-description">
-                    Enable each event type and edit templates. Placeholders: {'{name}'}, {'{gifter}'}, {'{months}'}, {'{count}'}, {'{lifetimeSubs}'}, {'{sender}'}, {'{amount}'}, {'{kickDescription}'}, {'{redeemer}'}, {'{title}'}, {'{userInput}'}, {'{message}'}.
-                  </p>
                 <div className="form-stack">
                   {TEMPLATE_GROUP_CONFIG.map((group) => (
                     <div key={group.toggleKey} className="kick-message-group kick-message-card">
-                      {(group.toggleKey === 'giftSub' || group.toggleKey === 'kicksGifted') && (
+                      {group.toggleKey === 'kicksGifted' && (
                         <div className="kick-group-options">
-                          <span className="kick-group-options-label">Options:</span>
-                          {group.toggleKey === 'giftSub' && (
-                            <label className="kick-group-options-item">
-                              <input
-                                type="checkbox"
-                                checked={kickGiftSubShowLifetimeSubs}
-                                onChange={(e) => {
-                                  const checked = e.target.checked;
-                                  setKickGiftSubShowLifetimeSubs(checked);
-                                  saveKickMessages({ alertSettings: { giftSubShowLifetimeSubs: checked } });
-                                }}
-                                className="checkbox-input"
-                              />
-                              <span>Show lifetime subs in message</span>
-                        </label>
-                          )}
                           {group.toggleKey === 'kicksGifted' && (
                             <label className="kick-group-options-item">
                               <span>Min kicks to alert:</span>
@@ -2364,38 +1877,6 @@ export default function AdminPage() {
                       </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="data-tools" title="⚙️ Body metrics & data tools" description="Manual body metric entry and data reset options.">
-            <HealthDataSection />
-
-            <div className="setting-separator" style={{ margin: '1.25rem 0' }} />
-
-            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Data resets</h3>
-            <p className="input-hint" style={{ marginBottom: 12 }}>
-              Reset specific data stores. Use when auto-reset fails or for targeted cleanup.
-            </p>
-            <button
-              type="button"
-              className="btn btn-secondary btn-small"
-              title="Reset wellness milestones only"
-              onClick={async () => {
-                if (!confirm('Reset wellness milestones? Leaderboard, steps, distance unchanged.')) return;
-                try {
-                  const r = await authenticatedFetch('/api/reset-wellness-session', { method: 'POST' });
-                  const data = await r.json();
-                  if (r.ok) {
-                    setToast({ type: 'saved', message: 'Wellness milestones reset' });
-                  } else {
-                    setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                  }
-                } catch {
-                  setToast({ type: 'error', message: 'Reset failed' });
-                }
-                setTimeout(() => setToast(null), 3000);
-              }}
-            >
-              🧘 Reset wellness
-            </button>
-          </CollapsibleSection>
         </div>
       </main>
 

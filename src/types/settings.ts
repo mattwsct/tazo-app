@@ -20,6 +20,10 @@ export interface OverlaySettings {
   minimapTheme: MinimapTheme;
   mapZoomLevel: MapZoomLevel;
   showSteps: boolean;
+  showDistance?: boolean;
+  showCalories?: boolean;
+  showSpeed?: boolean;
+  showAltitude?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
   pollState?: PollState | null;
   /** Leaderboard: include in rotation (true) or hidden (false). */
@@ -75,6 +79,10 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   minimapTheme: 'auto',
   mapZoomLevel: 'match',
   showSteps: true,
+  showDistance: true,
+  showCalories: false,
+  showSpeed: true,
+  showAltitude: true,
   showLeaderboard: true,
   showGoalsRotation: true,
   leaderboardTopN: 5,
@@ -105,6 +113,10 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   minimapTheme: 'string',
   mapZoomLevel: 'string',
   showSteps: 'boolean',
+  showDistance: 'boolean',
+  showCalories: 'boolean',
+  showSpeed: 'boolean',
+  showAltitude: 'boolean',
   showLeaderboard: 'boolean',
   showGoalsRotation: 'boolean',
   leaderboardTopN: 'number',

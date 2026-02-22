@@ -38,6 +38,10 @@ import {
   playSlots,
   playRoulette,
   playDice,
+  playCrash,
+  playWar,
+  challengeDuel,
+  acceptDuel,
 } from '@/utils/blackjack-storage';
 
 export const KICK_CHAT_COMMANDS = [
@@ -76,6 +80,10 @@ export const KICK_CHAT_COMMANDS = [
   'spin',
   'roulette',
   'dice',
+  'crash',
+  'war',
+  'duel',
+  'accept',
   'gamba',
   'gamble',
 ] as const;
@@ -118,6 +126,10 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'slots' || cmd === 'spin') return { cmd: 'slots', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'roulette') return { cmd: 'roulette', arg: parts.slice(1).join(' ') };
   if (cmd === 'dice') return { cmd: 'dice', arg: parts.slice(1).join(' ') };
+  if (cmd === 'crash') return { cmd: 'crash', arg: parts.slice(1).join(' ') };
+  if (cmd === 'war') return { cmd: 'war', arg };
+  if (cmd === 'duel') return { cmd: 'duel', arg: parts.slice(1).join(' ') };
+  if (cmd === 'accept') return { cmd: 'accept' };
   if (cmd === 'gamba' || cmd === 'gamble') return { cmd: 'gamble', arg: arg ?? parts.slice(1).join(' ') };
   return null;
 }
@@ -196,7 +208,7 @@ export async function handleKickChatCommand(
   if (cmd === 'subs') return getSubsResponse();
 
   // Gambling (all require gambling enabled)
-  const gamblingCmds = ['refill', 'chips', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'gamba', 'gamble'];
+  const gamblingCmds = ['refill', 'chips', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return '🃏 Gambling is disabled for this stream.';
@@ -210,14 +222,14 @@ export async function handleKickChatCommand(
     const targetUser = (arg ?? '').trim() || user;
     const chips = await getChips(targetUser);
     if (targetUser.toLowerCase() === user.toLowerCase()) {
-      return `🃏 You have ${chips} chips (resets each stream). Chat to earn 10 per 10 min. !deal !slots !roulette !coinflip !dice. At 0? !refill for a rebuy (1 per stream).`;
+      return `🃏 You have ${chips} chips. !gamble for games. !refill if at 0.`;
     }
     return `🃏 ${targetUser} has ${chips} chips (resets each stream).`;
   }
   if (cmd === 'deal' || cmd === 'bj') {
     if (!user) return null;
-    const bet = parseInt(arg ?? '1', 10);
-    if (isNaN(bet) || bet < 1) return '🃏 Usage: !deal <amount> or !bj <amount> — e.g. !deal 5';
+    const betRaw = parseInt(arg ?? '', 10);
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
     return blackjackDeal(user, bet);
   }
   if (cmd === 'hit') {
@@ -268,18 +280,49 @@ export async function handleKickChatCommand(
     const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
     return playDice(user, choice, bet);
   }
+  if (cmd === 'crash') {
+    if (!user) return null;
+    const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+    const betRaw = parseInt(args[0] ?? '', 10);
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
+    const multRaw = args.length >= 2 ? parseFloat(args[1]) : undefined;
+    const mult = multRaw && !isNaN(multRaw) && multRaw >= 1.1 ? multRaw : undefined;
+    return playCrash(user, bet, mult);
+  }
+  if (cmd === 'war') {
+    if (!user) return null;
+    const betRaw = parseInt((arg ?? '').trim(), 10);
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
+    return playWar(user, bet);
+  }
+  if (cmd === 'duel') {
+    if (!user) return null;
+    const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+    let target = args[0] ?? '';
+    if (target.startsWith('@')) target = target.slice(1);
+    if (!target) return '⚔️ Usage: !duel @user <amount>';
+    const betRaw = args.length >= 2 ? parseInt(args[1], 10) : 5;
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
+    return challengeDuel(user, target, bet);
+  }
+  if (cmd === 'accept') {
+    if (!user) return null;
+    return acceptDuel(user);
+  }
   if (cmd === 'gamba' || cmd === 'gamble') {
     if (!user) return null;
     const betRaw = parseInt((arg ?? '').trim(), 10);
     if (isNaN(betRaw) || betRaw < 1) {
-      return '🎲 Games: !slots [amt] | !roulette red/black/number <amt> | !coinflip [amt] | !dice high/low [amt] | !deal [amt]. Bet 5–50, default 5. !chips. !speed !altitude !forecast !map for stats.';
+      return '🎲 !deal !slots !coinflip !dice !roulette !crash !war !duel — all take [amount]. !chips to check.';
     }
     const bet = betRaw;
-    const games: Array<'coinflip' | 'slots' | 'roulette' | 'dice'> = ['coinflip', 'slots', 'roulette', 'dice'];
+    const games = ['coinflip', 'slots', 'roulette', 'dice', 'crash', 'war'] as const;
     const pick = games[Math.floor(Math.random() * games.length)];
     if (pick === 'coinflip') return playCoinflip(user, bet);
     if (pick === 'slots') return playSlots(user, bet);
     if (pick === 'roulette') return playRoulette(user, ['red', 'black'][Math.floor(Math.random() * 2)], bet);
+    if (pick === 'crash') return playCrash(user, bet);
+    if (pick === 'war') return playWar(user, bet);
     return playDice(user, ['high', 'low'][Math.floor(Math.random() * 2)], bet);
   }
   return null;
