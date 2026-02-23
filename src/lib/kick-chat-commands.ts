@@ -43,6 +43,8 @@ import {
   joinOrStartHeist,
   getHeistStatus,
   checkAndResolveExpiredHeist,
+  joinRaffle,
+  getRaffleStatus,
 } from '@/utils/blackjack-storage';
 import {
   parseConvertArgs,
@@ -171,6 +173,7 @@ export const KICK_CHAT_COMMANDS = [
   'gamba',
   'games',
   'heist',
+  'join',
   'convert',
   'math',
 ] as const;
@@ -218,6 +221,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'gamba' || cmd === 'gamble') return { cmd: 'gamble', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'games') return { cmd: 'games' };
   if (cmd === 'heist') return { cmd: 'heist', arg };
+  if (cmd === 'join') return { cmd: 'join' };
   if (cmd === 'convert') return { cmd: 'convert', arg: parts.slice(1).join(' ') };
   if (cmd === 'math' || cmd === 'calc') return { cmd: 'math', arg: parts.slice(1).join(' ') };
   return null;
@@ -323,7 +327,7 @@ export async function handleKickChatCommand(
     return `🔢 ${expr.replace(/\*/g, '×').replace(/\//g, '÷')} = ${formatted}`;
   }
   // Gambling (all require gambling enabled)
-  const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games', 'heist'];
+  const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games', 'heist', 'join'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return '🃏 Gambling is disabled for this stream.';
@@ -415,6 +419,10 @@ export async function handleKickChatCommand(
       return '🏦 Usage: !heist <amount> — Start or join a group heist. More robbers = better odds!';
     }
     return joinOrStartHeist(user, bet);
+  }
+  if (cmd === 'join') {
+    if (!user) return null;
+    return joinRaffle(user);
   }
   return null;
 }

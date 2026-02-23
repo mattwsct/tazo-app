@@ -5,10 +5,11 @@ import type { OverlaySettings } from '@/types/settings';
 import GoalProgressBar from './GoalProgressBar';
 
 const ALERT_DISPLAY_MS = 8000;
-const CYCLE_DURATION_MS = 32000; // 4× base rotation (8s) — synced to same wall clock rhythm
-const CROSSFADE_DURATION_MS = 500; // Fade out + fade in overlap
+const GOALS_CYCLE_DURATION_MS = 32000; // 4x base rotation (8s)
+const CROSSFADE_DURATION_MS = 500;
 
-type SlideType = 'leaderboard' | 'subs' | 'kicks';
+type GoalSlide = 'subs' | 'kicks';
+type LbPollSlide = 'leaderboard' | 'poll';
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -39,7 +40,7 @@ export default function BottomRightPanel({
     (poll.status === 'active' ||
       (poll.status === 'winner' && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil));
   const totalVotes = poll?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
-  const showPoll = isPollActive && totalVotes >= 0;
+  const showPoll = !!(isPollActive && totalVotes >= 0);
 
   const gamblingEnabled = settings.gamblingEnabled !== false;
   const showLeaderboard = settings.showLeaderboard !== false && gamblingEnabled;
@@ -51,27 +52,34 @@ export default function BottomRightPanel({
 
   const showSubGoal = settings.showSubGoal && (settings.subGoalTarget ?? 0) > 0;
   const showKicksGoal = settings.showKicksGoal && (settings.kicksGoalTarget ?? 0) > 0;
+  const hasSubTarget = (settings.subGoalTarget ?? 0) > 0;
+  const hasKicksTarget = (settings.kicksGoalTarget ?? 0) > 0;
   const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0 };
 
-  // Build ordered slides: leaderboard (chips), subs, kicks — only include enabled ones
-  const slides = (['leaderboard', 'subs', 'kicks'] as SlideType[]).filter((s) => {
-    if (s === 'leaderboard') return showLeaderboard;
+  // Cache poll children for outgoing crossfade (children may be null when poll ends)
+  const pollChildrenCacheRef = useRef<React.ReactNode>(null);
+  if (children) pollChildrenCacheRef.current = children;
+
+  // =============================================
+  // SECTION 1: Goals rotation (subs / kicks)
+  // =============================================
+
+  const goalSlides = (['subs', 'kicks'] as GoalSlide[]).filter((s) => {
     if (s === 'subs') return showSubGoal;
     if (s === 'kicks') return showKicksGoal;
     return false;
   });
-  const slidesRef = useRef<SlideType[]>(slides);
-  const slidesKey = slides.join(',');
-  useEffect(() => {
-    slidesRef.current = slides;
-  }, [slides, slidesKey]);
+  const goalSlidesRef = useRef<GoalSlide[]>(goalSlides);
+  const goalSlidesKey = goalSlides.join(',');
+  useEffect(() => { goalSlidesRef.current = goalSlides; }, [goalSlides, goalSlidesKey]);
 
-  const [activeSlide, setActiveSlide] = useState<SlideType | null>(slides[0] ?? null);
-  const [displayedSlide, setDisplayedSlide] = useState<SlideType | null>(slides[0] ?? null);
-  const [outgoingSlide, setOutgoingSlide] = useState<SlideType | null>(null);
-  const holdUntilRef = useRef<number>(0);
+  const [activeGoal, setActiveGoal] = useState<GoalSlide | null>(goalSlides[0] ?? null);
+  const [displayedGoal, setDisplayedGoal] = useState<GoalSlide | null>(goalSlides[0] ?? null);
+  const [outgoingGoal, setOutgoingGoal] = useState<GoalSlide | null>(null);
+  const goalHoldUntilRef = useRef<number>(0);
+  const goalTransitionRef = useRef<NodeJS.Timeout | null>(null);
+
   const lastSeenAlertIdsRef = useRef<Set<string>>(new Set());
-  const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subsAlertClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const kicksAlertClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bumpedSubsUntilRef = useRef<number | null>(null);
@@ -80,48 +88,38 @@ export default function BottomRightPanel({
   const [subsAlert, setSubsAlert] = useState<OverlayAlert | null>(null);
   const [kicksAlert, setKicksAlert] = useState<OverlayAlert | null>(null);
 
-  // Update activeSlide when slides change (e.g. enable/disable goals)
   useEffect(() => {
-    if (slides.length === 0) {
-      setActiveSlide(null);
-      setDisplayedSlide(null);
-      setOutgoingSlide(null);
+    if (goalSlides.length === 0) {
+      setActiveGoal(null);
+      setDisplayedGoal(null);
+      setOutgoingGoal(null);
       return;
     }
-    const current = activeSlide ? slides.indexOf(activeSlide) : -1;
-    if (current >= 0 && slides.includes(activeSlide!)) return; // keep current if still valid
-    setActiveSlide(slides[0]);
-    setDisplayedSlide(slides[0]);
-    setOutgoingSlide(null);
-  }, [slides, activeSlide]);
+    if (activeGoal && goalSlides.includes(activeGoal)) return;
+    setActiveGoal(goalSlides[0]);
+    setDisplayedGoal(goalSlides[0]);
+    setOutgoingGoal(null);
+  }, [goalSlides, activeGoal]);
 
-  // Crossfade when activeSlide changes: fade out current, fade in next
-  // displayedSlide/outgoingSlide intentionally omitted — they are effect outputs, not inputs
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- displayedGoal, outgoingGoal are outputs
   useEffect(() => {
-    if (activeSlide == null || slides.length === 0) return;
-    if (activeSlide === displayedSlide && !outgoingSlide) return;
+    if (activeGoal == null || goalSlides.length === 0) return;
+    if (activeGoal === displayedGoal && !outgoingGoal) return;
 
-    // Start transition — sync setState for crossfade; timeout handles async completion
-    setOutgoingSlide(displayedSlide ?? activeSlide);
-
-    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-    transitionTimeoutRef.current = setTimeout(() => {
-      transitionTimeoutRef.current = null;
-      setDisplayedSlide(activeSlide);
-      setOutgoingSlide(null);
+    setOutgoingGoal(displayedGoal ?? activeGoal);
+    if (goalTransitionRef.current) clearTimeout(goalTransitionRef.current);
+    goalTransitionRef.current = setTimeout(() => {
+      goalTransitionRef.current = null;
+      setDisplayedGoal(activeGoal);
+      setOutgoingGoal(null);
     }, CROSSFADE_DURATION_MS);
+    return () => { if (goalTransitionRef.current) clearTimeout(goalTransitionRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGoal]);
 
-    return () => {
-      if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- displayedSlide, outgoingSlide are outputs
-  }, [activeSlide]);
-
-  // When new sub/resub/giftSub alert arrives → switch to subs and hold (or show alert-only bar when rotation hidden)
-  // When new kicks alert arrives → switch to kicks and hold
+  // Alert bumping — switch to relevant goal on sub/kicks alerts
   useEffect(() => {
-    if (!showOverlayAlerts || overlayAlerts.length === 0 || (!showSubGoal && !showKicksGoal)) return;
-
+    if (!showOverlayAlerts || overlayAlerts.length === 0 || (!hasSubTarget && !hasKicksTarget)) return;
     const seen = lastSeenAlertIdsRef.current;
     for (const a of overlayAlerts) {
       if (!a?.id || seen.has(a.id)) continue;
@@ -130,10 +128,10 @@ export default function BottomRightPanel({
       const isSubType = a.type === 'sub' || a.type === 'resub' || a.type === 'giftSub';
       const isKicksType = a.type === 'kicks';
 
-      if (isSubType && showSubGoal) {
-        holdUntilRef.current = Date.now() + ALERT_DISPLAY_MS;
+      if (isSubType && hasSubTarget) {
+        goalHoldUntilRef.current = Date.now() + ALERT_DISPLAY_MS;
         queueMicrotask(() => {
-          if (showGoalsRotation) setActiveSlide('subs');
+          if (showGoalsRotation) setActiveGoal('subs');
           setSubsAlert(a);
         });
         if (subsAlertClearRef.current) clearTimeout(subsAlertClearRef.current);
@@ -143,10 +141,10 @@ export default function BottomRightPanel({
         }, ALERT_DISPLAY_MS);
         break;
       }
-      if (isKicksType && showKicksGoal) {
-        holdUntilRef.current = Date.now() + ALERT_DISPLAY_MS;
+      if (isKicksType && hasKicksTarget) {
+        goalHoldUntilRef.current = Date.now() + ALERT_DISPLAY_MS;
         queueMicrotask(() => {
-          if (showGoalsRotation) setActiveSlide('kicks');
+          if (showGoalsRotation) setActiveGoal('kicks');
           setKicksAlert(a);
         });
         if (kicksAlertClearRef.current) clearTimeout(kicksAlertClearRef.current);
@@ -157,41 +155,57 @@ export default function BottomRightPanel({
         break;
       }
     }
-  }, [overlayAlerts, showOverlayAlerts, showSubGoal, showKicksGoal, showGoalsRotation]);
+  }, [overlayAlerts, showOverlayAlerts, hasSubTarget, hasKicksTarget, showGoalsRotation]);
 
-  // Cycle through slides (when not on hold) — runs even during poll so both show; skip when rotation hidden
+  // Goals cycling (wall clock aligned)
   useEffect(() => {
-    if (!showGoalsRotation || slides.length <= 1) return;
-
+    if (!showGoalsRotation || goalSlides.length <= 1) return;
     const tick = () => {
-      const now = Date.now();
-      if (now < holdUntilRef.current) return; // still holding for alert
-
-      const currentSlides = slidesRef.current;
-      if (currentSlides.length <= 1) return;
-
-      setActiveSlide((prev) => {
-        const idx = prev && currentSlides.includes(prev) ? currentSlides.indexOf(prev) : 0;
-        const next = (idx + 1) % currentSlides.length;
-        return currentSlides[next];
+      if (Date.now() < goalHoldUntilRef.current) return;
+      const current = goalSlidesRef.current;
+      if (current.length <= 1) return;
+      setActiveGoal((prev) => {
+        const idx = prev && current.includes(prev) ? current.indexOf(prev) : 0;
+        return current[(idx + 1) % current.length];
       });
     };
-
-    // Align to wall clock so rotation syncs with other overlay rotations
-    const now = Date.now();
-    const msUntilNextTick = CYCLE_DURATION_MS - (now % CYCLE_DURATION_MS);
+    const msUntilNext = GOALS_CYCLE_DURATION_MS - (Date.now() % GOALS_CYCLE_DURATION_MS);
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const initialTimeout = setTimeout(() => {
       tick();
-      intervalId = setInterval(tick, CYCLE_DURATION_MS);
-    }, msUntilNextTick);
-    return () => {
-      clearTimeout(initialTimeout);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [showGoalsRotation, slides.length, slidesKey]);
+      intervalId = setInterval(tick, GOALS_CYCLE_DURATION_MS);
+    }, msUntilNext);
+    return () => { clearTimeout(initialTimeout); if (intervalId) clearInterval(intervalId); };
+  }, [showGoalsRotation, goalSlides.length, goalSlidesKey]);
 
-  // When celebration window ends, bump goal via API (once per celebration)
+  // =============================================
+  // SECTION 2: Leaderboard / Poll crossfade
+  // =============================================
+
+  const lbTarget: LbPollSlide = showPoll ? 'poll' : 'leaderboard';
+  const [lbDisplayed, setLbDisplayed] = useState<LbPollSlide>(lbTarget);
+  const [lbOutgoing, setLbOutgoing] = useState<LbPollSlide | null>(null);
+  const lbTransRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (lbTransRef.current) { clearTimeout(lbTransRef.current); lbTransRef.current = null; }
+    if (lbTarget === lbDisplayed) {
+      setLbOutgoing(null);
+      return;
+    }
+    setLbOutgoing(lbDisplayed);
+    lbTransRef.current = setTimeout(() => {
+      lbTransRef.current = null;
+      setLbDisplayed(lbTarget);
+      setLbOutgoing(null);
+    }, CROSSFADE_DURATION_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lbTarget]);
+
+  // =============================================
+  // Celebration bumping (goal reached → bump target)
+  // =============================================
+
   useEffect(() => {
     if (!showSubGoal && !showKicksGoal) return;
 
@@ -236,11 +250,20 @@ export default function BottomRightPanel({
     };
   }, []);
 
-  const hasRotationContent = showGoalsRotation && slides.length > 0;
-  const hasAlertOnlyContent = !showGoalsRotation && (showSubGoal || showKicksGoal) && (subsAlert != null || kicksAlert != null);
-  const hasContent = showPoll || hasRotationContent || hasAlertOnlyContent;
+  // =============================================
+  // Visibility
+  // =============================================
+
+  const hasGoalsContent = showGoalsRotation && goalSlides.length > 0;
+  const hasGoalAlertContent = !hasGoalsContent && (hasSubTarget || hasKicksTarget) && (subsAlert != null || kicksAlert != null);
+  const hasLbPollContent = showLeaderboard || showPoll;
+  const hasContent = hasGoalsContent || hasGoalAlertContent || hasLbPollContent;
 
   if (!hasContent) return null;
+
+  // =============================================
+  // Render helpers
+  // =============================================
 
   const renderLeaderboard = () => (
     <div className="overlay-box leaderboard-box">
@@ -296,38 +319,58 @@ export default function BottomRightPanel({
     </div>
   );
 
+  const renderGoalSlide = (type: GoalSlide) => {
+    if (type === 'subs') return renderSubsGoal();
+    if (type === 'kicks') return renderKicksGoal();
+    return null;
+  };
+
+  const renderLbPollSlide = (type: LbPollSlide, isOutgoing = false) => {
+    if (type === 'leaderboard') return showLeaderboard ? renderLeaderboard() : null;
+    return isOutgoing ? pollChildrenCacheRef.current : (children || pollChildrenCacheRef.current);
+  };
+
   return (
     <div className="bottom-right">
-      {/* Top: rotating leaderboard/subs/kicks — or alert-only bars when rotation hidden */}
-      {hasRotationContent && (
+      {/* Top: Goals rotation (subs/kicks) */}
+      {hasGoalsContent && (
         <div className="bottom-right-cycling-wrapper">
           <div className="bottom-right-cycling-slots">
-            {outgoingSlide && (
-              <div className="bottom-right-cycling-slide cycling-slide-out" key={`out-${outgoingSlide}`}>
-                {outgoingSlide === 'leaderboard' && renderLeaderboard()}
-                {outgoingSlide === 'subs' && renderSubsGoal()}
-                {outgoingSlide === 'kicks' && renderKicksGoal()}
+            {outgoingGoal && (
+              <div className="bottom-right-cycling-slide cycling-slide-out" key={`goal-out-${outgoingGoal}`}>
+                {renderGoalSlide(outgoingGoal)}
               </div>
             )}
-            {(activeSlide || displayedSlide) && (
-              <div className="bottom-right-cycling-slide cycling-slide-in" key={`in-${activeSlide ?? displayedSlide}`}>
-                {(activeSlide ?? displayedSlide) === 'leaderboard' && renderLeaderboard()}
-                {(activeSlide ?? displayedSlide) === 'subs' && renderSubsGoal()}
-                {(activeSlide ?? displayedSlide) === 'kicks' && renderKicksGoal()}
+            {(activeGoal || displayedGoal) && (
+              <div className="bottom-right-cycling-slide cycling-slide-in" key={`goal-in-${activeGoal ?? displayedGoal}`}>
+                {renderGoalSlide((activeGoal ?? displayedGoal)!)}
               </div>
             )}
           </div>
         </div>
       )}
-      {/* When rotation hidden: show goal bars only when alert is active */}
-      {hasAlertOnlyContent && (
+      {/* Alert-only goals when rotation hidden */}
+      {hasGoalAlertContent && (
         <div className="bottom-right-alert-only">
-          {subsAlert && showSubGoal && renderSubsGoal()}
-          {kicksAlert && showKicksGoal && renderKicksGoal()}
+          {subsAlert && hasSubTarget && renderSubsGoal()}
+          {kicksAlert && hasKicksTarget && renderKicksGoal()}
         </div>
       )}
-      {/* Bottom: poll (when active) — stacks under rotation */}
-      {children}
+      {/* Bottom: Leaderboard / Poll crossfade */}
+      {hasLbPollContent && (
+        <div className="bottom-right-cycling-wrapper">
+          <div className="bottom-right-cycling-slots">
+            {lbOutgoing && (
+              <div className="bottom-right-cycling-slide cycling-slide-out" key={`lb-out-${lbOutgoing}`}>
+                {renderLbPollSlide(lbOutgoing, true)}
+              </div>
+            )}
+            <div className="bottom-right-cycling-slide cycling-slide-in" key={`lb-in-${lbTarget}`}>
+              {renderLbPollSlide(lbTarget)}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -30,7 +30,7 @@ import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightT
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
-import { checkAndResolveExpiredHeist } from '@/utils/blackjack-storage';
+import { checkAndResolveExpiredHeist, resolveRaffle, shouldStartRaffle, startRaffle, resolveTopChatter } from '@/utils/blackjack-storage';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
@@ -420,6 +420,40 @@ export async function GET(request: NextRequest) {
     }
   } catch (err) {
     console.error('[Cron HR] HEIST_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+  }
+
+  // Auto-raffle: resolve expired, then maybe start a new one (only when live)
+  if (isLive) {
+    try {
+      const raffleResult = await resolveRaffle();
+      if (raffleResult) {
+        await sendKickChatMessage(accessToken, raffleResult);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
+      }
+      if (await shouldStartRaffle()) {
+        const announcement = await startRaffle();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_start', msgPreview: announcement.slice(0, 80) }));
+      }
+    } catch (err) {
+      console.error('[Cron HR] RAFFLE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Top chatter: resolve previous hour (only when live)
+  if (isLive) {
+    try {
+      const topChatterResult = await resolveTopChatter();
+      if (topChatterResult) {
+        await sendKickChatMessage(accessToken, topChatterResult);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'top_chatter', msgPreview: topChatterResult.slice(0, 80) }));
+      }
+    } catch (err) {
+      console.error('[Cron HR] TOP_CHATTER_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
   }
 
   console.log('[Cron HR] CRON_END', JSON.stringify({ sent, runAt }));

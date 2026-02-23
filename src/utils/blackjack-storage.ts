@@ -871,19 +871,7 @@ export async function joinOrStartHeist(username: string, betAmount: number): Pro
 
   if (existing && Date.now() - existing.startedAt >= HEIST_JOIN_WINDOW_MS) {
     const heistResult = await resolveHeist(existing);
-
-    const result = await placeBet(user, betAmount);
-    if (!result.ok) return `${heistResult}\n🏦 Not enough chips to start a new heist (${result.balance}).`;
-    const { bet } = result;
-    await setInstantCooldown(user);
-
-    const newHeist: HeistState = {
-      participants: [{ user, display, bet }],
-      startedAt: Date.now(),
-    };
-    await kv.set(HEIST_KEY, newHeist, { ex: HEIST_TTL_SEC });
-
-    return `${heistResult}\n🏦 NEW HEIST! ${display} bets ${bet} chips. Type !heist [amount] to join! (60s)`;
+    return `${heistResult} Use !heist [amount] to start a new one.`;
   }
 
   if (existing) {
@@ -933,4 +921,191 @@ export async function getHeistStatus(): Promise<string | null> {
   const timeLeft = Math.ceil((HEIST_JOIN_WINDOW_MS - (Date.now() - existing.startedAt)) / 1000);
   const names = existing.participants.map(p => p.display).join(', ');
   return `🏦 Active heist: ${names} (${existing.participants.length} robbers, ${totalPot} at stake, ${rate}% odds, ${timeLeft}s left). !heist [amount] to join!`;
+}
+
+// --- Raffle ---
+
+const RAFFLE_KEY = 'raffle_active';
+const RAFFLE_LAST_AT_KEY = 'raffle_last_at';
+const RAFFLE_TTL_SEC = 300; // 5 min TTL safety net
+const RAFFLE_ENTRY_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+const RAFFLE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between raffles
+const RAFFLE_DEFAULT_PRIZE = 50;
+
+interface RaffleState {
+  participants: Array<{ user: string; display: string }>;
+  startedAt: number;
+  prize: number;
+}
+
+/** Start a new raffle. Returns announcement message. */
+export async function startRaffle(prize = RAFFLE_DEFAULT_PRIZE): Promise<string> {
+  const raffle: RaffleState = {
+    participants: [],
+    startedAt: Date.now(),
+    prize,
+  };
+  await kv.set(RAFFLE_KEY, raffle, { ex: RAFFLE_TTL_SEC });
+  return `🎰 RAFFLE! Type !join to enter! Drawing in 2 minutes — winner gets ${prize} chips!`;
+}
+
+/** Join the active raffle. Returns response message. */
+export async function joinRaffle(username: string): Promise<string> {
+  const user = normalizeUser(username);
+  const display = username.trim();
+  const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
+  if (!raffle) return '🎰 No active raffle right now. One will start soon!';
+  if (Date.now() - raffle.startedAt >= RAFFLE_ENTRY_WINDOW_MS) {
+    return '🎰 Raffle entry has closed — drawing soon!';
+  }
+  if (raffle.participants.some(p => p.user === user)) {
+    return '🎰 You\'re already in this raffle!';
+  }
+  raffle.participants.push({ user, display });
+  await kv.set(RAFFLE_KEY, raffle, { ex: RAFFLE_TTL_SEC });
+  return `🎰 ${display} joined the raffle! (${raffle.participants.length} entered)`;
+}
+
+/** Resolve the active raffle. Returns result message or null if nothing to resolve. */
+export async function resolveRaffle(): Promise<string | null> {
+  const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
+  if (!raffle) return null;
+  if (Date.now() - raffle.startedAt < RAFFLE_ENTRY_WINDOW_MS) return null;
+
+  await kv.del(RAFFLE_KEY);
+  await kv.set(RAFFLE_LAST_AT_KEY, String(Date.now()));
+
+  if (raffle.participants.length === 0) return null;
+
+  const winner = raffle.participants[Math.floor(Math.random() * raffle.participants.length)];
+  const bal = await addChips(winner.user, raffle.prize);
+  if (winner.display) await setLeaderboardDisplayName(winner.user, winner.display);
+
+  return `🎰 RAFFLE WINNER! ${winner.display} wins ${raffle.prize} chips! (${bal} chips)`;
+}
+
+/** Check if enough time has passed to start a new raffle. */
+export async function shouldStartRaffle(): Promise<boolean> {
+  const existing = await kv.get<RaffleState>(RAFFLE_KEY);
+  if (existing) return false;
+  const lastAt = await kv.get<string>(RAFFLE_LAST_AT_KEY);
+  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : RAFFLE_INTERVAL_MS;
+  return elapsed >= RAFFLE_INTERVAL_MS;
+}
+
+/** Get raffle status for chat. */
+export async function getRaffleStatus(): Promise<string | null> {
+  const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
+  if (!raffle) return null;
+  if (Date.now() - raffle.startedAt >= RAFFLE_ENTRY_WINDOW_MS) return null;
+  const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - (Date.now() - raffle.startedAt)) / 1000);
+  return `🎰 Active raffle: ${raffle.participants.length} entered, ${raffle.prize} chip prize, ${timeLeft}s left. Type !join to enter!`;
+}
+
+// --- Chat Activity / Top Chatter ---
+
+const CHAT_ACTIVITY_KEY_PREFIX = 'chat_activity:';
+const CHAT_ACTIVITY_META_PREFIX = 'chat_activity_meta:';
+const CHAT_ACTIVITY_HASH_PREFIX = 'chat_activity_hash:';
+const CHAT_ACTIVITY_LAST_RESOLVED_KEY = 'chat_activity_last_resolved';
+const CHAT_ACTIVITY_TTL_SEC = 7200; // 2 hours
+const CHAT_ACTIVITY_RATE_LIMIT_MS = 30_000; // 30s between counted messages
+const TOP_CHATTER_PRIZE = 25;
+const TOP_CHATTER_MIN_CHATTERS = 3;
+
+function hourKey(date = new Date()): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}-${String(date.getUTCHours()).padStart(2, '0')}`;
+}
+
+function simpleHash(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return String(h);
+}
+
+/** Track a chat message for top-chatter scoring. Returns silently; anti-spam filters applied. */
+export async function trackChatActivity(username: string, messageContent: string): Promise<void> {
+  const user = normalizeUser(username);
+  const excluded = await getLeaderboardExclusions();
+  if (excluded.has(user)) return;
+
+  const hk = hourKey();
+  const activityKey = `${CHAT_ACTIVITY_KEY_PREFIX}${hk}`;
+  const metaKey = `${CHAT_ACTIVITY_META_PREFIX}${hk}`;
+  const hashKey = `${CHAT_ACTIVITY_HASH_PREFIX}${hk}`;
+
+  try {
+    const now = Date.now();
+
+    // Rate limit: max 1 counted message per 30s
+    const lastAt = await kv.hget<string>(metaKey, user);
+    if (lastAt && now - parseInt(lastAt, 10) < CHAT_ACTIVITY_RATE_LIMIT_MS) return;
+
+    // Dedup: skip identical consecutive messages
+    const msgHash = simpleHash(messageContent.trim().toLowerCase());
+    const lastHash = await kv.hget<string>(hashKey, user);
+    if (lastHash === msgHash) return;
+
+    // All checks passed — count this message
+    await Promise.all([
+      kv.hincrby(activityKey, user, 1),
+      kv.hset(metaKey, { [user]: String(now) }),
+      kv.hset(hashKey, { [user]: msgHash }),
+    ]);
+
+    // Set TTL on first write (ignore errors if already set)
+    await Promise.all([
+      kv.expire(activityKey, CHAT_ACTIVITY_TTL_SEC),
+      kv.expire(metaKey, CHAT_ACTIVITY_TTL_SEC),
+      kv.expire(hashKey, CHAT_ACTIVITY_TTL_SEC),
+    ]);
+  } catch {
+    // Silently ignore tracking errors
+  }
+}
+
+/** Resolve top chatter for the previous hour. Returns announcement or null. */
+export async function resolveTopChatter(): Promise<string | null> {
+  const now = new Date();
+  const currentHk = hourKey(now);
+  const lastResolved = await kv.get<string>(CHAT_ACTIVITY_LAST_RESOLVED_KEY);
+  if (lastResolved === currentHk) return null;
+
+  // Resolve the previous hour
+  const prevHour = new Date(now.getTime() - 60 * 60 * 1000);
+  const prevHk = hourKey(prevHour);
+
+  // Don't re-resolve the same hour
+  if (lastResolved === prevHk) {
+    await kv.set(CHAT_ACTIVITY_LAST_RESOLVED_KEY, currentHk);
+    return null;
+  }
+
+  await kv.set(CHAT_ACTIVITY_LAST_RESOLVED_KEY, currentHk);
+
+  const activityKey = `${CHAT_ACTIVITY_KEY_PREFIX}${prevHk}`;
+  const counts = await kv.hgetall<Record<string, string | number>>(activityKey);
+  if (!counts) return null;
+
+  const entries = Object.entries(counts).map(([u, c]) => ({
+    user: u,
+    count: typeof c === 'number' ? c : parseInt(String(c), 10) || 0,
+  }));
+
+  if (entries.length < TOP_CHATTER_MIN_CHATTERS) return null;
+
+  entries.sort((a, b) => b.count - a.count);
+  const winner = entries[0];
+  if (winner.count < 1) return null;
+
+  const excluded = await getLeaderboardExclusions();
+  if (excluded.has(winner.user)) return null;
+
+  const bal = await addChips(winner.user, TOP_CHATTER_PRIZE);
+  const names = (await kv.hgetall<Record<string, string>>(LEADERBOARD_DISPLAY_NAMES_KEY)) ?? {};
+  const displayName = names[winner.user] ?? winner.user;
+
+  return `💬 Top chatter this hour: ${displayName} (${winner.count} messages) — +${TOP_CHATTER_PRIZE} chips! (${bal} chips)`;
 }

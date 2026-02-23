@@ -23,7 +23,7 @@ import {
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
-import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin } from '@/utils/blackjack-storage';
+import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin, trackChatActivity } from '@/utils/blackjack-storage';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
@@ -169,7 +169,8 @@ export async function POST(request: NextRequest) {
     const sender = (payload.sender as { username?: string })?.username ?? '?';
     void (async () => {
       if (await isGamblingEnabled()) void addViewTimeChips(sender);
-    })(); // 10 chips per 10 min of chat activity (only when gambling enabled)
+    })();
+    void trackChatActivity(sender, content);
     try {
       await kv.set(KICK_LAST_CHAT_MESSAGE_AT_KEY, Date.now());
     } catch { /* ignore */ }
