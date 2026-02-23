@@ -13,7 +13,6 @@ const VIEW_CHIPS_PER_INTERVAL = 10;
 const CHIPS_BALANCE_KEY = 'blackjack_chips';
 const GAMBLING_LEADERBOARD_KEY = 'blackjack_leaderboard';
 const DEAL_COOLDOWN_KEY = 'blackjack_deal_last_at';
-const REBUYS_KEY = 'blackjack_rebuys';
 const VIEW_CHIPS_LAST_AT_KEY = 'blackjack_view_chips_last_at';
 const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
@@ -74,8 +73,14 @@ function shuffleDeck(): Card[] {
 }
 
 function cardDisplay(card: Card): string {
-  return card; // e.g. "K♥" "A♠"
+  return card;
 }
+
+function formatHand(cards: Card[]): string {
+  return cards.map(cardDisplay).join(' ');
+}
+
+const NO_ACTIVE_HAND_MSG = '🃏 No active hand. Use !deal <amount> to play.';
 
 function cardRank(card: Card): Rank {
   return card.slice(0, -1) as Rank;
@@ -220,7 +225,6 @@ export async function resetGamblingOnStreamStart(): Promise<void> {
       kv.del(CHIPS_BALANCE_KEY),
       kv.del(GAMBLING_LEADERBOARD_KEY),
       kv.del(DEAL_COOLDOWN_KEY),
-      kv.del(REBUYS_KEY),
       kv.del(VIEW_CHIPS_LAST_AT_KEY),
     ]);
     console.log('[Blackjack] Chips and gambling leaderboard reset on stream start at', new Date().toISOString());
@@ -284,7 +288,7 @@ export async function deal(username: string, betAmount: number): Promise<string>
   const existing = await getActiveGame(username);
   if (existing) {
     const { value } = handValue(existing.playerHand);
-    return `🃏 You're already in a hand (${existing.playerHand.map(cardDisplay).join(' ')} = ${value}). !hit or !stand`;
+    return `🃏 You're already in a hand (${formatHand(existing.playerHand)} = ${value}). !hit or !stand`;
   }
 
   const { ok, balance } = await deductChips(user, bet);
@@ -334,14 +338,14 @@ export async function deal(username: string, betAmount: number): Promise<string>
 
   const dealerVis = cardDisplay(d1) + ' ?';
   const extras = isPair(playerHand) ? ' | !double (2 cards) | !split (pair)' : ' | !double (2 cards)';
-  return `🃏 Your hand: ${playerHand.map(cardDisplay).join(' ')} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
+  return `🃏 Your hand: ${formatHand(playerHand)} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
 }
 
 /** Double - double bet, take one card, stand. Only when 2 cards and not split. */
 export async function double(username: string): Promise<string> {
   const user = normalizeUser(username);
   const game = await getActiveGame(username);
-  if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
+  if (!game) return NO_ACTIVE_HAND_MSG;
   if (game.split) return `🃏 Can't !double on split hands. Use !hit or !stand.`;
   if (game.playerHand.length !== 2) return `🃏 !double only on first 2 cards. Use !hit or !stand.`;
 
@@ -357,7 +361,7 @@ export async function double(username: string): Promise<string> {
 
   if (value > 21) {
     await kv.del(gameKey(user));
-    return `🃏 Double bust! Drew ${cardDisplay(card)} — ${game.playerHand.map(cardDisplay).join(' ')} = ${value}. Lost ${game.bet * 2} chips.`;
+    return `🃏 Double bust! Drew ${cardDisplay(card)} — ${formatHand(game.playerHand)} = ${value}. Lost ${game.bet * 2} chips.`;
   }
 
   game.bet *= 2;
@@ -371,7 +375,7 @@ export async function double(username: string): Promise<string> {
 export async function split(username: string): Promise<string> {
   const user = normalizeUser(username);
   const game = await getActiveGame(username);
-  if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
+  if (!game) return NO_ACTIVE_HAND_MSG;
   if (game.split) return `🃏 Already split. Use !hit or !stand.`;
   if (!isPair(game.playerHand)) return `🃏 !split only on pairs. Use !hit or !stand.`;
 
@@ -396,14 +400,14 @@ export async function split(username: string): Promise<string> {
   game.createdAt = Date.now();
   await kv.set(gameKey(user), game);
   const v1 = handValue(game.playerHand).value;
-  return `🃏 Split! Hand 1: ${game.playerHand.map(cardDisplay).join(' ')} (${v1}) — !hit or !stand (Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} waits)`;
+  return `🃏 Split! Hand 1: ${formatHand(game.playerHand)} (${v1}) — !hit or !stand (Hand 2: ${formatHand(game.playerHand2!)} waits)`;
 }
 
 /** Hit - draw a card. */
 export async function hit(username: string): Promise<string> {
   const user = normalizeUser(username);
   const game = await getActiveGame(username);
-  if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
+  if (!game) return NO_ACTIVE_HAND_MSG;
 
   const isHand1 = !game.split || !game.hand1Done;
   const hand = isHand1 ? game.playerHand : game.playerHand2!;
@@ -422,22 +426,22 @@ export async function hit(username: string): Promise<string> {
         const v2 = handValue(game.playerHand2!).value;
         if (v2 > 21) {
           await kv.del(gameKey(user));
-          return `🃏 Hand 1 bust! Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} (${v2}) also bust. Lost ${game.bet + game.bet2!} chips.`;
+          return `🃏 Hand 1 bust! Hand 2: ${formatHand(game.playerHand2!)} (${v2}) also bust. Lost ${game.bet + game.bet2!} chips.`;
         }
-        return `🃏 Hand 1 bust! Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} (${v2}) — !hit or !stand`;
+        return `🃏 Hand 1 bust! Hand 2: ${formatHand(game.playerHand2!)} (${v2}) — !hit or !stand`;
       } else {
         await kv.del(gameKey(user));
-        return `🃏 Hand 2 bust! ${game.playerHand2!.map(cardDisplay).join(' ')} = ${value}. Lost ${game.bet + game.bet2!} chips.`;
+        return `🃏 Hand 2 bust! ${formatHand(game.playerHand2!)} = ${value}. Lost ${game.bet + game.bet2!} chips.`;
       }
     }
     await kv.del(gameKey(user));
-    return `🃏 Bust! You got ${cardDisplay(card)} — ${game.playerHand.map(cardDisplay).join(' ')} = ${value}. Lost ${game.bet} chips.`;
+    return `🃏 Bust! You got ${cardDisplay(card)} — ${formatHand(game.playerHand)} = ${value}. Lost ${game.bet} chips.`;
   }
 
   game.createdAt = Date.now();
   await kv.set(gameKey(user), game);
   const handLabel = game.split ? (isHand1 ? 'Hand 1' : 'Hand 2') : 'Your hand';
-  return `🃏 Drew ${cardDisplay(card)}. ${handLabel}: ${hand.map(cardDisplay).join(' ')} (${value}) — !hit or !stand`;
+  return `🃏 Drew ${cardDisplay(card)}. ${handLabel}: ${formatHand(hand)} (${value}) — !hit or !stand`;
 }
 
 function resolveHand(
@@ -455,14 +459,14 @@ function resolveHand(
 export async function stand(username: string): Promise<string> {
   const user = normalizeUser(username);
   const game = await getActiveGame(username);
-  if (!game) return `🃏 No active hand. Use !deal <amount> to play.`;
+  if (!game) return NO_ACTIVE_HAND_MSG;
 
   if (game.split && !game.hand1Done) {
     game.hand1Done = true;
     game.createdAt = Date.now();
     await kv.set(gameKey(user), game);
     const v2 = handValue(game.playerHand2!).value;
-    return `🃏 Hand 1 stood. Hand 2: ${game.playerHand2!.map(cardDisplay).join(' ')} (${v2}) — !hit or !stand`;
+    return `🃏 Hand 1 stood. Hand 2: ${formatHand(game.playerHand2!)} (${v2}) — !hit or !stand`;
   }
 
   const dealerHand = [...game.dealerHand];
@@ -484,7 +488,7 @@ export async function stand(username: string): Promise<string> {
     const totalBet = game.bet + game.bet2!;
     if (totalWin > 0) await addChips(user, totalWin);
     await kv.del(gameKey(user));
-    return `🃏 Dealer: ${dealerHand.map(cardDisplay).join(' ')} (${dealerVal}) | H1: ${r1.msg} | H2: ${r2.msg} | Net: ${totalWin - totalBet >= 0 ? '+' : ''}${totalWin - totalBet} chips`;
+    return `🃏 Dealer: ${formatHand(dealerHand)} (${dealerVal}) | H1: ${r1.msg} | H2: ${r2.msg} | Net: ${totalWin - totalBet >= 0 ? '+' : ''}${totalWin - totalBet} chips`;
   }
 
   const playerVal = handValue(game.playerHand).value;
@@ -492,7 +496,7 @@ export async function stand(username: string): Promise<string> {
   if (win > 0) await addChips(user, win);
 
   await kv.del(gameKey(user));
-  return `🃏 Dealer: ${dealerHand.map(cardDisplay).join(' ')} (${dealerVal}) | ${msg}`;
+  return `🃏 Dealer: ${formatHand(dealerHand)} (${dealerVal}) | ${msg}`;
 }
 
 // --- Instant games: coinflip, slots, roulette, dice ---

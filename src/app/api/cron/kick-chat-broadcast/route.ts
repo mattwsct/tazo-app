@@ -17,7 +17,6 @@ import { formatLocation } from '@/utils/location-utils';
 import type { LocationDisplayMode } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
 import {
-  getWellnessData,
   getStepsSinceStreamStart,
   getDistanceSinceStreamStart,
   getFlightsSinceStreamStart,
@@ -94,6 +93,21 @@ export async function GET(request: NextRequest) {
 
   let sent = 0;
 
+  // Fetch channel status once (used by location, speed, altitude, weather, wellness)
+  let isLive = false;
+  let currentTitle = '';
+  try {
+    const channelRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (channelRes.ok) {
+      const channelData = await channelRes.json();
+      const ch = (channelData.data ?? [])[0];
+      isLive = !!(ch?.livestream?.is_live ?? ch?.is_live);
+      currentTitle = (ch?.stream_title ?? '').trim();
+    }
+  } catch { /* ignore */ }
+
   // Unified location: stream title + chat — both only when live, at most every N min
   const autoUpdateLocation = streamTitleSettings?.autoUpdateLocation !== false;
   const chatBroadcastStreamTitle = storedAlert?.chatBroadcastStreamTitle === true;
@@ -102,39 +116,21 @@ export async function GET(request: NextRequest) {
   const intervalMs = intervalMin * 60 * 1000;
   const wantsLocationUpdate = autoUpdateLocation || chatBroadcastLocation;
 
-  if (wantsLocationUpdate) {
-    let isLive = false;
-    let currentTitle = '';
-    const channelRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (channelRes.ok) {
-      try {
-        const channelData = await channelRes.json();
-        const ch = (channelData.data ?? [])[0];
-        isLive = !!(ch?.livestream?.is_live ?? ch?.is_live);
-        currentTitle = (ch?.stream_title ?? '').trim();
-      } catch {
-        // ignore
-      }
-    }
-
-    if (isLive) {
+  if (wantsLocationUpdate && isLive) {
       const persistent = await getPersistentLocation();
       const lastAt = typeof lastLocationAt === 'number' ? lastLocationAt : 0;
       const intervalOk = now - lastAt >= intervalMs;
 
       if (persistent?.location && intervalOk) {
         const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
-        const displayForTitle = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
+        const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
         const customLoc = (overlaySettings?.customLocation as string) ?? '';
         const formattedForTitle = getStreamTitleLocationPart(
           persistent.location,
-          displayForTitle,
+          displayMode,
           customLoc,
           includeLocationInTitle
         );
-        const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) || 'city';
         let formattedForChat: string | null = null;
         if (displayMode !== 'hidden') {
           const formatted = formatLocation(persistent.location, displayMode);
@@ -190,27 +186,13 @@ export async function GET(request: NextRequest) {
           await kv.set(KICK_BROADCAST_LAST_LOCATION_MSG_KEY, lastMsgToStore);
         }
       }
-    }
   }
 
   // Speed & altitude broadcasts: only when live, new top above min, and timeout passed
   const chatBroadcastSpeed = storedAlert?.chatBroadcastSpeed === true;
   const chatBroadcastAltitude = storedAlert?.chatBroadcastAltitude === true;
-  let speedAltitudeLive = false;
-  if (chatBroadcastSpeed || chatBroadcastAltitude) {
-    try {
-      const channelRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (channelRes.ok) {
-        const channelData = await channelRes.json();
-        const ch = (channelData.data ?? [])[0];
-        speedAltitudeLive = !!(ch?.livestream?.is_live ?? ch?.is_live);
-      }
-    } catch { /* ignore */ }
-  }
 
-  if (chatBroadcastSpeed && speedAltitudeLive) {
+  if (chatBroadcastSpeed && isLive) {
     const minKmh = (storedAlert?.chatBroadcastSpeedMinKmh as number) ?? 20;
     const speedTimeoutMin = (storedAlert?.chatBroadcastSpeedTimeoutMin as number) ?? 5;
     const speedTimeoutMs = speedTimeoutMin * 60 * 1000;
@@ -234,7 +216,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  if (chatBroadcastAltitude && speedAltitudeLive) {
+  if (chatBroadcastAltitude && isLive) {
     const minM = (storedAlert?.chatBroadcastAltitudeMinM as number) ?? 50;
     const altitudeTimeoutMin = (storedAlert?.chatBroadcastAltitudeTimeoutMin as number) ?? 5;
     const altitudeTimeoutMs = altitudeTimeoutMin * 60 * 1000;
@@ -260,7 +242,7 @@ export async function GET(request: NextRequest) {
 
   // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
   const chatBroadcastWeather = storedAlert?.chatBroadcastWeather === true;
-  if (chatBroadcastWeather && speedAltitudeLive) {
+  if (chatBroadcastWeather && isLive) {
     const locationData = await getLocationData(false);
     if (locationData?.weather) {
       const { condition, desc, tempC, uvIndex, aqi } = locationData.weather;
@@ -299,7 +281,7 @@ export async function GET(request: NextRequest) {
     storedAlert?.chatBroadcastWellnessDistance ||
     storedAlert?.chatBroadcastWellnessFlights ||
     storedAlert?.chatBroadcastWellnessActiveCalories;
-  if (hasWellnessToggles && speedAltitudeLive) {
+  if (hasWellnessToggles && isLive) {
     const [stepsSince, distanceSince, flightsSince, activeCalSince, milestonesLast] = await Promise.all([
       getStepsSinceStreamStart(),
       getDistanceSinceStreamStart(),

@@ -1,5 +1,6 @@
 import { kv } from '@vercel/kv';
 import { getLocationData } from '@/utils/location-cache';
+import { KM_TO_MI, M_TO_FT, CM_TO_IN, KG_TO_LBS, L_TO_GAL, ML_TO_FLOZ } from '@/utils/unit-conversions';
 
 const CURRENCY_CACHE_KEY = 'convert_currency_cache';
 const CURRENCY_CACHE_TTL_SEC = 3600; // 1 hour
@@ -124,74 +125,26 @@ export function parseConvertArgs(raw: string): ParsedConvert {
 
 export function convertUnit(amount: number, unit: string): string {
   switch (unit) {
-    case 'km': {
-      const mi = amount * 0.621371;
-      return `📏 ${fmt(amount)} km = ${fmt(mi)} mi`;
-    }
-    case 'mi': {
-      const km = amount / 0.621371;
-      return `📏 ${fmt(amount)} mi = ${fmt(km)} km`;
-    }
-    case 'm': {
-      const ft = amount * 3.28084;
-      return `📏 ${fmt(amount)} m = ${fmt(ft)} ft`;
-    }
-    case 'ft': {
-      const m = amount / 3.28084;
-      return `📏 ${fmt(amount)} ft = ${fmt(m)} m`;
-    }
+    case 'km':    return `📏 ${fmt(amount)} km = ${fmt(amount * KM_TO_MI)} mi`;
+    case 'mi':    return `📏 ${fmt(amount)} mi = ${fmt(amount / KM_TO_MI)} km`;
+    case 'm':     return `📏 ${fmt(amount)} m = ${fmt(amount * M_TO_FT)} ft`;
+    case 'ft':    return `📏 ${fmt(amount)} ft = ${fmt(amount / M_TO_FT)} m`;
     case 'cm': {
-      const totalIn = amount * 0.393701;
-      const feet = Math.floor(totalIn / 12);
-      const inches = Math.round(totalIn % 12);
-      return `📏 ${fmt(amount)} cm = ${feet}'${inches}" (${fmt(totalIn)} in)`;
+      const totalIn = amount * CM_TO_IN;
+      return `📏 ${fmt(amount)} cm = ${Math.floor(totalIn / 12)}'${Math.round(totalIn % 12)}" (${fmt(totalIn)} in)`;
     }
-    case 'in': {
-      const cm = amount / 0.393701;
-      return `📏 ${fmt(amount)} in = ${fmt(cm)} cm`;
-    }
-    case 'kg': {
-      const lbs = amount * 2.20462;
-      return `⚖️ ${fmt(amount)} kg = ${fmt(lbs)} lbs`;
-    }
-    case 'lbs': {
-      const kg = amount / 2.20462;
-      return `⚖️ ${fmt(amount)} lbs = ${fmt(kg)} kg`;
-    }
-    case 'c': {
-      const f = (amount * 9 / 5) + 32;
-      return `🌡️ ${fmt(amount)}°C = ${fmt(f)}°F`;
-    }
-    case 'f': {
-      const c = (amount - 32) * 5 / 9;
-      return `🌡️ ${fmt(amount)}°F = ${fmt(c)}°C`;
-    }
-    case 'l': {
-      const gal = amount * 0.264172;
-      return `📏 ${fmt(amount)} L = ${fmt(gal)} gal`;
-    }
-    case 'gal': {
-      const l = amount / 0.264172;
-      return `📏 ${fmt(amount)} gal = ${fmt(l)} L`;
-    }
-    case 'kmh': {
-      const mph = amount * 0.621371;
-      return `📏 ${fmt(amount)} km/h = ${fmt(mph)} mph`;
-    }
-    case 'mph': {
-      const kmh = amount / 0.621371;
-      return `📏 ${fmt(amount)} mph = ${fmt(kmh)} km/h`;
-    }
-    case 'ml': {
-      const floz = amount * 0.033814;
-      return `📏 ${fmt(amount)} mL = ${fmt(floz)} fl oz`;
-    }
-    case 'floz': {
-      const ml = amount / 0.033814;
-      return `📏 ${fmt(amount)} fl oz = ${fmt(ml)} mL`;
-    }
-    default:
-      return `📏 Unknown unit: ${unit}`;
+    case 'in':    return `📏 ${fmt(amount)} in = ${fmt(amount / CM_TO_IN)} cm`;
+    case 'kg':    return `⚖️ ${fmt(amount)} kg = ${fmt(amount * KG_TO_LBS)} lbs`;
+    case 'lbs':   return `⚖️ ${fmt(amount)} lbs = ${fmt(amount / KG_TO_LBS)} kg`;
+    case 'c':     return `🌡️ ${fmt(amount)}°C = ${fmt((amount * 9 / 5) + 32)}°F`;
+    case 'f':     return `🌡️ ${fmt(amount)}°F = ${fmt((amount - 32) * 5 / 9)}°C`;
+    case 'l':     return `📏 ${fmt(amount)} L = ${fmt(amount * L_TO_GAL)} gal`;
+    case 'gal':   return `📏 ${fmt(amount)} gal = ${fmt(amount / L_TO_GAL)} L`;
+    case 'kmh':   return `📏 ${fmt(amount)} km/h = ${fmt(amount * KM_TO_MI)} mph`;
+    case 'mph':   return `📏 ${fmt(amount)} mph = ${fmt(amount / KM_TO_MI)} km/h`;
+    case 'ml':    return `📏 ${fmt(amount)} mL = ${fmt(amount * ML_TO_FLOZ)} fl oz`;
+    case 'floz':  return `📏 ${fmt(amount)} fl oz = ${fmt(amount / ML_TO_FLOZ)} mL`;
+    default:      return `📏 Unknown unit: ${unit}`;
   }
 }
 

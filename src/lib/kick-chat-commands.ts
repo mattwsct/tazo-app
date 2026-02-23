@@ -52,6 +52,84 @@ import {
   handleConvertDefault,
 } from '@/utils/convert-utils';
 
+/**
+ * Safe math expression evaluator — supports +, -, *, /, ^, %, parentheses.
+ * Accepts 'x' as multiplication alias. No eval().
+ */
+function evaluateMath(expr: string): number | null {
+  const tokens: string[] = [];
+  const cleaned = expr.replace(/\s+/g, '').replace(/x/gi, '*').replace(/÷/g, '/');
+  let i = 0;
+  while (i < cleaned.length) {
+    const ch = cleaned[i];
+    if ('+-*/^%()'.includes(ch)) {
+      tokens.push(ch);
+      i++;
+    } else if (/[\d.]/.test(ch)) {
+      let num = '';
+      while (i < cleaned.length && /[\d.]/.test(cleaned[i])) { num += cleaned[i]; i++; }
+      tokens.push(num);
+    } else {
+      return null;
+    }
+  }
+  if (tokens.length === 0) return null;
+
+  let pos = 0;
+  function peek(): string | undefined { return tokens[pos]; }
+  function consume(): string { return tokens[pos++]; }
+
+  function parseExpr(): number {
+    let left = parseTerm();
+    while (peek() === '+' || peek() === '-') {
+      const op = consume();
+      const right = parseTerm();
+      left = op === '+' ? left + right : left - right;
+    }
+    return left;
+  }
+  function parseTerm(): number {
+    let left = parsePower();
+    while (peek() === '*' || peek() === '/' || peek() === '%') {
+      const op = consume();
+      const right = parsePower();
+      if (op === '*') left *= right;
+      else if (op === '/') left = right === 0 ? NaN : left / right;
+      else left = right === 0 ? NaN : left % right;
+    }
+    return left;
+  }
+  function parsePower(): number {
+    let base = parseUnary();
+    if (peek() === '^') { consume(); base = Math.pow(base, parsePower()); }
+    return base;
+  }
+  function parseUnary(): number {
+    if (peek() === '-') { consume(); return -parseAtom(); }
+    if (peek() === '+') { consume(); return parseAtom(); }
+    return parseAtom();
+  }
+  function parseAtom(): number {
+    if (peek() === '(') {
+      consume();
+      const val = parseExpr();
+      if (peek() === ')') consume();
+      return val;
+    }
+    const tok = consume();
+    if (tok === undefined) return NaN;
+    const n = parseFloat(tok);
+    return isNaN(n) ? NaN : n;
+  }
+
+  try {
+    const result = parseExpr();
+    if (pos < tokens.length) return null;
+    if (!isFinite(result)) return null;
+    return result;
+  } catch { return null; }
+}
+
 export const KICK_CHAT_COMMANDS = [
   'ping',
   'uptime',
@@ -94,6 +172,7 @@ export const KICK_CHAT_COMMANDS = [
   'games',
   'heist',
   'convert',
+  'math',
 ] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
@@ -140,7 +219,17 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'games') return { cmd: 'games' };
   if (cmd === 'heist') return { cmd: 'heist', arg };
   if (cmd === 'convert') return { cmd: 'convert', arg: parts.slice(1).join(' ') };
+  if (cmd === 'math' || cmd === 'calc') return { cmd: 'math', arg: parts.slice(1).join(' ') };
   return null;
+}
+
+function parseBet(input: string | undefined, defaultBet = 5): number {
+  const raw = parseInt((input ?? '').trim(), 10);
+  return !isNaN(raw) && raw >= 1 ? raw : defaultBet;
+}
+
+function splitArgs(arg: string | undefined): string[] {
+  return (arg ?? '').trim().split(/\s+/).filter(Boolean);
 }
 
 export async function handleKickChatCommand(
@@ -223,6 +312,14 @@ export async function handleKickChatCommand(
     if (parsed.type === 'bare_number') return handleConvertBareNumber(parsed.amount);
     return handleConvertDefault();
   }
+  if (cmd === 'math') {
+    const expr = (arg ?? '').trim();
+    if (!expr) return '🔢 Usage: !math <expression> — e.g. !math 5 x 29, !math (10 + 5) * 3';
+    const result = evaluateMath(expr);
+    if (result === null) return '🔢 Invalid expression. Use +, -, *, /, ^, () — e.g. !math 5 x 29';
+    const formatted = Number.isInteger(result) ? result.toLocaleString() : parseFloat(result.toPrecision(10)).toLocaleString(undefined, { maximumFractionDigits: 6 });
+    return `🔢 ${expr.replace(/\*/g, '×').replace(/\//g, '÷')} = ${formatted}`;
+  }
   // Gambling (all require gambling enabled)
   const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games', 'heist'];
   const gamblingOn = await isGamblingEnabled();
@@ -240,9 +337,7 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'deal' || cmd === 'bj') {
     if (!user) return null;
-    const betRaw = parseInt(arg ?? '', 10);
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return blackjackDeal(user, bet);
+    return blackjackDeal(user, parseBet(arg));
   }
   if (cmd === 'hit') {
     if (!user) return null;
@@ -258,59 +353,43 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'slots' || cmd === 'spin') {
     if (!user) return null;
-    const betRaw = parseInt((arg ?? '').trim(), 10);
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return playSlots(user, bet);
+    return playSlots(user, parseBet(arg));
   }
   if (cmd === 'roulette') {
     if (!user) return null;
-    const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+    const args = splitArgs(arg);
     const choice = args[0];
     if (!choice) return '🎡 Usage: !roulette <red|black|number> <amount> — e.g. !roulette red 10 or !roulette 27 10';
-    const isColorBet = ['red', 'black'].includes(choice.toLowerCase());
-    const isNumberBet = !isColorBet && !isNaN(parseInt(choice, 10));
     const num = parseInt(choice, 10);
-    const validNumber = isNumberBet && num >= 1 && num <= 36;
-    const amountArg = args.length >= 2 ? args[1] : null;
-    const betRaw = amountArg != null ? parseInt(amountArg, 10) : 5;
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    const actualChoice = validNumber ? String(num) : choice;
-    return playRoulette(user, actualChoice, bet);
+    const isColorBet = ['red', 'black'].includes(choice.toLowerCase());
+    const validNumber = !isColorBet && !isNaN(num) && num >= 1 && num <= 36;
+    return playRoulette(user, validNumber ? String(num) : choice, parseBet(args[1]));
   }
   if (cmd === 'dice') {
     if (!user) return null;
-    const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+    const args = splitArgs(arg);
     const choice = args[0]?.toLowerCase();
     if (!choice || !['high', 'h', 'low', 'l'].includes(choice)) return '🎲 Usage: !dice <high|low> [amount] — default 5';
-    const betRaw = args.length >= 2 ? parseInt(args[1], 10) : 5;
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return playDice(user, choice, bet);
+    return playDice(user, choice, parseBet(args[1]));
   }
   if (cmd === 'crash') {
     if (!user) return null;
-    const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+    const args = splitArgs(arg);
     if (!args.length) return '💥 Usage: !crash <amount> [target multiplier] — e.g. !crash 50 2.0 (cash out before it crashes!)';
-    const betRaw = parseInt(args[0] ?? '', 10);
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
     const multRaw = args.length >= 2 ? parseFloat(args[1]) : undefined;
-    const mult = multRaw && !isNaN(multRaw) && multRaw >= 1.1 ? multRaw : undefined;
-    return playCrash(user, bet, mult);
+    return playCrash(user, parseBet(args[0]), multRaw && !isNaN(multRaw) && multRaw >= 1.1 ? multRaw : undefined);
   }
   if (cmd === 'war') {
     if (!user) return null;
-    const betRaw = parseInt((arg ?? '').trim(), 10);
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return playWar(user, bet);
+    return playWar(user, parseBet(arg));
   }
   if (cmd === 'duel') {
     if (!user) return null;
-    const args = (arg ?? '').trim().split(/\s+/).filter(Boolean);
+    const args = splitArgs(arg);
     let target = args[0] ?? '';
     if (target.startsWith('@')) target = target.slice(1);
     if (!target) return '⚔️ Usage: !duel @user <amount>';
-    const betRaw = args.length >= 2 ? parseInt(args[1], 10) : 5;
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return challengeDuel(user, target, bet);
+    return challengeDuel(user, target, parseBet(args[1]));
   }
   if (cmd === 'accept') {
     if (!user) return null;
@@ -318,9 +397,7 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'gamba' || cmd === 'gamble') {
     if (!user) return null;
-    const betRaw = parseInt((arg ?? '').trim(), 10);
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return playCoinflip(user, bet);
+    return playCoinflip(user, parseBet(arg));
   }
   if (cmd === 'games') {
     return '🎲 !gamble [amt] | !deal [amt] | !slots [amt] | !dice high/low [amt] | !roulette red/black/number [amt] | !crash [amt] | !war [amt] | !duel @user [amt] | !heist [amt]. !chips to check balance.';

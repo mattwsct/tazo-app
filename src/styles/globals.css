@@ -286,7 +286,7 @@ html, body {
   font-size: var(--font-size-sm);
   min-width: 140px;
   overflow: visible;
-  padding: var(--gap-md) var(--gap-3xl);
+  padding: var(--gap-md) var(--gap-xl);
 }
 
 .leaderboard-box .leaderboard-entries {
@@ -322,7 +322,8 @@ html, body {
 }
 
 .leaderboard-entry.leaderboard-empty {
-  opacity: 0.85;
+  font-size: 0.7em;
+  opacity: 0.75;
   font-weight: 500;
   font-style: italic;
 }
@@ -461,7 +462,6 @@ html, body {
   width: 100%;
   min-width: 280px;
   max-width: 480px;
-  min-height: 64px;
   background: rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -484,8 +484,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 64px;
-  padding: var(--gap-lg) var(--gap-2xl) var(--gap-xl) var(--gap-2xl);
+  padding: var(--gap-sm) var(--gap-2xl);
   z-index: 1;
   min-width: 0;
 }

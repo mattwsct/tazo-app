@@ -137,7 +137,6 @@ function OverlayPage() {
   const [settings, setSettings, settingsLoadedRef, refreshSettings] = useOverlaySettings();
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [minimapOpacity, setMinimapOpacity] = useState(1.0); // Fully opaque for better readability
-  const [, setHasIncompleteLocationData] = useState(false); // Track if we have incomplete location data (country but no code)
   const [overlayVisible, setOverlayVisible] = useState(false); // Track if overlay should be visible (fade-in delay)
   
   // When active poll countdown ends: show winner immediately from current votes, then sync with server
@@ -397,7 +396,6 @@ function OverlayPage() {
           secondary: formatted.secondary,
           countryCode: lastRawLocation.current!.countryCode || ''
         });
-        setHasIncompleteLocationData(false); // Clear incomplete flag when re-formatting
       } catch (error) {
         OverlayLogger.warn('Location re-formatting failed on settings change', { error });
         // Ignore formatting errors; UI will update on next normal cycle
@@ -639,7 +637,6 @@ function OverlayPage() {
             lastRawLocation.current = data.rawLocation;
             // Use 0 when updatedAt missing — treat as very old so staleness broadening triggers (old browser-set data may lack timestamp)
             lastLocationSourceTimestampRef.current = (typeof data.updatedAt === 'number' && data.updatedAt > 0) ? data.updatedAt : 0;
-            setHasIncompleteLocationData(false);
             if (process.env.NODE_ENV !== 'production') {
               OverlayLogger.location('Location from persistent storage (RTIRL unavailable)', {
                 primary: data.location.primary || 'none',
@@ -685,7 +682,6 @@ function OverlayPage() {
           lastLocationSourceTimestampRef.current = persistentUpdatedAt;
           lastRawLocation.current = data.rawLocation ?? lastRawLocation.current;
           setLocation(data.location);
-          setHasIncompleteLocationData(false);
           if (process.env.NODE_ENV !== 'production') {
             OverlayLogger.location('Using persistent (newer than RTIRL)', { updatedAt: persistentUpdatedAt });
           }
@@ -1023,7 +1019,6 @@ function OverlayPage() {
                     
                     // Fetch location from LocationIQ
                     let locationIQWas404 = false;
-                    const locationIQRateLimited = false;
                     
                     if (API_KEYS.LOCATIONIQ) {
                       // Rate limit already checked above (line 972) - don't check again to avoid double consumption
@@ -1122,7 +1117,6 @@ function OverlayPage() {
                           secondary: formatted.secondary,
                           countryCode: loc.countryCode || ''
                         });
-                        setHasIncompleteLocationData(false);
                       }
                       
                       // PRIORITY: LocationIQ timezone is ALWAYS preferred (accurate IANA timezone)
@@ -1153,11 +1147,9 @@ function OverlayPage() {
                         });
                         // Clear location and mark as incomplete to hide the entire section
                         setLocation(null);
-                        setHasIncompleteLocationData(true);
                         // Don't update lastSuccessfulLocationFetch - we're hiding, not caching
                       } else if (rawCountryName) {
                         // We have both country name and code - safe to display
-                        setHasIncompleteLocationData(false);
                         // We have both country name and code - safe to display
                         OverlayLogger.warn('LocationIQ returned only country data, using country name');
                         // Format country name (e.g., "United States of America" -> "USA")
@@ -1195,7 +1187,7 @@ function OverlayPage() {
                       if (loc!.timezone) {
                         updateTimezone(loc!.timezone);
                       }
-                    } else if (!locationIQRateLimited) {
+                    } else {
                       // LocationIQ failed completely (not rate-limited), use country-only fallback
                       // Never show coordinates - only show country if estimable, or ocean names if on water
                       OverlayLogger.warn('LocationIQ failed, using country-only fallback');
@@ -1207,7 +1199,6 @@ function OverlayPage() {
                           secondary: fallbackLocation.secondary,
                           countryCode: fallbackLocation.countryCode || ''
                         });
-                        setHasIncompleteLocationData(false);
                         // IMPORTANT: Don't update lastRawLocation.current with fallback data
                         // This ensures settings changes don't try to format incomplete country-only data
                         // Only update lastRawLocation when we have full location data from LocationIQ
