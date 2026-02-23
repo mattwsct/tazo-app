@@ -7,7 +7,7 @@ import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 import { kmToMiles } from '@/utils/unit-conversions';
 
 const POLL_INTERVAL_MS = 60000;
-const CYCLE_DURATION_MS = 30000;
+const CYCLE_DURATION_MS = 16000;
 
 type SlotType = 'date' | 'steps' | 'distance' | 'calories';
 

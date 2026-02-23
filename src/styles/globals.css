@@ -3,6 +3,7 @@
   /* Font sizes (scaled up by 25%) */
   --font-size-xs: 0.9375rem;    /* 0.75rem * 1.25 */
   --font-size-sm: 1.125rem;     /* 0.9rem * 1.25 */
+  --font-size-md: 1.3125rem;    /* ~21px — between sm and base */
   --font-size-base: 1.5625rem;  /* 1.25rem * 1.25 */
   --font-size-lg: 1.875rem;     /* 1.5rem * 1.25 */
   --font-size-xl: 2.5rem;       /* 2rem * 1.25 */
@@ -65,13 +66,6 @@ html, body {
   font-family: 'Montserrat', sans-serif;
 }
 
-/* Overlay page specific styles */
-body.overlay-page {
-  background: transparent !important;
-  height: 100vh;
-  overflow: hidden;
-}
-
 /* === OBS-FRIENDLY RENDERING UTILITY === */
 /* Shared rendering optimizations for OBS compatibility */
 .obs-render {
@@ -120,11 +114,6 @@ body.overlay-page {
   margin-top: -2px;
 }
 
-/* Slight extra space after location sub-line (gap + margin = ~5px total) */
-.location-sub-line {
-  margin-bottom: 2px !important;
-}
-
 .time-line,
 .date-line,
 .location-line,
@@ -143,7 +132,6 @@ body.overlay-page {
 .top-left .overlay-box { align-items: flex-start; }
 .top-right .overlay-box {
   align-items: flex-end;
-  padding-bottom: var(--gap-sm); /* Tighter space under temp/weather */
 }
 .bottom-right .overlay-box { align-items: flex-start; }
 .overlay-box:empty { display: none; }
@@ -293,26 +281,6 @@ body.overlay-page {
   white-space: normal;
 }
 
-.poll-option-votes {
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-  flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.poll-winner,
-.poll-no-winner {
-  font-size: var(--font-size-sm);
-  font-weight: 700;
-  word-break: break-word;
-  white-space: normal;
-}
-
-.poll-no-winner {
-  margin-bottom: 6px;
-  opacity: 0.9;
-}
-
 /* === LEADERBOARD & OVERLAY ALERTS === */
 .leaderboard-box {
   font-size: var(--font-size-sm);
@@ -322,7 +290,7 @@ body.overlay-page {
 }
 
 .leaderboard-box .leaderboard-entries {
-  line-height: 1.35;
+  line-height: 1;
   padding-bottom: 0;
 }
 
@@ -330,19 +298,19 @@ body.overlay-page {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .leaderboard-subtitle {
   font-size: 0.7em;
   opacity: 0.75;
-  margin-bottom: 6px;
+  margin-bottom: 3px;
 }
 
 .leaderboard-entries {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .leaderboard-entry {
@@ -350,7 +318,7 @@ body.overlay-page {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.1;
 }
 
 .leaderboard-entry.leaderboard-empty {
@@ -403,17 +371,21 @@ body.overlay-page {
 }
 
 .cycling-slide-out {
-  animation: cycling-fade-out 0.5s ease-out forwards;
+  animation: cycling-fade-out 0.25s ease-out forwards;
   pointer-events: none;
 }
 
 .cycling-slide-in {
-  animation: cycling-fade-in 0.5s ease-out forwards;
+  animation: cycling-fade-in 0.25s ease-out 0.25s forwards;
+  opacity: 0;
 }
 
-/* When only one slide (no transition), ensure it's visible */
-.bottom-right-cycling-slots > .cycling-slide-in:only-child {
-  animation: cycling-fade-in 0.5s ease-out forwards;
+/* When only one slide (no transition), ensure it's visible immediately */
+.bottom-right-cycling-slots > .cycling-slide-in:only-child,
+.top-left-cycling-slots > .cycling-slide-in:only-child,
+.top-right-cycling-slots > .cycling-slide-in:only-child {
+  animation: cycling-fade-in 0.3s ease-out forwards;
+  opacity: 0;
 }
 
 /* === TOP-LEFT CYCLING (date, steps, distance) === */
@@ -441,7 +413,7 @@ body.overlay-page {
   min-height: 1.5em;
 }
 
-/* === TOP-RIGHT CYCLING (temp, condition, altitude, speed) === */
+/* === TOP-RIGHT CYCLING (altitude, speed) === */
 .top-right-cycling-wrapper {
   position: relative;
   display: flex;
@@ -476,14 +448,7 @@ body.overlay-page {
   to { opacity: 1; }
 }
 
-/* === GOAL PROGRESS BARS (bar only, no container) === */
-.bottom-right-goals-and-leaderboard {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
+/* === GOAL PROGRESS BARS === */
 .goal-progress-stack {
   display: flex;
   flex-direction: column;
@@ -695,7 +660,7 @@ body.overlay-page {
   align-items: flex-start;
   gap: 2px;
   color: white;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   font-weight: 700;
   line-height: 1;
   opacity: 0.95;
@@ -710,7 +675,7 @@ body.overlay-page {
 }
 
 .step-counter-icon {
-  font-size: 1rem;
+  font-size: var(--font-size-sm);
   line-height: 1;
 }
 
@@ -730,7 +695,7 @@ body.overlay-page {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-sm);
+  gap: var(--gap-md);
   transition: opacity 0.3s ease-in-out;
 }
 
@@ -741,39 +706,26 @@ body.overlay-page {
   line-height: 1;
 }
 
-.location-sub-line {
+/* Rotating location text (city/state/country) */
+.location-rotating-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.location-rotating-slots {
+  display: grid;
+  grid-template: 1fr / 1fr;
+  place-items: end;
+}
+
+.location-rotating-slots > * {
+  grid-area: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-sm);
-}
-
-.location-sub {
-  font-size: var(--font-size-base);
-  font-weight: 700;
-  opacity: 0.9;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--gap-sm);
-  letter-spacing: var(--letter-spacing-compact);
-}
-
-.location-sub-line.country-only .location-sub {
-  font-size: var(--font-size-lg);
-  opacity: 1;
-}
-
-.location-sub-line.country-only .location-flag {
-  width: 36px;
-  height: 22px;
-}
-
-.location-flag-container {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 1.15em;
 }
 
 .location-flag {
@@ -809,68 +761,61 @@ body.overlay-page {
   transition: opacity 0.3s ease-in-out;
 }
 
-/* Spacing between location and weather */
-.location-line:last-of-type + .weather-line {
-  margin-top: var(--gap-md);
+/* Location to weather uses the base overlay-box gap (4px) */
+.top-right .location-line + .weather-temperature {
+  margin-top: 0;
 }
 
-/* Movement data group - altitude and speed together */
-.movement-data-group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--gap-xs); /* Consistent spacing between altitude and speed */
-  margin-top: var(--gap-xs); /* Consistent spacing from weather section above */
+/* Temp and condition are a visual pair but need breathing room */
+.weather-temperature + .weather-condition-group {
+  margin-top: 0;
 }
 
-/* Ensure weather condition group doesn't add extra space */
 .weather-condition-group {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--gap-md); /* Increased from sm to md for better visual balance */
-  line-height: 1; /* Prevent extra line height from adding space */
-  margin: 0; /* Ensure no margin */
-  padding: 0; /* Ensure no padding */
-}
-
-.movement-data-line {
-  margin-top: 0; /* Remove default margin, handled by parent gap */
-}
-
-.weather-text-group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--gap-xs);
+  gap: var(--gap-md);
+  line-height: 1;
   margin: 0;
   padding: 0;
-  line-height: 1;
 }
 
-.weather-description-text {
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-uppercase);
-  opacity: 0.85;
-  line-height: 1;
-}
-
-.weather-description {
-  font-size: var(--font-size-xs);
-  font-weight: 700;
+.precip-forecast {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: var(--gap-sm);
+  line-height: 1;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-uppercase);
+  opacity: 0.85;
+}
+
+.precip-forecast-icon {
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.precip-forecast-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.movement-data-line {
+  margin-top: 0;
+}
+
+.weather-description-text {
+  font-size: var(--font-size-sm);
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-uppercase);
   opacity: 0.85;
   line-height: 1;
-  margin-top: 2px;
 }
-
 
 .weather-temperature {
   font-size: var(--font-size-sm);
@@ -885,20 +830,6 @@ body.overlay-page {
   font-variant-numeric: tabular-nums;
 }
 
-.weather-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  line-height: 18px;
-  margin-left: var(--gap-md);
-  width: 24px;
-  flex-shrink: 0;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
-}
-
 .weather-icon-inline {
   display: inline-flex;
   align-items: center;
@@ -909,60 +840,8 @@ body.overlay-page {
   transform: translateZ(0);
   backface-visibility: hidden;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
-  margin: 0; /* Remove margin - gap handles spacing */
-  margin-bottom: 0;
-  height: 1em; /* Match text line height */
-}
-
- 
-
-/* === SPEED INDICATOR STYLES === */
-.speed-indicator {
-  font-size: var(--font-size-base);
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: right;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0;
-  color: white;
-  text-shadow: var(--text-shadow);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-.speed-content {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.speed-value {
-  font-size: var(--font-size-base);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.speed-label {
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  opacity: 0.9;
-  text-transform: uppercase;
-  text-align: center;
-  align-self: center;
-}
-
-.speed-separator {
-  font-size: var(--font-size-base);
-  font-weight: 700;
-  opacity: 0.7;
-  margin: 0 8px;
-  align-self: center;
+  margin: 0;
+  height: 1em;
 }
 
 /* === ⚠️ API STATUS INDICATOR === */
@@ -1015,30 +894,6 @@ body.overlay-page {
   contain: layout style paint;
   /* Smooth fade transitions */
   transition: opacity 1s ease-out;
-}
-
-.minimap.fading-out {
-  opacity: 0;
-}
-
-.minimap.fading-in {
-  opacity: 0.95;
-}
-
-/* Position minimap relative to top-right container - handled by minimap positioning */
-
-.minimap-loading {
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: rgba(248, 250, 252, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  font-size: 0.875rem;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .minimap-placeholder {
@@ -1112,8 +967,6 @@ body.overlay-page {
 .error-reload-btn:hover {
   background: #c82333;
 }
-
-/* Minimap styling - handled by main .minimap rule above */
 
 .error-details {
   margin-top: 1rem;

@@ -22,8 +22,6 @@ const DEAL_COOLDOWN_MS = 15_000; // Min 15s between starting new hands
 const GAMBLE_INSTANT_COOLDOWN_MS = 5_000; // Min 5s between slots/roulette/coinflip/dice
 const GAMBLE_INSTANT_LAST_AT_KEY = 'gamble_instant_last_at';
 const STARTING_CHIPS = 100;
-const REBUY_CHIPS = 50;
-const REBUYS_PER_STREAM = 1;
 const MIN_BET = 1;
 const DUEL_KEY_PREFIX = 'gamble_duel:';
 const DUEL_EXPIRE_SEC = 60;
@@ -194,9 +192,12 @@ export async function addViewTimeChips(username: string): Promise<number> {
     const intervals = Math.floor(elapsed / VIEW_CHIPS_INTERVAL_MS);
     if (intervals < 1) return 0;
 
-    // Cap at 1 interval per chat so you can't save up 2 hours and claim 120 chips
-    const chipsToAdd = Math.min(intervals, 1) * VIEW_CHIPS_PER_INTERVAL;
     const bal = await getChips(user);
+    if (bal >= STARTING_CHIPS) return 0;
+
+    // Cap at 1 interval per chat, and don't exceed STARTING_CHIPS
+    const chipsToAdd = Math.min(Math.min(intervals, 1) * VIEW_CHIPS_PER_INTERVAL, STARTING_CHIPS - bal);
+    if (chipsToAdd <= 0) return 0;
     const newBal = bal + chipsToAdd;
     const updates: Promise<unknown>[] = [
       kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
@@ -211,29 +212,6 @@ export async function addViewTimeChips(username: string): Promise<number> {
   }
 }
 
-/** Refill chips when at 0. Returns message. Limited to REBUYS_PER_STREAM per user per stream. */
-export async function refillChips(username: string): Promise<string> {
-  const user = normalizeUser(username);
-  const chips = await getChips(user);
-  if (chips > 0) {
-    return `🃏 You have ${chips} chips. !refill only works when you have 0. Use !deal <amount> to play.`;
-  }
-  try {
-    const used = parseKvInt(await kv.hget<number | string>(REBUYS_KEY, user));
-    if (used >= REBUYS_PER_STREAM) {
-      return `🃏 You've already used your ${REBUYS_PER_STREAM} rebu${REBUYS_PER_STREAM === 1 ? 'y' : 'ys'} this stream. Chips reset when the stream starts.`;
-    }
-    await Promise.all([
-      kv.hset(CHIPS_BALANCE_KEY, { [user]: String(REBUY_CHIPS) }),
-      kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: REBUY_CHIPS, member: user }),
-      kv.hset(REBUYS_KEY, { [user]: String(used + 1) }),
-      setLeaderboardDisplayName(user, username.trim()),
-    ]);
-    return `🃏 Rebuy! You have ${REBUY_CHIPS} chips. !deal <amount> to play.`;
-  } catch {
-    return `🃏 Rebuy failed. Try again.`;
-  }
-}
 
 /** Reset chips and gambling leaderboard on stream start. */
 export async function resetGamblingOnStreamStart(): Promise<void> {
@@ -311,7 +289,7 @@ export async function deal(username: string, betAmount: number): Promise<string>
 
   const { ok, balance } = await deductChips(user, bet);
   if (!ok) {
-    return `🃏 Not enough chips. You have ${balance}. Use !chips to check balance.`;
+    return `🃏 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
   }
 
   const deck = shuffleDeck();
@@ -542,15 +520,16 @@ export async function playCoinflip(username: string, betAmount: number): Promise
   if (wait !== null) return `🎲 Wait ${wait}s before another game.`;
 
   const { ok, balance } = await deductChips(user, bet);
-  if (!ok) return `🎲 Not enough chips. You have ${balance}.`;
+  if (!ok) return `🎲 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
   await setInstantCooldown(user);
 
-  const win = Math.random() < 0.5;
-  if (win) {
+  const isHeads = Math.random() < 0.5;
+  const side = isHeads ? 'HEADS' : 'TAILS';
+  if (isHeads) {
     await addChips(user, bet * 2);
-    return `🎲 Coinflip: HEADS — You win! +${bet} chips`;
+    return `🪙 ${side} — You win! +${bet} chips`;
   }
-  return `🎲 Coinflip: TAILS — Lost ${bet} chips.`;
+  return `🪙 ${side} — Lost ${bet} chips.`;
 }
 
 const SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍀', '7️⃣', '💎'] as const;
@@ -573,7 +552,7 @@ export async function playSlots(username: string, betAmount: number): Promise<st
   if (wait !== null) return `🎰 Wait ${wait}s before another spin.`;
 
   const { ok, balance } = await deductChips(user, bet);
-  if (!ok) return `🎰 Not enough chips. You have ${balance}.`;
+  if (!ok) return `🎰 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
   await setInstantCooldown(user);
 
   const reels = [
@@ -621,7 +600,7 @@ export async function playRoulette(username: string, choice: string, betAmount: 
   }
 
   const { ok, balance } = await deductChips(user, bet);
-  if (!ok) return `🎡 Not enough chips. You have ${balance}.`;
+  if (!ok) return `🎡 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
   await setInstantCooldown(user);
 
   const spin = Math.floor(Math.random() * 37);
@@ -634,14 +613,14 @@ export async function playRoulette(username: string, choice: string, betAmount: 
       await addChips(user, bet * 2);
       return `🎡 [ ${spinStr} ] Red wins! +${bet} chips (${bet * 2} total)`;
     }
-    return `🎡 [ ${spinStr} ] Red lost — ${bet} chips gone.`;
+    return `🎡 [ ${spinStr} ] Red lost — lost ${bet} chips.`;
   }
   if (isBlack) {
     if (spinBlack) {
       await addChips(user, bet * 2);
       return `🎡 [ ${spinStr} ] Black wins! +${bet} chips (${bet * 2} total)`;
     }
-    return `🎡 [ ${spinStr} ] Black lost — ${bet} chips gone.`;
+    return `🎡 [ ${spinStr} ] Black lost — lost ${bet} chips.`;
   }
   if (spin === numBet) {
     const win = bet * 36;
@@ -666,7 +645,7 @@ export async function playDice(username: string, choice: string, betAmount: numb
   if (!isHigh && !isLow) return `🎲 Bet high (4-6) or low (1-3). !dice high 10`;
 
   const { ok, balance } = await deductChips(user, bet);
-  if (!ok) return `🎲 Not enough chips. You have ${balance}.`;
+  if (!ok) return `🎲 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
   await setInstantCooldown(user);
 
   const roll = Math.floor(Math.random() * 6) + 1;
@@ -692,7 +671,7 @@ export async function playCrash(username: string, betAmount: number, targetMulti
   if (wait !== null) return `💥 Wait ${wait}s before another game.`;
 
   const { ok, balance } = await deductChips(user, bet);
-  if (!ok) return `💥 Not enough chips. You have ${balance}.`;
+  if (!ok) return `💥 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
   await setInstantCooldown(user);
 
   // House edge ~3%. Crash point distribution: mostly low, occasionally very high.
@@ -728,7 +707,7 @@ export async function playWar(username: string, betAmount: number): Promise<stri
   if (wait !== null) return `⚔️ Wait ${wait}s before another game.`;
 
   const { ok, balance } = await deductChips(user, bet);
-  if (!ok) return `⚔️ Not enough chips. You have ${balance}.`;
+  if (!ok) return `⚔️ Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
   await setInstantCooldown(user);
 
   const playerRankIdx = Math.floor(Math.random() * WAR_RANKS.length);
@@ -778,7 +757,7 @@ export async function challengeDuel(challengerUsername: string, targetUsername: 
   if (wait !== null) return `⚔️ Wait ${wait}s before another game.`;
 
   const { ok, balance } = await deductChips(challenger, bet);
-  if (!ok) return `⚔️ Not enough chips. You have ${balance}.`;
+  if (!ok) return `⚔️ Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
 
   const duel: PendingDuel = {
     challenger,
@@ -809,7 +788,7 @@ export async function acceptDuel(accepterUsername: string): Promise<string> {
   if (!ok) {
     await kv.del(duelKey(accepter));
     await addChips(duel.challenger, duel.bet);
-    return `⚔️ Not enough chips (need ${duel.bet}, have ${balance}). Duel cancelled, ${duel.challengerDisplay}'s chips refunded.`;
+    return `⚔️ Not enough chips (need ${duel.bet}, have ${balance}). Duel cancelled, ${duel.challengerDisplay}'s chips returned.`;
   }
 
   await kv.del(duelKey(accepter));

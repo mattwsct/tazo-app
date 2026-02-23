@@ -900,22 +900,6 @@ export default function AdminPage() {
                       >
                         Disconnect
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          if (!confirm('Reset stream session? Clears steps, distance, goals, milestones.')) return;
-                          try {
-                            const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
-                            const data = await r.json();
-                            if (r.ok) setToast({ type: 'saved', message: 'Stream session reset' });
-                            else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                          } catch { setToast({ type: 'error', message: 'Reset failed' }); }
-                          setTimeout(() => setToast(null), 3000);
-                        }}
-                      >
-                        🔄 Reset stream session
-                      </button>
                     </div>
                   </div>
                 ) : (
@@ -1875,6 +1859,60 @@ export default function AdminPage() {
                           </button>
                         </div>
                       </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="danger-zone" title="⚠️ Danger zone">
+            <p className="input-hint" style={{ marginBottom: '1rem' }}>Manual resets if auto-reset on stream start fails or data needs clearing mid-stream.</p>
+            <div className="danger-zone-grid">
+              <button
+                type="button"
+                className="btn btn-danger btn-small"
+                onClick={async () => {
+                  if (!confirm('Reset wellness session? Clears steps, distance, flights, and calories since stream start.')) return;
+                  try {
+                    const r = await authenticatedFetch('/api/reset-wellness-session', { method: 'POST' });
+                    const data = await r.json();
+                    if (r.ok) setToast({ type: 'saved', message: 'Wellness session reset' });
+                    else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                  } catch { setToast({ type: 'error', message: 'Reset failed' }); }
+                  setTimeout(() => setToast(null), 3000);
+                }}
+              >
+                🔄 Reset wellness (steps, distance, calories)
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-small"
+                onClick={async () => {
+                  if (!confirm('Reset chips leaderboard? Clears all player chips and gambling state.')) return;
+                  try {
+                    const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
+                    const data = await r.json();
+                    if (r.ok) setToast({ type: 'saved', message: 'Chips leaderboard reset' });
+                    else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                  } catch { setToast({ type: 'error', message: 'Reset failed' }); }
+                  setTimeout(() => setToast(null), 3000);
+                }}
+              >
+                🔄 Reset chips leaderboard
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-small"
+                onClick={async () => {
+                  if (!confirm('Reset entire stream session? Clears wellness, leaderboard, goals, milestones, and uptime.')) return;
+                  try {
+                    const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
+                    const data = await r.json();
+                    if (r.ok) setToast({ type: 'saved', message: 'Full stream session reset' });
+                    else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                  } catch { setToast({ type: 'error', message: 'Reset failed' }); }
+                  setTimeout(() => setToast(null), 3000);
+                }}
+              >
+                🔄 Reset full stream session
+              </button>
+            </div>
           </CollapsibleSection>
 
         </div>

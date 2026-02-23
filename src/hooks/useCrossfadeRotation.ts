@@ -40,8 +40,21 @@ export function useCrossfadeRotation<T>(slides: T[], cycleDurationMs: number): C
       });
     };
 
-    const id = setInterval(tick, cycleDurationMs);
-    return () => clearInterval(id);
+    // Align ticks to wall clock so all rotations with the same (or multiple)
+    // cycle duration change at the same moment regardless of mount time.
+    const now = Date.now();
+    const msUntilNextTick = cycleDurationMs - (now % cycleDurationMs);
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const initialTimeout = setTimeout(() => {
+      tick();
+      intervalId = setInterval(tick, cycleDurationMs);
+    }, msUntilNextTick);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [slides.length, cycleDurationMs]);
 
   useEffect(() => {

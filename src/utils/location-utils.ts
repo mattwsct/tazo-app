@@ -526,6 +526,38 @@ function getNextBroadestCategory(
 
 
 /**
+ * Returns deduplicated location names at city/state/country granularity for rotation display.
+ * Flag is handled separately (always visible), so country name is included as text.
+ */
+export function getLocationLevels(location: LocationData | null): string[] {
+  if (!location) return [];
+
+  const tryFields = (fields: (keyof LocationData)[]): string | null => {
+    for (const f of fields) {
+      const name = cleanForDisplay(location[f] as string | undefined);
+      if (name) return name;
+    }
+    return null;
+  };
+
+  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
+  const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
+
+  const city = tryFields(cityFields);
+  const state = tryFields(stateFields);
+  const countryInfo = getCountry(location);
+  const country = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : null;
+
+  const levels: string[] = [];
+  for (const name of [city, state, country]) {
+    if (!name) continue;
+    const isDuplicate = levels.some(existing => hasOverlappingNames(existing, name));
+    if (!isDuplicate) levels.push(name);
+  }
+  return levels;
+}
+
+/**
  * Calculates distance between two coordinates in meters using Haversine formula
  */
 export function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {

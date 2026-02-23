@@ -22,7 +22,7 @@ import type { LocationData } from '@/utils/location-utils';
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
 import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
-import { formatLocation, formatCountryName, getLocationForPersistence } from '@/utils/location-utils';
+import { formatLocation, formatCountryName, getLocationForPersistence, getLocationLevels } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
 import { 
@@ -53,6 +53,7 @@ import {
   calculateMovedMeters
 } from '@/utils/fetch-decision';
 import { isSpeedStale } from '@/utils/staleness-utils';
+import { fetchMinutelyForecast, type MinutelyPrecipForecast } from '@/utils/weather-chat';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
 import BottomRightPanel from '@/components/BottomRightPanel';
@@ -84,6 +85,11 @@ const TopLeftRotatingWellness = dynamic(() => import('@/components/TopLeftRotati
 });
 
 const TopRightRotatingSlot = dynamic(() => import('@/components/TopRightRotatingSlot'), {
+  ssr: false,
+  loading: () => null
+});
+
+const RotatingLocationText = dynamic(() => import('@/components/RotatingLocationText'), {
   ssr: false,
   loading: () => null
 });
@@ -122,6 +128,7 @@ function OverlayPage() {
     countryCode?: string;
   } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
+  const [precipForecast, setPrecipForecast] = useState<MinutelyPrecipForecast | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [sunriseSunset, setSunriseSunset] = useState<SunriseSunsetData | null>(null);
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
@@ -989,6 +996,12 @@ function OverlayPage() {
                     }
                   })()
                 );
+                // Minutely precipitation forecast (One Call 3.0 — parallel, non-blocking)
+                promises.push(
+                  fetchMinutelyForecast(lat!, lon!, API_KEYS.OPENWEATHER!, weather?.temp)
+                    .then(f => setPrecipForecast(f))
+                    .catch(() => { /* non-critical */ })
+                );
               }
               
               // Check if location should actually be fetched (with concurrency check)
@@ -1326,6 +1339,20 @@ function OverlayPage() {
     return null;
   }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
 
+  const locationLevels = useMemo(() => {
+    if (settings.locationDisplay === 'hidden') return [];
+    if (settings.locationDisplay === 'custom') {
+      const custom = settings.customLocation?.trim();
+      return custom ? [custom] : [];
+    }
+    if (hasCompleteLocationData(lastRawLocation.current)) {
+      return getLocationLevels(lastRawLocation.current);
+    }
+    if (location?.primary) return [location.primary];
+    if (location?.secondary) return [location.secondary];
+    return [];
+  }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
   // Recalculates when sunriseSunset, timezone, or staleCheckTime changes
   const isNightTime = useMemo((): boolean => {
@@ -1420,6 +1447,26 @@ function OverlayPage() {
     return display;
   }, [weather, getWeatherIcon, isNightTime]);
 
+  // Precipitation countdown — ticks every 15s to update "RAIN ~N MIN" display
+  const [precipTick, setPrecipTick] = useState(0);
+  useEffect(() => {
+    if (!precipForecast) return;
+    const id = setInterval(() => setPrecipTick(t => t + 1), 15_000);
+    return () => clearInterval(id);
+  }, [precipForecast]);
+
+  const precipCountdown = useMemo(() => {
+    void precipTick; // dependency for re-evaluation
+    if (!precipForecast) return null;
+    const minutesLeft = Math.ceil((precipForecast.targetTime - Date.now()) / 60_000);
+    if (minutesLeft <= 0 || minutesLeft > 60) return null;
+    const label = precipForecast.event === 'stopping'
+      ? `CLEARING ~${minutesLeft} MIN`
+      : `${precipForecast.precipType} ~${minutesLeft} MIN`;
+    const icon = precipForecast.event === 'stopping' ? '☀️' : '🌧️';
+    return { label, icon };
+  }, [precipForecast, precipTick]);
+
   // Animated speed value - counts through each integer (50, 51, 52...) - faster for responsiveness
   const displayedSpeed = useAnimatedValue(currentSpeed, {
     ...SPEED_ANIMATION,
@@ -1494,48 +1541,49 @@ function OverlayPage() {
         </div>
 
         <div className="top-right">
-          {/* Show right section if:
-              1. Custom location mode (always show), OR
-              2. Location display is not 'hidden' AND we have valid data (location or weather) and no incomplete location data
-              "Hidden" mode hides both location and weather (useful for flights, etc.) */}
           {settings.locationDisplay !== 'hidden' && (
             <>
           <div className="overlay-box">
-            {/* Show location if we have location data (or custom mode) */}
-            {((settings.locationDisplay === 'custom') || locationDisplay) && locationDisplay && (
+            {/* Location: rotating text (city/state/country) + always-visible flag */}
+            {locationLevels.length > 0 && (
+              <div className="location location-line">
+                <ErrorBoundary fallback={null}>
+                  <RotatingLocationText levels={locationLevels} />
+                </ErrorBoundary>
+                {locationDisplay?.countryCode && (
+                  <LocationFlag countryCode={locationDisplay.countryCode} />
+                )}
+              </div>
+            )}
+
+            {/* Weather: always visible, two lines (temp + condition) + optional precip countdown */}
+            {settings.showWeather !== false && weatherDisplay && (
               <>
-                  {locationDisplay.primary && (
-                  <div className="location location-line">
-                    <div className="location-main">{locationDisplay.primary}</div>
+                <div className="weather-temperature">{weatherDisplay.temperature}</div>
+                {(weatherDisplay.description || weatherDisplay.icon) && (
+                  <div className="weather-condition-group">
+                    {weatherDisplay.description && (
+                      <span className="weather-description-text">{weatherDisplay.description}</span>
+                    )}
+                    {weatherDisplay.icon && (
+                      <span className="weather-icon-inline">{weatherDisplay.icon}</span>
+                    )}
                   </div>
-                  )}
-                  {locationDisplay.secondary && (
-                    // Only show secondary line (city/state/country) with flag if:
-                    // 1. Not in custom mode (always show for GPS modes), OR
-                    // 2. In custom mode AND showCountryName is enabled
-                    (settings.locationDisplay !== 'custom' || settings.showCountryName) && (
-                    <div className={`location location-line location-sub-line ${!locationDisplay.primary ? 'country-only' : ''}`}>
-                      <div className="location-sub">
-                        {locationDisplay.secondary}
-                        {locationDisplay.countryCode && (
-                          <LocationFlag 
-                            countryCode={locationDisplay.countryCode} 
-                          />
-                        )}
-                      </div>
-                      </div>
-                    )
-                  )}
+                )}
+                {precipCountdown && (
+                  <div className="precip-forecast">
+                    <span className="precip-forecast-text">{precipCountdown.label}</span>
+                    <span className="precip-forecast-icon">{precipCountdown.icon}</span>
+                  </div>
+                )}
               </>
             )}
-            
-            {/* Rotating slot: temp, condition (when notable), altitude (when visible), speed (when visible) */}
+
+            {/* Altitude/speed: static if only one, rotating if both present */}
             <ErrorBoundary fallback={null}>
               <TopRightRotatingSlot
-                weatherDisplay={weatherDisplay}
                 altitudeDisplay={altitudeDisplay}
                 speedDisplay={speedDisplay}
-                showWeather={settings.showWeather}
                 showAltitude={settings.showAltitude}
                 showSpeed={settings.showSpeed}
               />

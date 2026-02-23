@@ -32,7 +32,6 @@ import {
   split as blackjackSplit,
   getChips,
   getGamblingLeaderboardTop,
-  refillChips,
   isGamblingEnabled,
   playCoinflip,
   playSlots,
@@ -73,7 +72,6 @@ export const KICK_CHAT_COMMANDS = [
   'hit',
   'double',
   'split',
-  'refill',
   'chips',
   'coinflip',
   'flip',
@@ -85,8 +83,9 @@ export const KICK_CHAT_COMMANDS = [
   'war',
   'duel',
   'accept',
-  'gamba',
   'gamble',
+  'gamba',
+  'games',
 ] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
@@ -101,28 +100,27 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'uptime') return { cmd: 'uptime' };
   if (cmd === 'followers') return { cmd: 'followers' };
   if (cmd === 'subs' || cmd === 'subscribers') return { cmd: 'subs' };
-  if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top' || cmd === 'gambleboard' || cmd === 'chiptop' || cmd === 'gambletop') return { cmd: 'leaderboard' };
+  if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard' };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
   if (cmd === 'steps') return { cmd: 'steps' };
   if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
   if (cmd === 'stand') return { cmd: 'stand' };
   if (cmd === 'calories' || cmd === 'cal') return { cmd: 'calories' };
-  if (cmd === 'flights' || cmd === 'stairs') return { cmd: 'flights' };
-  if (cmd === 'height' || cmd === 'ht') return { cmd: 'height' };
+  if (cmd === 'flights') return { cmd: 'flights' };
+  if (cmd === 'height') return { cmd: 'height' };
   if (cmd === 'length') return { cmd: 'length' };
-  if (cmd === 'weight' || cmd === 'wt') return { cmd: 'weight' };
+  if (cmd === 'weight') return { cmd: 'weight' };
   if (cmd === 'wellness') return { cmd: 'wellness' };
   if (cmd === 'uv') return { cmd: 'uv' };
   if (cmd === 'aqi') return { cmd: 'aqi' };
   if (cmd === 'speed') return { cmd: 'speed' };
-  if (cmd === 'altitude' || cmd === 'elevation' || cmd === 'elev') return { cmd: 'altitude' };
-  if (cmd === 'forecast' || cmd === 'fc') return { cmd: 'forecast' };
+  if (cmd === 'altitude' || cmd === 'elevation') return { cmd: 'altitude' };
+  if (cmd === 'forecast') return { cmd: 'forecast' };
   if (cmd === 'map') return { cmd: 'map' };
   if (cmd === 'deal' || cmd === 'bj') return { cmd: cmd as 'deal' | 'bj', arg };
   if (cmd === 'hit') return { cmd: 'hit' };
-  if (cmd === 'double' || cmd === 'dd') return { cmd: 'double' };
+  if (cmd === 'double') return { cmd: 'double' };
   if (cmd === 'split') return { cmd: 'split' };
-  if (cmd === 'refill' || cmd === 'rebuy' || cmd === 'rebuys') return { cmd: 'refill' };
   if (cmd === 'chips') return { cmd: 'chips', arg };
   if (cmd === 'coinflip' || cmd === 'flip') return { cmd: 'coinflip', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'slots' || cmd === 'spin') return { cmd: 'slots', arg: arg ?? parts.slice(1).join(' ') };
@@ -133,6 +131,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'duel') return { cmd: 'duel', arg: parts.slice(1).join(' ') };
   if (cmd === 'accept') return { cmd: 'accept' };
   if (cmd === 'gamba' || cmd === 'gamble') return { cmd: 'gamble', arg: arg ?? parts.slice(1).join(' ') };
+  if (cmd === 'games') return { cmd: 'games' };
   return null;
 }
 
@@ -212,21 +211,17 @@ export async function handleKickChatCommand(
   if (cmd === 'subs') return getSubsResponse();
 
   // Gambling (all require gambling enabled)
-  const gamblingCmds = ['refill', 'chips', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble'];
+  const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return '🃏 Gambling is disabled for this stream.';
-  }
-  if (cmd === 'refill') {
-    if (!user) return null;
-    return refillChips(user);
   }
   if (cmd === 'chips') {
     if (!user) return null;
     const targetUser = (arg ?? '').trim() || user;
     const chips = await getChips(targetUser);
     if (targetUser.toLowerCase() === user.toLowerCase()) {
-      return `🃏 You have ${chips} chips. !gamble for games. !refill if at 0.`;
+      return `🃏 You have ${chips} chips. !games for options. Redeem channel points for more chips.`;
     }
     return `🃏 ${targetUser} has ${chips} chips (resets each stream).`;
   }
@@ -317,18 +312,11 @@ export async function handleKickChatCommand(
   if (cmd === 'gamba' || cmd === 'gamble') {
     if (!user) return null;
     const betRaw = parseInt((arg ?? '').trim(), 10);
-    if (isNaN(betRaw) || betRaw < 1) {
-      return '🎲 !deal !slots !coinflip !dice !roulette !crash !war !duel — all take [amount]. !chips to check.';
-    }
-    const bet = betRaw;
-    const games = ['coinflip', 'slots', 'roulette', 'dice', 'crash', 'war'] as const;
-    const pick = games[Math.floor(Math.random() * games.length)];
-    if (pick === 'coinflip') return playCoinflip(user, bet);
-    if (pick === 'slots') return playSlots(user, bet);
-    if (pick === 'roulette') return playRoulette(user, ['red', 'black'][Math.floor(Math.random() * 2)], bet);
-    if (pick === 'crash') return playCrash(user, bet);
-    if (pick === 'war') return playWar(user, bet);
-    return playDice(user, ['high', 'low'][Math.floor(Math.random() * 2)], bet);
+    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
+    return playCoinflip(user, bet);
+  }
+  if (cmd === 'games') {
+    return '🎲 !gamble [amt] | !deal [amt] | !slots [amt] | !coinflip [amt] | !dice high/low [amt] | !roulette red/black/number [amt] | !crash [amt] | !war [amt] | !duel @user [amt]. !chips to check balance.';
   }
   return null;
 }

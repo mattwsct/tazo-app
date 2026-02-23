@@ -5,7 +5,7 @@ import type { OverlaySettings } from '@/types/settings';
 import GoalProgressBar from './GoalProgressBar';
 
 const ALERT_DISPLAY_MS = 8000;
-const CYCLE_DURATION_MS = 30000; // Time each slide is shown before fading to next
+const CYCLE_DURATION_MS = 32000; // 4× base rotation (8s) — synced to same wall clock rhythm
 const CROSSFADE_DURATION_MS = 500; // Fade out + fade in overlap
 
 type SlideType = 'leaderboard' | 'subs' | 'kicks';
@@ -177,8 +177,18 @@ export default function BottomRightPanel({
       });
     };
 
-    const id = setInterval(tick, CYCLE_DURATION_MS);
-    return () => clearInterval(id);
+    // Align to wall clock so rotation syncs with other overlay rotations
+    const now = Date.now();
+    const msUntilNextTick = CYCLE_DURATION_MS - (now % CYCLE_DURATION_MS);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const initialTimeout = setTimeout(() => {
+      tick();
+      intervalId = setInterval(tick, CYCLE_DURATION_MS);
+    }, msUntilNextTick);
+    return () => {
+      clearTimeout(initialTimeout);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [showGoalsRotation, slides.length, slidesKey]);
 
   // When celebration window ends, bump goal via API (once per celebration)

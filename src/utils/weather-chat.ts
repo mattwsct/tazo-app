@@ -165,6 +165,80 @@ interface OpenWeatherForecastResponse {
   list?: Array<{ dt?: number; pop?: number; weather?: Array<{ main?: string }> }>;
 }
 
+/** Minutely precipitation forecast from One Call 3.0 */
+export interface MinutelyPrecipForecast {
+  event: 'starting' | 'stopping';
+  targetTime: number;
+  precipType: string;
+  fetchedAt: number;
+}
+
+/**
+ * Fetches minutely precipitation data from One Call 3.0.
+ * Returns a forecast of when precipitation starts or stops within the next 60 minutes.
+ */
+export async function fetchMinutelyForecast(
+  lat: number, lon: number, apiKey: string, currentTempC?: number
+): Promise<MinutelyPrecipForecast | null> {
+  try {
+    const res = await fetch(
+      `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=current,hourly,daily,alerts&appid=${apiKey}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseMinutelyData(data?.minutely, currentTempC);
+  } catch {
+    return null;
+  }
+}
+
+const PRECIP_THRESHOLD = 0.1; // mm/h — ignore trace moisture
+
+/**
+ * Parses One Call 3.0 minutely array into an actionable forecast.
+ * Detects the next transition: dry→wet (starting) or wet→dry (stopping).
+ */
+export function parseMinutelyData(
+  minutely: Array<{ dt: number; precipitation: number }> | undefined,
+  currentTempC?: number,
+): MinutelyPrecipForecast | null {
+  if (!minutely || minutely.length < 5) return null;
+
+  const now = Date.now();
+  const precipType = (currentTempC != null && currentTempC <= 2) ? 'SNOW' : 'RAIN';
+
+  const isWet = (entry: { precipitation: number }) => entry.precipitation >= PRECIP_THRESHOLD;
+  const currentlyWet = isWet(minutely[0]);
+
+  // Require at least 3 consecutive minutes in the new state to avoid flicker
+  const MIN_CONSECUTIVE = 3;
+
+  for (let i = 1; i <= minutely.length - MIN_CONSECUTIVE; i++) {
+    const transitioned = currentlyWet ? !isWet(minutely[i]) : isWet(minutely[i]);
+    if (!transitioned) continue;
+
+    let sustained = true;
+    for (let j = 1; j < MIN_CONSECUTIVE; j++) {
+      if (i + j >= minutely.length) { sustained = false; break; }
+      const check = currentlyWet ? !isWet(minutely[i + j]) : isWet(minutely[i + j]);
+      if (!check) { sustained = false; break; }
+    }
+    if (!sustained) continue;
+
+    const targetTime = minutely[i].dt * 1000;
+    if (targetTime <= now) continue;
+
+    return {
+      event: currentlyWet ? 'stopping' : 'starting',
+      targetTime,
+      precipType,
+      fetchedAt: now,
+    };
+  }
+
+  return null;
+}
+
 /**
  * Extracts precipitation forecast from forecast data
  */

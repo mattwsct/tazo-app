@@ -43,7 +43,15 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
   }
 
   // Log any rejected keys (potential malicious entries)
-  const allowedNonSchema = ['pollState', 'gamblingLeaderboardTop', 'overlayAlerts'];
+  // These are runtime-only fields — not persisted but valid to receive from the client
+  const allowedNonSchema = [
+    'pollState',
+    'gamblingLeaderboardTop',
+    'overlayAlerts',
+    'streamGoals',
+    'subGoalCelebrationUntil',
+    'kicksGoalCelebrationUntil',
+  ];
   for (const key of Object.keys(settings)) {
     if (!(key in SETTINGS_CONFIG) && !allowedNonSchema.includes(key)) {
       rejectedKeys.push(key);
@@ -76,8 +84,16 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const maliciousKeys: string[] = [];
   const settingsObj = settings as Record<string, unknown>;
 
+  const runtimeOnlyKeys = [
+    'pollState',
+    'gamblingLeaderboardTop',
+    'overlayAlerts',
+    'streamGoals',
+    'subGoalCelebrationUntil',
+    'kicksGoalCelebrationUntil',
+  ];
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in SETTINGS_CONFIG) && !['pollState', 'gamblingLeaderboardTop', 'overlayAlerts'].includes(key)) {
+    if (!(key in SETTINGS_CONFIG) && !runtimeOnlyKeys.includes(key)) {
       maliciousKeys.push(key);
     }
   }
