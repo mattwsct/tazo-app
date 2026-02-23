@@ -224,7 +224,9 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
 }
 
 function parseBet(input: string | undefined, defaultBet = 5): number {
-  const raw = parseInt((input ?? '').trim(), 10);
+  const s = (input ?? '').trim().toLowerCase();
+  if (['max', 'all', 'allin', 'all-in'].includes(s)) return Infinity;
+  const raw = parseInt(s, 10);
   return !isNaN(raw) && raw >= 1 ? raw : defaultBet;
 }
 
@@ -400,19 +402,19 @@ export async function handleKickChatCommand(
     return playCoinflip(user, parseBet(arg));
   }
   if (cmd === 'games') {
-    return '🎲 !gamble [amt] | !deal [amt] | !slots [amt] | !dice high/low [amt] | !roulette red/black/number [amt] | !crash [amt] | !war [amt] | !duel @user [amt] | !heist [amt]. !chips to check balance.';
+    return '🎲 Games: !gamble !deal !slots !dice !roulette !crash !war !duel !heist — Use max/all to go all-in. !chips for balance.';
   }
   if (cmd === 'heist') {
     if (!user) return null;
-    const betRaw = parseInt((arg ?? '').trim(), 10);
-    if (isNaN(betRaw) || betRaw < 1) {
+    const bet = parseBet(arg, 0);
+    if (bet < 1) {
       const status = await getHeistStatus();
       if (status) return status;
       const expired = await checkAndResolveExpiredHeist();
       if (expired) return expired;
       return '🏦 Usage: !heist <amount> — Start or join a group heist. More robbers = better odds!';
     }
-    return joinOrStartHeist(user, betRaw);
+    return joinOrStartHeist(user, bet);
   }
   return null;
 }

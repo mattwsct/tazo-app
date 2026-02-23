@@ -21,6 +21,7 @@ interface WellnessData {
   stepsSinceStreamStart?: number;
   distanceSinceStreamStart?: number;
   updatedAt?: number;
+  lastSessionUpdateAt?: number;
 }
 
 export default function TopLeftRotatingWellness({ date, timezoneValid, settings }: TopLeftRotatingWellnessProps) {
@@ -38,6 +39,7 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
             stepsSinceStreamStart: typeof data.stepsSinceStreamStart === 'number' ? data.stepsSinceStreamStart : undefined,
             distanceSinceStreamStart: typeof data.distanceSinceStreamStart === 'number' ? data.distanceSinceStreamStart : undefined,
             updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
+            lastSessionUpdateAt: typeof data.lastSessionUpdateAt === 'number' ? data.lastSessionUpdateAt : undefined,
           });
         }
       } catch {
@@ -54,9 +56,10 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
   }, []);
 
   const stepsFresh = useMemo(() => {
-    if (!wellness?.updatedAt) return false;
-    return Date.now() - wellness.updatedAt <= TIMERS.WELLNESS_STALE_MS;
-  }, [wellness?.updatedAt]);
+    const latest = Math.max(wellness?.updatedAt ?? 0, wellness?.lastSessionUpdateAt ?? 0);
+    if (!latest) return false;
+    return Date.now() - latest <= TIMERS.WELLNESS_STALE_MS;
+  }, [wellness?.updatedAt, wellness?.lastSessionUpdateAt]);
 
   const slides = useMemo<SlotType[]>(() => {
     const s: SlotType[] = [];
