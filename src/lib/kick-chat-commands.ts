@@ -21,7 +21,6 @@ import {
   getForecastResponse,
   getMapResponse,
   getFollowersResponse,
-  getSubsResponse,
 } from '@/lib/chat-response-helpers';
 import {
   getActiveGame,
@@ -47,7 +46,6 @@ export const KICK_CHAT_COMMANDS = [
   'ping',
   'uptime',
   'followers',
-  'subs',
   'leaderboard',
   'heartrate',
   'hr',
@@ -99,7 +97,6 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'ping') return { cmd: 'ping' };
   if (cmd === 'uptime') return { cmd: 'uptime' };
   if (cmd === 'followers') return { cmd: 'followers' };
-  if (cmd === 'subs' || cmd === 'subscribers') return { cmd: 'subs' };
   if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard' };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
   if (cmd === 'steps') return { cmd: 'steps' };
@@ -208,8 +205,6 @@ export async function handleKickChatCommand(
   if (cmd === 'forecast') return getForecastResponse();
   if (cmd === 'map') return getMapResponse();
   if (cmd === 'followers') return getFollowersResponse();
-  if (cmd === 'subs') return getSubsResponse();
-
   // Gambling (all require gambling enabled)
   const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games'];
   const gamblingOn = await isGamblingEnabled();

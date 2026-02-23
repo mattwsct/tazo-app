@@ -91,8 +91,7 @@ export async function getWellnessHeightResponse(): Promise<string> {
   const wellness = await getWellnessData();
   const heightCm = wellness?.heightCm;
   if (heightCm == null || heightCm <= 0) return '📏 No height data yet.';
-  const age = formatDataAge(getMetricUpdatedAt(wellness, 'heightCm'));
-  return `📏 ${formatHeight(heightCm)}${age}`;
+  return `📏 ${formatHeight(heightCm)}`;
 }
 
 export async function getWellnessWeightResponse(): Promise<string> {
@@ -107,8 +106,7 @@ export async function getWellnessWeightResponse(): Promise<string> {
   if (bodyFat != null && bodyFat > 0) parts.push(`Body fat ${bodyFat}%`);
   if (leanKg != null && leanKg > 0) parts.push(`Lean ${leanKg} kg (${(leanKg * 2.205).toFixed(1)} lbs)`);
   if (parts.length === 0) return '⚖️ No weight data yet.';
-  const age = formatDataAge(getMetricUpdatedAt(wellness, ['weightKg', 'bodyMassIndex', 'bodyFatPercent', 'leanBodyMassKg']));
-  return `⚖️ ${parts.join(' · ')}${age}`;
+  return `⚖️ ${parts.join(' · ')}`;
 }
 
 export async function getWellnessSummaryResponse(): Promise<string> {
@@ -142,7 +140,6 @@ export async function getWellnessSummaryResponse(): Promise<string> {
   if (parts.length === 0) return '📊 No wellness data yet.';
   const age = formatDataAge(getMetricUpdatedAt(wellness, [
     'steps', 'distanceKm', 'flightsClimbed', 'activeCalories', 'heartRate', 'restingHeartRate',
-    'heightCm', 'weightKg', 'bodyMassIndex', 'bodyFatPercent', 'leanBodyMassKg',
   ]));
   return `📊 ${parts.join(' · ')}${age}`;
 }
