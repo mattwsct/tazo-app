@@ -1251,15 +1251,6 @@ export default function AdminPage() {
                   />
                   <span className="checkbox-text">Distance — when walking/running detected</span>
                 </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showCalories ?? false}
-                    onChange={(e) => handleSettingsChange({ showCalories: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Calories — active calories when &gt; 0</span>
-                </label>
             </div>
             </div>
             

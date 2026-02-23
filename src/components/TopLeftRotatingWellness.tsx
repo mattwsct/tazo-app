@@ -4,23 +4,22 @@ import { useEffect, useState, useMemo } from 'react';
 import type { OverlaySettings } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
-import { kmToMiles } from '@/utils/unit-conversions';
+import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 const POLL_INTERVAL_MS = 60000;
 const CYCLE_DURATION_MS = 16000;
 
-type SlotType = 'date' | 'steps' | 'distance' | 'calories';
+type SlotType = 'date' | 'steps' | 'distance';
 
 interface TopLeftRotatingWellnessProps {
   date: string | null;
   timezoneValid: boolean;
-  settings: Pick<OverlaySettings, 'showSteps' | 'showDistance' | 'showCalories'>;
+  settings: Pick<OverlaySettings, 'showSteps' | 'showDistance'>;
 }
 
 interface WellnessData {
   stepsSinceStreamStart?: number;
   distanceSinceStreamStart?: number;
-  activeCaloriesSinceStreamStart?: number;
   updatedAt?: number;
 }
 
@@ -38,7 +37,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
           setWellness({
             stepsSinceStreamStart: typeof data.stepsSinceStreamStart === 'number' ? data.stepsSinceStreamStart : undefined,
             distanceSinceStreamStart: typeof data.distanceSinceStreamStart === 'number' ? data.distanceSinceStreamStart : undefined,
-            activeCaloriesSinceStreamStart: typeof data.activeCaloriesSinceStreamStart === 'number' ? data.activeCaloriesSinceStreamStart : undefined,
             updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
           });
         }
@@ -65,9 +63,18 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     if (timezoneValid && date) s.push('date');
     if (settings.showSteps !== false && stepsFresh && wellness?.stepsSinceStreamStart != null && wellness.stepsSinceStreamStart >= 0) s.push('steps');
     if (settings.showDistance !== false && stepsFresh && wellness?.distanceSinceStreamStart != null && wellness.distanceSinceStreamStart > 0) s.push('distance');
-    if (settings.showCalories && stepsFresh && wellness?.activeCaloriesSinceStreamStart != null && wellness.activeCaloriesSinceStreamStart > 0) s.push('calories');
     return s;
-  }, [timezoneValid, date, settings.showSteps, settings.showDistance, settings.showCalories, stepsFresh, wellness]);
+  }, [timezoneValid, date, settings.showSteps, settings.showDistance, stepsFresh, wellness]);
+
+  const animatedSteps = useAnimatedValue(
+    wellness?.stepsSinceStreamStart ?? null,
+    { precision: 0, durationMultiplier: 5, maxDuration: 1500, immediateThreshold: 1, allowNull: true }
+  );
+
+  const animatedDistanceKm = useAnimatedValue(
+    wellness?.distanceSinceStreamStart ?? null,
+    { precision: 1, durationMultiplier: 3000, maxDuration: 1000, immediateThreshold: 0.05, allowNull: true }
+  );
 
   const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
 
@@ -86,34 +93,22 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
           <div className="step-counter-wrapper">
             <div className="step-counter-row">
               <span className="step-counter-icon">👟</span>
-              <span className="step-counter-value">{wellness!.stepsSinceStreamStart!.toLocaleString()}</span>
+              <span className="step-counter-value">{(animatedSteps ?? 0).toLocaleString()}</span>
               <span className="step-counter-label">steps</span>
             </div>
           </div>
         );
       case 'distance': {
-        const km = wellness!.distanceSinceStreamStart!;
-        const mi = Math.round(kmToMiles(km));
+        const km = animatedDistanceKm ?? 0;
         return (
           <div className="step-counter-wrapper">
             <div className="step-counter-row">
               <span className="step-counter-icon">🚶</span>
-              <span className="step-counter-value">{Math.round(km)} km</span>
-              <span className="step-counter-label">({mi} mi)</span>
+              <span className="step-counter-value">{km.toFixed(1)} km</span>
             </div>
           </div>
         );
       }
-      case 'calories':
-        return (
-          <div className="step-counter-wrapper">
-            <div className="step-counter-row">
-              <span className="step-counter-icon">🔥</span>
-              <span className="step-counter-value">{wellness!.activeCaloriesSinceStreamStart!.toLocaleString()}</span>
-              <span className="step-counter-label">cal</span>
-            </div>
-          </div>
-        );
       default:
         return null;
     }

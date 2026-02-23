@@ -803,3 +803,126 @@ export async function acceptDuel(accepterUsername: string): Promise<string> {
 
   return `⚔️ ${winnerDisplay} defeats ${loserDisplay}! +${totalPot} chips to ${winnerDisplay}!`;
 }
+
+// --- Heist ---
+
+const HEIST_KEY = 'heist_active';
+const HEIST_JOIN_WINDOW_MS = 60_000;
+const HEIST_TTL_SEC = 180;
+const HEIST_MAX_PARTICIPANTS = 10;
+
+interface HeistState {
+  participants: Array<{ user: string; display: string; bet: number }>;
+  startedAt: number;
+}
+
+function heistSuccessRate(numPlayers: number): number {
+  return Math.min(75, 20 + numPlayers * 10);
+}
+
+async function resolveHeist(heist: HeistState): Promise<string> {
+  await kv.del(HEIST_KEY);
+
+  const numPlayers = heist.participants.length;
+  const successRate = heistSuccessRate(numPlayers);
+  const succeeded = Math.random() * 100 < successRate;
+  const totalPot = heist.participants.reduce((sum, p) => sum + p.bet, 0);
+
+  if (succeeded) {
+    const multiplier = 1.5 + Math.random();
+    const payouts: string[] = [];
+    for (const p of heist.participants) {
+      const payout = Math.floor(p.bet * multiplier);
+      await addChips(p.user, payout);
+      payouts.push(`${p.display} +${payout - p.bet}`);
+    }
+    return `🏦💰 HEIST SUCCEEDED! ${numPlayers} robber${numPlayers > 1 ? 's' : ''} split the loot! ${payouts.join(', ')}`;
+  }
+
+  return `🏦🚔 HEIST FAILED! Police caught ${numPlayers === 1 ? 'the lone robber' : `all ${numPlayers} robbers`}! ${totalPot} chips lost.`;
+}
+
+/** Auto-resolve expired heists (called by cron). Returns result message or null. */
+export async function checkAndResolveExpiredHeist(): Promise<string | null> {
+  const existing = await kv.get<HeistState>(HEIST_KEY);
+  if (!existing) return null;
+  if (Date.now() - existing.startedAt < HEIST_JOIN_WINDOW_MS) return null;
+  return resolveHeist(existing);
+}
+
+/** Join or start a heist. Handles auto-resolution of expired heists. */
+export async function joinOrStartHeist(username: string, betAmount: number): Promise<string> {
+  const user = normalizeUser(username);
+  const display = username.trim();
+  const bet = Math.floor(Math.max(MIN_BET, betAmount));
+
+  const wait = await checkInstantCooldown(user);
+  if (wait !== null) return `🏦 Wait ${wait}s before joining.`;
+
+  const existing = await kv.get<HeistState>(HEIST_KEY);
+
+  // Expired heist — resolve it, then start a fresh one with this player
+  if (existing && Date.now() - existing.startedAt >= HEIST_JOIN_WINDOW_MS) {
+    const result = await resolveHeist(existing);
+
+    const { ok, balance } = await deductChips(user, bet);
+    if (!ok) return `${result}\n🏦 Not enough chips to start a new heist (have ${balance}).`;
+    await setInstantCooldown(user);
+
+    const newHeist: HeistState = {
+      participants: [{ user, display, bet }],
+      startedAt: Date.now(),
+    };
+    await kv.set(HEIST_KEY, newHeist, { ex: HEIST_TTL_SEC });
+
+    return `${result}\n🏦 NEW HEIST! ${display} bets ${bet} chips. Type !heist [amount] to join! (60s)`;
+  }
+
+  // Active heist in join window — join it
+  if (existing) {
+    if (existing.participants.some(p => p.user === user)) {
+      return `🏦 You're already in this heist!`;
+    }
+    if (existing.participants.length >= HEIST_MAX_PARTICIPANTS) {
+      return `🏦 Heist crew is full (max ${HEIST_MAX_PARTICIPANTS}).`;
+    }
+
+    const { ok, balance } = await deductChips(user, bet);
+    if (!ok) return `🏦 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
+    await setInstantCooldown(user);
+
+    existing.participants.push({ user, display, bet });
+    await kv.set(HEIST_KEY, existing, { ex: HEIST_TTL_SEC });
+
+    const totalPot = existing.participants.reduce((sum, p) => sum + p.bet, 0);
+    const rate = heistSuccessRate(existing.participants.length);
+    const timeLeft = Math.ceil((HEIST_JOIN_WINDOW_MS - (Date.now() - existing.startedAt)) / 1000);
+
+    return `🏦 ${display} joins the heist with ${bet} chips! (${existing.participants.length} robbers, ${totalPot} at stake, ${rate}% odds, ${timeLeft}s left)`;
+  }
+
+  // No active heist — start one
+  const { ok, balance } = await deductChips(user, bet);
+  if (!ok) return `🏦 Not enough chips (have ${balance}). Chat to earn more or redeem channel points.`;
+  await setInstantCooldown(user);
+
+  const newHeist: HeistState = {
+    participants: [{ user, display, bet }],
+    startedAt: Date.now(),
+  };
+  await kv.set(HEIST_KEY, newHeist, { ex: HEIST_TTL_SEC });
+
+  return `🏦 HEIST STARTED! ${display} bets ${bet} chips. Type !heist [amount] to join! (60s)`;
+}
+
+/** Check heist status (called when !heist is used without an amount during an active heist). */
+export async function getHeistStatus(): Promise<string | null> {
+  const existing = await kv.get<HeistState>(HEIST_KEY);
+  if (!existing) return null;
+  if (Date.now() - existing.startedAt >= HEIST_JOIN_WINDOW_MS) return null;
+  const totalPot = existing.participants.reduce((sum, p) => sum + p.bet, 0);
+  const rate = heistSuccessRate(existing.participants.length);
+  const timeLeft = Math.ceil((HEIST_JOIN_WINDOW_MS - (Date.now() - existing.startedAt)) / 1000);
+  const names = existing.participants.map(p => p.display).join(', ');
+  return `🏦 Active heist: ${names} (${existing.participants.length} robbers, ${totalPot} at stake, ${rate}% odds, ${timeLeft}s left). !heist [amount] to join!`;
+}

@@ -31,6 +31,7 @@ import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightT
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { checkAndResolveExpiredHeist } from '@/utils/blackjack-storage';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
@@ -425,6 +426,18 @@ export async function GET(request: NextRequest) {
     if (currentHrState !== (hrState as HeartrateBroadcastState)) {
       await kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, currentHrState);
     }
+  }
+
+  // Auto-resolve expired heists
+  try {
+    const heistResult = await checkAndResolveExpiredHeist();
+    if (heistResult) {
+      await sendKickChatMessage(accessToken, heistResult);
+      sent++;
+      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heist_resolve', msgPreview: heistResult.slice(0, 80) }));
+    }
+  } catch (err) {
+    console.error('[Cron HR] HEIST_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
   console.log('[Cron HR] CRON_END', JSON.stringify({ sent, runAt }));

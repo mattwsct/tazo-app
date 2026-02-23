@@ -21,7 +21,6 @@ export interface OverlaySettings {
   mapZoomLevel: MapZoomLevel;
   showSteps: boolean;
   showDistance?: boolean;
-  showCalories?: boolean;
   showSpeed?: boolean;
   showAltitude?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
@@ -80,7 +79,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   mapZoomLevel: 'match',
   showSteps: true,
   showDistance: true,
-  showCalories: false,
   showSpeed: true,
   showAltitude: true,
   showLeaderboard: true,
@@ -114,7 +112,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   mapZoomLevel: 'string',
   showSteps: 'boolean',
   showDistance: 'boolean',
-  showCalories: 'boolean',
   showSpeed: 'boolean',
   showAltitude: 'boolean',
   showLeaderboard: 'boolean',

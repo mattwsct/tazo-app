@@ -40,7 +40,17 @@ import {
   playWar,
   challengeDuel,
   acceptDuel,
+  joinOrStartHeist,
+  getHeistStatus,
+  checkAndResolveExpiredHeist,
 } from '@/utils/blackjack-storage';
+import {
+  parseConvertArgs,
+  convertUnit,
+  handleConvertCurrency,
+  handleConvertBareNumber,
+  handleConvertDefault,
+} from '@/utils/convert-utils';
 
 export const KICK_CHAT_COMMANDS = [
   'ping',
@@ -71,8 +81,6 @@ export const KICK_CHAT_COMMANDS = [
   'double',
   'split',
   'chips',
-  'coinflip',
-  'flip',
   'slots',
   'spin',
   'roulette',
@@ -84,6 +92,8 @@ export const KICK_CHAT_COMMANDS = [
   'gamble',
   'gamba',
   'games',
+  'heist',
+  'convert',
 ] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
@@ -119,7 +129,6 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'double') return { cmd: 'double' };
   if (cmd === 'split') return { cmd: 'split' };
   if (cmd === 'chips') return { cmd: 'chips', arg };
-  if (cmd === 'coinflip' || cmd === 'flip') return { cmd: 'coinflip', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'slots' || cmd === 'spin') return { cmd: 'slots', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'roulette') return { cmd: 'roulette', arg: parts.slice(1).join(' ') };
   if (cmd === 'dice') return { cmd: 'dice', arg: parts.slice(1).join(' ') };
@@ -129,6 +138,8 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'accept') return { cmd: 'accept' };
   if (cmd === 'gamba' || cmd === 'gamble') return { cmd: 'gamble', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'games') return { cmd: 'games' };
+  if (cmd === 'heist') return { cmd: 'heist', arg };
+  if (cmd === 'convert') return { cmd: 'convert', arg: parts.slice(1).join(' ') };
   return null;
 }
 
@@ -205,8 +216,15 @@ export async function handleKickChatCommand(
   if (cmd === 'forecast') return getForecastResponse();
   if (cmd === 'map') return getMapResponse();
   if (cmd === 'followers') return getFollowersResponse();
+  if (cmd === 'convert') {
+    const parsed = parseConvertArgs(arg ?? '');
+    if (parsed.type === 'unit') return convertUnit(parsed.amount, parsed.unit);
+    if (parsed.type === 'currency') return handleConvertCurrency(parsed.amount, parsed.from, parsed.to);
+    if (parsed.type === 'bare_number') return handleConvertBareNumber(parsed.amount);
+    return handleConvertDefault();
+  }
   // Gambling (all require gambling enabled)
-  const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'coinflip', 'flip', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games'];
+  const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games', 'heist'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return '🃏 Gambling is disabled for this stream.';
@@ -237,12 +255,6 @@ export async function handleKickChatCommand(
   if (cmd === 'split') {
     if (!user) return null;
     return blackjackSplit(user);
-  }
-  if (cmd === 'coinflip' || cmd === 'flip') {
-    if (!user) return null;
-    const betRaw = parseInt((arg ?? '').trim(), 10);
-    const bet = isNaN(betRaw) || betRaw < 1 ? 5 : betRaw;
-    return playCoinflip(user, bet);
   }
   if (cmd === 'slots' || cmd === 'spin') {
     if (!user) return null;
@@ -311,7 +323,19 @@ export async function handleKickChatCommand(
     return playCoinflip(user, bet);
   }
   if (cmd === 'games') {
-    return '🎲 !gamble [amt] | !deal [amt] | !slots [amt] | !coinflip [amt] | !dice high/low [amt] | !roulette red/black/number [amt] | !crash [amt] | !war [amt] | !duel @user [amt]. !chips to check balance.';
+    return '🎲 !gamble [amt] | !deal [amt] | !slots [amt] | !dice high/low [amt] | !roulette red/black/number [amt] | !crash [amt] | !war [amt] | !duel @user [amt] | !heist [amt]. !chips to check balance.';
+  }
+  if (cmd === 'heist') {
+    if (!user) return null;
+    const betRaw = parseInt((arg ?? '').trim(), 10);
+    if (isNaN(betRaw) || betRaw < 1) {
+      const status = await getHeistStatus();
+      if (status) return status;
+      const expired = await checkAndResolveExpiredHeist();
+      if (expired) return expired;
+      return '🏦 Usage: !heist <amount> — Start or join a group heist. More robbers = better odds!';
+    }
+    return joinOrStartHeist(user, betRaw);
   }
   return null;
 }
