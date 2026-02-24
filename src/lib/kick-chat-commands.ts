@@ -32,6 +32,7 @@ import {
   getChips,
   getGamblingLeaderboardTop,
   isGamblingEnabled,
+  isSettingEnabled,
   playCoinflip,
   playSlots,
   playRoulette,
@@ -308,6 +309,7 @@ export async function handleKickChatCommand(
   if (cmd === 'map') return getMapResponse();
   if (cmd === 'followers') return getFollowersResponse();
   if (cmd === 'convert') {
+    if (!(await isSettingEnabled('convertEnabled'))) return null;
     const parsed = parseConvertArgs(arg ?? '');
     if (parsed.type === 'unit') return convertUnit(parsed.amount, parsed.unit);
     if (parsed.type === 'currency') return handleConvertCurrency(parsed.amount, parsed.from, parsed.to);
@@ -315,6 +317,7 @@ export async function handleKickChatCommand(
     return handleConvertDefault();
   }
   if (cmd === 'math') {
+    if (!(await isSettingEnabled('mathEnabled'))) return null;
     const expr = (arg ?? '').trim();
     if (!expr) return '🔢 Usage: !math <expression> — e.g. !math 5 x 29, !math (10 + 5) * 3';
     const result = evaluateMath(expr);
@@ -327,6 +330,22 @@ export async function handleKickChatCommand(
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return '🃏 Gambling is disabled for this stream.';
+  }
+  // Individual game toggle checks
+  const gameToggleMap: Record<string, string> = {
+    deal: 'blackjackEnabled', bj: 'blackjackEnabled', hit: 'blackjackEnabled', stand: 'blackjackEnabled', double: 'blackjackEnabled', split: 'blackjackEnabled',
+    slots: 'slotsEnabled', spin: 'slotsEnabled',
+    roulette: 'rouletteEnabled',
+    dice: 'diceEnabled',
+    crash: 'crashEnabled',
+    war: 'warEnabled',
+    gamble: 'coinflipEnabled', gamba: 'coinflipEnabled',
+    duel: 'duelEnabled', accept: 'duelEnabled',
+    heist: 'heistEnabled',
+  };
+  const toggleKey = gameToggleMap[cmd];
+  if (toggleKey && !(await isSettingEnabled(toggleKey))) {
+    return `🃏 That game is currently disabled.`;
   }
   if (cmd === 'chips') {
     if (!user) return null;
@@ -402,7 +421,23 @@ export async function handleKickChatCommand(
     return playCoinflip(user, parseBet(arg));
   }
   if (cmd === 'games') {
-    return '🎲 Games: !gamble !deal !slots !dice !roulette !crash !war !duel !heist — Use max/all to go all-in. !chips for balance.';
+    const gameList: { cmd: string; toggle: string }[] = [
+      { cmd: '!gamble', toggle: 'coinflipEnabled' },
+      { cmd: '!deal', toggle: 'blackjackEnabled' },
+      { cmd: '!slots', toggle: 'slotsEnabled' },
+      { cmd: '!dice', toggle: 'diceEnabled' },
+      { cmd: '!roulette', toggle: 'rouletteEnabled' },
+      { cmd: '!crash', toggle: 'crashEnabled' },
+      { cmd: '!war', toggle: 'warEnabled' },
+      { cmd: '!duel', toggle: 'duelEnabled' },
+      { cmd: '!heist', toggle: 'heistEnabled' },
+    ];
+    const enabled: string[] = [];
+    for (const g of gameList) {
+      if (await isSettingEnabled(g.toggle)) enabled.push(g.cmd);
+    }
+    if (enabled.length === 0) return '🎲 No games are currently enabled.';
+    return `🎲 Games: ${enabled.join(' ')} — Use max/all to go all-in. !chips for balance.`;
   }
   if (cmd === 'heist') {
     if (!user) return null;

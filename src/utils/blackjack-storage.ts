@@ -104,6 +104,15 @@ export async function isGamblingEnabled(): Promise<boolean> {
   }
 }
 
+export async function isSettingEnabled(key: string): Promise<boolean> {
+  try {
+    const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
+    return settings[key] !== false;
+  } catch {
+    return true;
+  }
+}
+
 export interface BlackjackGame {
   playerHand: Card[];
   playerHand2?: Card[];

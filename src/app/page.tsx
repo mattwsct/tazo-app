@@ -1046,10 +1046,9 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          {/* Stream title & chat broadcasts */}
-          <CollapsibleSection id="stream-title" title="📺 Stream title & chat broadcasts">
+          {/* Stream title */}
+          <CollapsibleSection id="stream-title" title="📺 Stream title">
             <div className="setting-group">
-              <h3 className="subsection-label">Stream title</h3>
             <div className="form-stack">
               <div>
                 <label className="field-label">Custom title</label>
@@ -1149,8 +1148,443 @@ export default function AdminPage() {
               </div>
             </div>
             
-            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <h3 className="subsection-label">Chat broadcasts</h3>
+          </CollapsibleSection>
+
+          {/* === OVERLAY === */}
+          <CollapsibleSection id="overlay" title="🖥️ Overlay display">
+            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Top-left &amp; top-right rotation</h3>
+            <div className="setting-group">
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-left (wellness — Health Auto Export)</h4>
+              <div className="checkbox-group" style={{ marginBottom: 8 }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showSteps ?? true}
+                    onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Steps — from Health Auto Export</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showDistance ?? true}
+                    onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Distance — when walking/running detected</span>
+                </label>
+            </div>
+            </div>
+            
+            <div className="setting-group" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-right (location data)</h4>
+              <div className="checkbox-group" style={{ marginBottom: 8 }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showWeather ?? false}
+                    onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Weather — temp &amp; conditions from GPS location</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showAltitude ?? true}
+                    onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Altitude — shows when ≥50m change from session start</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showSpeed ?? true}
+                    onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Speed — shows when ≥10 km/h</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="setting-separator" style={{ margin: '1.25rem 0' }} />
+
+            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Bottom-right rotation &amp; alerts</h3>
+            <div className="setting-group">
+              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showGoalsRotation !== false}
+                    onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Show rotating section (leaderboard, goals, poll)</span>
+                </label>
+              </div>
+              <div className="checkbox-group" style={{ marginTop: '8px', marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showOverlayAlerts ?? true}
+                    onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
+                </label>
+              </div>
+              <div className="button-row" style={{ marginTop: '12px' }}>
+                <span className="group-label" style={{ marginRight: '8px' }}>Test alert:</span>
+                {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      try {
+                        const res = await authenticatedFetch('/api/overlay-alerts/test', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type }),
+                        });
+                        if (res.ok) setToast({ type: 'saved', message: `Test ${type} alert sent` });
+                        else setToast({ type: 'error', message: 'Test failed' });
+                      } catch {
+                        setToast({ type: 'error', message: 'Test failed' });
+                      }
+                    }}
+                  >
+                    {type === 'sub' && '🎉 Sub'}
+                    {type === 'resub' && '💪 Resub'}
+                    {type === 'giftSub' && '🎁 Gift'}
+                    {type === 'kicks' && '💰 Kicks'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* === GAMBLING & EVENTS === */}
+          <CollapsibleSection id="gambling" title="🎰 Gambling & events">
+            <div className="setting-group">
+              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.gamblingEnabled !== false}
+                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Enable gambling</span>
+                </label>
+              </div>
+              {settings.gamblingEnabled !== false && (
+                <>
+                  <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
+                    <label>Chips leaderboard</label>
+                    <select
+                      className="admin-select-big"
+                      value={settings.showLeaderboard !== false ? 'true' : 'false'}
+                      onChange={(e) => handleSettingsChange({ showLeaderboard: e.target.value === 'true' })}
+                    >
+                      <option value="true">🃏 Show in rotation</option>
+                      <option value="false">🚫 Hidden</option>
+                    </select>
+                  </div>
+                  {settings.showLeaderboard !== false && (
+                    <div className="admin-select-wrap">
+                      <label>Top N chips</label>
+                      <select
+                        className="admin-select-big"
+                        value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
+                        onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
+                      >
+                        {[1, 3, 5, 10].map((n) => (
+                          <option key={n} value={n}>Top {n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="admin-select-wrap">
+                    <label>Excluded users (comma separated)</label>
+                    <textarea
+                      className="text-input"
+                      value={leaderboardExcludedBotsInput}
+                      onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
+                      placeholder="e.g. nightbot, moobot, streamelements"
+                      rows={2}
+                      style={{ resize: 'vertical', minHeight: 50 }}
+                    />
+                  </div>
+                  <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
+                    <label>Channel point reward name (redeem for chips)</label>
+                    <input
+                      type="text"
+                      className="text-input"
+                      value={settings.chipRewardTitle ?? 'Buy Chips'}
+                      onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value })}
+                      placeholder="Buy Chips"
+                    />
+                  </div>
+                  <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                    <label>Chips per redemption</label>
+                    <input
+                      type="number"
+                      className="text-input"
+                      value={settings.chipRewardChips ?? 50}
+                      onChange={(e) => handleSettingsChange({ chipRewardChips: Math.max(1, parseInt(e.target.value, 10) || 50) })}
+                      min={1}
+                    />
+                  </div>
+
+                  <div className="setting-separator" style={{ margin: '1rem 0' }} />
+                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Automated events</h4>
+                  <div className="checkbox-group">
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.autoRaffleEnabled !== false} onChange={(e) => handleSettingsChange({ autoRaffleEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Auto-raffle every ~30 min when live</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.chipDropsEnabled !== false} onChange={(e) => handleSettingsChange({ chipDropsEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Chip drops every ~15 min</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.chatChallengesEnabled !== false} onChange={(e) => handleSettingsChange({ chatChallengesEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Chat challenges every ~20-30 min</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.bossEventsEnabled !== false} onChange={(e) => handleSettingsChange({ bossEventsEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Boss events every ~45-60 min</span>
+                    </label>
+                  </div>
+
+                  <div className="setting-separator" style={{ margin: '1rem 0' }} />
+                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Bonus rewards</h4>
+                  <div className="checkbox-group">
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.winStreaksEnabled !== false} onChange={(e) => handleSettingsChange({ winStreaksEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Win streak bonuses</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.participationStreaksEnabled !== false} onChange={(e) => handleSettingsChange({ participationStreaksEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Participation streak rewards</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.subGiftChipRewards !== false} onChange={(e) => handleSettingsChange({ subGiftChipRewards: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Chip rewards for subs/gifts/kicks</span>
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
+          </CollapsibleSection>
+
+          {/* === CHAT COMMANDS === */}
+          <CollapsibleSection id="chat-commands" title="💬 Chat commands">
+            <div className="setting-group">
+              {settings.gamblingEnabled !== false && (
+                <>
+                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Games</h4>
+                  <div className="checkbox-group">
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.coinflipEnabled !== false} onChange={(e) => handleSettingsChange({ coinflipEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!gamble — coin flip (50/50)</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.blackjackEnabled !== false} onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!deal — blackjack</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.slotsEnabled !== false} onChange={(e) => handleSettingsChange({ slotsEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!slots — slot machine</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.rouletteEnabled !== false} onChange={(e) => handleSettingsChange({ rouletteEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!roulette — red/black/number</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.diceEnabled !== false} onChange={(e) => handleSettingsChange({ diceEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!dice — high/low roll</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.crashEnabled !== false} onChange={(e) => handleSettingsChange({ crashEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!crash — cash out before crash</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.warEnabled !== false} onChange={(e) => handleSettingsChange({ warEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!war — card war</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.duelEnabled !== false} onChange={(e) => handleSettingsChange({ duelEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!duel — challenge another player</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.heistEnabled !== false} onChange={(e) => handleSettingsChange({ heistEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!heist — group heist</span>
+                    </label>
+                  </div>
+                  <div className="setting-separator" style={{ margin: '1rem 0' }} />
+                </>
+              )}
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Utility commands</h4>
+              <div className="checkbox-group">
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.convertEnabled !== false} onChange={(e) => handleSettingsChange({ convertEnabled: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">!convert — currency &amp; unit conversion</span>
+                </label>
+              </div>
+              <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.mathEnabled !== false} onChange={(e) => handleSettingsChange({ mathEnabled: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">!math — calculator</span>
+                </label>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* === STREAM GOALS === */}
+          <CollapsibleSection id="stream-goals" title="🎯 Stream goals">
+            <div className="setting-group">
+              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showSubGoal ?? false}
+                    onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Sub goal — include in rotation</span>
+                </label>
+                {settings.showSubGoal && (
+                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
+                    <div className="admin-select-wrap">
+                      <label>Sub goal target</label>
+                      <input type="number" className="text-input" value={subGoalTargetInput} onChange={(e) => handleSubGoalTargetChange(e.target.value)} min={1} />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Auto-increment amount (when goal is reached)</label>
+                      <input type="number" className="text-input" value={subGoalIncrementInput} onChange={(e) => handleSubGoalIncrementChange(e.target.value)} min={1} />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Sub goal subtext (optional second line)</label>
+                      <input type="text" className="text-input" value={subGoalSubtextInput} onChange={(e) => handleSubGoalSubtextChange(e.target.value)} placeholder="e.g. 10 subs = 10 min extra stream" />
+                    </div>
+                  </div>
+                )}
+                <label className="checkbox-label" style={{ marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={settings.showKicksGoal ?? false}
+                    onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Kicks goal — include in rotation</span>
+                </label>
+                {settings.showKicksGoal && (
+                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
+                    <div className="admin-select-wrap">
+                      <label>Kicks goal target</label>
+                      <input type="number" className="text-input" value={kicksGoalTargetInput} onChange={(e) => handleKicksGoalTargetChange(e.target.value)} min={1} />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Auto-increment amount (when goal is reached)</label>
+                      <input type="number" className="text-input" value={kicksGoalIncrementInput} onChange={(e) => handleKicksGoalIncrementChange(e.target.value)} min={1} />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Kicks goal subtext (optional second line)</label>
+                      <input type="text" className="text-input" value={kicksGoalSubtextInput} onChange={(e) => handleKicksGoalSubtextChange(e.target.value)} placeholder="e.g. Help me hit $50!" />
+                    </div>
+                  </div>
+                )}
+                {(settings.showSubGoal || settings.showKicksGoal) && (
+                  <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                    <div className="stream-goals-override-fields">
+                      {settings.showSubGoal && (
+                        <div className="admin-select-wrap">
+                          <label>Current subs</label>
+                          <input key={`subs-${settings.streamGoals?.subs ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.subs ?? 0} id="stream-goals-subs-input" min={0} />
+                        </div>
+                      )}
+                      {settings.showKicksGoal && (
+                        <div className="admin-select-wrap">
+                          <label>Current kicks</label>
+                          <input key={`kicks-${settings.streamGoals?.kicks ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.kicks ?? 0} id="stream-goals-kicks-input" min={0} />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          try {
+                            const body: { subs?: number; kicks?: number } = {};
+                            if (settings.showSubGoal) {
+                              const el = document.getElementById('stream-goals-subs-input') as HTMLInputElement;
+                              if (el) body.subs = Math.max(0, parseInt(el.value, 10) || 0);
+                            }
+                            if (settings.showKicksGoal) {
+                              const el = document.getElementById('stream-goals-kicks-input') as HTMLInputElement;
+                              if (el) body.kicks = Math.max(0, parseInt(el.value, 10) || 0);
+                            }
+                            if (Object.keys(body).length === 0) return;
+                            const r = await authenticatedFetch('/api/stream-goals', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(body),
+                            });
+                            const data = await r.json();
+                            if (r.ok && data) {
+                              setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? 0 } }));
+                              setToast({ type: 'saved', message: 'Goals updated' });
+                            } else {
+                              setToast({ type: 'error', message: 'Update failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Update failed' });
+                          }
+                          setTimeout(() => setToast(null), 2000);
+                        }}
+                      >
+                        Update
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* === CHAT BROADCASTS === */}
+          <CollapsibleSection id="chat-broadcasts" title="📢 Chat broadcasts">
+            <div className="setting-group">
               <div className="broadcast-options-list">
                 <label className="checkbox-label-row broadcast-checkbox-item">
                   <input type="checkbox" checked={kickChatBroadcastStreamTitle} onChange={(e) => { setKickChatBroadcastStreamTitle(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastStreamTitle: e.target.checked } }); }} className="checkbox-input" />
@@ -1224,426 +1658,6 @@ export default function AdminPage() {
                   <span>Active calories — at 100, 250, 500, 1k…</span>
                 </label>
               </div>
-            </div>
-          </CollapsibleSection>
-
-          {/* === OVERLAY === */}
-          <CollapsibleSection id="overlay" title="🖥️ Overlay display">
-            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Top-left &amp; top-right rotation</h3>
-            <div className="setting-group">
-              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-left (wellness — Health Auto Export)</h4>
-              <div className="checkbox-group" style={{ marginBottom: 8 }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showSteps ?? true}
-                    onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Steps — from Health Auto Export</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showDistance ?? true}
-                    onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Distance — when walking/running detected</span>
-                </label>
-            </div>
-            </div>
-            
-            <div className="setting-group" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-right (location data)</h4>
-              <div className="checkbox-group" style={{ marginBottom: 8 }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showWeather ?? false}
-                    onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Weather — temp &amp; conditions from GPS location</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showAltitude ?? true}
-                    onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Altitude — shows when ≥50m change from session start</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showSpeed ?? true}
-                    onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Speed — shows when ≥10 km/h</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="setting-separator" style={{ margin: '1.25rem 0' }} />
-
-            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Bottom-right: leaderboard, goals &amp; alerts</h3>
-            <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showGoalsRotation !== false}
-                    onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Show rotating section</span>
-                </label>
-            </div>
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.gamblingEnabled !== false}
-                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Enable gambling</span>
-                </label>
-              </div>
-              {settings.gamblingEnabled !== false && (
-                <>
-                  <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                    <label>Chips leaderboard</label>
-                    <select
-                      className="admin-select-big"
-                      value={settings.showLeaderboard !== false ? 'true' : 'false'}
-                      onChange={(e) => handleSettingsChange({ showLeaderboard: e.target.value === 'true' })}
-                    >
-                      <option value="true">🃏 Show in rotation</option>
-                      <option value="false">🚫 Hidden</option>
-                    </select>
-                  </div>
-                  {settings.showLeaderboard !== false && (
-                    <div className="admin-select-wrap">
-                      <label>Top N chips</label>
-                      <select
-                        className="admin-select-big"
-                        value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
-                        onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
-                      >
-                        {[1, 3, 5, 10].map((n) => (
-                          <option key={n} value={n}>Top {n}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className="admin-select-wrap">
-                    <label>Excluded users (comma separated)</label>
-                    <textarea
-                      className="text-input"
-                      value={leaderboardExcludedBotsInput}
-                      onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
-                      placeholder="e.g. nightbot, moobot, streamelements"
-                      rows={2}
-                      style={{ resize: 'vertical', minHeight: 50 }}
-                    />
-                  </div>
-                  <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
-                    <label>Channel point reward name (redeem for chips)</label>
-                    <input
-                      type="text"
-                      className="text-input"
-                      value={settings.chipRewardTitle ?? 'Buy Chips'}
-                      onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value })}
-                      placeholder="Buy Chips"
-                    />
-                  </div>
-                  <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                    <label>Chips per redemption</label>
-                    <input
-                      type="number"
-                      className="text-input"
-                      value={settings.chipRewardChips ?? 50}
-                      onChange={(e) => handleSettingsChange({ chipRewardChips: Math.max(1, parseInt(e.target.value, 10) || 50) })}
-                      min={1}
-                    />
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '12px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.autoRaffleEnabled !== false}
-                        onChange={(e) => handleSettingsChange({ autoRaffleEnabled: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Auto-raffle every ~30 min when live</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.chipDropsEnabled !== false}
-                        onChange={(e) => handleSettingsChange({ chipDropsEnabled: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Chip drops every ~15 min</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.chatChallengesEnabled !== false}
-                        onChange={(e) => handleSettingsChange({ chatChallengesEnabled: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Chat challenges every ~20-30 min</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.bossEventsEnabled !== false}
-                        onChange={(e) => handleSettingsChange({ bossEventsEnabled: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Boss events every ~45-60 min</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.winStreaksEnabled !== false}
-                        onChange={(e) => handleSettingsChange({ winStreaksEnabled: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Win streak bonuses</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.participationStreaksEnabled !== false}
-                        onChange={(e) => handleSettingsChange({ participationStreaksEnabled: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Participation streak rewards</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.subGiftChipRewards !== false}
-                        onChange={(e) => handleSettingsChange({ subGiftChipRewards: e.target.checked })}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Chip rewards for subs/gifts/kicks</span>
-                    </label>
-                  </div>
-                </>
-              )}
-              <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showSubGoal ?? false}
-                    onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Sub goal — include in rotation</span>
-                </label>
-                {settings.showSubGoal && (
-                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
-                    <div className="admin-select-wrap">
-                      <label>Sub goal target</label>
-                      <input
-                        type="number"
-                        className="text-input"
-                        value={subGoalTargetInput}
-                        onChange={(e) => handleSubGoalTargetChange(e.target.value)}
-                        min={1}
-                      />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Auto-increment amount (when goal is reached)</label>
-                      <input
-                        type="number"
-                        className="text-input"
-                        value={subGoalIncrementInput}
-                        onChange={(e) => handleSubGoalIncrementChange(e.target.value)}
-                        min={1}
-                      />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Sub goal subtext (optional second line)</label>
-                <input
-                  type="text"
-                        className="text-input"
-                        value={subGoalSubtextInput}
-                        onChange={(e) => handleSubGoalSubtextChange(e.target.value)}
-                        placeholder="e.g. 10 subs = 10 min extra stream"
-                      />
-                    </div>
-                  </div>
-                )}
-                <label className="checkbox-label" style={{ marginTop: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={settings.showKicksGoal ?? false}
-                    onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Kicks goal — include in rotation</span>
-                </label>
-                {settings.showKicksGoal && (
-                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
-                    <div className="admin-select-wrap">
-                      <label>Kicks goal target</label>
-                      <input
-                        type="number"
-                        className="text-input"
-                        value={kicksGoalTargetInput}
-                        onChange={(e) => handleKicksGoalTargetChange(e.target.value)}
-                        min={1}
-                      />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Auto-increment amount (when goal is reached)</label>
-                      <input
-                        type="number"
-                        className="text-input"
-                        value={kicksGoalIncrementInput}
-                        onChange={(e) => handleKicksGoalIncrementChange(e.target.value)}
-                        min={1}
-                      />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Kicks goal subtext (optional second line)</label>
-                      <input
-                        type="text"
-                        className="text-input"
-                        value={kicksGoalSubtextInput}
-                        onChange={(e) => handleKicksGoalSubtextChange(e.target.value)}
-                        placeholder="e.g. Help me hit $50!"
-                      />
-                    </div>
-                  </div>
-                )}
-                {(settings.showSubGoal || settings.showKicksGoal) && (
-                  <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-                    <div className="stream-goals-override-fields">
-                      {settings.showSubGoal && (
-                        <div className="admin-select-wrap">
-                          <label>Current subs</label>
-                          <input
-                            key={`subs-${settings.streamGoals?.subs ?? 0}`}
-                            type="number"
-                            className="text-input admin-number-input"
-                            defaultValue={settings.streamGoals?.subs ?? 0}
-                            id="stream-goals-subs-input"
-                            min={0}
-                          />
-                        </div>
-                      )}
-                      {settings.showKicksGoal && (
-                        <div className="admin-select-wrap">
-                          <label>Current kicks</label>
-                          <input
-                            key={`kicks-${settings.streamGoals?.kicks ?? 0}`}
-                            type="number"
-                            className="text-input admin-number-input"
-                            defaultValue={settings.streamGoals?.kicks ?? 0}
-                            id="stream-goals-kicks-input"
-                            min={0}
-                          />
-                        </div>
-                      )}
-                <button 
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          try {
-                            const body: { subs?: number; kicks?: number } = {};
-                            if (settings.showSubGoal) {
-                              const el = document.getElementById('stream-goals-subs-input') as HTMLInputElement;
-                              if (el) body.subs = Math.max(0, parseInt(el.value, 10) || 0);
-                            }
-                            if (settings.showKicksGoal) {
-                              const el = document.getElementById('stream-goals-kicks-input') as HTMLInputElement;
-                              if (el) body.kicks = Math.max(0, parseInt(el.value, 10) || 0);
-                            }
-                            if (Object.keys(body).length === 0) return;
-                            const r = await authenticatedFetch('/api/stream-goals', {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(body),
-                            });
-                            const data = await r.json();
-                            if (r.ok && data) {
-                              setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? 0 } }));
-                              setToast({ type: 'saved', message: 'Goals updated' });
-                            } else {
-                              setToast({ type: 'error', message: 'Update failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Update failed' });
-                          }
-                          setTimeout(() => setToast(null), 2000);
-                        }}
-                      >
-                        Update
-                </button>
-              </div>
-                  </div>
-                )}
-              </div>
-              <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showOverlayAlerts ?? true}
-                    onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
-                </label>
-              </div>
-              <div className="button-row" style={{ marginTop: '12px' }}>
-                <span className="group-label" style={{ marginRight: '8px' }}>Test alert:</span>
-                {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
-                    <button
-                    key={type}
-                    type="button"
-                      className="btn btn-secondary btn-small"
-                    onClick={async () => {
-                      try {
-                        const res = await authenticatedFetch('/api/overlay-alerts/test', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ type }),
-                        });
-                        if (res.ok) setToast({ type: 'saved', message: `Test ${type} alert sent` });
-                        else setToast({ type: 'error', message: 'Test failed' });
-                      } catch {
-                        setToast({ type: 'error', message: 'Test failed' });
-                      }
-                    }}
-                  >
-                    {type === 'sub' && '🎉 Sub'}
-                    {type === 'resub' && '💪 Resub'}
-                    {type === 'giftSub' && '🎁 Gift'}
-                    {type === 'kicks' && '💰 Kicks'}
-                    </button>
-                ))}
-                  </div>
             </div>
           </CollapsibleSection>
 

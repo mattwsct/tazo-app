@@ -55,6 +55,19 @@ export interface OverlaySettings {
   participationStreaksEnabled?: boolean;
   /** Chip rewards for subs, gifts, kicks. */
   subGiftChipRewards?: boolean;
+  /** Individual game toggles (all default true, only apply when gamblingEnabled). */
+  blackjackEnabled?: boolean;
+  slotsEnabled?: boolean;
+  rouletteEnabled?: boolean;
+  diceEnabled?: boolean;
+  crashEnabled?: boolean;
+  warEnabled?: boolean;
+  coinflipEnabled?: boolean;
+  duelEnabled?: boolean;
+  heistEnabled?: boolean;
+  /** Utility command toggles. */
+  convertEnabled?: boolean;
+  mathEnabled?: boolean;
   /** Runtime: top chips (from get-settings). */
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
@@ -104,6 +117,17 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   chipRewardTitle: 'Buy Chips',
   chipRewardChips: 50,
   showOverlayAlerts: true,
+  blackjackEnabled: true,
+  slotsEnabled: true,
+  rouletteEnabled: true,
+  diceEnabled: true,
+  crashEnabled: true,
+  warEnabled: true,
+  coinflipEnabled: true,
+  duelEnabled: true,
+  heistEnabled: true,
+  convertEnabled: true,
+  mathEnabled: true,
   showSubGoal: false,
   subGoalTarget: 10, // ~$50 at typical sub price
   subGoalIncrement: 10,
@@ -143,6 +167,17 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   winStreaksEnabled: 'boolean',
   participationStreaksEnabled: 'boolean',
   subGiftChipRewards: 'boolean',
+  blackjackEnabled: 'boolean',
+  slotsEnabled: 'boolean',
+  rouletteEnabled: 'boolean',
+  diceEnabled: 'boolean',
+  crashEnabled: 'boolean',
+  warEnabled: 'boolean',
+  coinflipEnabled: 'boolean',
+  duelEnabled: 'boolean',
+  heistEnabled: 'boolean',
+  convertEnabled: 'boolean',
+  mathEnabled: 'boolean',
   showOverlayAlerts: 'boolean',
   showSubGoal: 'boolean',
   subGoalTarget: 'number',
