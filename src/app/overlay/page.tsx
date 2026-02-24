@@ -1675,7 +1675,7 @@ function OverlayPage() {
                                 />
                                 <div className="poll-option-text">
                                   <span className="poll-option-label">
-                                    {showWinner ? `Winner - ${displayLabel} (${voteStr})` : displayLabel}
+                                    {showWinner ? `Winner - ${displayLabel} (${voteStr})` : (opt.votes > 1 ? `${displayLabel} (${opt.votes} votes)` : displayLabel)}
                                   </span>
                                 </div>
                               </div>

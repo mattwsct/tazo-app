@@ -1192,8 +1192,8 @@ const TAZO_DROP_KEY = 'chip_drop_active'; // KV key unchanged
 const TAZO_DROP_LAST_AT_KEY = 'chip_drop_last_at'; // KV key unchanged
 const TAZO_DROP_TTL_SEC = 180;
 const TAZO_DROP_WINDOW_MS = 2 * 60 * 1000;
-const TAZO_DROP_INTERVAL_MS = 10 * 60 * 1000;
-const TAZO_DROP_PRIZE = 5;
+const TAZO_DROP_INTERVAL_MS = 8 * 60 * 1000; // 8 min
+const TAZO_DROP_PRIZE = 10;
 const TAZO_DROP_MAX_WINNERS = 5;
 
 interface TazoDropState {
@@ -1261,9 +1261,9 @@ const CHAT_CHALLENGE_KEY = 'chat_challenge_active';
 const CHAT_CHALLENGE_LAST_AT_KEY = 'chat_challenge_last_at';
 const CHAT_CHALLENGE_TTL_SEC = 180;
 const CHAT_CHALLENGE_WINDOW_MS = 2 * 60 * 1000;
-const CHAT_CHALLENGE_INTERVAL_MS = 15 * 60 * 1000;
+const CHAT_CHALLENGE_INTERVAL_MS = 12 * 60 * 1000; // 12 min
 const CHAT_CHALLENGE_TARGET = 50;
-const CHAT_CHALLENGE_PRIZE = 5;
+const CHAT_CHALLENGE_PRIZE = 10;
 const CHAT_CHALLENGE_MAX_PER_USER = 3;
 
 interface ChatChallengeState {

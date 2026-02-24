@@ -8,6 +8,7 @@ import { getPollState, setPollState, popPollQueue, getPollQueue, tryAcquirePollE
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { endOverduePollIfAny } from '@/lib/poll-end-overdue';
+import { isStreamLive } from '@/utils/stats-storage';
 import type { PollState } from '@/types/poll';
 
 export const dynamic = 'force-dynamic';
@@ -72,8 +73,8 @@ export async function GET(request: NextRequest) {
       status: 'active',
     };
     await setPollState(newState);
-    const token = await getValidAccessToken();
-    if (token) {
+    const [token, isLive] = await Promise.all([getValidAccessToken(), isStreamLive()]);
+    if (token && isLive) {
       try {
         await sendKickChatMessage(token, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
       } catch { /* ignore */ }

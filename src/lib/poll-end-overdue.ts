@@ -13,6 +13,7 @@ import {
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { computePollResult } from '@/lib/poll-logic';
+import { isStreamLive } from '@/utils/stats-storage';
 import type { PollState } from '@/types/poll';
 
 /**
@@ -29,11 +30,14 @@ export async function endOverduePollIfAny(): Promise<boolean> {
 
   if (!(await tryAcquirePollEndLock())) return false; // Another process is ending this poll
 
-  const settings = await getPollSettings();
+  const [settings, isLive, token] = await Promise.all([
+    getPollSettings(),
+    isStreamLive(),
+    getValidAccessToken(),
+  ]);
   const { winnerMessage, topVoter } = computePollResult(state);
-  const token = await getValidAccessToken();
 
-  if (token) {
+  if (token && isLive) {
     try {
       await sendKickChatMessage(
         token,
@@ -55,7 +59,7 @@ export async function endOverduePollIfAny(): Promise<boolean> {
       status: 'active',
     };
     await setPollState(newState);
-    if (token) {
+    if (token && isLive) {
       try {
         await sendKickChatMessage(token, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
       } catch { /* ignore */ }

@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
     } else {
       const reminder = await getRaffleReminder();
-      if (reminder) {
+      if (reminder && isLive) {
         await sendKickChatMessage(accessToken, reminder);
         sent++;
       }
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
     const shouldRaffle = await shouldStartRaffle();
     console.log('[Cron HR] RAFFLE_CHECK', JSON.stringify({ autoRaffleEnabled, shouldRaffle }));
     if (diagnostic) Object.assign(debug, { autoRaffleEnabled, raffleShouldStart: shouldRaffle });
-    if (autoRaffleEnabled && shouldRaffle) {
+    if (autoRaffleEnabled && shouldRaffle && isLive) {
       const announcement = await startRaffle();
       try {
         await sendKickChatMessage(accessToken, announcement);
@@ -192,7 +192,7 @@ export async function GET(request: NextRequest) {
     const shouldDrop = await shouldStartTazoDrop();
     console.log('[Cron HR] TAZO_DROP_CHECK', JSON.stringify({ tazoDropsEnabled, activeEvent, shouldDrop }));
     if (diagnostic) Object.assign(debug, { tazoDropsEnabled, activeEvent, shouldDrop });
-    if (tazoDropsEnabled && !activeEvent && shouldDrop) {
+    if (tazoDropsEnabled && !activeEvent && shouldDrop && isLive) {
       const announcement = await startTazoDrop();
       try {
         await sendKickChatMessage(accessToken, announcement);
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
     const chatChallengesEnabled = overlaySettings?.chatChallengesEnabled !== false;
     const chatChallengeShouldStart = await shouldStartChatChallenge();
     if (diagnostic) Object.assign(debug, { chatChallengesEnabled, chatChallengeShouldStart });
-    if (chatChallengesEnabled && !(await hasActiveEvent()) && chatChallengeShouldStart) {
+    if (chatChallengesEnabled && !(await hasActiveEvent()) && chatChallengeShouldStart && isLive) {
       const announcement = await startChatChallenge();
       try {
         await sendKickChatMessage(accessToken, announcement);
@@ -244,7 +244,7 @@ export async function GET(request: NextRequest) {
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_resolve', msgPreview: bossResult.slice(0, 80) }));
     }
     const bossReminder = await getBossReminder();
-    if (bossReminder) {
+    if (bossReminder && isLive) {
       await sendKickChatMessage(accessToken, bossReminder);
       sent++;
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_reminder', msgPreview: bossReminder.slice(0, 80) }));
@@ -257,7 +257,7 @@ export async function GET(request: NextRequest) {
     const shouldBoss = await shouldStartBossEvent();
     console.log('[Cron HR] BOSS_CHECK', JSON.stringify({ bossEventsEnabled, shouldBoss }));
     if (diagnostic) Object.assign(debug, { bossEventsEnabled, bossShouldStart: shouldBoss });
-    if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss) {
+    if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss && isLive) {
       const announcement = await startBossEvent();
       try {
         await sendKickChatMessage(accessToken, announcement);
@@ -554,30 +554,34 @@ export async function GET(request: NextRequest) {
       if (hrState !== 'below') console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrStateChange: '->below', bpm, minBpm }));
     } else if (veryHighBpm > minBpm && bpm >= veryHighBpm) {
       if (currentHrState !== 'very_high') {
-        const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
-        try {
-          await sendKickChatMessage(accessToken, msg);
-          currentHrState = 'very_high';
-          sent++;
-          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, msgPreview: msg.slice(0, 50) }));
-        } catch (err) {
-          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', error: err instanceof Error ? err.message : String(err) }));
+        currentHrState = 'very_high';
+        if (isLive) {
+          const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
+          try {
+            await sendKickChatMessage(accessToken, msg);
+            sent++;
+            await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
+            console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, msgPreview: msg.slice(0, 50) }));
+          } catch (err) {
+            console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', error: err instanceof Error ? err.message : String(err) }));
+          }
         }
       } else {
         console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'already_sent_very_high', state: currentHrState }));
       }
     } else if (bpm >= minBpm) {
       if (currentHrState === 'below') {
-        const msg = `❤️ High heart rate: ${bpm} BPM`;
-        try {
-          await sendKickChatMessage(accessToken, msg);
-          currentHrState = 'high';
-          sent++;
-          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, msgPreview: msg.slice(0, 50) }));
-        } catch (err) {
-          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', error: err instanceof Error ? err.message : String(err) }));
+        currentHrState = 'high';
+        if (isLive) {
+          const msg = `❤️ High heart rate: ${bpm} BPM`;
+          try {
+            await sendKickChatMessage(accessToken, msg);
+            sent++;
+            await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
+            console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, msgPreview: msg.slice(0, 50) }));
+          } catch (err) {
+            console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', error: err instanceof Error ? err.message : String(err) }));
+          }
         }
       } else if (currentHrState === 'very_high' && bpm < veryHighBpm) {
         currentHrState = 'high';

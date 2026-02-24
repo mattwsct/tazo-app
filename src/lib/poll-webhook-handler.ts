@@ -218,12 +218,11 @@ export async function handleChatPoll(
   const durationVariant = parsePollDurationVariant(contentTrimmed);
   const isPollCmd = contentLower.startsWith('!poll ') || (durationVariant !== null && durationVariant.rest.length > 0);
   const isBarePoll = contentLower === '!poll' || /^!poll\s*$/.test(contentLower) || (durationVariant !== null && durationVariant.rest.length === 0);
-  const isPollStatus = contentLower === '!pollstatus' || contentLower === '!poll status';
   const isEndPoll = contentLower === '!endpoll';
   const isRankCmd = contentLower.startsWith('!rank ');
   const isBareRank = contentLower === '!rank' || /^!rank\s*$/.test(contentLower);
 
-  const needsChat = isEndPoll || isPollStatus || isBarePoll || isPollCmd || isRankCmd || isBareRank ||
+  const needsChat = isEndPoll || isBarePoll || isPollCmd || isRankCmd || isBareRank ||
     (initialState?.status === 'winner') || (initialState?.status === 'active');
   const token = needsChat ? await getValidAccessToken() : null;
   const messageId = (payload.id ?? payload.message_id) as string | undefined;
@@ -245,22 +244,6 @@ export async function handleChatPoll(
     await replyChat(token, 'Poll ended early.', messageId);
     const queued = await popPollQueue();
     if (queued) await startQueuedPoll(queued, token);
-    return { handled: true };
-  }
-
-  // --- !pollstatus ---
-  if (isPollStatus) {
-    if (!token) return { handled: true };
-    if (initialState?.status === 'active') {
-      const labels = initialState.options.map((o) => `'${o.label.toLowerCase()}'`);
-      const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
-      const elapsed = (Date.now() - initialState.startedAt) / 1000;
-      const remaining = Math.max(0, Math.ceil(initialState.durationSeconds - elapsed));
-      const timeStr = remaining === 0 ? 'ending soon' : `${remaining}s left`;
-      await replyChat(token, `Poll: ${initialState.question} Type ${optionStr} to vote. (${timeStr})`, messageId);
-    } else {
-      await replyChat(token, 'No poll active.', messageId);
-    }
     return { handled: true };
   }
 

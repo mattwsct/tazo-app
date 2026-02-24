@@ -19,7 +19,7 @@ function normalizeForVote(str: string): string {
 
 /** Single-word options to filter out — conjunctions etc. that slip in from "Yes or no" or "Pizza and burgers". */
 const BANNED_OPTION_WORDS = new Set([
-  'and', 'or', 'but', 'the', 'a', 'an', 'to', 'for', 'of', 'in', 'on', 'at',
+  'and', 'or', 'if', 'but', 'the', 'a', 'an', 'to', 'for', 'of', 'in', 'on', 'at',
 ]);
 
 /** Allowed duration variants: !poll15, !poll30, !poll60, !poll120 */
@@ -40,9 +40,10 @@ export function parsePollCommand(content: string): { question: string; options: 
   if (!trimmed.toLowerCase().startsWith('!poll ')) return null;
   const rest = trimmed.slice(6).trim();
   const qMark = rest.indexOf('?');
-  const question = qMark >= 0 ? rest.slice(0, qMark + 1).trim() : rest;
+  const rawQuestion = qMark >= 0 ? rest.slice(0, qMark + 1).trim() : rest;
+  if (!rawQuestion) return null;
+  const question = rawQuestion.endsWith('?') ? rawQuestion : rawQuestion.trimEnd() + '?';
   const after = qMark >= 0 ? rest.slice(qMark + 1).trim() : '';
-  if (!question) return null;
 
   let options: PollOption[];
   if (!after || after.length === 0) {
@@ -62,15 +63,19 @@ export function parsePollCommand(content: string): { question: string; options: 
   return { question, options };
 }
 
-/** Parse !rank opt1, opt2, opt3 — comma-separated options for a preference vote. */
+/** Parse !rank opt1, opt2, opt3 — comma-separated or (when no commas) space-separated single-word options. */
 export function parseRankCommand(content: string): { question: string; options: PollOption[] } | null {
   const trimmed = content.trim();
   if (!trimmed.toLowerCase().startsWith('!rank ')) return null;
   const rest = trimmed.slice(6).trim();
   if (!rest) return null;
 
-  const parts = rest.split(',').map((p) => p.trim()).filter(Boolean);
-  const filtered = parts.filter((p) => !BANNED_OPTION_WORDS.has(p.toLowerCase()));
+  const parts = rest.includes(',')
+    ? rest.split(',').map((p) => p.trim()).filter(Boolean)
+    : rest.split(/\s+/).map((p) => p.trim()).filter(Boolean);
+  const filtered = parts
+    .filter((p) => !BANNED_OPTION_WORDS.has(p.toLowerCase()))
+    .filter((p) => !containsBlockedContent(p));
   if (filtered.length < 2) return null;
 
   const question = 'Cast your vote!';
