@@ -5,7 +5,7 @@
 
 import { kv } from '@vercel/kv';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
-import { addTazosAsAdmin } from '@/utils/blackjack-storage';
+import { addTazosAsAdmin } from '@/utils/gambling-storage';
 
 function isModOrBroadcaster(
   sender: unknown,

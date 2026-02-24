@@ -5,7 +5,7 @@ import { validateEnvironment } from '@/lib/env-validator';
 import { OverlayLogger } from '@/lib/logger';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { POLL_STATE_KEY, type PollState } from '@/types/poll';
-import { getGamblingLeaderboardTop } from '@/utils/blackjack-storage';
+import { getGamblingLeaderboardTop } from '@/utils/gambling-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 import { getGoalCelebration } from '@/utils/stream-goals-celebration';

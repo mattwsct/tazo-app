@@ -104,14 +104,10 @@ export function formatLocationForStreamTitle(
     }
     case 'city': {
       if (city) {
-        // City option: city + state if state exists, else city + country
-        const includeState = state && !hasOverlappingNames(city, state) && !hasOverlappingNames(state, countryName);
         if (hasOverlappingNames(city, countryName)) {
           return flag ? `${flag} ${city}` : city;
         }
-        const locationPart = includeState
-          ? `${city}, ${state}`
-          : `${city}, ${countryName}`;
+        const locationPart = `${city}, ${countryName}`;
         return flag ? `${flag} ${locationPart}` : locationPart;
       }
       if (state && !hasOverlappingNames(state, countryName)) {

@@ -3,6 +3,7 @@ import {
   formatLocation,
   stripTrailingNumbers,
   formatCountryName,
+  getLocationLevels,
 } from '@/utils/location-utils';
 import type { LocationData } from '@/utils/location-utils';
 
@@ -45,6 +46,41 @@ describe('formatLocation', () => {
   });
   it('returns empty for null location', () => {
     expect(formatLocation(null, 'city')).toEqual({ primary: '', secondary: undefined });
+  });
+});
+
+describe('getLocationLevels', () => {
+  const bali: LocationData = { city: 'Kuta', state: 'Bali', country: 'Indonesia', countryCode: 'ID' };
+
+  it('returns all levels for city mode (default)', () => {
+    const levels = getLocationLevels(bali);
+    expect(levels).toContain('Kuta');
+    expect(levels.some(l => l.includes('Bali'))).toBe(true);
+    expect(levels.some(l => l.includes('Indonesia'))).toBe(true);
+  });
+
+  it('returns state + country for state mode (no city)', () => {
+    const levels = getLocationLevels(bali, 'state');
+    expect(levels.every(l => !l.includes('Kuta'))).toBe(true);
+    expect(levels.some(l => l.includes('Bali'))).toBe(true);
+    expect(levels.some(l => l.includes('Indonesia'))).toBe(true);
+  });
+
+  it('returns only country for country mode', () => {
+    const levels = getLocationLevels(bali, 'country');
+    expect(levels.every(l => !l.includes('Kuta'))).toBe(true);
+    expect(levels.every(l => !l.includes('Bali'))).toBe(true);
+    expect(levels.some(l => l.includes('Indonesia'))).toBe(true);
+  });
+
+  it('returns empty for null location', () => {
+    expect(getLocationLevels(null)).toEqual([]);
+  });
+
+  it('deduplicates overlapping names', () => {
+    const sg: LocationData = { city: 'Singapore', state: 'Singapore', country: 'Singapore', countryCode: 'SG' };
+    const levels = getLocationLevels(sg, 'city');
+    expect(levels.length).toBe(1);
   });
 });
 

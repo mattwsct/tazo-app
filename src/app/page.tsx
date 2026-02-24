@@ -1366,6 +1366,25 @@ export default function AdminPage() {
                       <span className="checkbox-text">Boss events every ~45-60 min</span>
                     </label>
                   </div>
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm('Reset event timestamps? Use if drops/raffles/challenges aren\'t starting. They\'ll be eligible to start again on next cron run.')) return;
+                        try {
+                          const r = await authenticatedFetch('/api/reset-event-timestamps', { method: 'POST' });
+                          const data = await r.json();
+                          if (r.ok) setToast({ type: 'saved', message: 'Event timestamps reset — events can start again' });
+                          else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
+                        } catch { setToast({ type: 'error', message: 'Reset failed' }); }
+                        setTimeout(() => setToast(null), 3000);
+                      }}
+                      className="button-secondary"
+                      style={{ padding: '6px 12px', fontSize: 12 }}
+                    >
+                      Reset event timestamps
+                    </button>
+                  </div>
 
                   <div className="setting-separator" style={{ margin: '1rem 0' }} />
                   <h4 className="subsection-label" style={{ marginBottom: 8 }}>Bonus rewards</h4>

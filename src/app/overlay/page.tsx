@@ -1337,7 +1337,7 @@ function OverlayPage() {
       return custom ? [custom] : [];
     }
     if (hasCompleteLocationData(lastRawLocation.current)) {
-      return getLocationLevels(lastRawLocation.current);
+      return getLocationLevels(lastRawLocation.current, settings.locationDisplay as 'city' | 'state' | 'country');
     }
     if (location?.primary) return [location.primary];
     if (location?.secondary) return [location.secondary];

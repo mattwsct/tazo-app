@@ -22,13 +22,13 @@ import {
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
-import { onStreamStarted } from '@/utils/stats-storage';
+import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
 import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
   trackChallengeMessage, checkParticipationStreak, resetEventTimestamps,
   getAttackList, giftTazos, requestTazos, acceptTazoRequest, denyTazoRequest,
-} from '@/utils/blackjack-storage';
+} from '@/utils/gambling-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
@@ -148,6 +148,7 @@ export async function POST(request: NextRequest) {
 
   // Stream start: reset stats session, steps counter, and leaderboard when going live
   if (eventNorm === 'livestream.status.updated' && payload.is_live === true) {
+    void setStreamLive(true);
     void onStreamStarted();
     void (async () => {
       if (await isGamblingEnabled()) void resetGamblingOnStreamStart();
@@ -168,6 +169,11 @@ export async function POST(request: NextRequest) {
         console.warn('Failed to reset wellness session on stream start:', e);
       }
     })();
+  }
+
+  // Stream end: clear live flag
+  if (eventNorm === 'livestream.status.updated' && payload.is_live === false) {
+    void setStreamLive(false);
   }
 
   // Chat: poll handling first (if enabled), then !ping. Award view-time chips when gambling enabled.

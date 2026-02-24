@@ -759,6 +759,13 @@ When enabled, broadcaster or mods can start a poll with `!poll Question? Option1
 
 ### Troubleshooting
 
+**Auto events (tazo drops, raffles, challenges, boss) not starting:**
+- **Kick OAuth**: Ensure Kick is connected (admin → Connection → Connect Kick). The cron skips immediately if `getValidAccessToken()` returns null.
+- **Vercel logs**: Search for `[Cron HR] CRON_SKIP` (no_token) or `[Cron HR] TAZO_DROP_CHECK` / `[Cron HR] RAFFLE_CHECK` / `[Cron HR] BOSS_CHECK` to see `tazoDropsEnabled`, `activeEvent`, `shouldDrop`, etc.
+- **Reset timestamps**: Use **Reset event timestamps** in admin (Automated events section) if events used to work but stopped — stale `*_last_at` timestamps can block new events for 10–25 minutes.
+- **Diagnostic request**: Hit the cron with `?diagnostic=1` and your `CRON_SECRET`: `GET /api/cron/kick-chat-broadcast?diagnostic=1` with `Authorization: Bearer <CRON_SECRET>`. Response includes `debug.tokenPresent`, `debug.isLive`, `debug.tazoDropsEnabled`, `debug.activeEvent`, `debug.shouldDrop`, `debug.raffleShouldStart`, `debug.bossShouldStart`.
+- **Vercel Hobby**: Cron may timeout at 10s. Consider Vercel Pro for longer limits.
+
 - **Mod says "no permission" but has mod badge**: Role detection runs on every message from the Kick webhook payload. We check `identity.role`, `roles[]`, `badges[]`, `is_moderator`, `isModerator`, etc. Ensure **Mods can start polls** is enabled in poll settings. If still failing, check Vercel logs for `[poll] webhook: rejected (no permission)` — it now logs `roles`, `rawSender` so you can see what Kick sends and add support if needed.
 - **Poll didn't get queued after another was rejected**: Each message is a separate webhook; rejecting one poll does not block the next. Common causes: (1) **Permission** — if the sender lacks permission (Everyone/Mods/VIPs/OGs/Subs), the bot now replies "You don't have permission to start polls." Previously it was silent. (2) **Deleted message** — if the message was deleted before Kick delivered the webhook, it never arrives. (3) **Debugging** — in Vercel logs, look for `[poll] webhook: rejected (content filter)` or `rejected (no permission)` to see why a poll was skipped.
 - **Leaderboard didn't reset on stream start**: Reset triggers when Kick sends `livestream.status.updated` with `is_live: true` to your webhook URL. Ensure Kick Developer Console → Webhook URL is `https://your-domain/api/webhooks/kick`. In dev, check logs for `[Leaderboard] Reset on stream start at`. If unsure, use **Reset session** in Connection section before going live to force a clean slate.

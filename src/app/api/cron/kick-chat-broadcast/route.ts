@@ -1,7 +1,7 @@
 /**
  * Vercel Cron: Sends location and/or heart rate updates to Kick chat when enabled.
  * Pushes stream title updates when location changes and autoUpdateLocation is on.
- * Runs every 2 minutes.
+ * Runs every 1 minute.
  *
  * Location (unified): Stream title + chat both run only when live, at most every N min (configurable).
  * - Stream title: when autoUpdateLocation is on
@@ -15,7 +15,7 @@ import { kv } from '@vercel/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import type { LocationDisplayMode } from '@/types/settings';
-import { getHeartrateStats, getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
+import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive } from '@/utils/stats-storage';
 import {
   getStepsSinceStreamStart,
   getDistanceSinceStreamStart,
@@ -36,7 +36,7 @@ import {
   shouldStartChatChallenge, startChatChallenge, resolveChatChallenge,
   shouldStartBossEvent, startBossEvent, resolveExpiredBoss, getBossReminder,
   hasActiveEvent,
-} from '@/utils/blackjack-storage';
+} from '@/utils/gambling-storage';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
@@ -69,15 +69,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const url = new URL(request.url);
+  const diagnostic = url.searchParams.get('diagnostic') === '1';
+
   const runAt = new Date().toISOString();
   console.log('[Cron HR] CRON_START', JSON.stringify({ runAt }));
   const accessToken = await getValidAccessToken();
   if (!accessToken) {
     console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'no_token', runAt }));
-    return NextResponse.json({ ok: true, sent: 0 });
+    return NextResponse.json(
+      diagnostic ? { ok: true, sent: 0, debug: { reason: 'no_token', tokenPresent: false } } : { ok: true, sent: 0 }
+    );
   }
 
-  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition] = await Promise.all([
+  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition, kvIsLive] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
@@ -89,6 +94,7 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
     kv.get<string>(KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY),
+    isStreamLive(),
   ]);
 
   const now = Date.now();
@@ -98,9 +104,13 @@ export async function GET(request: NextRequest) {
   let currentHrState: HeartrateBroadcastState = (hrState === 'below' || hrState === 'high' || hrState === 'very_high') ? hrState : 'below';
 
   let sent = 0;
+  const debug: Record<string, unknown> = diagnostic ? { tokenPresent: true } : {} as Record<string, unknown>;
 
-  // Fetch channel status once (used by location, speed, altitude, weather, wellness)
-  let isLive = false;
+  // Live status from KV (set by webhook, reliable)
+  const isLive = kvIsLive;
+  if (diagnostic) debug.isLive = isLive;
+
+  // Fetch current stream title (needed for location-in-title updates)
   let currentTitle = '';
   try {
     const channelRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
@@ -109,10 +119,10 @@ export async function GET(request: NextRequest) {
     if (channelRes.ok) {
       const channelData = await channelRes.json();
       const ch = (channelData.data ?? [])[0];
-      isLive = !!(ch?.livestream?.is_live ?? ch?.is_live);
       currentTitle = (ch?.stream_title ?? '').trim();
     }
   } catch { /* ignore */ }
+  console.log('[Cron HR] LIVE_CHECK', JSON.stringify({ isLive, currentTitle: currentTitle.slice(0, 50) }));
 
   // ===== EVENT RESOLUTION & AUTO-START (run first — time-critical, TTL-bound) =====
 
@@ -145,20 +155,24 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[Cron HR] RAFFLE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
-  if (isLive) {
-    try {
-      const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
-      const shouldRaffle = await shouldStartRaffle();
-      console.log('[Cron HR] RAFFLE_CHECK', JSON.stringify({ autoRaffleEnabled, shouldRaffle }));
-      if (autoRaffleEnabled && shouldRaffle) {
-        const announcement = await startRaffle();
+  try {
+    const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
+    const shouldRaffle = await shouldStartRaffle();
+    console.log('[Cron HR] RAFFLE_CHECK', JSON.stringify({ autoRaffleEnabled, shouldRaffle }));
+    if (diagnostic) Object.assign(debug, { autoRaffleEnabled, raffleShouldStart: shouldRaffle });
+    if (autoRaffleEnabled && shouldRaffle) {
+      const announcement = await startRaffle();
+      try {
         await sendKickChatMessage(accessToken, announcement);
         sent++;
         console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_start', msgPreview: announcement.slice(0, 80) }));
+      } catch (sendErr) {
+        await kv.del('raffle_active');
+        console.error('[Cron HR] RAFFLE_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
       }
-    } catch (err) {
-      console.error('[Cron HR] RAFFLE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
+  } catch (err) {
+    console.error('[Cron HR] RAFFLE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
   // Tazo drops: always resolve, only auto-start when live
@@ -172,21 +186,25 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[Cron HR] TAZO_DROP_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
-  if (isLive) {
-    try {
-      const tazoDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
-      const activeEvent = await hasActiveEvent();
-      const shouldDrop = await shouldStartTazoDrop();
-      console.log('[Cron HR] TAZO_DROP_CHECK', JSON.stringify({ tazoDropsEnabled, activeEvent, shouldDrop }));
-      if (tazoDropsEnabled && !activeEvent && shouldDrop) {
-        const announcement = await startTazoDrop();
+  try {
+    const tazoDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
+    const activeEvent = await hasActiveEvent();
+    const shouldDrop = await shouldStartTazoDrop();
+    console.log('[Cron HR] TAZO_DROP_CHECK', JSON.stringify({ tazoDropsEnabled, activeEvent, shouldDrop }));
+    if (diagnostic) Object.assign(debug, { tazoDropsEnabled, activeEvent, shouldDrop });
+    if (tazoDropsEnabled && !activeEvent && shouldDrop) {
+      const announcement = await startTazoDrop();
+      try {
         await sendKickChatMessage(accessToken, announcement);
         sent++;
         console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_start', msgPreview: announcement.slice(0, 80) }));
+      } catch (sendErr) {
+        await kv.del('chip_drop_active');
+        console.error('[Cron HR] TAZO_DROP_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
       }
-    } catch (err) {
-      console.error('[Cron HR] TAZO_DROP_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
+  } catch (err) {
+    console.error('[Cron HR] TAZO_DROP_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
   // Chat challenges: always resolve, only auto-start when live
@@ -199,17 +217,22 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[Cron HR] CHAT_CHALLENGE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
-  if (isLive) {
-    try {
-      const chatChallengesEnabled = overlaySettings?.chatChallengesEnabled !== false;
-      if (chatChallengesEnabled && !(await hasActiveEvent()) && await shouldStartChatChallenge()) {
-        const announcement = await startChatChallenge();
+  try {
+    const chatChallengesEnabled = overlaySettings?.chatChallengesEnabled !== false;
+    const chatChallengeShouldStart = await shouldStartChatChallenge();
+    if (diagnostic) Object.assign(debug, { chatChallengesEnabled, chatChallengeShouldStart });
+    if (chatChallengesEnabled && !(await hasActiveEvent()) && chatChallengeShouldStart) {
+      const announcement = await startChatChallenge();
+      try {
         await sendKickChatMessage(accessToken, announcement);
         sent++;
+      } catch (sendErr) {
+        await kv.del('chat_challenge_active');
+        console.error('[Cron HR] CHAT_CHALLENGE_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
       }
-    } catch (err) {
-      console.error('[Cron HR] CHAT_CHALLENGE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
+  } catch (err) {
+    console.error('[Cron HR] CHAT_CHALLENGE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
   // Boss events: always resolve + remind, only auto-start when live
@@ -229,20 +252,24 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[Cron HR] BOSS_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
-  if (isLive) {
-    try {
-      const bossEventsEnabled = overlaySettings?.bossEventsEnabled !== false;
-      const shouldBoss = await shouldStartBossEvent();
-      console.log('[Cron HR] BOSS_CHECK', JSON.stringify({ bossEventsEnabled, shouldBoss }));
-      if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss) {
-        const announcement = await startBossEvent();
+  try {
+    const bossEventsEnabled = overlaySettings?.bossEventsEnabled !== false;
+    const shouldBoss = await shouldStartBossEvent();
+    console.log('[Cron HR] BOSS_CHECK', JSON.stringify({ bossEventsEnabled, shouldBoss }));
+    if (diagnostic) Object.assign(debug, { bossEventsEnabled, bossShouldStart: shouldBoss });
+    if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss) {
+      const announcement = await startBossEvent();
+      try {
         await sendKickChatMessage(accessToken, announcement);
         sent++;
         console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_start', msgPreview: announcement.slice(0, 80) }));
+      } catch (sendErr) {
+        await kv.del('boss_active');
+        console.error('[Cron HR] BOSS_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
       }
-    } catch (err) {
-      console.error('[Cron HR] BOSS_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
+  } catch (err) {
+    console.error('[Cron HR] BOSS_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
   // Top chatter: only when live
@@ -428,7 +455,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Wellness milestones: steps, distance, flights, active calories (only when live)
+  // Wellness milestones: steps, distance, flights, active calories
   // Steps/distance default ON (opt-out via !== false); flights/calories default OFF (opt-in via === true)
   const wellnessStepsOn = storedAlert?.chatBroadcastWellnessSteps !== false;
   const wellnessDistanceOn = storedAlert?.chatBroadcastWellnessDistance !== false;
@@ -443,6 +470,7 @@ export async function GET(request: NextRequest) {
       getActiveCaloriesSinceStreamStart(),
       getWellnessMilestonesLastSent(),
     ]);
+    console.log('[Cron HR] WELLNESS_CHECK', JSON.stringify({ wellnessStepsOn, wellnessDistanceOn, stepsSince, distanceSince, milestonesLast }));
 
     const checkAndSend = async (
       toggle: boolean | undefined,
@@ -565,5 +593,7 @@ export async function GET(request: NextRequest) {
   }
 
   console.log('[Cron HR] CRON_END', JSON.stringify({ sent, runAt }));
-  return NextResponse.json({ ok: true, sent });
+  return NextResponse.json(
+    diagnostic ? { ok: true, sent, debug } : { ok: true, sent }
+  );
 }

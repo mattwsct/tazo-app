@@ -949,7 +949,7 @@ const RAFFLE_KEY = 'raffle_active';
 const RAFFLE_LAST_AT_KEY = 'raffle_last_at';
 const RAFFLE_TTL_SEC = 600; // 10 min TTL safety net
 const RAFFLE_ENTRY_WINDOW_MS = 60 * 1000; // 1 minute
-const RAFFLE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between raffles
+const RAFFLE_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes between raffles
 const RAFFLE_RECENT_KEY = 'raffle_recent_keywords';
 const RAFFLE_RECENT_MAX = 30;
 
@@ -1192,7 +1192,7 @@ const TAZO_DROP_KEY = 'chip_drop_active'; // KV key unchanged
 const TAZO_DROP_LAST_AT_KEY = 'chip_drop_last_at'; // KV key unchanged
 const TAZO_DROP_TTL_SEC = 180;
 const TAZO_DROP_WINDOW_MS = 2 * 60 * 1000;
-const TAZO_DROP_INTERVAL_MS = 15 * 60 * 1000;
+const TAZO_DROP_INTERVAL_MS = 10 * 60 * 1000;
 const TAZO_DROP_PRIZE = 5;
 const TAZO_DROP_MAX_WINNERS = 5;
 
@@ -1238,8 +1238,10 @@ export async function shouldStartTazoDrop(): Promise<boolean> {
   const existing = await kv.get<TazoDropState>(TAZO_DROP_KEY);
   if (existing) return false;
   const lastAt = await kv.get<string>(TAZO_DROP_LAST_AT_KEY);
-  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : TAZO_DROP_INTERVAL_MS;
-  return elapsed >= TAZO_DROP_INTERVAL_MS;
+  if (!lastAt) return true; // No prior drop — eligible immediately
+  const lastMs = parseInt(lastAt, 10);
+  if (Number.isNaN(lastMs) || lastMs > Date.now()) return true; // Invalid or future — treat as eligible
+  return Date.now() - lastMs >= TAZO_DROP_INTERVAL_MS;
 }
 
 export async function resolveExpiredTazoDrop(): Promise<string | null> {
@@ -1259,7 +1261,7 @@ const CHAT_CHALLENGE_KEY = 'chat_challenge_active';
 const CHAT_CHALLENGE_LAST_AT_KEY = 'chat_challenge_last_at';
 const CHAT_CHALLENGE_TTL_SEC = 180;
 const CHAT_CHALLENGE_WINDOW_MS = 2 * 60 * 1000;
-const CHAT_CHALLENGE_INTERVAL_MS = 25 * 60 * 1000;
+const CHAT_CHALLENGE_INTERVAL_MS = 15 * 60 * 1000;
 const CHAT_CHALLENGE_TARGET = 50;
 const CHAT_CHALLENGE_PRIZE = 5;
 const CHAT_CHALLENGE_MAX_PER_USER = 3;
@@ -1539,7 +1541,7 @@ const BOSS_KEY = 'boss_active';
 const BOSS_LAST_AT_KEY = 'boss_last_at';
 const BOSS_TTL_SEC = 360;
 const BOSS_WINDOW_MS = 5 * 60 * 1000;
-const BOSS_INTERVAL_MS = 50 * 60 * 1000;
+const BOSS_INTERVAL_MS = 25 * 60 * 1000;
 const BOSS_REWARD_POOL = 100;
 const BOSS_ATTACK_COOLDOWN_MS = 5_000;
 const BOSS_ATTACK_COOLDOWN_KEY = 'boss_attack_cd';
@@ -1696,10 +1698,10 @@ export async function resolveExpiredBoss(): Promise<string | null> {
 // --- Active event check (prevents overlapping events) ---
 
 export async function hasActiveEvent(): Promise<boolean> {
-  const [raffle, drop, challenge, boss] = await Promise.all([
-    kv.get(RAFFLE_KEY), kv.get(TAZO_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
+  const [drop, challenge, boss] = await Promise.all([
+    kv.get(TAZO_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
   ]);
-  return !!(raffle || drop || challenge || boss);
+  return !!(drop || challenge || boss);
 }
 
 export async function resetEventTimestamps(): Promise<void> {

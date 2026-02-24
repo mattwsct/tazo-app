@@ -528,8 +528,15 @@ function getNextBroadestCategory(
 /**
  * Returns deduplicated location names at city/state/country granularity for rotation display.
  * Flag is handled separately (always visible), so country name is included as text.
+ * When displayMode is provided, only levels at or broader than the selected mode are returned:
+ *   'city'    -> city, state, country (full rotation)
+ *   'state'   -> state, country
+ *   'country' -> country only
  */
-export function getLocationLevels(location: LocationData | null): string[] {
+export function getLocationLevels(
+  location: LocationData | null,
+  displayMode: 'city' | 'state' | 'country' = 'city'
+): string[] {
   if (!location) return [];
 
   const tryFields = (fields: (keyof LocationData)[]): string | null => {
@@ -543,8 +550,8 @@ export function getLocationLevels(location: LocationData | null): string[] {
   const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
   const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
 
-  const city = tryFields(cityFields);
-  const state = tryFields(stateFields);
+  const city = displayMode === 'city' ? tryFields(cityFields) : null;
+  const state = displayMode !== 'country' ? tryFields(stateFields) : null;
   const countryInfo = getCountry(location);
   const country = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : null;
 

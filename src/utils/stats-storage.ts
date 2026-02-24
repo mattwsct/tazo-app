@@ -56,6 +56,7 @@ const SPEED_KEY = 'speed_history';
 const ALTITUDE_KEY = 'altitude_history';
 const LOCATION_KEY = 'location_history';
 export const STREAM_STARTED_AT_KEY = 'stream_started_at';
+const STREAM_IS_LIVE_KEY = 'stream_is_live';
 
 /**
  * Filters entries to only those since stream started
@@ -102,6 +103,15 @@ export async function getStreamStartedAt(): Promise<number | null> {
   } catch {
     return null;
   }
+}
+
+export async function setStreamLive(live: boolean): Promise<void> {
+  await kv.set(STREAM_IS_LIVE_KEY, live);
+}
+
+export async function isStreamLive(): Promise<boolean> {
+  const val = await kv.get<boolean>(STREAM_IS_LIVE_KEY);
+  return val === true;
 }
 
 /**

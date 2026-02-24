@@ -46,7 +46,7 @@ import {
   checkAndResolveExpiredHeist,
   giftTazos,
   requestTazos,
-} from '@/utils/blackjack-storage';
+} from '@/utils/gambling-storage';
 import {
   parseConvertArgs,
   convertUnit,
