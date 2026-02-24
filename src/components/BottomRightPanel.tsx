@@ -275,7 +275,7 @@ export default function BottomRightPanel({
             <div key={u.username} className="leaderboard-entry">
               <span className="leaderboard-rank">#{i + 1}</span>
               <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
-              <span className="leaderboard-chips">{u.chips} tazos</span>
+              <span className="leaderboard-chips">{u.chips}</span>
             </div>
           ))
         ) : (

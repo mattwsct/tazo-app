@@ -947,7 +947,7 @@ export async function getHeistStatus(): Promise<string | null> {
 
 const RAFFLE_KEY = 'raffle_active';
 const RAFFLE_LAST_AT_KEY = 'raffle_last_at';
-const RAFFLE_TTL_SEC = 300; // 5 min TTL safety net
+const RAFFLE_TTL_SEC = 600; // 10 min TTL safety net
 const RAFFLE_ENTRY_WINDOW_MS = 60 * 1000; // 1 minute
 const RAFFLE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between raffles
 const RAFFLE_DEFAULT_PRIZE = 50;
@@ -1017,7 +1017,7 @@ export async function resolveRaffle(): Promise<string | null> {
   await kv.del(RAFFLE_KEY);
   await kv.set(RAFFLE_LAST_AT_KEY, String(Date.now()));
 
-  if (raffle.participants.length === 0) return null;
+  if (raffle.participants.length === 0) return '🎰 Raffle ended — no entries this time.';
 
   const winner = raffle.participants[Math.floor(Math.random() * raffle.participants.length)];
   const bal = await addTazos(winner.user, raffle.prize);
@@ -1369,30 +1369,65 @@ export async function checkParticipationStreak(username: string): Promise<string
 type AttackCategory = 'physical' | 'magic' | 'ranged' | 'special';
 
 const ATTACK_WORDS: Record<string, AttackCategory> = {
-  // Physical
+  // Physical — melee / wrestling / martial arts
   attack: 'physical', punch: 'physical', kick: 'physical', uppercut: 'physical',
   slap: 'physical', headbutt: 'physical', elbow: 'physical', smash: 'physical',
   crush: 'physical', slam: 'physical', tackle: 'physical', stomp: 'physical',
   chop: 'physical', strike: 'physical', hammer: 'physical', clobber: 'physical',
+  suplex: 'physical', clothesline: 'physical', spear: 'physical', roundhouse: 'physical',
+  backhand: 'physical', haymaker: 'physical', wallop: 'physical', pummel: 'physical',
+  throttle: 'physical', brawl: 'physical', grapple: 'physical', wrangle: 'physical',
   'drop kick': 'physical', 'body slam': 'physical', 'power punch': 'physical',
-  'flying kick': 'physical', 'ground pound': 'physical',
-  // Magic
+  'flying kick': 'physical', 'ground pound': 'physical', 'pile driver': 'physical',
+  'tombstone': 'physical', 'stone cold stunner': 'physical', rko: 'physical',
+  'german suplex': 'physical', 'choke slam': 'physical', 'leg sweep': 'physical',
+  'sucker punch': 'physical', 'scissor kick': 'physical', 'karate chop': 'physical',
+  'falcon punch': 'physical', 'wombo combo': 'physical', 'peoples elbow': 'physical',
+  'five knuckle shuffle': 'physical', 'sweet chin music': 'physical',
+  'atomic wedgie': 'physical', 'wet willy': 'physical', 'purple nurple': 'physical',
+  'kidney punch': 'physical', 'spinning backfist': 'physical', 'crane kick': 'physical',
+  // Magic — spells / elemental / anime
   fireball: 'magic', lightning: 'magic', ice: 'magic', freeze: 'magic',
   thunder: 'magic', blast: 'magic', burn: 'magic', shock: 'magic',
   zap: 'magic', meteor: 'magic', inferno: 'magic', blizzard: 'magic',
+  abracadabra: 'magic', kamehameha: 'magic', rasengan: 'magic', hadouken: 'magic',
+  enchant: 'magic', conjure: 'magic', hex: 'magic', bewitch: 'magic',
   'lightning bolt': 'magic', 'fire blast': 'magic', 'ice beam': 'magic',
   'thunder strike': 'magic', 'shadow bolt': 'magic', 'arcane blast': 'magic',
-  // Ranged
+  'avada kedavra': 'magic', 'expelliarmus': 'magic', 'shadow realm': 'magic',
+  'dark pulse': 'magic', 'mind blast': 'magic', 'soul drain': 'magic',
+  'mana burn': 'magic', 'chaos bolt': 'magic', 'void ray': 'magic',
+  'eldritch blast': 'magic', moonbeam: 'magic', starfall: 'magic', thunderclap: 'magic',
+  'shoryuken': 'magic', 'spirit bomb': 'magic', 'final flash': 'magic',
+  'galick gun': 'magic', 'special beam cannon': 'magic', 'dragon fist': 'magic',
+  'chidori': 'magic', 'getsuga tensho': 'magic', 'finger of death': 'magic',
+  // Ranged — projectiles / throwing / artillery
   shoot: 'ranged', snipe: 'ranged', arrow: 'ranged', throw: 'ranged',
   hurl: 'ranged', launch: 'ranged', fire: 'ranged', aim: 'ranged',
+  yeet: 'ranged', boop: 'ranged', fling: 'ranged', catapult: 'ranged',
+  trebuchet: 'ranged', tomahawk: 'ranged', boomerang: 'ranged', slingshot: 'ranged',
   'head shot': 'ranged', 'double tap': 'ranged', 'quick shot': 'ranged',
-  'power shot': 'ranged', 'triple shot': 'ranged',
-  // Special
-  insult: 'special', roast: 'special', curse: 'special', hex: 'special',
-  taunt: 'special', mock: 'special', jinx: 'special', doom: 'special',
-  banish: 'special', smite: 'special', nuke: 'special', obliterate: 'special',
-  'yo mama': 'special', 'spirit bomb': 'special', 'death stare': 'special',
-  'dark magic': 'special', 'soul strike': 'special',
+  'power shot': 'ranged', 'triple shot': 'ranged', 'sniper shot': 'ranged',
+  'mortar strike': 'ranged', 'carpet bomb': 'ranged', 'orbital strike': 'ranged',
+  'poison dart': 'ranged', 'throwing star': 'ranged', 'banana peel': 'ranged',
+  'blue shell': 'ranged', 'red shell': 'ranged', 'green shell': 'ranged',
+  'rocket launcher': 'ranged', 'nerf dart': 'ranged', 'paper airplane': 'ranged',
+  'rubber band': 'ranged', 'spitball': 'ranged', 'water balloon': 'ranged',
+  // Special — social / meme / psychological warfare
+  insult: 'special', roast: 'special', curse: 'special', taunt: 'special',
+  mock: 'special', jinx: 'special', doom: 'special', banish: 'special',
+  smite: 'special', nuke: 'special', obliterate: 'special', ratio: 'special',
+  cancel: 'special', report: 'special', cope: 'special', seethe: 'special',
+  mald: 'special', cringe: 'special', bonk: 'special', banhammer: 'special',
+  'yo mama': 'special', 'death stare': 'special', 'dark magic': 'special',
+  'soul strike': 'special', 'vibe check': 'special', 'skill issue': 'special',
+  'touch grass': 'special', 'no u': 'special', 'talk to the hand': 'special',
+  'stink eye': 'special', 'cold shoulder': 'special', 'silent treatment': 'special',
+  'cringe attack': 'special', 'brain freeze': 'special', 'deplatform': 'special',
+  'unsubscribe': 'special', 'emotional damage': 'special', 'uno reverse': 'special',
+  'rickroll': 'special', 'delete system32': 'special', 'skill diff': 'special',
+  'gg ez': 'special', 'get rekt': 'special', 'L plus ratio': 'special',
+  'ok boomer': 'special', 'thats cap': 'special', 'caught in 4k': 'special',
 };
 
 const ATTACK_WORD_LIST = Object.keys(ATTACK_WORDS);
@@ -1405,30 +1440,58 @@ interface BossDefinition {
 }
 
 const BOSS_ROSTER: BossDefinition[] = [
+  // Tier 1 — 400 HP
   { name: 'xQc', maxHp: 400, weakness: 'special', resistance: 'physical' },
   { name: 'Trainwreck', maxHp: 400, weakness: 'physical', resistance: 'magic' },
   { name: 'Adin Ross', maxHp: 400, weakness: 'magic', resistance: 'special' },
   { name: 'Roshtein', maxHp: 400, weakness: 'ranged', resistance: 'magic' },
+  { name: 'Kai Cenat', maxHp: 400, weakness: 'special', resistance: 'ranged' },
+  { name: 'Speed', maxHp: 400, weakness: 'physical', resistance: 'special' },
+  // Tier 2 — 350 HP
   { name: 'Nickmercs', maxHp: 350, weakness: 'ranged', resistance: 'physical' },
   { name: 'YourRAGE', maxHp: 350, weakness: 'magic', resistance: 'physical' },
   { name: 'Stable Ronaldo', maxHp: 350, weakness: 'special', resistance: 'ranged' },
   { name: 'WestCol', maxHp: 350, weakness: 'physical', resistance: 'special' },
+  { name: 'Hasanabi', maxHp: 350, weakness: 'ranged', resistance: 'magic' },
+  { name: 'SteveWillDoIt', maxHp: 350, weakness: 'magic', resistance: 'physical' },
+  { name: 'Bradley Martyn', maxHp: 350, weakness: 'physical', resistance: 'ranged' },
+  { name: 'Agent00', maxHp: 350, weakness: 'special', resistance: 'physical' },
+  { name: 'Duke Dennis', maxHp: 350, weakness: 'ranged', resistance: 'special' },
+  // Tier 3 — 300 HP
   { name: 'Ice Poseidon', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
   { name: 'Sneako', maxHp: 300, weakness: 'special', resistance: 'physical' },
   { name: 'Jynxzi', maxHp: 300, weakness: 'physical', resistance: 'magic' },
   { name: 'Fanum', maxHp: 300, weakness: 'ranged', resistance: 'special' },
   { name: 'TheGrefg', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
   { name: 'Plaqueboymax', maxHp: 300, weakness: 'special', resistance: 'physical' },
+  { name: 'Jack Doherty', maxHp: 300, weakness: 'physical', resistance: 'special' },
+  { name: 'Jon Zherka', maxHp: 300, weakness: 'ranged', resistance: 'physical' },
+  { name: 'FaZe Banks', maxHp: 300, weakness: 'magic', resistance: 'special' },
+  { name: 'Eddie Hall', maxHp: 300, weakness: 'special', resistance: 'physical' },
+  { name: 'Destiny', maxHp: 300, weakness: 'ranged', resistance: 'magic' },
+  { name: 'Adam22', maxHp: 300, weakness: 'physical', resistance: 'ranged' },
+  // Tier 4 — 250 HP
   { name: 'Amouranth', maxHp: 250, weakness: 'ranged', resistance: 'special' },
   { name: 'Sketch', maxHp: 250, weakness: 'physical', resistance: 'magic' },
   { name: 'Suspendas', maxHp: 250, weakness: 'magic', resistance: 'physical' },
   { name: 'Mike Majlak', maxHp: 250, weakness: 'special', resistance: 'ranged' },
   { name: 'JiDion', maxHp: 250, weakness: 'ranged', resistance: 'magic' },
   { name: 'BruceDropEmOff', maxHp: 250, weakness: 'physical', resistance: 'special' },
+  { name: 'KeemStar', maxHp: 250, weakness: 'special', resistance: 'physical' },
+  { name: 'Sam Hyde', maxHp: 250, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Bob Menery', maxHp: 250, weakness: 'ranged', resistance: 'physical' },
+  { name: 'Slim', maxHp: 250, weakness: 'physical', resistance: 'magic' },
+  { name: 'PirateSoftware', maxHp: 250, weakness: 'magic', resistance: 'special' },
+  // Tier 5 — 200 HP
   { name: 'N3on', maxHp: 200, weakness: 'special', resistance: 'ranged' },
   { name: 'Fousey', maxHp: 200, weakness: 'magic', resistance: 'physical' },
   { name: 'Vitaly', maxHp: 200, weakness: 'physical', resistance: 'magic' },
   { name: 'Corinna Kopf', maxHp: 200, weakness: 'ranged', resistance: 'special' },
+  { name: 'Johnny Somali', maxHp: 200, weakness: 'special', resistance: 'magic' },
+  { name: 'Morgpie', maxHp: 200, weakness: 'ranged', resistance: 'physical' },
+  { name: 'HamptonBrandon', maxHp: 200, weakness: 'physical', resistance: 'special' },
+  { name: 'Knut', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
+  { name: 'ConnorEatsPants', maxHp: 200, weakness: 'special', resistance: 'physical' },
 ];
 
 const BOSS_KEY = 'boss_active';

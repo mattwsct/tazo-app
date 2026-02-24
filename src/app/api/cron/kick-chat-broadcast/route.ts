@@ -114,6 +114,153 @@ export async function GET(request: NextRequest) {
     }
   } catch { /* ignore */ }
 
+  // ===== EVENT RESOLUTION & AUTO-START (run first — time-critical, TTL-bound) =====
+
+  // Heist resolution (always attempt, regardless of isLive)
+  try {
+    const heistResult = await checkAndResolveExpiredHeist();
+    if (heistResult) {
+      await sendKickChatMessage(accessToken, heistResult);
+      sent++;
+      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heist_resolve', msgPreview: heistResult.slice(0, 80) }));
+    }
+  } catch (err) {
+    console.error('[Cron HR] HEIST_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+  }
+
+  // Raffle: always resolve (even if not live — already-started raffles must pay out)
+  try {
+    const raffleResult = await resolveRaffle();
+    if (raffleResult) {
+      await sendKickChatMessage(accessToken, raffleResult);
+      sent++;
+      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
+    } else {
+      const reminder = await getRaffleReminder();
+      if (reminder) {
+        await sendKickChatMessage(accessToken, reminder);
+        sent++;
+      }
+    }
+  } catch (err) {
+    console.error('[Cron HR] RAFFLE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+  }
+  if (isLive) {
+    try {
+      const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
+      const shouldRaffle = await shouldStartRaffle();
+      console.log('[Cron HR] RAFFLE_CHECK', JSON.stringify({ autoRaffleEnabled, shouldRaffle }));
+      if (autoRaffleEnabled && shouldRaffle) {
+        const announcement = await startRaffle();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_start', msgPreview: announcement.slice(0, 80) }));
+      }
+    } catch (err) {
+      console.error('[Cron HR] RAFFLE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Tazo drops: always resolve, only auto-start when live
+  try {
+    const dropResult = await resolveExpiredTazoDrop();
+    if (dropResult) {
+      await sendKickChatMessage(accessToken, dropResult);
+      sent++;
+      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_resolve', msgPreview: dropResult.slice(0, 80) }));
+    }
+  } catch (err) {
+    console.error('[Cron HR] TAZO_DROP_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+  }
+  if (isLive) {
+    try {
+      const tazoDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
+      const activeEvent = await hasActiveEvent();
+      const shouldDrop = await shouldStartTazoDrop();
+      console.log('[Cron HR] TAZO_DROP_CHECK', JSON.stringify({ tazoDropsEnabled, activeEvent, shouldDrop }));
+      if (tazoDropsEnabled && !activeEvent && shouldDrop) {
+        const announcement = await startTazoDrop();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_start', msgPreview: announcement.slice(0, 80) }));
+      }
+    } catch (err) {
+      console.error('[Cron HR] TAZO_DROP_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Chat challenges: always resolve, only auto-start when live
+  try {
+    const challengeResult = await resolveChatChallenge();
+    if (challengeResult) {
+      await sendKickChatMessage(accessToken, challengeResult);
+      sent++;
+    }
+  } catch (err) {
+    console.error('[Cron HR] CHAT_CHALLENGE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+  }
+  if (isLive) {
+    try {
+      const chatChallengesEnabled = overlaySettings?.chatChallengesEnabled !== false;
+      if (chatChallengesEnabled && !(await hasActiveEvent()) && await shouldStartChatChallenge()) {
+        const announcement = await startChatChallenge();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+      }
+    } catch (err) {
+      console.error('[Cron HR] CHAT_CHALLENGE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Boss events: always resolve + remind, only auto-start when live
+  try {
+    const bossResult = await resolveExpiredBoss();
+    if (bossResult) {
+      await sendKickChatMessage(accessToken, bossResult);
+      sent++;
+      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_resolve', msgPreview: bossResult.slice(0, 80) }));
+    }
+    const bossReminder = await getBossReminder();
+    if (bossReminder) {
+      await sendKickChatMessage(accessToken, bossReminder);
+      sent++;
+      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_reminder', msgPreview: bossReminder.slice(0, 80) }));
+    }
+  } catch (err) {
+    console.error('[Cron HR] BOSS_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+  }
+  if (isLive) {
+    try {
+      const bossEventsEnabled = overlaySettings?.bossEventsEnabled !== false;
+      const shouldBoss = await shouldStartBossEvent();
+      console.log('[Cron HR] BOSS_CHECK', JSON.stringify({ bossEventsEnabled, shouldBoss }));
+      if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss) {
+        const announcement = await startBossEvent();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_start', msgPreview: announcement.slice(0, 80) }));
+      }
+    } catch (err) {
+      console.error('[Cron HR] BOSS_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Top chatter: only when live
+  if (isLive) {
+    try {
+      const topChatterResult = await resolveTopChatter();
+      if (topChatterResult) {
+        await sendKickChatMessage(accessToken, topChatterResult);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'top_chatter', msgPreview: topChatterResult.slice(0, 80) }));
+      }
+    } catch (err) {
+      console.error('[Cron HR] TOP_CHATTER_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // ===== BROADCASTS (non-critical, can tolerate being skipped) =====
+
   // Unified location: stream title + chat — both only when live, at most every N min
   const autoUpdateLocation = streamTitleSettings?.autoUpdateLocation !== false;
   const chatBroadcastStreamTitle = storedAlert?.chatBroadcastStreamTitle === true;
@@ -414,137 +561,6 @@ export async function GET(request: NextRequest) {
 
     if (currentHrState !== (hrState as HeartrateBroadcastState)) {
       await kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, currentHrState);
-    }
-  }
-
-  // Auto-resolve expired heists
-  try {
-    const heistResult = await checkAndResolveExpiredHeist();
-    if (heistResult) {
-      await sendKickChatMessage(accessToken, heistResult);
-      sent++;
-      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heist_resolve', msgPreview: heistResult.slice(0, 80) }));
-    }
-  } catch (err) {
-    console.error('[Cron HR] HEIST_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-
-  // Raffle: always resolve expired ones (could be manual), only auto-start if enabled
-  if (isLive) {
-    try {
-      const raffleResult = await resolveRaffle();
-      if (raffleResult) {
-        await sendKickChatMessage(accessToken, raffleResult);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
-      } else {
-        const reminder = await getRaffleReminder();
-        if (reminder) {
-          await sendKickChatMessage(accessToken, reminder);
-          sent++;
-        }
-      }
-      const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
-      const shouldRaffle = await shouldStartRaffle();
-      console.log('[Cron HR] RAFFLE_CHECK', JSON.stringify({ autoRaffleEnabled, shouldRaffle }));
-      if (autoRaffleEnabled && shouldRaffle) {
-        const announcement = await startRaffle();
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_start', msgPreview: announcement.slice(0, 80) }));
-      }
-    } catch (err) {
-      console.error('[Cron HR] RAFFLE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-    }
-  } else {
-    console.log('[Cron HR] SKIP_RAFFLES', JSON.stringify({ reason: 'not_live' }));
-  }
-
-  // Tazo drops: resolve/start (only when live)
-  if (isLive) {
-    try {
-      const dropResult = await resolveExpiredTazoDrop();
-      if (dropResult) {
-        await sendKickChatMessage(accessToken, dropResult);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_resolve', msgPreview: dropResult.slice(0, 80) }));
-      }
-      const tazoDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
-      const activeEvent = await hasActiveEvent();
-      const shouldDrop = await shouldStartTazoDrop();
-      console.log('[Cron HR] TAZO_DROP_CHECK', JSON.stringify({ tazoDropsEnabled, activeEvent, shouldDrop }));
-      if (tazoDropsEnabled && !activeEvent && shouldDrop) {
-        const announcement = await startTazoDrop();
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_start', msgPreview: announcement.slice(0, 80) }));
-      }
-    } catch (err) {
-      console.error('[Cron HR] TAZO_DROP_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-    }
-  } else {
-    console.log('[Cron HR] SKIP_TAZO_DROPS', JSON.stringify({ reason: 'not_live' }));
-  }
-
-  // Chat challenges: resolve/start (only when live)
-  if (isLive) {
-    try {
-      const challengeResult = await resolveChatChallenge();
-      if (challengeResult) {
-        await sendKickChatMessage(accessToken, challengeResult);
-        sent++;
-      }
-      const chatChallengesEnabled = overlaySettings?.chatChallengesEnabled !== false;
-      if (chatChallengesEnabled && !(await hasActiveEvent()) && await shouldStartChatChallenge()) {
-        const announcement = await startChatChallenge();
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-      }
-    } catch (err) {
-      console.error('[Cron HR] CHAT_CHALLENGE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-    }
-  }
-
-  // Boss events: resolve/start/remind (only when live)
-  if (isLive) {
-    try {
-      const bossResult = await resolveExpiredBoss();
-      if (bossResult) {
-        await sendKickChatMessage(accessToken, bossResult);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_resolve', msgPreview: bossResult.slice(0, 80) }));
-      }
-      const bossReminder = await getBossReminder();
-      if (bossReminder) {
-        await sendKickChatMessage(accessToken, bossReminder);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_reminder', msgPreview: bossReminder.slice(0, 80) }));
-      }
-      const bossEventsEnabled = overlaySettings?.bossEventsEnabled !== false;
-      const shouldBoss = await shouldStartBossEvent();
-      console.log('[Cron HR] BOSS_CHECK', JSON.stringify({ bossEventsEnabled, shouldBoss }));
-      if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss) {
-        const announcement = await startBossEvent();
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_start', msgPreview: announcement.slice(0, 80) }));
-      }
-    } catch (err) {
-      console.error('[Cron HR] BOSS_EVENT_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-    }
-  }
-
-  // Top chatter: resolve previous hour (only when live)
-  if (isLive) {
-    try {
-      const topChatterResult = await resolveTopChatter();
-      if (topChatterResult) {
-        await sendKickChatMessage(accessToken, topChatterResult);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'top_chatter', msgPreview: topChatterResult.slice(0, 80) }));
-      }
-    } catch (err) {
-      console.error('[Cron HR] TOP_CHATTER_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
   }
 

@@ -15,7 +15,7 @@ const CATEGORY_COMMANDS: Record<string, string> = {
   irl: 'IRL',
   sleep: 'Just Sleeping',
   chat: 'Just Chatting',
-  software: 'Software and Game Development',
+  software: 'Software Development',
 };
 
 const CATEGORY_ID_CACHE_KEY = 'kick_category_id_cache';
