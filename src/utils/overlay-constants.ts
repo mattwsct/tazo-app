@@ -26,7 +26,7 @@ export const TIMERS = {
   GPS_FRESHNESS_TIMEOUT: 15 * 60 * 1000, // 15 minutes
   GPS_STALE_TIMEOUT: 10000, // 10 seconds
   /** Wellness (steps): hide if last import older than this (Health Auto Export updates every 15–30+ min) */
-  WELLNESS_STALE_MS: 2 * 60 * 60 * 1000, // 2 hours
+  WELLNESS_STALE_MS: 1 * 60 * 60 * 1000, // 1 hour
   WEATHER_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
   LOCATION_DATA_VALIDITY_TIMEOUT: 30 * 60 * 1000, // 30 minutes
   

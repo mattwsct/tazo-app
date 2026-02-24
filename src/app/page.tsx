@@ -1452,6 +1452,12 @@ export default function AdminPage() {
                       <span className="checkbox-text">!heist — group heist</span>
                     </label>
                   </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.giftEnabled !== false} onChange={(e) => handleSettingsChange({ giftEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">!gift / !ask / !beg — tazo transfers</span>
+                    </label>
+                  </div>
                   <div className="setting-separator" style={{ margin: '1rem 0' }} />
                 </>
               )}

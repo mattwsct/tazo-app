@@ -1441,57 +1441,77 @@ interface BossDefinition {
 
 const BOSS_ROSTER: BossDefinition[] = [
   // Tier 1 — 400 HP
+  { name: 'Ice Poseidon', maxHp: 400, weakness: 'special', resistance: 'physical' },
+  { name: 'HamptonBrandon', maxHp: 400, weakness: 'physical', resistance: 'magic' },
+  { name: 'Sam', maxHp: 400, weakness: 'magic', resistance: 'special' },
+  { name: 'AsianAndy', maxHp: 400, weakness: 'ranged', resistance: 'physical' },
+  { name: 'EBZ', maxHp: 400, weakness: 'special', resistance: 'ranged' },
+  { name: 'BurgerPlanet', maxHp: 400, weakness: 'physical', resistance: 'special' },
+  { name: 'SJC', maxHp: 400, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Adin Ross', maxHp: 400, weakness: 'ranged', resistance: 'magic' },
   { name: 'xQc', maxHp: 400, weakness: 'special', resistance: 'physical' },
-  { name: 'Trainwreck', maxHp: 400, weakness: 'physical', resistance: 'magic' },
-  { name: 'Adin Ross', maxHp: 400, weakness: 'magic', resistance: 'special' },
-  { name: 'Roshtein', maxHp: 400, weakness: 'ranged', resistance: 'magic' },
-  { name: 'Kai Cenat', maxHp: 400, weakness: 'special', resistance: 'ranged' },
-  { name: 'Speed', maxHp: 400, weakness: 'physical', resistance: 'special' },
+  { name: 'SNEAKO', maxHp: 400, weakness: 'physical', resistance: 'special' },
+  { name: 'Amouranth', maxHp: 400, weakness: 'magic', resistance: 'physical' },
+  { name: 'Bradley Martin', maxHp: 400, weakness: 'ranged', resistance: 'special' },
+  { name: 'SteveWillDoIt', maxHp: 400, weakness: 'special', resistance: 'magic' },
+  { name: 'Andy Dick', maxHp: 400, weakness: 'physical', resistance: 'ranged' },
   // Tier 2 — 350 HP
-  { name: 'Nickmercs', maxHp: 350, weakness: 'ranged', resistance: 'physical' },
-  { name: 'YourRAGE', maxHp: 350, weakness: 'magic', resistance: 'physical' },
-  { name: 'Stable Ronaldo', maxHp: 350, weakness: 'special', resistance: 'ranged' },
-  { name: 'WestCol', maxHp: 350, weakness: 'physical', resistance: 'special' },
-  { name: 'Hasanabi', maxHp: 350, weakness: 'ranged', resistance: 'magic' },
-  { name: 'SteveWillDoIt', maxHp: 350, weakness: 'magic', resistance: 'physical' },
-  { name: 'Bradley Martyn', maxHp: 350, weakness: 'physical', resistance: 'ranged' },
-  { name: 'Agent00', maxHp: 350, weakness: 'special', resistance: 'physical' },
-  { name: 'Duke Dennis', maxHp: 350, weakness: 'ranged', resistance: 'special' },
+  { name: 'Mando', maxHp: 350, weakness: 'magic', resistance: 'physical' },
+  { name: 'ABZ', maxHp: 350, weakness: 'ranged', resistance: 'special' },
+  { name: 'Suspendas', maxHp: 350, weakness: 'special', resistance: 'ranged' },
+  { name: 'n3on', maxHp: 350, weakness: 'physical', resistance: 'magic' },
+  { name: 'RiceGum', maxHp: 350, weakness: 'magic', resistance: 'special' },
+  { name: 'Cobbruvs', maxHp: 350, weakness: 'ranged', resistance: 'physical' },
+  { name: 'Clavicular', maxHp: 350, weakness: 'special', resistance: 'magic' },
+  { name: 'Robcdee', maxHp: 350, weakness: 'physical', resistance: 'ranged' },
+  { name: 'JoeyKaotyk', maxHp: 350, weakness: 'magic', resistance: 'physical' },
+  { name: 'PeeguuTV', maxHp: 350, weakness: 'ranged', resistance: 'special' },
+  { name: 'Ac7ionman', maxHp: 350, weakness: 'special', resistance: 'physical' },
+  { name: 'Jandro', maxHp: 350, weakness: 'physical', resistance: 'special' },
+  { name: 'fousey', maxHp: 350, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Shotime', maxHp: 350, weakness: 'ranged', resistance: 'magic' },
   // Tier 3 — 300 HP
-  { name: 'Ice Poseidon', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
-  { name: 'Sneako', maxHp: 300, weakness: 'special', resistance: 'physical' },
-  { name: 'Jynxzi', maxHp: 300, weakness: 'physical', resistance: 'magic' },
-  { name: 'Fanum', maxHp: 300, weakness: 'ranged', resistance: 'special' },
-  { name: 'TheGrefg', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
-  { name: 'Plaqueboymax', maxHp: 300, weakness: 'special', resistance: 'physical' },
-  { name: 'Jack Doherty', maxHp: 300, weakness: 'physical', resistance: 'special' },
-  { name: 'Jon Zherka', maxHp: 300, weakness: 'ranged', resistance: 'physical' },
-  { name: 'FaZe Banks', maxHp: 300, weakness: 'magic', resistance: 'special' },
-  { name: 'Eddie Hall', maxHp: 300, weakness: 'special', resistance: 'physical' },
-  { name: 'Destiny', maxHp: 300, weakness: 'ranged', resistance: 'magic' },
-  { name: 'Adam22', maxHp: 300, weakness: 'physical', resistance: 'ranged' },
+  { name: 'kangjoel', maxHp: 300, weakness: 'special', resistance: 'ranged' },
+  { name: 'TAEMIN1998', maxHp: 300, weakness: 'physical', resistance: 'magic' },
+  { name: 'nickwhite', maxHp: 300, weakness: 'magic', resistance: 'special' },
+  { name: 'nicklee', maxHp: 300, weakness: 'ranged', resistance: 'physical' },
+  { name: 'kimmee', maxHp: 300, weakness: 'special', resistance: 'magic' },
+  { name: 'Alexis', maxHp: 300, weakness: 'physical', resistance: 'ranged' },
+  { name: 'Hanridge', maxHp: 300, weakness: 'magic', resistance: 'physical' },
+  { name: 'Xenathewitch', maxHp: 300, weakness: 'ranged', resistance: 'special' },
+  { name: 'Moxie', maxHp: 300, weakness: 'special', resistance: 'physical' },
+  { name: 'iDuncle', maxHp: 300, weakness: 'physical', resistance: 'special' },
+  { name: 'dtanmanb', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
+  { name: 'aloeirl', maxHp: 300, weakness: 'ranged', resistance: 'magic' },
+  { name: 'LordHito', maxHp: 300, weakness: 'special', resistance: 'ranged' },
+  { name: 'Andy', maxHp: 300, weakness: 'physical', resistance: 'magic' },
+  { name: 'ChickenAndy', maxHp: 300, weakness: 'magic', resistance: 'physical' },
   // Tier 4 — 250 HP
-  { name: 'Amouranth', maxHp: 250, weakness: 'ranged', resistance: 'special' },
-  { name: 'Sketch', maxHp: 250, weakness: 'physical', resistance: 'magic' },
-  { name: 'Suspendas', maxHp: 250, weakness: 'magic', resistance: 'physical' },
-  { name: 'Mike Majlak', maxHp: 250, weakness: 'special', resistance: 'ranged' },
-  { name: 'JiDion', maxHp: 250, weakness: 'ranged', resistance: 'magic' },
-  { name: 'BruceDropEmOff', maxHp: 250, weakness: 'physical', resistance: 'special' },
-  { name: 'KeemStar', maxHp: 250, weakness: 'special', resistance: 'physical' },
-  { name: 'Sam Hyde', maxHp: 250, weakness: 'magic', resistance: 'ranged' },
-  { name: 'Bob Menery', maxHp: 250, weakness: 'ranged', resistance: 'physical' },
-  { name: 'Slim', maxHp: 250, weakness: 'physical', resistance: 'magic' },
-  { name: 'PirateSoftware', maxHp: 250, weakness: 'magic', resistance: 'special' },
+  { name: 'jjstream', maxHp: 250, weakness: 'ranged', resistance: 'special' },
+  { name: 'shoovy', maxHp: 250, weakness: 'special', resistance: 'physical' },
+  { name: 'nanatty', maxHp: 250, weakness: 'physical', resistance: 'ranged' },
+  { name: 'wvagabond', maxHp: 250, weakness: 'magic', resistance: 'special' },
+  { name: 'Deepak', maxHp: 250, weakness: 'ranged', resistance: 'magic' },
+  { name: 'hyubsama', maxHp: 250, weakness: 'special', resistance: 'physical' },
+  { name: 'vnthony', maxHp: 250, weakness: 'physical', resistance: 'special' },
+  { name: 'CRISTRAVELS', maxHp: 250, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Moises', maxHp: 250, weakness: 'ranged', resistance: 'physical' },
+  { name: 'bennymack', maxHp: 250, weakness: 'special', resistance: 'magic' },
+  { name: 'CaptainGee', maxHp: 250, weakness: 'physical', resistance: 'magic' },
+  { name: 'DBR666', maxHp: 250, weakness: 'magic', resistance: 'physical' },
+  { name: 'Eddie', maxHp: 250, weakness: 'ranged', resistance: 'special' },
+  { name: 'Santamaria', maxHp: 250, weakness: 'special', resistance: 'ranged' },
   // Tier 5 — 200 HP
-  { name: 'N3on', maxHp: 200, weakness: 'special', resistance: 'ranged' },
-  { name: 'Fousey', maxHp: 200, weakness: 'magic', resistance: 'physical' },
-  { name: 'Vitaly', maxHp: 200, weakness: 'physical', resistance: 'magic' },
-  { name: 'Corinna Kopf', maxHp: 200, weakness: 'ranged', resistance: 'special' },
-  { name: 'Johnny Somali', maxHp: 200, weakness: 'special', resistance: 'magic' },
-  { name: 'Morgpie', maxHp: 200, weakness: 'ranged', resistance: 'physical' },
-  { name: 'HamptonBrandon', maxHp: 200, weakness: 'physical', resistance: 'special' },
-  { name: 'Knut', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
-  { name: 'ConnorEatsPants', maxHp: 200, weakness: 'special', resistance: 'physical' },
+  { name: 'LettieVision', maxHp: 200, weakness: 'physical', resistance: 'magic' },
+  { name: 'AdrianahLee', maxHp: 200, weakness: 'magic', resistance: 'special' },
+  { name: 'FloridaBoy', maxHp: 200, weakness: 'ranged', resistance: 'physical' },
+  { name: 'garydavid', maxHp: 200, weakness: 'special', resistance: 'ranged' },
+  { name: 'Nanapips', maxHp: 200, weakness: 'physical', resistance: 'special' },
+  { name: 'DDURANTV', maxHp: 200, weakness: 'magic', resistance: 'physical' },
+  { name: 'carldo', maxHp: 200, weakness: 'ranged', resistance: 'magic' },
+  { name: 'Slightlyhomeless', maxHp: 200, weakness: 'special', resistance: 'physical' },
+  { name: 'Muratstyle', maxHp: 200, weakness: 'physical', resistance: 'ranged' },
+  { name: 'mhyochi', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
 ];
 
 const BOSS_KEY = 'boss_active';
@@ -1503,6 +1523,8 @@ const BOSS_REWARD_POOL = 100;
 const BOSS_ATTACK_COOLDOWN_MS = 5_000;
 const BOSS_ATTACK_COOLDOWN_KEY = 'boss_attack_cd';
 const BOSS_REMINDER_INTERVAL_MS = 60_000;
+const BOSS_RECENT_KEY = 'boss_recent_names';
+const BOSS_RECENT_MAX = 20;
 
 interface BossState {
   name: string;
@@ -1530,10 +1552,28 @@ const BOSS_REMINDER_MESSAGES = [
 export async function getBossReminder(): Promise<string | null> {
   const boss = await kv.get<BossState>(BOSS_KEY);
   if (!boss) return null;
-  if (Date.now() - boss.startedAt >= BOSS_WINDOW_MS) return null;
+  const elapsed = Date.now() - boss.startedAt;
+  if (elapsed >= BOSS_WINDOW_MS) return null;
+  if (elapsed < BOSS_WINDOW_MS / 2) return null;
   if (Date.now() - boss.lastAttackAt < BOSS_REMINDER_INTERVAL_MS) return null;
   const msg = BOSS_REMINDER_MESSAGES[Math.floor(Math.random() * BOSS_REMINDER_MESSAGES.length)];
   return msg(boss.name, boss.hp, boss.maxHp, boss.weakness);
+}
+
+export function getAttackList(): string {
+  const grouped: Record<string, string[]> = {};
+  for (const [word, cat] of Object.entries(ATTACK_WORDS)) {
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(word);
+  }
+  const MAX_PER_CAT = 6;
+  return Object.entries(grouped)
+    .map(([cat, words]) => {
+      const sample = words.slice(0, MAX_PER_CAT).join(', ');
+      const more = words.length > MAX_PER_CAT ? ` +${words.length - MAX_PER_CAT} more` : '';
+      return `${cat}: ${sample}${more}`;
+    })
+    .join(' | ');
 }
 
 export async function startBossEvent(): Promise<string> {
@@ -1543,7 +1583,12 @@ export async function startBossEvent(): Promise<string> {
     const attackerCount = Object.keys(existing.attackers).length;
     return `⚔️ ${existing.name} is still alive! ${existing.hp}/${existing.maxHp} HP (${hpPct}%). ${attackerCount} attacker${attackerCount !== 1 ? 's' : ''} so far. Weak to ${existing.weakness}!`;
   }
-  const def = BOSS_ROSTER[Math.floor(Math.random() * BOSS_ROSTER.length)];
+  const recent = (await kv.get<string[]>(BOSS_RECENT_KEY)) ?? [];
+  const available = BOSS_ROSTER.filter(b => !recent.includes(b.name));
+  const pool = available.length > 0 ? available : BOSS_ROSTER;
+  const def = pool[Math.floor(Math.random() * pool.length)];
+  const updatedRecent = [...recent, def.name].slice(-BOSS_RECENT_MAX);
+  await kv.set(BOSS_RECENT_KEY, updatedRecent);
   const boss: BossState = {
     name: def.name, hp: def.maxHp, maxHp: def.maxHp,
     weakness: def.weakness, resistance: def.resistance,
@@ -1643,4 +1688,83 @@ export async function resetEventTimestamps(): Promise<void> {
     kv.del(CHAT_CHALLENGE_LAST_AT_KEY),
     kv.del(BOSS_LAST_AT_KEY),
   ]);
+}
+
+// --- Tazo Gifting & Requests ---
+
+const TAZO_REQUEST_KEY_PREFIX = 'tazo_request:';
+const TAZO_REQUEST_EXPIRE_SEC = 60;
+
+interface PendingTazoRequest {
+  requester: string;
+  requesterDisplay: string;
+  amount: number;
+  createdAt: number;
+}
+
+function tazoRequestKey(target: string): string {
+  return `${TAZO_REQUEST_KEY_PREFIX}${target}`;
+}
+
+export async function giftTazos(senderUsername: string, recipientUsername: string, amount: number): Promise<string> {
+  const sender = normalizeUser(senderUsername);
+  const recipient = normalizeUser(recipientUsername);
+  if (sender === recipient) return '🎁 You can\'t gift tazos to yourself.';
+  if (amount < 1) return '🎁 Minimum gift is 1 tazo.';
+
+  const { ok, balance } = await deductTazos(sender, amount);
+  if (!ok) return `🎁 Not enough tazos (have ${balance}).`;
+
+  const recipientBal = await addTazos(recipient, amount);
+  const senderBal = balance - amount;
+  return `🎁 ${senderUsername.trim()} gifted ${amount} tazos to ${recipientUsername.trim()}! (${senderBal} | ${recipientBal} tazos)`;
+}
+
+export async function requestTazos(requesterUsername: string, targetUsername: string, amount: number): Promise<string> {
+  const requester = normalizeUser(requesterUsername);
+  const target = normalizeUser(targetUsername);
+  if (requester === target) return '🙏 You can\'t ask yourself for tazos.';
+  if (amount < 1) return '🙏 Minimum request is 1 tazo.';
+
+  const req: PendingTazoRequest = {
+    requester,
+    requesterDisplay: requesterUsername.trim(),
+    amount,
+    createdAt: Date.now(),
+  };
+  await kv.set(tazoRequestKey(target), req, { ex: TAZO_REQUEST_EXPIRE_SEC });
+  return `🙏 ${requesterUsername.trim()} is asking ${targetUsername.trim()} for ${amount} tazos! accept or deny (60s)`;
+}
+
+export async function acceptTazoRequest(targetUsername: string): Promise<string | null> {
+  const target = normalizeUser(targetUsername);
+  const raw = await kv.get<PendingTazoRequest>(tazoRequestKey(target));
+  if (!raw) return null;
+
+  const req = raw as PendingTazoRequest;
+  if (Date.now() - req.createdAt > TAZO_REQUEST_EXPIRE_SEC * 1000) {
+    await kv.del(tazoRequestKey(target));
+    return null;
+  }
+
+  const { ok, balance } = await deductTazos(target, req.amount);
+  if (!ok) {
+    await kv.del(tazoRequestKey(target));
+    return `🎁 Not enough tazos to give (have ${balance}). Request cancelled.`;
+  }
+
+  const requesterBal = await addTazos(req.requester, req.amount);
+  await kv.del(tazoRequestKey(target));
+  const targetBal = balance - req.amount;
+  return `🎁 ${targetUsername.trim()} gave ${req.requesterDisplay} ${req.amount} tazos! (${targetBal} | ${requesterBal} tazos)`;
+}
+
+export async function denyTazoRequest(targetUsername: string): Promise<string | null> {
+  const target = normalizeUser(targetUsername);
+  const raw = await kv.get<PendingTazoRequest>(tazoRequestKey(target));
+  if (!raw) return null;
+
+  const req = raw as PendingTazoRequest;
+  await kv.del(tazoRequestKey(target));
+  return `❌ ${targetUsername.trim()} denied ${req.requesterDisplay}'s request.`;
 }

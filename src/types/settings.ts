@@ -65,6 +65,7 @@ export interface OverlaySettings {
   coinflipEnabled?: boolean;
   duelEnabled?: boolean;
   heistEnabled?: boolean;
+  giftEnabled?: boolean;
   /** Utility command toggles. */
   convertEnabled?: boolean;
   mathEnabled?: boolean;
@@ -90,7 +91,12 @@ export interface OverlaySettings {
   subGoalCelebrationUntil?: number;
   kicksGoalCelebrationUntil?: number;
   /** Runtime: subs and kicks since stream start (from get-settings). */
-  streamGoals?: { subs: number; kicks: number };
+  streamGoals?: {
+    subs: number;
+    kicks: number;
+    topSubGifter?: { username: string; amount: number };
+    topKicksGifter?: { username: string; amount: number };
+  };
 }
 
 // Default settings (single source of truth)
@@ -133,6 +139,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   coinflipEnabled: true,
   duelEnabled: true,
   heistEnabled: true,
+  giftEnabled: true,
   convertEnabled: true,
   mathEnabled: true,
   showSubGoal: false,
@@ -183,6 +190,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   coinflipEnabled: 'boolean',
   duelEnabled: 'boolean',
   heistEnabled: 'boolean',
+  giftEnabled: 'boolean',
   convertEnabled: 'boolean',
   mathEnabled: 'boolean',
   showOverlayAlerts: 'boolean',

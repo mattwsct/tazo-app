@@ -73,7 +73,7 @@ export function parseRankCommand(content: string): { question: string; options: 
   const filtered = parts.filter((p) => !BANNED_OPTION_WORDS.has(p.toLowerCase()));
   if (filtered.length < 2) return null;
 
-  const question = `Which is best? ${filtered.join(' vs ')}`;
+  const question = 'Cast your vote!';
   const options = filtered.map((label) => ({ label, votes: 0, voters: {} }));
   return { question, options };
 }

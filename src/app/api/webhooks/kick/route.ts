@@ -27,12 +27,13 @@ import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
   trackChallengeMessage, checkParticipationStreak, resetEventTimestamps,
+  getAttackList, giftTazos, requestTazos, acceptTazoRequest, denyTazoRequest,
 } from '@/utils/blackjack-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
-import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
+import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals, trackSubGifter, trackKicksGifter } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
@@ -276,6 +277,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
+    if (trimmedLower === '!attacks') {
+      const list = getAttackList();
+      const accessToken = await getValidAccessToken();
+      if (accessToken) {
+        try { await sendKickChatMessage(accessToken, `⚔️ ${list}`); } catch {}
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
     const parsed = parseKickChatMessage(content);
     if (parsed) {
       const response = await handleKickChatCommand(parsed, sender);
@@ -325,10 +335,16 @@ export async function POST(request: NextRequest) {
       if (bjResponse) { await replyNonCmd(bjResponse); return NextResponse.json({ received: true }, { status: 200 }); }
     }
 
-    // 5. Bare-word duel accept
+    // 5. Bare-word accept/deny (duels + tazo requests)
     if (bareWord === 'accept') {
       const acceptResponse = await handleKickChatCommand({ cmd: 'accept' }, sender);
       if (acceptResponse) { await replyNonCmd(acceptResponse); return NextResponse.json({ received: true }, { status: 200 }); }
+      const tazoAccept = await acceptTazoRequest(sender);
+      if (tazoAccept) { await replyNonCmd(tazoAccept); return NextResponse.json({ received: true }, { status: 200 }); }
+    }
+    if (bareWord === 'deny') {
+      const tazoDeny = await denyTazoRequest(sender);
+      if (tazoDeny) { await replyNonCmd(tazoDeny); return NextResponse.json({ received: true }, { status: 200 }); }
     }
 
     // 6. Challenge message tracking (always, silent)
@@ -485,6 +501,7 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
+        ...(gifterUser ? [trackSubGifter(gifterUser, count)] : []),
         ...(gifterUser && subGiftChipRewards ? [addTazosAsAdmin(gifterUser, 25 * count)] : []),
       ]);
       didAlertOrLeaderboard = true;
@@ -511,6 +528,7 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),
+        ...(kickUser ? [trackKicksGifter(kickUser, amount)] : []),
         ...(kickUser && subGiftChipRewards ? [addTazosAsAdmin(kickUser, 10 * amount)] : []),
       ]);
       didAlertOrLeaderboard = true;

@@ -97,7 +97,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
             <div className="step-counter-row">
               <span className="step-counter-icon">👟</span>
               <span className="step-counter-value">{(animatedSteps ?? 0).toLocaleString()}</span>
-              <span className="step-counter-label">steps</span>
             </div>
           </div>
         );

@@ -44,6 +44,8 @@ import {
   joinOrStartHeist,
   getHeistStatus,
   checkAndResolveExpiredHeist,
+  giftTazos,
+  requestTazos,
 } from '@/utils/blackjack-storage';
 import {
   parseConvertArgs,
@@ -175,6 +177,9 @@ export const KICK_CHAT_COMMANDS = [
   'convert',
   'cv',
   'math',
+  'gift',
+  'ask',
+  'beg',
 ] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
@@ -222,6 +227,8 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'heist') return { cmd: 'heist', arg };
   if (cmd === 'convert' || cmd === 'cv') return { cmd: 'convert', arg: parts.slice(1).join(' ') };
   if (cmd === 'math' || cmd === 'calc') return { cmd: 'math', arg: parts.slice(1).join(' ') };
+  if (cmd === 'gift') return { cmd: 'gift', arg: parts.slice(1).join(' ') };
+  if (cmd === 'ask' || cmd === 'beg') return { cmd: 'ask', arg: parts.slice(1).join(' ') };
   return null;
 }
 
@@ -451,6 +458,28 @@ export async function handleKickChatCommand(
       return '🏦 !heist [amount] — Start or join a group heist. Default 5 tazos. More robbers = better odds!';
     }
     return joinOrStartHeist(user, bet);
+  }
+  if (cmd === 'gift') {
+    if (!user) return null;
+    if (!(await isSettingEnabled('giftEnabled'))) return null;
+    const args = splitArgs(arg);
+    let target = args[0] ?? '';
+    if (target.startsWith('@')) target = target.slice(1);
+    if (!target) return '🎁 Usage: !gift @user <amount>';
+    const amount = parseInt(args[1] ?? '', 10);
+    if (isNaN(amount) || amount < 1) return '🎁 Usage: !gift @user <amount>';
+    return giftTazos(user, target, amount);
+  }
+  if (cmd === 'ask') {
+    if (!user) return null;
+    if (!(await isSettingEnabled('giftEnabled'))) return null;
+    const args = splitArgs(arg);
+    let target = args[0] ?? '';
+    if (target.startsWith('@')) target = target.slice(1);
+    if (!target) return '🙏 Usage: !ask @user <amount>';
+    const amount = parseInt(args[1] ?? '', 10);
+    if (isNaN(amount) || amount < 1) return '🙏 Usage: !ask @user <amount>';
+    return requestTazos(user, target, amount);
   }
   return null;
 }

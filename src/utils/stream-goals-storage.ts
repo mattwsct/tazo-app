@@ -8,6 +8,8 @@ import { getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
 
 const STREAM_GOALS_SUBS_KEY = 'stream_goals_subs';
 const STREAM_GOALS_KICKS_KEY = 'stream_goals_kicks';
+const STREAM_TOP_SUB_GIFTERS_KEY = 'stream_top_sub_gifters';
+const STREAM_TOP_KICKS_GIFTERS_KEY = 'stream_top_kicks_gifters';
 
 async function ensureSessionStarted(): Promise<void> {
   const started = await getStreamStartedAt();
@@ -19,8 +21,12 @@ async function ensureSessionStarted(): Promise<void> {
 /** Reset goals and targets when stream starts. */
 export async function resetStreamGoalsOnStreamStart(): Promise<void> {
   try {
-    await kv.set(STREAM_GOALS_SUBS_KEY, 0);
-    await kv.set(STREAM_GOALS_KICKS_KEY, 0);
+    await Promise.all([
+      kv.set(STREAM_GOALS_SUBS_KEY, 0),
+      kv.set(STREAM_GOALS_KICKS_KEY, 0),
+      kv.del(STREAM_TOP_SUB_GIFTERS_KEY),
+      kv.del(STREAM_TOP_KICKS_GIFTERS_KEY),
+    ]);
     const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
     await kv.set('overlay_settings', {
       ...settings,
@@ -56,16 +62,58 @@ export async function addStreamGoalKicks(amount: number): Promise<void> {
   }
 }
 
-/** Get subs and kicks since stream start. */
-export async function getStreamGoals(): Promise<{ subs: number; kicks: number }> {
+/** Track a sub gifter's contribution this stream. */
+export async function trackSubGifter(username: string, count: number): Promise<void> {
+  if (!username || count <= 0) return;
   try {
-    const [subs, kicks] = await kv.mget<[number | null, number | null]>(
-      STREAM_GOALS_SUBS_KEY,
-      STREAM_GOALS_KICKS_KEY
-    );
+    const data = (await kv.get<Record<string, number>>(STREAM_TOP_SUB_GIFTERS_KEY)) ?? {};
+    data[username] = (data[username] ?? 0) + count;
+    await kv.set(STREAM_TOP_SUB_GIFTERS_KEY, data);
+  } catch (e) {
+    console.warn('[StreamGoals] Failed to track sub gifter:', e);
+  }
+}
+
+/** Track a kicks gifter's contribution this stream. */
+export async function trackKicksGifter(username: string, amount: number): Promise<void> {
+  if (!username || amount <= 0) return;
+  try {
+    const data = (await kv.get<Record<string, number>>(STREAM_TOP_KICKS_GIFTERS_KEY)) ?? {};
+    data[username] = (data[username] ?? 0) + amount;
+    await kv.set(STREAM_TOP_KICKS_GIFTERS_KEY, data);
+  } catch (e) {
+    console.warn('[StreamGoals] Failed to track kicks gifter:', e);
+  }
+}
+
+function topFromRecord(data: Record<string, number> | null): { username: string; amount: number } | undefined {
+  if (!data) return undefined;
+  let best: { username: string; amount: number } | undefined;
+  for (const [username, amount] of Object.entries(data)) {
+    if (!best || amount > best.amount) best = { username, amount };
+  }
+  return best;
+}
+
+/** Get subs, kicks, and top gifters since stream start. */
+export async function getStreamGoals(): Promise<{
+  subs: number;
+  kicks: number;
+  topSubGifter?: { username: string; amount: number };
+  topKicksGifter?: { username: string; amount: number };
+}> {
+  try {
+    const [subs, kicks, subGifters, kicksGifters] = await Promise.all([
+      kv.get<number>(STREAM_GOALS_SUBS_KEY),
+      kv.get<number>(STREAM_GOALS_KICKS_KEY),
+      kv.get<Record<string, number>>(STREAM_TOP_SUB_GIFTERS_KEY),
+      kv.get<Record<string, number>>(STREAM_TOP_KICKS_GIFTERS_KEY),
+    ]);
     return {
       subs: Math.max(0, subs ?? 0),
       kicks: Math.max(0, kicks ?? 0),
+      topSubGifter: topFromRecord(subGifters),
+      topKicksGifter: topFromRecord(kicksGifters),
     };
   } catch {
     return { subs: 0, kicks: 0 };
