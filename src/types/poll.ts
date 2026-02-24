@@ -26,10 +26,6 @@ export interface PollState {
   topVoter?: { username: string; count: number };
   /** Our poll-start message ID (for threading winner reply) */
   startMessageId?: string;
-  /** 'open' = any chat message becomes an option; 'closed' = predefined options only */
-  mode?: 'closed' | 'open';
-  /** Open-ended: username -> their normalized response (one vote per person) */
-  openVoters?: Record<string, string>;
 }
 
 export interface QueuedPoll {

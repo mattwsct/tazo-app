@@ -1661,7 +1661,7 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="poll" title="🗳️ Poll">
+          <CollapsibleSection id="poll" title="🗳️ Poll & Rank">
             <div className="setting-group">
                   <div className="form-stack" style={{ maxWidth: 520 }}>
                     <label className="checkbox-label-row">
@@ -1872,6 +1872,10 @@ export default function AdminPage() {
                             ))}
                           </select>
                         </div>
+                        <p style={{ fontSize: 12, color: '#999', margin: '8px 0 0' }}>
+                          <strong>!poll</strong> Question? Option1, Option2 — defaults to Yes/No if no options given.<br />
+                          <strong>!rank</strong> Option1, Option2, Option3 — viewers vote for their favorite.
+                        </p>
                       </>
                     )}
                   </div>

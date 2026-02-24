@@ -7,6 +7,7 @@ import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } f
 import { setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 import {
   parsePollCommand,
+  parseRankCommand,
   parsePollDurationVariant,
   parseVote,
   canStartPoll,
@@ -18,7 +19,6 @@ import {
   POLL_QUESTION_MAX_LENGTH,
   POLL_OPTION_MAX_LENGTH,
 } from '@/lib/poll-logic';
-import { containsBlockedContent } from '@/lib/poll-content-filter';
 import {
   getPollState,
   getPollStateAndSettings,
@@ -128,11 +128,8 @@ function formatSecondsEstimate(sec: number): string {
 }
 
 /** Build chat message for when a poll starts: question + how to vote. Exported for cron. */
-export function buildPollStartMessage(question: string, options: { label: string }[], durationSeconds: number, mode?: 'closed' | 'open'): string {
+export function buildPollStartMessage(question: string, options: { label: string }[], durationSeconds: number): string {
   const timeStr = durationSeconds === 60 ? '60 seconds' : durationSeconds === 30 ? '30 seconds' : `${durationSeconds} seconds`;
-  if (mode === 'open') {
-    return `Poll started! ${question} Type your answer in chat! (${timeStr})`;
-  }
   const labels = options.map((o) => `'${o.label.toLowerCase()}'`);
   const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
   return `Poll started! ${question} Type ${optionStr} in chat to vote. (${timeStr})`;
@@ -223,8 +220,10 @@ export async function handleChatPoll(
   const isBarePoll = contentLower === '!poll' || /^!poll\s*$/.test(contentLower) || (durationVariant !== null && durationVariant.rest.length === 0);
   const isPollStatus = contentLower === '!pollstatus' || contentLower === '!poll status';
   const isEndPoll = contentLower === '!endpoll';
+  const isRankCmd = contentLower.startsWith('!rank ');
+  const isBareRank = contentLower === '!rank' || /^!rank\s*$/.test(contentLower);
 
-  const needsChat = isEndPoll || isPollStatus || isBarePoll || isPollCmd ||
+  const needsChat = isEndPoll || isPollStatus || isBarePoll || isPollCmd || isRankCmd || isBareRank ||
     (initialState?.status === 'winner') || (initialState?.status === 'active');
   const token = needsChat ? await getValidAccessToken() : null;
   const messageId = (payload.id ?? payload.message_id) as string | undefined;
@@ -267,7 +266,7 @@ export async function handleChatPoll(
 
   // --- Winner display expired: clear and start next queued poll ---
   if (
-    !isPollCmd &&
+    !isPollCmd && !isRankCmd &&
     initialState?.status === 'winner' &&
     initialState.winnerDisplayUntil != null &&
     Date.now() >= initialState.winnerDisplayUntil
@@ -289,21 +288,28 @@ export async function handleChatPoll(
 
   // --- !poll with no args: show usage ---
   if (isBarePoll) {
-    await replyChat(token, 'Usage: !poll Question? Option1, Option2 — or !poll Question? (no options = open-ended)', messageId);
+    await replyChat(token, 'Usage: !poll Question? Option1, Option2 — defaults to Yes/No if no options given', messageId);
     return { handled: true };
   }
 
-  // --- !poll command: start or queue ---
-  if (isPollCmd) {
-    const inputToParse = durationVariant ? `!poll ${durationVariant.rest}` : contentTrimmed;
-    const parsed = parsePollCommand(inputToParse);
+  // --- !rank with no args: show usage ---
+  if (isBareRank) {
+    await replyChat(token, 'Usage: !rank Option1, Option2, Option3 — viewers vote for their favorite', messageId);
+    return { handled: true };
+  }
+
+  // --- !poll or !rank command: start or queue ---
+  if (isPollCmd || isRankCmd) {
+    const parsed = isRankCmd
+      ? parseRankCommand(contentTrimmed)
+      : parsePollCommand(durationVariant ? `!poll ${durationVariant.rest}` : contentTrimmed);
     if (!parsed) return { handled: true };
 
     const effectiveDuration = durationVariant?.duration ?? settings.durationSeconds;
 
     const validationError =
-      (parsed.mode !== 'open' && parsed.options.length > 5) ? 'Maximum 5 options allowed.' :
-      (parsed.mode !== 'open' && hasDuplicateOptions(parsed.options)) ? 'Duplicate options are not allowed (e.g. "yes, yes"). Use distinct options.' :
+      (parsed.options.length > 5) ? 'Maximum 5 options allowed.' :
+      (hasDuplicateOptions(parsed.options)) ? 'Duplicate options are not allowed (e.g. "yes, yes"). Use distinct options.' :
       pollExceedsLength(parsed.question, parsed.options) ? `Question max ${POLL_QUESTION_MAX_LENGTH} chars, each option max ${POLL_OPTION_MAX_LENGTH} chars.` :
       pollContainsInvalidChars(parsed.question, parsed.options) ? 'Question and options cannot contain control characters or invisible/special Unicode.' :
       pollContainsBlockedContent(parsed.question, parsed.options) ? 'Poll rejected: question or options contain inappropriate content.' :
@@ -352,11 +358,9 @@ export async function handleChatPoll(
           startedAt: Date.now(),
           durationSeconds: effectiveDuration,
           status: 'active',
-          mode: parsed.mode,
-          ...(parsed.mode === 'open' ? { openVoters: {} } : {}),
         };
         await setPollState(state);
-        const sent = await replyChat(token, buildPollStartMessage(parsed.question, parsed.options, effectiveDuration, parsed.mode), messageId);
+        const sent = await replyChat(token, buildPollStartMessage(parsed.question, parsed.options, effectiveDuration), messageId);
         const msgId = sent?.message_id ?? sent?.id;
         if (msgId) {
           state.startMessageId = String(msgId);
@@ -399,11 +403,9 @@ export async function handleChatPoll(
       startedAt: Date.now(),
       durationSeconds: effectiveDuration,
       status: 'active',
-      mode: parsed.mode,
-      ...(parsed.mode === 'open' ? { openVoters: {} } : {}),
     };
     await setPollState(state);
-    const sent = await replyChat(token, buildPollStartMessage(parsed.question, parsed.options, effectiveDuration, parsed.mode), messageId);
+    const sent = await replyChat(token, buildPollStartMessage(parsed.question, parsed.options, effectiveDuration), messageId);
     const msgId = sent?.message_id ?? sent?.id;
     if (msgId) {
       state.startMessageId = String(msgId);
@@ -445,45 +447,6 @@ export async function handleChatPoll(
       topVoter,
     };
     await setPollState(winnerState);
-    return { handled: true };
-  }
-
-  // Open-ended poll: any chat message becomes a vote/option
-  if (initialState.mode === 'open') {
-    const raw = contentTrimmed.trim();
-    if (raw.startsWith('!') || raw.length < 2 || raw.length > 50) return { handled: false };
-    const normalized = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-    if (!normalized || containsBlockedContent(normalized)) return { handled: false };
-
-    const voters = initialState.openVoters ?? {};
-    const userKey = senderUsername.toLowerCase();
-    if (voters[userKey]) return { handled: true };
-
-    const MAX_OPEN_OPTIONS = 20;
-    let matchIdx = -1;
-    for (let i = 0; i < initialState.options.length; i++) {
-      if (initialState.options[i].label.toLowerCase() === normalized) {
-        matchIdx = i;
-        break;
-      }
-    }
-
-    if (matchIdx >= 0) {
-      initialState.options[matchIdx].votes += 1;
-      if (!initialState.options[matchIdx].voters) initialState.options[matchIdx].voters = {};
-      initialState.options[matchIdx].voters![userKey] = 1;
-    } else if (initialState.options.length < MAX_OPEN_OPTIONS) {
-      initialState.options.push({ label: raw, votes: 1, voters: { [userKey]: 1 } });
-    } else {
-      return { handled: false };
-    }
-
-    voters[userKey] = normalized;
-    initialState.openVoters = voters;
-    void setLeaderboardDisplayName(userKey, senderUsername);
-    const stateNow = await getPollState();
-    if (stateNow?.id !== initialState.id) return { handled: true };
-    await setPollState(initialState);
     return { handled: true };
   }
 

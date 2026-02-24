@@ -34,8 +34,8 @@ export function parsePollDurationVariant(content: string): { duration: number; r
   return { duration, rest };
 }
 
-/** Parse !poll <question?> [opts] — question before ?, options after. Comma-separated or space-separated. No options after ? = open-ended. No ? at all = closed Yes/No. */
-export function parsePollCommand(content: string): { question: string; options: PollOption[]; mode: 'closed' | 'open' } | null {
+/** Parse !poll <question?> [opts] — question before ?, options after. Comma-separated or space-separated. Defaults to Yes/No if no options given. */
+export function parsePollCommand(content: string): { question: string; options: PollOption[] } | null {
   const trimmed = content.trim();
   if (!trimmed.toLowerCase().startsWith('!poll ')) return null;
   const rest = trimmed.slice(6).trim();
@@ -43,10 +43,6 @@ export function parsePollCommand(content: string): { question: string; options: 
   const question = qMark >= 0 ? rest.slice(0, qMark + 1).trim() : rest;
   const after = qMark >= 0 ? rest.slice(qMark + 1).trim() : '';
   if (!question) return null;
-
-  if (qMark >= 0 && (!after || after.length === 0)) {
-    return { question, options: [], mode: 'open' };
-  }
 
   let options: PollOption[];
   if (!after || after.length === 0) {
@@ -63,7 +59,23 @@ export function parsePollCommand(content: string): { question: string; options: 
     if (filtered.length < 2) return null;
     options = filtered.map((label) => ({ label, votes: 0, voters: {} }));
   }
-  return { question, options, mode: 'closed' };
+  return { question, options };
+}
+
+/** Parse !rank opt1, opt2, opt3 — comma-separated options for a preference vote. */
+export function parseRankCommand(content: string): { question: string; options: PollOption[] } | null {
+  const trimmed = content.trim();
+  if (!trimmed.toLowerCase().startsWith('!rank ')) return null;
+  const rest = trimmed.slice(6).trim();
+  if (!rest) return null;
+
+  const parts = rest.split(',').map((p) => p.trim()).filter(Boolean);
+  const filtered = parts.filter((p) => !BANNED_OPTION_WORDS.has(p.toLowerCase()));
+  if (filtered.length < 2) return null;
+
+  const question = `Which is best? ${filtered.join(' vs ')}`;
+  const options = filtered.map((label) => ({ label, votes: 0, voters: {} }));
+  return { question, options };
 }
 
 /** Max lengths for poll content (chars). */
