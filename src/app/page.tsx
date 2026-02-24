@@ -1371,6 +1371,83 @@ export default function AdminPage() {
                       min={1}
                     />
                   </div>
+                  <div className="checkbox-group" style={{ marginTop: '12px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.autoRaffleEnabled !== false}
+                        onChange={(e) => handleSettingsChange({ autoRaffleEnabled: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Auto-raffle every ~30 min when live</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.chipDropsEnabled !== false}
+                        onChange={(e) => handleSettingsChange({ chipDropsEnabled: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Chip drops every ~15 min</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.chatChallengesEnabled !== false}
+                        onChange={(e) => handleSettingsChange({ chatChallengesEnabled: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Chat challenges every ~20-30 min</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.bossEventsEnabled !== false}
+                        onChange={(e) => handleSettingsChange({ bossEventsEnabled: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Boss events every ~45-60 min</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.winStreaksEnabled !== false}
+                        onChange={(e) => handleSettingsChange({ winStreaksEnabled: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Win streak bonuses</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.participationStreaksEnabled !== false}
+                        onChange={(e) => handleSettingsChange({ participationStreaksEnabled: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Participation streak rewards</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.subGiftChipRewards !== false}
+                        onChange={(e) => handleSettingsChange({ subGiftChipRewards: e.target.checked })}
+                        className="checkbox-input"
+                      />
+                      <span className="checkbox-text">Chip rewards for subs/gifts/kicks</span>
+                    </label>
+                  </div>
                 </>
               )}
               <div className="checkbox-group" style={{ marginTop: '16px', marginBottom: '12px' }}>

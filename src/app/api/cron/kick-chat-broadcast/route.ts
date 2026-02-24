@@ -30,7 +30,13 @@ import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightT
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
-import { checkAndResolveExpiredHeist, resolveRaffle, shouldStartRaffle, startRaffle, resolveTopChatter } from '@/utils/blackjack-storage';
+import {
+  checkAndResolveExpiredHeist, resolveRaffle, shouldStartRaffle, startRaffle, resolveTopChatter,
+  shouldStartChipDrop, startChipDrop, resolveExpiredChipDrop,
+  shouldStartChatChallenge, startChatChallenge, resolveChatChallenge,
+  shouldStartBossEvent, startBossEvent, resolveExpiredBoss,
+  hasActiveEvent,
+} from '@/utils/blackjack-storage';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
@@ -76,7 +82,7 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-    kv.get<{ locationDisplay?: string; customLocation?: string }>(OVERLAY_SETTINGS_KEY),
+    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; chatChallengesEnabled?: boolean; bossEventsEnabled?: boolean }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
@@ -422,7 +428,7 @@ export async function GET(request: NextRequest) {
     console.error('[Cron HR] HEIST_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
-  // Auto-raffle: resolve expired, then maybe start a new one (only when live)
+  // Raffle: always resolve expired ones (could be manual), only auto-start if enabled
   if (isLive) {
     try {
       const raffleResult = await resolveRaffle();
@@ -431,7 +437,8 @@ export async function GET(request: NextRequest) {
         sent++;
         console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
       }
-      if (await shouldStartRaffle()) {
+      const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
+      if (autoRaffleEnabled && await shouldStartRaffle()) {
         const announcement = await startRaffle();
         await sendKickChatMessage(accessToken, announcement);
         sent++;
@@ -439,6 +446,63 @@ export async function GET(request: NextRequest) {
       }
     } catch (err) {
       console.error('[Cron HR] RAFFLE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Chip drops: resolve/start (only when live)
+  if (isLive) {
+    try {
+      const dropResult = await resolveExpiredChipDrop();
+      if (dropResult) {
+        await sendKickChatMessage(accessToken, dropResult);
+        sent++;
+      }
+      const chipDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
+      if (chipDropsEnabled && !(await hasActiveEvent()) && await shouldStartChipDrop()) {
+        const announcement = await startChipDrop();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+      }
+    } catch (err) {
+      console.error('[Cron HR] CHIP_DROP_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Chat challenges: resolve/start (only when live)
+  if (isLive) {
+    try {
+      const challengeResult = await resolveChatChallenge();
+      if (challengeResult) {
+        await sendKickChatMessage(accessToken, challengeResult);
+        sent++;
+      }
+      const chatChallengesEnabled = overlaySettings?.chatChallengesEnabled !== false;
+      if (chatChallengesEnabled && !(await hasActiveEvent()) && await shouldStartChatChallenge()) {
+        const announcement = await startChatChallenge();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+      }
+    } catch (err) {
+      console.error('[Cron HR] CHAT_CHALLENGE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+
+  // Boss events: resolve/start (only when live)
+  if (isLive) {
+    try {
+      const bossResult = await resolveExpiredBoss();
+      if (bossResult) {
+        await sendKickChatMessage(accessToken, bossResult);
+        sent++;
+      }
+      const bossEventsEnabled = overlaySettings?.bossEventsEnabled !== false;
+      if (bossEventsEnabled && !(await hasActiveEvent()) && await shouldStartBossEvent()) {
+        const announcement = await startBossEvent();
+        await sendKickChatMessage(accessToken, announcement);
+        sent++;
+      }
+    } catch (err) {
+      console.error('[Cron HR] BOSS_EVENT_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
   }
 

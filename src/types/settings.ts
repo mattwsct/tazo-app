@@ -41,6 +41,20 @@ export interface OverlaySettings {
   chipRewardTitle?: string;
   /** Chips granted per channel point redemption (when chipRewardTitle matches). */
   chipRewardChips?: number;
+  /** Auto-start raffles every ~30 min when live. */
+  autoRaffleEnabled?: boolean;
+  /** Auto chip drops every ~15 min. */
+  chipDropsEnabled?: boolean;
+  /** Chat challenges every ~20-30 min. */
+  chatChallengesEnabled?: boolean;
+  /** Boss events every ~45-60 min. */
+  bossEventsEnabled?: boolean;
+  /** Win streak bonuses on gambling wins. */
+  winStreaksEnabled?: boolean;
+  /** Participation streak rewards. */
+  participationStreaksEnabled?: boolean;
+  /** Chip rewards for subs, gifts, kicks. */
+  subGiftChipRewards?: boolean;
   /** Runtime: top chips (from get-settings). */
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
@@ -122,6 +136,13 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   gamblingLeaderboardTopN: 'number',
   chipRewardTitle: 'string',
   chipRewardChips: 'number',
+  autoRaffleEnabled: 'boolean',
+  chipDropsEnabled: 'boolean',
+  chatChallengesEnabled: 'boolean',
+  bossEventsEnabled: 'boolean',
+  winStreaksEnabled: 'boolean',
+  participationStreaksEnabled: 'boolean',
+  subGiftChipRewards: 'boolean',
   showOverlayAlerts: 'boolean',
   showSubGoal: 'boolean',
   subGoalTarget: 'number',

@@ -23,7 +23,12 @@ import {
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
-import { addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin, trackChatActivity } from '@/utils/blackjack-storage';
+import {
+  addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin,
+  trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryChipDropEntry, tryBossAttack,
+  trackChallengeMessage, checkParticipationStreak,
+} from '@/utils/blackjack-storage';
+import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
@@ -225,18 +230,101 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    const parsed = parseKickChatMessage(content);
-    if (!parsed) return NextResponse.json({ received: true }, { status: 200 });
-    const response = await handleKickChatCommand(parsed, sender);
-    if (!response) return NextResponse.json({ received: true }, { status: 200 });
-    const accessToken = await getValidAccessToken();
-    if (!accessToken) return NextResponse.json({ received: true }, { status: 200 });
-    const messageId = (payload.id ?? payload.message_id) as string | undefined;
-    try {
-      await sendKickChatMessage(accessToken, response, messageId ? { replyToMessageId: messageId } : undefined);
-    } catch (err) {
-      console.error('[Kick webhook] Chat command failed:', err instanceof Error ? err.message : String(err));
+    // !raffle — broadcaster/mod only: manually start a raffle
+    const trimmedLower = content.trim().toLowerCase();
+    if (trimmedLower === '!raffle' || trimmedLower.startsWith('!raffle ')) {
+      const senderObj = payload.sender as Record<string, unknown> | undefined;
+      const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+      const isAuthorized = (() => {
+        if (!senderObj || typeof senderObj !== 'object') return false;
+        const identity = senderObj.identity as Record<string, unknown> | undefined;
+        const role = String(identity?.role ?? senderObj.role ?? '').toLowerCase();
+        const rolesArr = senderObj.roles as string[] | undefined;
+        const rolesLower = Array.isArray(rolesArr) ? rolesArr.map((r) => String(r).toLowerCase()) : [];
+        if (role === 'moderator' || role === 'owner' || role === 'broadcaster') return true;
+        if (rolesLower.includes('moderator') || rolesLower.includes('owner') || rolesLower.includes('broadcaster')) return true;
+        if (senderObj.is_moderator === true || senderObj.moderator === true || senderObj.isModerator === true) return true;
+        if (sender.toLowerCase() === (broadcasterSlug ?? '').toLowerCase()) return true;
+        return false;
+      })();
+      if (isAuthorized) {
+        const raffleReply = await startRaffle();
+        const accessToken = await getValidAccessToken();
+        if (accessToken) {
+          try {
+            await sendKickChatMessage(accessToken, raffleReply);
+          } catch (err) {
+            console.error('[Kick webhook] !raffle reply failed:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
     }
+
+    const parsed = parseKickChatMessage(content);
+    if (parsed) {
+      const response = await handleKickChatCommand(parsed, sender);
+      if (response) {
+        const accessToken = await getValidAccessToken();
+        if (accessToken) {
+          const messageId = (payload.id ?? payload.message_id) as string | undefined;
+          try {
+            await sendKickChatMessage(accessToken, response, messageId ? { replyToMessageId: messageId } : undefined);
+          } catch (err) {
+            console.error('[Kick webhook] Chat command failed:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    // Non-command messages: check raffle, drops, boss, bare-word actions, challenges
+    const replyNonCmd = async (msg: string) => {
+      const accessToken = await getValidAccessToken();
+      if (accessToken) {
+        const messageId = (payload.id ?? payload.message_id) as string | undefined;
+        try {
+          await sendKickChatMessage(accessToken, msg, messageId ? { replyToMessageId: messageId } : undefined);
+        } catch { /* silent */ }
+      }
+    };
+
+    // 1. Raffle keyword
+    const raffleEntry = await tryRaffleKeywordEntry(sender, content);
+    if (raffleEntry) { await replyNonCmd(raffleEntry); return NextResponse.json({ received: true }, { status: 200 }); }
+
+    // 2. Chip drop keyword
+    const dropEntry = await tryChipDropEntry(sender, content);
+    if (dropEntry) { await replyNonCmd(dropEntry); return NextResponse.json({ received: true }, { status: 200 }); }
+
+    // 3. Boss attack word
+    const bossHit = await tryBossAttack(sender, content);
+    if (bossHit) { await replyNonCmd(bossHit); return NextResponse.json({ received: true }, { status: 200 }); }
+
+    // 4. Bare-word blackjack actions (hit, stand, double, split)
+    const bareWord = content.trim().toLowerCase();
+    const bareBlackjackCmds: Record<string, 'hit' | 'stand' | 'double' | 'split'> = { hit: 'hit', stand: 'stand', double: 'double', split: 'split' };
+    const bjCmd = bareBlackjackCmds[bareWord];
+    if (bjCmd) {
+      const bjResponse = await handleKickChatCommand({ cmd: bjCmd }, sender);
+      if (bjResponse) { await replyNonCmd(bjResponse); return NextResponse.json({ received: true }, { status: 200 }); }
+    }
+
+    // 5. Bare-word duel accept
+    if (bareWord === 'accept') {
+      const acceptResponse = await handleKickChatCommand({ cmd: 'accept' }, sender);
+      if (acceptResponse) { await replyNonCmd(acceptResponse); return NextResponse.json({ received: true }, { status: 200 }); }
+    }
+
+    // 6. Challenge message tracking (always, silent)
+    void trackChallengeMessage(sender);
+
+    // 7. Participation streak check (fire-and-forget)
+    void (async () => {
+      const streakMsg = await checkParticipationStreak(sender);
+      if (streakMsg) await replyNonCmd(streakMsg);
+    })();
+
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
@@ -321,6 +409,8 @@ export async function POST(request: NextRequest) {
 
   // Push overlay alerts for follows, subs, gifts, kicks
   const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
+  const subGiftSettings = await kv.get<{ subGiftChipRewards?: boolean }>('overlay_settings');
+  const subGiftChipRewards = subGiftSettings?.subGiftChipRewards !== false;
   let didAlertOrLeaderboard = false;
   if (eventNorm === 'channel.followed') {
     const follower = getUsername(payload.follower);
@@ -328,9 +418,11 @@ export async function POST(request: NextRequest) {
   } else if (eventNorm === 'channel.subscription.new') {
     const subscriber = payload.subscriber;
     if (subscriber) {
+      const subUser = getUsername(subscriber);
       await Promise.all([
         addStreamGoalSubs(1),
         pushSubAlert(subscriber),
+        ...(subUser && subGiftChipRewards ? [addChipsAsAdmin(subUser, 25)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
@@ -344,9 +436,11 @@ export async function POST(request: NextRequest) {
     const subscriber = payload.subscriber;
     const duration = (payload.duration as number) ?? 0;
     if (subscriber) {
+      const resubUser = getUsername(subscriber);
       await Promise.all([
         addStreamGoalSubs(1),
         pushResubAlert(subscriber, duration > 0 ? duration : undefined),
+        ...(resubUser && subGiftChipRewards ? [addChipsAsAdmin(resubUser, 25)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
@@ -361,9 +455,11 @@ export async function POST(request: NextRequest) {
     const giftees = (payload.giftees as unknown[]) ?? [];
     const count = giftees.length > 0 ? giftees.length : 1;
     if (gifter) {
+      const gifterUser = getUsername(gifter);
       await Promise.all([
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
+        ...(gifterUser && subGiftChipRewards ? [addChipsAsAdmin(gifterUser, 25 * count)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
@@ -379,9 +475,11 @@ export async function POST(request: NextRequest) {
     const amount = Number(gift?.amount ?? 0);
     const giftName = gift?.name as string | undefined;
     if (sender && amount > 0) {
+      const kickUser = getUsername(sender);
       await Promise.all([
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),
+        ...(kickUser && subGiftChipRewards ? [addChipsAsAdmin(kickUser, 10 * amount)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([

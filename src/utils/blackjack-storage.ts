@@ -540,8 +540,10 @@ export async function playCoinflip(username: string, betAmount: number): Promise
 
   if (Math.random() < 0.5) {
     const bal = await addChips(user, bet * 2);
-    return `🎲 You won ${bet} chips! (${bal} chips)`;
+    const streak = await recordWin(user);
+    return `🎲 You won ${bet} chips! (${bal} chips)${streak}`;
   }
+  await recordLoss(user);
   return `🎲 You lost ${bet} chips. (${result.balance} chips)`;
 }
 
@@ -578,7 +580,8 @@ export async function playSlots(username: string, betAmount: number): Promise<st
     const mult = SLOT_MULTIPLIERS[reels[0]];
     const win = bet * mult;
     const bal = await addChips(user, win);
-    return `🎰 [ ${display} ] JACKPOT! ${mult}x — Won ${win - bet} chips! (${bal} chips)`;
+    const streak = await recordWin(user);
+    return `🎰 [ ${display} ] JACKPOT! ${mult}x — Won ${win - bet} chips! (${bal} chips)${streak}`;
   }
   if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
     const match = reels[0] === reels[1] ? reels[0] : reels[1];
@@ -586,10 +589,13 @@ export async function playSlots(username: string, betAmount: number): Promise<st
     const win = bet * mult;
     const bal = await addChips(user, win);
     const net = win - bet;
-    return net > 0
-      ? `🎰 [ ${display} ] Two match! ${mult}x — Won ${net} chips! (${bal} chips)`
-      : `🎰 [ ${display} ] Two match — ${bet} chips returned. (${bal} chips)`;
+    if (net > 0) {
+      const streak = await recordWin(user);
+      return `🎰 [ ${display} ] Two match! ${mult}x — Won ${net} chips! (${bal} chips)${streak}`;
+    }
+    return `🎰 [ ${display} ] Two match — ${bet} chips returned. (${bal} chips)`;
   }
+  await recordLoss(user);
   return `🎰 [ ${display} ] No match — lost ${bet} chips. (${result.balance} chips)`;
 }
 
@@ -625,22 +631,28 @@ export async function playRoulette(username: string, choice: string, betAmount: 
   if (isRed) {
     if (spinRed) {
       const bal = await addChips(user, bet * 2);
-      return `🎡 [ ${spinStr} ] Red wins! Won ${bet} chips! (${bal} chips)`;
+      const streak = await recordWin(user);
+      return `🎡 [ ${spinStr} ] Red wins! Won ${bet} chips! (${bal} chips)${streak}`;
     }
+    await recordLoss(user);
     return `🎡 [ ${spinStr} ] Red lost — lost ${bet} chips. (${result.balance} chips)`;
   }
   if (isBlack) {
     if (spinBlack) {
       const bal = await addChips(user, bet * 2);
-      return `🎡 [ ${spinStr} ] Black wins! Won ${bet} chips! (${bal} chips)`;
+      const streak = await recordWin(user);
+      return `🎡 [ ${spinStr} ] Black wins! Won ${bet} chips! (${bal} chips)${streak}`;
     }
+    await recordLoss(user);
     return `🎡 [ ${spinStr} ] Black lost — lost ${bet} chips. (${result.balance} chips)`;
   }
   if (spin === numBet) {
     const win = bet * 36;
     const bal = await addChips(user, win);
-    return `🎡 [ ${spinStr} ] NUMBER HIT! 36x — Won ${win - bet} chips! (${bal} chips)`;
+    const streak = await recordWin(user);
+    return `🎡 [ ${spinStr} ] NUMBER HIT! 36x — Won ${win - bet} chips! (${bal} chips)${streak}`;
   }
+  await recordLoss(user);
   return `🎡 [ ${spinStr} ] Wrong number — lost ${bet} chips. (${result.balance} chips)`;
 }
 
@@ -665,8 +677,10 @@ export async function playDice(username: string, choice: string, betAmount: numb
   const won = (isHigh && roll >= 4) || (isLow && roll <= 3);
   if (won) {
     const bal = await addChips(user, bet * 2);
-    return `🎲 Rolled ${roll} (${isHigh ? 'high' : 'low'}) — Won ${bet} chips! (${bal} chips)`;
+    const streak = await recordWin(user);
+    return `🎲 Rolled ${roll} (${isHigh ? 'high' : 'low'}) — Won ${bet} chips! (${bal} chips)${streak}`;
   }
+  await recordLoss(user);
   return `🎲 Rolled ${roll} (${roll >= 4 ? 'high' : 'low'}) — Lost ${bet} chips. (${result.balance} chips)`;
 }
 
@@ -695,8 +709,10 @@ export async function playCrash(username: string, betAmount: number, targetMulti
   if (crashPoint >= target) {
     const win = Math.floor(bet * target);
     const bal = await addChips(user, win);
-    return `💥 Crashed at ${crashStr} — Cashed out at ${targetStr}! Won ${win - bet} chips! (${bal} chips)`;
+    const streak = await recordWin(user);
+    return `💥 Crashed at ${crashStr} — Cashed out at ${targetStr}! Won ${win - bet} chips! (${bal} chips)${streak}`;
   }
+  await recordLoss(user);
   return `💥 Crashed at ${crashStr} — Target was ${targetStr}. Lost ${bet} chips. (${result.balance} chips)`;
 }
 
@@ -732,9 +748,11 @@ export async function playWar(username: string, betAmount: number): Promise<stri
 
   if (pVal > dVal) {
     const bal = await addChips(user, bet * 2);
-    return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Won ${bet} chips! (${bal} chips)`;
+    const streak = await recordWin(user);
+    return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Won ${bet} chips! (${bal} chips)${streak}`;
   }
   if (pVal < dVal) {
+    await recordLoss(user);
     return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Dealer wins. Lost ${bet} chips. (${result.balance} chips)`;
   }
   const bal = await addChips(user, bet);
@@ -932,35 +950,59 @@ const RAFFLE_ENTRY_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
 const RAFFLE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between raffles
 const RAFFLE_DEFAULT_PRIZE = 50;
 
+const RAFFLE_KEYWORDS = [
+  'tazo', 'wazo', 'lazo', 'ratzo', 'gayzo', 'nontent',
+  'yoink', 'poggers', 'monke', 'bonk', 'sheesh', 'vibes',
+  'bruh', 'noice', 'stonks', 'woop', 'snag', 'bingo',
+  'lemon', 'mango', 'panda', 'cobra', 'pixel', 'turbo',
+  'blaze', 'crispy', 'groovy', 'zippy', 'chunky', 'spicy',
+  'ninja', 'wizard', 'goblin', 'yeet', 'dingo', 'quack',
+  'noodle', 'taco', 'waffle', 'banana', 'rocket', 'thunder',
+];
+
+function pickRaffleKeyword(): string {
+  return RAFFLE_KEYWORDS[Math.floor(Math.random() * RAFFLE_KEYWORDS.length)];
+}
+
 interface RaffleState {
   participants: Array<{ user: string; display: string }>;
   startedAt: number;
   prize: number;
+  keyword: string;
 }
 
 /** Start a new raffle. Returns announcement message. */
 export async function startRaffle(prize = RAFFLE_DEFAULT_PRIZE): Promise<string> {
+  const existing = await kv.get<RaffleState>(RAFFLE_KEY);
+  if (existing && Date.now() - existing.startedAt < RAFFLE_ENTRY_WINDOW_MS) {
+    const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - (Date.now() - existing.startedAt)) / 1000);
+    return `🎰 Raffle already active! Type '${existing.keyword}' to enter (${timeLeft}s left).`;
+  }
+  const keyword = pickRaffleKeyword();
   const raffle: RaffleState = {
     participants: [],
     startedAt: Date.now(),
     prize,
+    keyword,
   };
   await kv.set(RAFFLE_KEY, raffle, { ex: RAFFLE_TTL_SEC });
-  return `🎰 RAFFLE! Type !join to enter! Drawing in 2 minutes — winner gets ${prize} chips!`;
+  return `🎰 RAFFLE! Type '${keyword}' in chat to enter! Drawing in 2 minutes — winner gets ${prize} chips!`;
 }
 
-/** Join the active raffle. Returns response message. */
-export async function joinRaffle(username: string): Promise<string> {
+/** Try to enter a raffle via keyword match. Returns reply if matched, null otherwise (silent for non-matches). */
+export async function tryRaffleKeywordEntry(username: string, content: string): Promise<string | null> {
+  const word = content.trim().toLowerCase();
+  if (!word || word.length > 20) return null;
+
+  const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
+  if (!raffle) return null;
+  if (Date.now() - raffle.startedAt >= RAFFLE_ENTRY_WINDOW_MS) return null;
+  if (word !== raffle.keyword) return null;
+
   const user = normalizeUser(username);
   const display = username.trim();
-  const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
-  if (!raffle) return '🎰 No active raffle right now. One will start soon!';
-  if (Date.now() - raffle.startedAt >= RAFFLE_ENTRY_WINDOW_MS) {
-    return '🎰 Raffle entry has closed — drawing soon!';
-  }
-  if (raffle.participants.some(p => p.user === user)) {
-    return '🎰 You\'re already in this raffle!';
-  }
+  if (raffle.participants.some(p => p.user === user)) return null;
+
   raffle.participants.push({ user, display });
   await kv.set(RAFFLE_KEY, raffle, { ex: RAFFLE_TTL_SEC });
   return `🎰 ${display} joined the raffle! (${raffle.participants.length} entered)`;
@@ -999,7 +1041,7 @@ export async function getRaffleStatus(): Promise<string | null> {
   if (!raffle) return null;
   if (Date.now() - raffle.startedAt >= RAFFLE_ENTRY_WINDOW_MS) return null;
   const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - (Date.now() - raffle.startedAt)) / 1000);
-  return `🎰 Active raffle: ${raffle.participants.length} entered, ${raffle.prize} chip prize, ${timeLeft}s left. Type !join to enter!`;
+  return `🎰 Active raffle: ${raffle.participants.length} entered, ${raffle.prize} chip prize, ${timeLeft}s left. Type '${raffle.keyword}' to enter!`;
 }
 
 // --- Chat Activity / Top Chatter ---
@@ -1108,4 +1150,350 @@ export async function resolveTopChatter(): Promise<string | null> {
   const displayName = names[winner.user] ?? winner.user;
 
   return `💬 Top chatter this hour: ${displayName} (${winner.count} messages) — +${TOP_CHATTER_PRIZE} chips! (${bal} chips)`;
+}
+
+// --- Chip Drops ---
+
+const CHIP_DROP_KEY = 'chip_drop_active';
+const CHIP_DROP_LAST_AT_KEY = 'chip_drop_last_at';
+const CHIP_DROP_TTL_SEC = 180;
+const CHIP_DROP_WINDOW_MS = 2 * 60 * 1000;
+const CHIP_DROP_INTERVAL_MS = 15 * 60 * 1000;
+const CHIP_DROP_PRIZE = 5;
+const CHIP_DROP_MAX_WINNERS = 5;
+
+interface ChipDropState {
+  keyword: string;
+  prize: number;
+  maxWinners: number;
+  winners: Array<{ user: string; display: string }>;
+  startedAt: number;
+}
+
+export async function startChipDrop(prize = CHIP_DROP_PRIZE, maxWinners = CHIP_DROP_MAX_WINNERS): Promise<string> {
+  const keyword = RAFFLE_KEYWORDS[Math.floor(Math.random() * RAFFLE_KEYWORDS.length)];
+  const drop: ChipDropState = { keyword, prize, maxWinners, winners: [], startedAt: Date.now() };
+  await kv.set(CHIP_DROP_KEY, drop, { ex: CHIP_DROP_TTL_SEC });
+  return `💧 Chip drop! First ${maxWinners} to type '${keyword}' get ${prize} chips!`;
+}
+
+export async function tryChipDropEntry(username: string, content: string): Promise<string | null> {
+  const word = content.trim().toLowerCase();
+  if (!word || word.length > 20) return null;
+  const drop = await kv.get<ChipDropState>(CHIP_DROP_KEY);
+  if (!drop) return null;
+  if (Date.now() - drop.startedAt >= CHIP_DROP_WINDOW_MS) return null;
+  if (word !== drop.keyword) return null;
+  const user = normalizeUser(username);
+  if (drop.winners.some(w => w.user === user)) return null;
+  const display = username.trim();
+  drop.winners.push({ user, display });
+  const bal = await addChips(user, drop.prize);
+  if (display) await setLeaderboardDisplayName(user, display);
+  const full = drop.winners.length >= drop.maxWinners;
+  if (full) {
+    await kv.del(CHIP_DROP_KEY);
+    await kv.set(CHIP_DROP_LAST_AT_KEY, String(Date.now()));
+    return `💧 ${display} grabbed ${drop.prize} chips! (${bal} chips) — Drop complete!`;
+  }
+  await kv.set(CHIP_DROP_KEY, drop, { ex: CHIP_DROP_TTL_SEC });
+  return `💧 ${display} grabbed ${drop.prize} chips! (${bal} chips) — ${drop.maxWinners - drop.winners.length} left!`;
+}
+
+export async function shouldStartChipDrop(): Promise<boolean> {
+  const existing = await kv.get<ChipDropState>(CHIP_DROP_KEY);
+  if (existing) return false;
+  const lastAt = await kv.get<string>(CHIP_DROP_LAST_AT_KEY);
+  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : CHIP_DROP_INTERVAL_MS;
+  return elapsed >= CHIP_DROP_INTERVAL_MS;
+}
+
+export async function resolveExpiredChipDrop(): Promise<string | null> {
+  const drop = await kv.get<ChipDropState>(CHIP_DROP_KEY);
+  if (!drop) return null;
+  if (Date.now() - drop.startedAt < CHIP_DROP_WINDOW_MS) return null;
+  await kv.del(CHIP_DROP_KEY);
+  await kv.set(CHIP_DROP_LAST_AT_KEY, String(Date.now()));
+  if (drop.winners.length === 0) return null;
+  const names = drop.winners.map(w => w.display).join(', ');
+  return `💧 Drop ended! ${drop.winners.length} grabbed chips: ${names}`;
+}
+
+// --- Chat Challenges ---
+
+const CHAT_CHALLENGE_KEY = 'chat_challenge_active';
+const CHAT_CHALLENGE_LAST_AT_KEY = 'chat_challenge_last_at';
+const CHAT_CHALLENGE_TTL_SEC = 180;
+const CHAT_CHALLENGE_WINDOW_MS = 2 * 60 * 1000;
+const CHAT_CHALLENGE_INTERVAL_MS = 25 * 60 * 1000;
+const CHAT_CHALLENGE_TARGET = 50;
+const CHAT_CHALLENGE_PRIZE = 5;
+const CHAT_CHALLENGE_MAX_PER_USER = 3;
+
+interface ChatChallengeState {
+  target: number;
+  prize: number;
+  startedAt: number;
+  participants: Record<string, number>;
+  messageCount: number;
+}
+
+export async function startChatChallenge(target = CHAT_CHALLENGE_TARGET, prize = CHAT_CHALLENGE_PRIZE): Promise<string> {
+  const challenge: ChatChallengeState = { target, prize, startedAt: Date.now(), participants: {}, messageCount: 0 };
+  await kv.set(CHAT_CHALLENGE_KEY, challenge, { ex: CHAT_CHALLENGE_TTL_SEC });
+  return `🎯 CHAT CHALLENGE! Send ${target} messages in 2 minutes and everyone gets ${prize} chips! Go go go!`;
+}
+
+export async function trackChallengeMessage(username: string): Promise<void> {
+  try {
+    const challenge = await kv.get<ChatChallengeState>(CHAT_CHALLENGE_KEY);
+    if (!challenge) return;
+    if (Date.now() - challenge.startedAt >= CHAT_CHALLENGE_WINDOW_MS) return;
+    const user = normalizeUser(username);
+    const userCount = challenge.participants[user] ?? 0;
+    if (userCount >= CHAT_CHALLENGE_MAX_PER_USER) return;
+    challenge.participants[user] = userCount + 1;
+    challenge.messageCount++;
+    await kv.set(CHAT_CHALLENGE_KEY, challenge, { ex: CHAT_CHALLENGE_TTL_SEC });
+  } catch { /* silent */ }
+}
+
+export async function resolveChatChallenge(): Promise<string | null> {
+  const challenge = await kv.get<ChatChallengeState>(CHAT_CHALLENGE_KEY);
+  if (!challenge) return null;
+  if (Date.now() - challenge.startedAt < CHAT_CHALLENGE_WINDOW_MS) return null;
+  await kv.del(CHAT_CHALLENGE_KEY);
+  await kv.set(CHAT_CHALLENGE_LAST_AT_KEY, String(Date.now()));
+  const users = Object.keys(challenge.participants);
+  if (challenge.messageCount >= challenge.target && users.length > 0) {
+    await Promise.all(users.map(u => addChips(u, challenge.prize)));
+    return `🎯 Challenge complete! ${challenge.messageCount}/${challenge.target} messages — ${users.length} chatters each earned ${challenge.prize} chips!`;
+  }
+  return `🎯 Challenge failed! Only ${challenge.messageCount}/${challenge.target} messages. Better luck next time!`;
+}
+
+export async function shouldStartChatChallenge(): Promise<boolean> {
+  const existing = await kv.get<ChatChallengeState>(CHAT_CHALLENGE_KEY);
+  if (existing) return false;
+  const lastAt = await kv.get<string>(CHAT_CHALLENGE_LAST_AT_KEY);
+  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : CHAT_CHALLENGE_INTERVAL_MS;
+  return elapsed >= CHAT_CHALLENGE_INTERVAL_MS;
+}
+
+// --- Win Streaks ---
+
+const WIN_STREAK_KEY = 'win_streak';
+const WIN_STREAK_MILESTONES: Array<[number, number]> = [[3, 3], [5, 10], [10, 25]];
+
+export async function recordWin(username: string): Promise<string> {
+  const user = normalizeUser(username);
+  try {
+    const s = await kv.get<{ winStreaksEnabled?: boolean }>('overlay_settings');
+    if (s?.winStreaksEnabled === false) return '';
+    const current = parseKvInt(await kv.hget<number>(WIN_STREAK_KEY, user), 0);
+    const next = current + 1;
+    await kv.hset(WIN_STREAK_KEY, { [user]: next });
+    const milestone = WIN_STREAK_MILESTONES.find(([streak]) => streak === next);
+    if (milestone) {
+      const bonus = milestone[1];
+      const bal = await addChips(user, bonus);
+      return ` 🔥 ${next} wins in a row! +${bonus} bonus! (${bal} chips)`;
+    }
+    if (next >= 2) return ` 🔥 ${next} streak!`;
+  } catch { /* silent */ }
+  return '';
+}
+
+export async function recordLoss(username: string): Promise<void> {
+  const user = normalizeUser(username);
+  try { await kv.hset(WIN_STREAK_KEY, { [user]: 0 }); } catch { /* silent */ }
+}
+
+// --- Participation Streaks ---
+
+const PARTICIPATION_STREAK_KEY = 'participation_streak';
+const PARTICIPATION_MILESTONES: Array<[number, number]> = [[3, 5], [7, 15], [14, 30], [30, 50]];
+
+interface ParticipationData {
+  lastDate: string;
+  streak: number;
+}
+
+function todayDateStr(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+export async function checkParticipationStreak(username: string): Promise<string | null> {
+  const user = normalizeUser(username);
+  try {
+    const s = await kv.get<{ participationStreaksEnabled?: boolean }>('overlay_settings');
+    if (s?.participationStreaksEnabled === false) return null;
+    const today = todayDateStr();
+    const data = await kv.hget<ParticipationData>(PARTICIPATION_STREAK_KEY, user);
+    if (data?.lastDate === today) return null;
+
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yesterdayStr = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth() + 1).padStart(2, '0')}-${String(yesterday.getUTCDate()).padStart(2, '0')}`;
+
+    const streak = (data?.lastDate === yesterdayStr) ? (data.streak + 1) : 1;
+    await kv.hset(PARTICIPATION_STREAK_KEY, { [user]: JSON.stringify({ lastDate: today, streak }) });
+
+    const milestone = PARTICIPATION_MILESTONES.find(([days]) => days === streak);
+    if (milestone) {
+      const bonus = milestone[1];
+      const bal = await addChips(user, bonus);
+      const display = username.trim();
+      return `📅 ${display} — ${streak}-day chat streak! +${bonus} chips! (${bal} chips)`;
+    }
+  } catch { /* silent */ }
+  return null;
+}
+
+// --- Boss Events ---
+
+type AttackCategory = 'physical' | 'magic' | 'ranged' | 'special';
+
+const ATTACK_WORDS: Record<string, AttackCategory> = {
+  attack: 'physical', punch: 'physical', kick: 'physical', uppercut: 'physical',
+  slap: 'physical', headbutt: 'physical', elbow: 'physical',
+  fireball: 'magic', lightning: 'magic', ice: 'magic', freeze: 'magic',
+  thunder: 'magic', blast: 'magic',
+  shoot: 'ranged', snipe: 'ranged', arrow: 'ranged', throw: 'ranged',
+  insult: 'special', roast: 'special', curse: 'special', hex: 'special',
+};
+
+const ATTACK_WORD_LIST = Object.keys(ATTACK_WORDS);
+
+interface BossDefinition {
+  name: string;
+  maxHp: number;
+  weakness: AttackCategory;
+  resistance: AttackCategory;
+}
+
+const BOSS_ROSTER: BossDefinition[] = [
+  { name: 'Goblin', maxHp: 300, weakness: 'physical', resistance: 'magic' },
+  { name: 'Dragon', maxHp: 600, weakness: 'magic', resistance: 'physical' },
+  { name: 'Kraken', maxHp: 500, weakness: 'ranged', resistance: 'physical' },
+  { name: 'Troll', maxHp: 400, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Skeleton King', maxHp: 500, weakness: 'special', resistance: 'physical' },
+  { name: 'Shadow Witch', maxHp: 400, weakness: 'physical', resistance: 'magic' },
+  { name: 'Ice Giant', maxHp: 600, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Rat King', maxHp: 300, weakness: 'ranged', resistance: 'special' },
+];
+
+const BOSS_KEY = 'boss_active';
+const BOSS_LAST_AT_KEY = 'boss_last_at';
+const BOSS_TTL_SEC = 360;
+const BOSS_WINDOW_MS = 5 * 60 * 1000;
+const BOSS_INTERVAL_MS = 50 * 60 * 1000;
+const BOSS_REWARD_POOL = 100;
+const BOSS_ATTACK_COOLDOWN_MS = 5_000;
+const BOSS_ATTACK_COOLDOWN_KEY = 'boss_attack_cd';
+
+interface BossState {
+  name: string;
+  hp: number;
+  maxHp: number;
+  weakness: AttackCategory;
+  resistance: AttackCategory;
+  attackers: Record<string, number>;
+  startedAt: number;
+  reward: number;
+}
+
+export async function startBossEvent(): Promise<string> {
+  const def = BOSS_ROSTER[Math.floor(Math.random() * BOSS_ROSTER.length)];
+  const boss: BossState = {
+    name: def.name, hp: def.maxHp, maxHp: def.maxHp,
+    weakness: def.weakness, resistance: def.resistance,
+    attackers: {}, startedAt: Date.now(), reward: BOSS_REWARD_POOL,
+  };
+  await kv.set(BOSS_KEY, boss, { ex: BOSS_TTL_SEC });
+  const words = Object.entries(ATTACK_WORDS).reduce((acc, [w, cat]) => {
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(w);
+    return acc;
+  }, {} as Record<string, string[]>);
+  const examples = Object.values(words).map(ws => ws[0]).join(' ');
+  return `⚔️ A Wild ${def.name} appears! ${def.maxHp} HP. Weak to ${def.weakness}, resists ${def.resistance}. Try: ${examples}`;
+}
+
+export async function tryBossAttack(username: string, content: string): Promise<string | null> {
+  const word = content.trim().toLowerCase();
+  const category = ATTACK_WORDS[word];
+  if (!category) return null;
+  const boss = await kv.get<BossState>(BOSS_KEY);
+  if (!boss) return null;
+  if (Date.now() - boss.startedAt >= BOSS_WINDOW_MS) return null;
+
+  const user = normalizeUser(username);
+  const display = username.trim();
+
+  // Per-user cooldown
+  const cdKey = `${BOSS_ATTACK_COOLDOWN_KEY}:${user}`;
+  const lastAttack = await kv.get<number>(cdKey);
+  if (lastAttack && Date.now() - lastAttack < BOSS_ATTACK_COOLDOWN_MS) return null;
+  await kv.set(cdKey, Date.now(), { ex: 10 });
+
+  let baseDmg = 5 + Math.floor(Math.random() * 21);
+  let effectText = '';
+  if (category === boss.weakness) {
+    baseDmg *= 2;
+    effectText = ' (super effective!)';
+  } else if (category === boss.resistance) {
+    baseDmg = Math.max(1, Math.ceil(baseDmg / 2));
+    effectText = ' (resisted!)';
+  }
+
+  boss.hp = Math.max(0, boss.hp - baseDmg);
+  boss.attackers[user] = (boss.attackers[user] ?? 0) + baseDmg;
+  if (display) await setLeaderboardDisplayName(user, display);
+
+  if (boss.hp <= 0) {
+    await kv.del(BOSS_KEY);
+    await kv.set(BOSS_LAST_AT_KEY, String(Date.now()));
+    const attackerEntries = Object.entries(boss.attackers);
+    const totalDmg = attackerEntries.reduce((s, [, d]) => s + d, 0);
+    const names = (await kv.hgetall<Record<string, string>>(LEADERBOARD_DISPLAY_NAMES_KEY)) ?? {};
+    const rewards: string[] = [];
+    for (const [u, dmg] of attackerEntries) {
+      const share = Math.max(3, Math.round((dmg / totalDmg) * boss.reward));
+      const bal = await addChips(u, share);
+      const dname = names[u] ?? u;
+      rewards.push(`${dname} +${share}`);
+    }
+    return `⚔️ ${word} hits ${boss.name} for ${baseDmg}${effectText} — ${boss.name} defeated! Rewards: ${rewards.join(', ')}`;
+  }
+
+  await kv.set(BOSS_KEY, boss, { ex: BOSS_TTL_SEC });
+  return `⚔️ ${display} uses ${word} on ${boss.name} for ${baseDmg} dmg${effectText}! (${boss.hp}/${boss.maxHp} HP)`;
+}
+
+export async function shouldStartBossEvent(): Promise<boolean> {
+  const existing = await kv.get<BossState>(BOSS_KEY);
+  if (existing) return false;
+  const lastAt = await kv.get<string>(BOSS_LAST_AT_KEY);
+  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : BOSS_INTERVAL_MS;
+  return elapsed >= BOSS_INTERVAL_MS;
+}
+
+export async function resolveExpiredBoss(): Promise<string | null> {
+  const boss = await kv.get<BossState>(BOSS_KEY);
+  if (!boss) return null;
+  if (Date.now() - boss.startedAt < BOSS_WINDOW_MS) return null;
+  await kv.del(BOSS_KEY);
+  await kv.set(BOSS_LAST_AT_KEY, String(Date.now()));
+  return `⚔️ The ${boss.name} escaped! Better luck next time.`;
+}
+
+// --- Active event check (prevents overlapping events) ---
+
+export async function hasActiveEvent(): Promise<boolean> {
+  const [raffle, drop, challenge, boss] = await Promise.all([
+    kv.get(RAFFLE_KEY), kv.get(CHIP_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
+  ]);
+  return !!(raffle || drop || challenge || boss);
 }
