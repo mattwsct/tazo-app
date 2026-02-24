@@ -8,7 +8,7 @@ import {
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { handleChatPoll } from '@/lib/poll-webhook-handler';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
-import { handleAddChipsCommand } from '@/lib/addchips-chat-handler';
+import { handleAddTazosCommand } from '@/lib/addchips-chat-handler';
 import { handleCategoryCommand } from '@/lib/category-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
@@ -24,9 +24,9 @@ import {
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
 import {
-  addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin,
-  trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryChipDropEntry, tryBossAttack, startBossEvent,
-  trackChallengeMessage, checkParticipationStreak,
+  addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
+  trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
+  trackChallengeMessage, checkParticipationStreak, resetEventTimestamps,
 } from '@/utils/blackjack-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
         await resetWellnessMilestonesOnStreamStart();
         await resetStreamGoalsOnStreamStart();
         await clearGoalCelebrationOnStreamStart();
+        await resetEventTimestamps();
       } catch (e) {
         console.warn('Failed to reset wellness session on stream start:', e);
       }
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
     const content = (payload.content as string) || '';
     const sender = (payload.sender as { username?: string })?.username ?? '?';
     void (async () => {
-      if (await isGamblingEnabled()) void addViewTimeChips(sender);
+      if (await isGamblingEnabled()) void addViewTimeTazos(sender);
     })();
     void trackChatActivity(sender, content);
     try {
@@ -214,16 +215,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    const addchipsResult = await handleAddChipsCommand(content, sender, payload);
-    if (addchipsResult.handled) {
-      if (addchipsResult.reply) {
+    const addtazosResult = await handleAddTazosCommand(content, sender, payload);
+    if (addtazosResult.handled) {
+      if (addtazosResult.reply) {
         const accessToken = await getValidAccessToken();
         if (accessToken) {
           const messageId = (payload.id ?? payload.message_id) as string | undefined;
           try {
-            await sendKickChatMessage(accessToken, addchipsResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
+            await sendKickChatMessage(accessToken, addtazosResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
           } catch (err) {
-            console.error('[Kick webhook] !addchips reply failed:', err instanceof Error ? err.message : String(err));
+            console.error('[Kick webhook] !addtazos reply failed:', err instanceof Error ? err.message : String(err));
           }
         }
       }
@@ -323,8 +324,8 @@ export async function POST(request: NextRequest) {
     const raffleEntry = await tryRaffleKeywordEntry(sender, content);
     if (raffleEntry) { await replyNonCmd(raffleEntry); return NextResponse.json({ received: true }, { status: 200 }); }
 
-    // 2. Chip drop keyword
-    const dropEntry = await tryChipDropEntry(sender, content);
+    // 2. Tazo drop keyword
+    const dropEntry = await tryTazoDropEntry(sender, content);
     if (dropEntry) { await replyNonCmd(dropEntry); return NextResponse.json({ received: true }, { status: 200 }); }
 
     // 3. Boss attack word
@@ -405,25 +406,24 @@ export async function POST(request: NextRequest) {
     } catch {
       /* ignore */
     }
-    // Channel point → chips: when approved/accepted and reward title matches, grant chips
     const status = String(payload.status ?? '').toLowerCase();
     const isApproved = status === 'approved' || status === 'accepted';
     if (isApproved) {
       const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardChips?: number }>('overlay_settings')) ?? {};
-      const configuredTitle = (settings.chipRewardTitle ?? 'Buy Chips').trim();
-      const chips = Math.max(1, Math.floor(Number(settings.chipRewardChips ?? 50)));
+      const configuredTitle = (settings.chipRewardTitle ?? 'Buy Tazos').trim();
+      const tazosAmount = Math.max(1, Math.floor(Number(settings.chipRewardChips ?? 50)));
       if (configuredTitle && rewardTitle.toLowerCase() === configuredTitle.toLowerCase()) {
         const redeemer = (payload.redeemer as { username?: string })?.username;
         if (redeemer) {
-          const added = await addChipsAsAdmin(redeemer, chips);
+          const added = await addTazosAsAdmin(redeemer, tazosAmount);
           if (added > 0) {
             const token = await getValidAccessToken();
             if (token) {
               try {
-                await sendKickChatMessage(token, `🃏 @${redeemer} redeemed channel points for chips! +${added} chips added.`);
+                await sendKickChatMessage(token, `🃏 @${redeemer} +${added} tazos!`);
                 chipRewardMessageSent = true;
               } catch (err) {
-                console.warn('[Kick webhook] Chip redemption chat message failed:', err instanceof Error ? err.message : String(err));
+                console.warn('[Kick webhook] Tazo redemption chat message failed:', err instanceof Error ? err.message : String(err));
               }
             }
           }
@@ -452,15 +452,21 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalSubs(1),
         pushSubAlert(subscriber),
-        ...(subUser && subGiftChipRewards ? [addChipsAsAdmin(subUser, 25)] : []),
+        ...(subUser && subGiftChipRewards ? [addTazosAsAdmin(subUser, 25)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
         getStreamGoals(),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      const target = (settings?.subGoalTarget as number) ?? 10;
-      if (target > 0) await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+      const target = (settings?.subGoalTarget as number) ?? 5;
+      if (target > 0) {
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+        if (celebrated) {
+          const token = await getValidAccessToken();
+          if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+        }
+      }
     }
   } else if (eventNorm === 'channel.subscription.renewal') {
     const subscriber = payload.subscriber;
@@ -470,15 +476,21 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalSubs(1),
         pushResubAlert(subscriber, duration > 0 ? duration : undefined),
-        ...(resubUser && subGiftChipRewards ? [addChipsAsAdmin(resubUser, 25)] : []),
+        ...(resubUser && subGiftChipRewards ? [addTazosAsAdmin(resubUser, 25)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
         getStreamGoals(),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      const target = (settings?.subGoalTarget as number) ?? 10;
-      if (target > 0) await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+      const target = (settings?.subGoalTarget as number) ?? 5;
+      if (target > 0) {
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+        if (celebrated) {
+          const token = await getValidAccessToken();
+          if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+        }
+      }
     }
   } else if (eventNorm === 'channel.subscription.gifts') {
     const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
@@ -489,15 +501,21 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
-        ...(gifterUser && subGiftChipRewards ? [addChipsAsAdmin(gifterUser, 25 * count)] : []),
+        ...(gifterUser && subGiftChipRewards ? [addTazosAsAdmin(gifterUser, 25 * count)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
         getStreamGoals(),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      const target = (settings?.subGoalTarget as number) ?? 10;
-      if (target > 0) await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+      const target = (settings?.subGoalTarget as number) ?? 5;
+      if (target > 0) {
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+        if (celebrated) {
+          const token = await getValidAccessToken();
+          if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+        }
+      }
     }
   } else if (eventNorm === 'kicks.gifted') {
     const sender = payload.sender;
@@ -509,15 +527,21 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),
-        ...(kickUser && subGiftChipRewards ? [addChipsAsAdmin(kickUser, 10 * amount)] : []),
+        ...(kickUser && subGiftChipRewards ? [addTazosAsAdmin(kickUser, 10 * amount)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
         getStreamGoals(),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      const target = (settings?.kicksGoalTarget as number) ?? 1000;
-      if (target > 0) await setGoalCelebrationIfNeeded('kicks', goals.kicks, target);
+      const target = (settings?.kicksGoalTarget as number) ?? 100;
+      if (target > 0) {
+        const celebrated = await setGoalCelebrationIfNeeded('kicks', goals.kicks, target);
+        if (celebrated) {
+          const token = await getValidAccessToken();
+          if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});
+        }
+      }
     }
   }
   if (didAlertOrLeaderboard) {

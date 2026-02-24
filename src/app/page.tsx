@@ -97,8 +97,8 @@ export default function AdminPage() {
   const [kickChatBroadcastSpeedMinKmh, setKickChatBroadcastSpeedMinKmh] = useState(20);
   const [kickChatBroadcastAltitude, setKickChatBroadcastAltitude] = useState(false);
   const [kickChatBroadcastAltitudeMinM, setKickChatBroadcastAltitudeMinM] = useState(50);
-  const [kickChatBroadcastWellnessSteps, setKickChatBroadcastWellnessSteps] = useState(false);
-  const [kickChatBroadcastWellnessDistance, setKickChatBroadcastWellnessDistance] = useState(false);
+  const [kickChatBroadcastWellnessSteps, setKickChatBroadcastWellnessSteps] = useState(true);
+  const [kickChatBroadcastWellnessDistance, setKickChatBroadcastWellnessDistance] = useState(true);
   const [kickChatBroadcastWellnessFlights, setKickChatBroadcastWellnessFlights] = useState(false);
   const [kickChatBroadcastWellnessActiveCalories, setKickChatBroadcastWellnessActiveCalories] = useState(false);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
@@ -1284,7 +1284,7 @@ export default function AdminPage() {
               {settings.gamblingEnabled !== false && (
                 <>
                   <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                    <label>Chips leaderboard</label>
+                    <label>Tazos leaderboard</label>
                     <select
                       className="admin-select-big"
                       value={settings.showLeaderboard !== false ? 'true' : 'false'}
@@ -1296,7 +1296,7 @@ export default function AdminPage() {
                   </div>
                   {settings.showLeaderboard !== false && (
                     <div className="admin-select-wrap">
-                      <label>Top N chips</label>
+                      <label>Top N tazos</label>
                       <select
                         className="admin-select-big"
                         value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
@@ -1320,17 +1320,17 @@ export default function AdminPage() {
                     />
                   </div>
                   <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
-                    <label>Channel point reward name (redeem for chips)</label>
+                    <label>Channel point reward name (redeem for tazos)</label>
                     <input
                       type="text"
                       className="text-input"
-                      value={settings.chipRewardTitle ?? 'Buy Chips'}
+                      value={settings.chipRewardTitle ?? 'Buy Tazos'}
                       onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value })}
-                      placeholder="Buy Chips"
+                      placeholder="Buy Tazos"
                     />
                   </div>
                   <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                    <label>Chips per redemption</label>
+                    <label>Tazos per redemption</label>
                     <input
                       type="number"
                       className="text-input"
@@ -1351,7 +1351,7 @@ export default function AdminPage() {
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.chipDropsEnabled !== false} onChange={(e) => handleSettingsChange({ chipDropsEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Chip drops every ~15 min</span>
+                      <span className="checkbox-text">Tazo drops every ~15 min</span>
                     </label>
                   </div>
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
@@ -1384,7 +1384,7 @@ export default function AdminPage() {
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.subGiftChipRewards !== false} onChange={(e) => handleSettingsChange({ subGiftChipRewards: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Chip rewards for subs/gifts/kicks</span>
+                      <span className="checkbox-text">Tazo rewards for subs/gifts/kicks</span>
                     </label>
                   </div>
                 </>
@@ -1966,17 +1966,17 @@ export default function AdminPage() {
                 type="button"
                 className="btn btn-danger btn-small"
                 onClick={async () => {
-                  if (!confirm('Reset chips leaderboard? Clears all player chips and gambling state.')) return;
+                  if (!confirm('Reset tazos leaderboard? Clears all player tazos and gambling state.')) return;
                   try {
                     const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
                     const data = await r.json();
-                    if (r.ok) setToast({ type: 'saved', message: 'Chips leaderboard reset' });
+                    if (r.ok) setToast({ type: 'saved', message: 'Tazos leaderboard reset' });
                     else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
                   } catch { setToast({ type: 'error', message: 'Reset failed' }); }
                   setTimeout(() => setToast(null), 3000);
                 }}
               >
-                🔄 Reset chips leaderboard
+                🔄 Reset tazos leaderboard
               </button>
               <button
                 type="button"

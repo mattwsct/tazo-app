@@ -26,6 +26,10 @@ export interface PollState {
   topVoter?: { username: string; count: number };
   /** Our poll-start message ID (for threading winner reply) */
   startMessageId?: string;
+  /** 'open' = any chat message becomes an option; 'closed' = predefined options only */
+  mode?: 'closed' | 'open';
+  /** Open-ended: username -> their normalized response (one vote per person) */
+  openVoters?: Record<string, string>;
 }
 
 export interface QueuedPoll {
@@ -64,7 +68,7 @@ export const DEFAULT_POLL_SETTINGS: PollSettings = {
   winnerDisplaySeconds: 10,
   autoStartPollsEnabled: false,
   minutesSinceLastPoll: 5,
-  oneVotePerPerson: false,
+  oneVotePerPerson: true,
 };
 
 export const POLL_STATE_KEY = 'overlay_poll_state';

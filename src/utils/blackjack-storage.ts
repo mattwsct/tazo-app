@@ -1,26 +1,26 @@
 /**
- * Blackjack game: gambling chips (separate from leaderboard points), per-user game state.
- * Commands: !deal <amount>, !hit, !stand, !double (2 cards), !split (pairs). Chips and gambling leaderboard reset each stream.
- * New players start with 100 chips.
+ * Gambling tazos (separate from leaderboard points), per-user game state.
+ * Commands: !deal <amount>, hit, stand, double (2 cards), split (pairs). Tazos and gambling leaderboard reset each stream.
+ * New players start with 100 tazos.
  */
 
 import { kv } from '@vercel/kv';
 import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 
-const VIEW_CHIPS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
-const VIEW_CHIPS_PER_INTERVAL = 10;
+const VIEW_TAZOS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const VIEW_TAZOS_PER_INTERVAL = 10;
 
-const CHIPS_BALANCE_KEY = 'blackjack_chips';
+const TAZOS_BALANCE_KEY = 'blackjack_chips'; // KV key unchanged for data compat
 const GAMBLING_LEADERBOARD_KEY = 'blackjack_leaderboard';
 const DEAL_COOLDOWN_KEY = 'blackjack_deal_last_at';
-const VIEW_CHIPS_LAST_AT_KEY = 'blackjack_view_chips_last_at';
+const VIEW_TAZOS_LAST_AT_KEY = 'blackjack_view_chips_last_at'; // KV key unchanged
 const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
-const GAME_TIMEOUT_MS = 90_000; // Auto-stand after 90s
-const DEAL_COOLDOWN_MS = 15_000; // Min 15s between starting new hands
-const GAMBLE_INSTANT_COOLDOWN_MS = 5_000; // Min 5s between slots/roulette/coinflip/dice
+const GAME_TIMEOUT_MS = 90_000;
+const DEAL_COOLDOWN_MS = 15_000;
+const GAMBLE_INSTANT_COOLDOWN_MS = 5_000;
 const GAMBLE_INSTANT_LAST_AT_KEY = 'gamble_instant_last_at';
-const STARTING_CHIPS = 100;
+const STARTING_TAZOS = 100;
 const MIN_BET = 1;
 const DUEL_KEY_PREFIX = 'gamble_duel:';
 const DUEL_EXPIRE_SEC = 60;
@@ -130,84 +130,81 @@ function gameKey(user: string): string {
   return `${ACTIVE_GAME_KEY_PREFIX}${user}`;
 }
 
-/** Get or create chips balance. New players start with STARTING_CHIPS. */
-export async function getChips(username: string): Promise<number> {
+/** Get or create tazos balance. New players start with STARTING_TAZOS. */
+export async function getTazos(username: string): Promise<number> {
   const user = normalizeUser(username);
   try {
-    const bal = await kv.hget<number | string>(CHIPS_BALANCE_KEY, user);
+    const bal = await kv.hget<number | string>(TAZOS_BALANCE_KEY, user);
     if (bal != null) {
       return typeof bal === 'string' ? parseInt(bal, 10) : Math.floor(bal);
     }
     const init: Promise<unknown>[] = [
-      kv.hset(CHIPS_BALANCE_KEY, { [user]: String(STARTING_CHIPS) }),
-      kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: STARTING_CHIPS, member: user }),
+      kv.hset(TAZOS_BALANCE_KEY, { [user]: String(STARTING_TAZOS) }),
+      kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: STARTING_TAZOS, member: user }),
     ];
     if (username?.trim()) init.push(setLeaderboardDisplayName(user, username.trim()));
     await Promise.all(init);
-    return STARTING_CHIPS;
+    return STARTING_TAZOS;
   } catch {
-    return STARTING_CHIPS;
+    return STARTING_TAZOS;
   }
 }
 
-/** Deduct chips (for bet). Returns { ok, balance } — balance is always current, avoiding an extra KV read on failure. */
-async function deductChips(user: string, amount: number): Promise<{ ok: boolean; balance: number }> {
-  const bal = await getChips(user);
+async function deductTazos(user: string, amount: number): Promise<{ ok: boolean; balance: number }> {
+  const bal = await getTazos(user);
   if (bal < amount) return { ok: false, balance: bal };
   const newBal = bal - amount;
   await Promise.all([
-    kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
+    kv.hset(TAZOS_BALANCE_KEY, { [user]: String(newBal) }),
     kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
   ]);
   return { ok: true, balance: newBal };
 }
 
-/** Deduct chips for a bet, auto-capping to user's balance if bet exceeds it. */
 async function placeBet(user: string, requestedBet: number): Promise<{ ok: false; balance: number } | { ok: true; bet: number; balance: number }> {
-  const bal = await getChips(user);
+  const bal = await getTazos(user);
   if (bal < MIN_BET) return { ok: false, balance: bal };
   const bet = Math.min(Math.floor(Math.max(MIN_BET, requestedBet)), bal);
   const newBal = bal - bet;
   await Promise.all([
-    kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
+    kv.hset(TAZOS_BALANCE_KEY, { [user]: String(newBal) }),
     kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
   ]);
   return { ok: true, bet, balance: newBal };
 }
 
-/** Add chips (for win). Returns new balance. */
-async function addChips(user: string, amount: number): Promise<number> {
-  const bal = await getChips(user);
+async function addTazos(user: string, amount: number): Promise<number> {
+  const bal = await getTazos(user);
   const newBal = bal + amount;
   await Promise.all([
-    kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
+    kv.hset(TAZOS_BALANCE_KEY, { [user]: String(newBal) }),
     kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
   ]);
   return newBal;
 }
 
-/** Add chips as admin (broadcaster/mod via !addchips). Bypasses gambling check and exclusions. */
-export async function addChipsAsAdmin(username: string, amount: number): Promise<number> {
+/** Add tazos as admin (broadcaster/mod via !addtazos). Bypasses gambling check and exclusions. */
+export async function addTazosAsAdmin(username: string, amount: number): Promise<number> {
   const user = normalizeUser(username);
   if (amount < 1) return 0;
-  await addChips(user, amount);
+  await addTazos(user, amount);
   if (username?.trim()) await setLeaderboardDisplayName(user, username.trim());
   return amount;
 }
 
-/** Add chips for channel point reward redemption. Returns chips added, or 0 if skipped (gambling off, excluded, or invalid). */
-export async function addChipsForReward(username: string, amount: number): Promise<number> {
+/** Add tazos for channel point reward redemption. */
+export async function addTazosForReward(username: string, amount: number): Promise<number> {
   const user = normalizeUser(username);
   if (!(await isGamblingEnabled())) return 0;
   const excluded = await getLeaderboardExclusions();
   if (excluded.has(user)) return 0;
   if (amount < 1) return 0;
-  await addChips(user, amount);
+  await addTazos(user, amount);
   return amount;
 }
 
-/** Award chips for watch time (chat as heartbeat). 10 chips per 10 min, max 10 per chat (no backpay). */
-export async function addViewTimeChips(username: string): Promise<number> {
+/** Award tazos for watch time (chat as heartbeat). 10 tazos per 10 min, no cap. */
+export async function addViewTimeTazos(username: string): Promise<number> {
   const user = normalizeUser(username);
   if (!(await isGamblingEnabled())) return 0;
   const excluded = await getLeaderboardExclusions();
@@ -215,48 +212,45 @@ export async function addViewTimeChips(username: string): Promise<number> {
 
   try {
     const now = Date.now();
-    const lastAt = parseKvInt(await kv.hget<number | string>(VIEW_CHIPS_LAST_AT_KEY, user));
-    const elapsed = lastAt > 0 ? now - lastAt : VIEW_CHIPS_INTERVAL_MS;
-    const intervals = Math.floor(elapsed / VIEW_CHIPS_INTERVAL_MS);
+    const lastAt = parseKvInt(await kv.hget<number | string>(VIEW_TAZOS_LAST_AT_KEY, user));
+    const elapsed = lastAt > 0 ? now - lastAt : VIEW_TAZOS_INTERVAL_MS;
+    const intervals = Math.floor(elapsed / VIEW_TAZOS_INTERVAL_MS);
     if (intervals < 1) return 0;
 
-    const bal = await getChips(user);
-    if (bal >= STARTING_CHIPS) return 0;
+    const bal = await getTazos(user);
 
-    // Cap at 1 interval per chat, and don't exceed STARTING_CHIPS
-    const chipsToAdd = Math.min(Math.min(intervals, 1) * VIEW_CHIPS_PER_INTERVAL, STARTING_CHIPS - bal);
-    if (chipsToAdd <= 0) return 0;
-    const newBal = bal + chipsToAdd;
+    const tazosToAdd = Math.min(intervals, 1) * VIEW_TAZOS_PER_INTERVAL;
+    if (tazosToAdd <= 0) return 0;
+    const newBal = bal + tazosToAdd;
     const updates: Promise<unknown>[] = [
-      kv.hset(CHIPS_BALANCE_KEY, { [user]: String(newBal) }),
+      kv.hset(TAZOS_BALANCE_KEY, { [user]: String(newBal) }),
       kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
-      kv.hset(VIEW_CHIPS_LAST_AT_KEY, { [user]: String(now) }),
+      kv.hset(VIEW_TAZOS_LAST_AT_KEY, { [user]: String(now) }),
     ];
     if (username?.trim()) updates.push(setLeaderboardDisplayName(user, username.trim()));
     await Promise.all(updates);
-    return chipsToAdd;
+    return tazosToAdd;
   } catch {
     return 0;
   }
 }
 
-
-/** Reset chips and gambling leaderboard on stream start. */
+/** Reset tazos and gambling leaderboard on stream start. */
 export async function resetGamblingOnStreamStart(): Promise<void> {
   try {
     await Promise.all([
-      kv.del(CHIPS_BALANCE_KEY),
+      kv.del(TAZOS_BALANCE_KEY),
       kv.del(GAMBLING_LEADERBOARD_KEY),
       kv.del(DEAL_COOLDOWN_KEY),
-      kv.del(VIEW_CHIPS_LAST_AT_KEY),
+      kv.del(VIEW_TAZOS_LAST_AT_KEY),
     ]);
-    console.log('[Blackjack] Chips and gambling leaderboard reset on stream start at', new Date().toISOString());
+    console.log('[Gambling] Tazos and leaderboard reset on stream start at', new Date().toISOString());
   } catch (e) {
-    console.warn('[Blackjack] Failed to reset on stream start:', e);
+    console.warn('[Gambling] Failed to reset on stream start:', e);
   }
 }
 
-/** Get top N by chips (gambling leaderboard). Uses leaderboard display names for casing. */
+/** Get top N by tazos (gambling leaderboard). */
 export async function getGamblingLeaderboardTop(n: number): Promise<{ username: string; chips: number }[]> {
   try {
     const excluded = await getLeaderboardExclusions();
@@ -314,7 +308,7 @@ export async function deal(username: string, betAmount: number): Promise<string>
 
   const result = await placeBet(user, betAmount);
   if (!result.ok) {
-    return `🃏 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+    return `🃏 Not enough tazos (${result.balance}).`;
   }
   const { bet } = result;
 
@@ -331,14 +325,14 @@ export async function deal(username: string, betAmount: number): Promise<string>
   if (playerVal.value === 21) {
     const dealerVal = handValue(dealerHand);
     if (dealerVal.value === 21) {
-      const bal = await addChips(user, bet);
+      const bal = await addTazos(user, bet);
       await kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) });
-      return `🃏 Push! Both have 21. ${bet} chips returned. (${bal} chips)`;
+      return `🃏 Push! Both 21. +0 (${bal} tazos)`;
     }
     const win = Math.floor(bet * 1.5);
-    const bal = await addChips(user, bet + win);
+    const bal = await addTazos(user, bet + win);
     await kv.hset(DEAL_COOLDOWN_KEY, { [user]: String(now) });
-    return `🃏 Blackjack! Won ${win} chips! (${bal} chips)`;
+    return `🃏 Blackjack! +${win}! (${bal} tazos)`;
   }
 
   const game: BlackjackGame = {
@@ -355,8 +349,8 @@ export async function deal(username: string, betAmount: number): Promise<string>
   ]);
 
   const dealerVis = cardDisplay(d1) + ' ?';
-  const extras = isPair(playerHand) ? ' | !double (2 cards) | !split (pair)' : ' | !double (2 cards)';
-  return `🃏 Your hand: ${formatHand(playerHand)} (${playerVal.value}) | Dealer: ${dealerVis} | Bet: ${bet} — !hit or !stand${extras}`;
+  const extras = isPair(playerHand) ? ' | double | split' : ' | double';
+  return `🃏 ${formatHand(playerHand)} (${playerVal.value}) vs ${dealerVis} | Bet: ${bet} — hit or stand${extras}`;
 }
 
 /** Double - double bet, take one card, stand. Only when 2 cards and not split. */
@@ -364,13 +358,13 @@ export async function double(username: string): Promise<string> {
   const user = normalizeUser(username);
   const game = await getActiveGame(username);
   if (!game) return NO_ACTIVE_HAND_MSG;
-  if (game.split) return `🃏 Can't !double on split hands. Use !hit or !stand.`;
-  if (game.playerHand.length !== 2) return `🃏 !double only on first 2 cards. Use !hit or !stand.`;
+  if (game.split) return `🃏 Can't double on split hands. hit or stand.`;
+  if (game.playerHand.length !== 2) return `🃏 double only on first 2 cards. hit or stand.`;
 
   const extraBet = game.bet;
-  const { ok, balance } = await deductChips(user, extraBet);
+  const { ok, balance } = await deductTazos(user, extraBet);
   if (!ok) {
-    return `🃏 Not enough chips to double (need ${extraBet} more, have ${balance}).`;
+    return `🃏 Not enough tazos to double (need ${extraBet}, have ${balance}).`;
   }
 
   const card = game.deck.pop()!;
@@ -379,8 +373,8 @@ export async function double(username: string): Promise<string> {
 
   if (value > 21) {
     await kv.del(gameKey(user));
-    const bal = await getChips(user);
-    return `🃏 Double bust! Drew ${cardDisplay(card)} — ${formatHand(game.playerHand)} = ${value}. Lost ${game.bet * 2} chips. (${bal} chips)`;
+    const bal = await getTazos(user);
+    return `🃏 Double bust (${value})! -${game.bet * 2}. (${bal} tazos)`;
   }
 
   game.bet *= 2;
@@ -395,13 +389,13 @@ export async function split(username: string): Promise<string> {
   const user = normalizeUser(username);
   const game = await getActiveGame(username);
   if (!game) return NO_ACTIVE_HAND_MSG;
-  if (game.split) return `🃏 Already split. Use !hit or !stand.`;
-  if (!isPair(game.playerHand)) return `🃏 !split only on pairs. Use !hit or !stand.`;
+  if (game.split) return `🃏 Already split. hit or stand.`;
+  if (!isPair(game.playerHand)) return `🃏 split only on pairs. hit or stand.`;
 
   const extraBet = game.bet;
-  const { ok, balance } = await deductChips(user, extraBet);
+  const { ok, balance } = await deductTazos(user, extraBet);
   if (!ok) {
-    return `🃏 Not enough chips to split (need ${extraBet} more). You have ${balance}.`;
+    return `🃏 Not enough tazos to split (need ${extraBet}, have ${balance}).`;
   }
 
   const [c1, c2] = game.playerHand;
@@ -419,7 +413,7 @@ export async function split(username: string): Promise<string> {
   game.createdAt = Date.now();
   await kv.set(gameKey(user), game);
   const v1 = handValue(game.playerHand).value;
-  return `🃏 Split! Hand 1: ${formatHand(game.playerHand)} (${v1}) — !hit or !stand (Hand 2: ${formatHand(game.playerHand2!)} waits)`;
+  return `🃏 Split! H1: ${formatHand(game.playerHand)} (${v1}) — hit or stand (H2: ${formatHand(game.playerHand2!)} waits)`;
 }
 
 /** Hit - draw a card. */
@@ -444,25 +438,25 @@ export async function hit(username: string): Promise<string> {
         const v2 = handValue(game.playerHand2!).value;
         if (v2 > 21) {
           await kv.del(gameKey(user));
-          const bal = await getChips(user);
-          return `🃏 Hand 1 bust! Hand 2: ${formatHand(game.playerHand2!)} (${v2}) also bust. Lost ${game.bet + game.bet2!} chips. (${bal} chips)`;
+          const bal = await getTazos(user);
+          return `🃏 H1 bust! H2 (${v2}) bust too. -${game.bet + game.bet2!}. (${bal} tazos)`;
         }
-        return `🃏 Hand 1 bust! Hand 2: ${formatHand(game.playerHand2!)} (${v2}) — !hit or !stand`;
+        return `🃏 H1 bust! H2: ${formatHand(game.playerHand2!)} (${v2}) — hit or stand`;
       } else {
         await kv.del(gameKey(user));
-        const bal = await getChips(user);
-        return `🃏 Hand 2 bust! ${formatHand(game.playerHand2!)} = ${value}. Lost ${game.bet + game.bet2!} chips. (${bal} chips)`;
+        const bal = await getTazos(user);
+        return `🃏 H2 bust (${value})! -${game.bet + game.bet2!}. (${bal} tazos)`;
       }
     }
     await kv.del(gameKey(user));
-    const bal = await getChips(user);
-    return `🃏 Bust! ${formatHand(game.playerHand)} = ${value}. Lost ${game.bet} chips. (${bal} chips)`;
+    const bal = await getTazos(user);
+    return `🃏 Bust (${value})! -${game.bet}. (${bal} tazos)`;
   }
 
   game.createdAt = Date.now();
   await kv.set(gameKey(user), game);
-  const handLabel = game.split ? (isHand1 ? 'Hand 1' : 'Hand 2') : 'Your hand';
-  return `🃏 Drew ${cardDisplay(card)}. ${handLabel}: ${formatHand(hand)} (${value}) — !hit or !stand`;
+  const handLabel = game.split ? (isHand1 ? 'H1' : 'H2') : '';
+  return `🃏 ${cardDisplay(card)} → ${handLabel ? handLabel + ': ' : ''}${formatHand(hand)} (${value}) — hit or stand`;
 }
 
 function resolveHand(
@@ -470,10 +464,10 @@ function resolveHand(
   playerVal: number,
   bet: number,
 ): { win: number; msg: string } {
-  if (dealerVal > 21) return { win: bet * 2, msg: `Dealer busts! You win ${bet} chips (${bet * 2} back)` };
-  if (dealerVal > playerVal) return { win: 0, msg: `Dealer wins ${dealerVal} vs ${playerVal} — lost ${bet} chips` };
-  if (dealerVal < playerVal) return { win: bet * 2, msg: `You win ${playerVal} vs ${dealerVal}! +${bet} chips (${bet * 2} back)` };
-  return { win: bet, msg: `Push — ${bet} chips returned` };
+  if (dealerVal > 21) return { win: bet * 2, msg: `Dealer busts! +${bet}` };
+  if (dealerVal > playerVal) return { win: 0, msg: `Dealer ${dealerVal} vs ${playerVal}. -${bet}` };
+  if (dealerVal < playerVal) return { win: bet * 2, msg: `${playerVal} vs ${dealerVal}. +${bet}` };
+  return { win: bet, msg: `Push` };
 }
 
 /** Stand - dealer plays (or switch to hand 2 when split). */
@@ -487,7 +481,7 @@ export async function stand(username: string): Promise<string> {
     game.createdAt = Date.now();
     await kv.set(gameKey(user), game);
     const v2 = handValue(game.playerHand2!).value;
-    return `🃏 Hand 1 stood. Hand 2: ${formatHand(game.playerHand2!)} (${v2}) — !hit or !stand`;
+    return `🃏 H1 stood. H2: ${formatHand(game.playerHand2!)} (${v2}) — hit or stand`;
   }
 
   const dealerHand = [...game.dealerHand];
@@ -503,21 +497,21 @@ export async function stand(username: string): Promise<string> {
   if (game.split && game.playerHand2) {
     const v1 = handValue(game.playerHand).value;
     const v2 = handValue(game.playerHand2).value;
-    const r1 = v1 <= 21 ? resolveHand(dealerVal, v1, game.bet) : { win: 0, msg: `Bust — lost ${game.bet} chips` };
-    const r2 = v2 <= 21 ? resolveHand(dealerVal, v2, game.bet2!) : { win: 0, msg: `Bust — lost ${game.bet2!} chips` };
+    const r1 = v1 <= 21 ? resolveHand(dealerVal, v1, game.bet) : { win: 0, msg: `Bust. -${game.bet}` };
+    const r2 = v2 <= 21 ? resolveHand(dealerVal, v2, game.bet2!) : { win: 0, msg: `Bust. -${game.bet2!}` };
     const totalWin = r1.win + r2.win;
     const totalBet = game.bet + game.bet2!;
-    const bal = totalWin > 0 ? await addChips(user, totalWin) : await getChips(user);
+    const bal = totalWin > 0 ? await addTazos(user, totalWin) : await getTazos(user);
     await kv.del(gameKey(user));
     const net = totalWin - totalBet;
-    return `🃏 Dealer: ${formatHand(dealerHand)} (${dealerVal}) | H1: ${r1.msg} | H2: ${r2.msg} | Net: ${net >= 0 ? '+' : ''}${net} chips (${bal} chips)`;
+    return `🃏 Dealer ${dealerVal} | H1: ${r1.msg} | H2: ${r2.msg} | ${net >= 0 ? '+' : ''}${net} (${bal} tazos)`;
   }
 
   const playerVal = handValue(game.playerHand).value;
   const { win, msg } = resolveHand(dealerVal, playerVal, game.bet);
-  const bal = win > 0 ? await addChips(user, win) : await getChips(user);
+  const bal = win > 0 ? await addTazos(user, win) : await getTazos(user);
   await kv.del(gameKey(user));
-  return `🃏 Dealer: ${formatHand(dealerHand)} (${dealerVal}) | ${msg} (${bal} chips)`;
+  return `🃏 Dealer ${dealerVal}. ${msg} (${bal} tazos)`;
 }
 
 // --- Instant games: coinflip, slots, roulette, dice ---
@@ -543,17 +537,17 @@ export async function playCoinflip(username: string, betAmount: number): Promise
   if (wait !== null) return `🎲 Wait ${wait}s before another game.`;
 
   const result = await placeBet(user, betAmount);
-  if (!result.ok) return `🎲 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `🎲 Not enough tazos (${result.balance}).`;
   const { bet } = result;
   await setInstantCooldown(user);
 
   if (Math.random() < 0.5) {
-    const bal = await addChips(user, bet * 2);
+    const bal = await addTazos(user, bet * 2);
     const streak = await recordWin(user);
-    return `🎲 You won ${bet} chips! (${bal} chips)${streak}`;
+    return `🎲 +${bet}! (${bal} tazos)${streak}`;
   }
   await recordLoss(user);
-  return `🎲 You lost ${bet} chips. (${result.balance} chips)`;
+  return `🎲 -${bet}. (${result.balance} tazos)`;
 }
 
 const SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍀', '7️⃣', '💎'] as const;
@@ -574,7 +568,7 @@ export async function playSlots(username: string, betAmount: number): Promise<st
   if (wait !== null) return `🎰 Wait ${wait}s before another spin.`;
 
   const result = await placeBet(user, betAmount);
-  if (!result.ok) return `🎰 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `🎰 Not enough tazos (${result.balance}).`;
   const { bet } = result;
   await setInstantCooldown(user);
 
@@ -588,24 +582,24 @@ export async function playSlots(username: string, betAmount: number): Promise<st
   if (reels[0] === reels[1] && reels[1] === reels[2]) {
     const mult = SLOT_MULTIPLIERS[reels[0]];
     const win = bet * mult;
-    const bal = await addChips(user, win);
+    const bal = await addTazos(user, win);
     const streak = await recordWin(user);
-    return `🎰 [ ${display} ] JACKPOT! ${mult}x — Won ${win - bet} chips! (${bal} chips)${streak}`;
+    return `🎰 [${display}] JACKPOT ${mult}x! +${win - bet} (${bal} tazos)${streak}`;
   }
   if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
     const match = reels[0] === reels[1] ? reels[0] : reels[1];
     const mult = Math.max(1, Math.floor(SLOT_MULTIPLIERS[match] / 2));
     const win = bet * mult;
-    const bal = await addChips(user, win);
+    const bal = await addTazos(user, win);
     const net = win - bet;
     if (net > 0) {
       const streak = await recordWin(user);
-      return `🎰 [ ${display} ] Two match! ${mult}x — Won ${net} chips! (${bal} chips)${streak}`;
+      return `🎰 [${display}] 2-match ${mult}x! +${net} (${bal} tazos)${streak}`;
     }
-    return `🎰 [ ${display} ] Two match — ${bet} chips returned. (${bal} chips)`;
+    return `🎰 [${display}] 2-match — push. (${bal} tazos)`;
   }
   await recordLoss(user);
-  return `🎰 [ ${display} ] No match — lost ${bet} chips. (${result.balance} chips)`;
+  return `🎰 [${display}] No match. -${bet} (${result.balance} tazos)`;
 }
 
 const ROULETTE_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
@@ -628,7 +622,7 @@ export async function playRoulette(username: string, choice: string, betAmount: 
   }
 
   const result = await placeBet(user, betAmount);
-  if (!result.ok) return `🎡 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `🎡 Not enough tazos (${result.balance}).`;
   const { bet } = result;
   await setInstantCooldown(user);
 
@@ -639,30 +633,30 @@ export async function playRoulette(username: string, choice: string, betAmount: 
 
   if (isRed) {
     if (spinRed) {
-      const bal = await addChips(user, bet * 2);
+      const bal = await addTazos(user, bet * 2);
       const streak = await recordWin(user);
-      return `🎡 [ ${spinStr} ] Red wins! Won ${bet} chips! (${bal} chips)${streak}`;
+      return `🎡 [${spinStr}] Red! +${bet} (${bal} tazos)${streak}`;
     }
     await recordLoss(user);
-    return `🎡 [ ${spinStr} ] Red lost — lost ${bet} chips. (${result.balance} chips)`;
+    return `🎡 [${spinStr}] Red lost. -${bet} (${result.balance} tazos)`;
   }
   if (isBlack) {
     if (spinBlack) {
-      const bal = await addChips(user, bet * 2);
+      const bal = await addTazos(user, bet * 2);
       const streak = await recordWin(user);
-      return `🎡 [ ${spinStr} ] Black wins! Won ${bet} chips! (${bal} chips)${streak}`;
+      return `🎡 [${spinStr}] Black! +${bet} (${bal} tazos)${streak}`;
     }
     await recordLoss(user);
-    return `🎡 [ ${spinStr} ] Black lost — lost ${bet} chips. (${result.balance} chips)`;
+    return `🎡 [${spinStr}] Black lost. -${bet} (${result.balance} tazos)`;
   }
   if (spin === numBet) {
     const win = bet * 36;
-    const bal = await addChips(user, win);
+    const bal = await addTazos(user, win);
     const streak = await recordWin(user);
-    return `🎡 [ ${spinStr} ] NUMBER HIT! 36x — Won ${win - bet} chips! (${bal} chips)${streak}`;
+    return `🎡 [${spinStr}] NUMBER HIT 36x! +${win - bet} (${bal} tazos)${streak}`;
   }
   await recordLoss(user);
-  return `🎡 [ ${spinStr} ] Wrong number — lost ${bet} chips. (${result.balance} chips)`;
+  return `🎡 [${spinStr}] Miss. -${bet} (${result.balance} tazos)`;
 }
 
 /** Dice: bet high (4-6) or low (1-3). 2x on win. */
@@ -678,19 +672,19 @@ export async function playDice(username: string, choice: string, betAmount: numb
   if (!isHigh && !isLow) return `🎲 Bet high (4-6) or low (1-3). !dice high 10`;
 
   const result = await placeBet(user, betAmount);
-  if (!result.ok) return `🎲 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `🎲 Not enough tazos (${result.balance}).`;
   const { bet } = result;
   await setInstantCooldown(user);
 
   const roll = Math.floor(Math.random() * 6) + 1;
   const won = (isHigh && roll >= 4) || (isLow && roll <= 3);
   if (won) {
-    const bal = await addChips(user, bet * 2);
+    const bal = await addTazos(user, bet * 2);
     const streak = await recordWin(user);
-    return `🎲 Rolled ${roll} (${isHigh ? 'high' : 'low'}) — Won ${bet} chips! (${bal} chips)${streak}`;
+    return `🎲 Rolled ${roll} (${isHigh ? 'high' : 'low'}) +${bet}! (${bal} tazos)${streak}`;
   }
   await recordLoss(user);
-  return `🎲 Rolled ${roll} (${roll >= 4 ? 'high' : 'low'}) — Lost ${bet} chips. (${result.balance} chips)`;
+  return `🎲 Rolled ${roll} (${roll >= 4 ? 'high' : 'low'}) -${bet}. (${result.balance} tazos)`;
 }
 
 // --- Crash ---
@@ -704,11 +698,10 @@ export async function playCrash(username: string, betAmount: number, targetMulti
   if (wait !== null) return `💥 Wait ${wait}s before another game.`;
 
   const result = await placeBet(user, betAmount);
-  if (!result.ok) return `💥 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `💥 Not enough tazos (${result.balance}).`;
   const { bet } = result;
   await setInstantCooldown(user);
 
-  // House edge ~3%. Crash point distribution: mostly low, occasionally very high.
   const r = Math.random();
   const crashPoint = Math.max(1, Math.floor(100 / (1 - r * 0.97)) / 100);
 
@@ -717,12 +710,12 @@ export async function playCrash(username: string, betAmount: number, targetMulti
 
   if (crashPoint >= target) {
     const win = Math.floor(bet * target);
-    const bal = await addChips(user, win);
+    const bal = await addTazos(user, win);
     const streak = await recordWin(user);
-    return `💥 Crashed at ${crashStr} — Cashed out at ${targetStr}! Won ${win - bet} chips! (${bal} chips)${streak}`;
+    return `💥 Crashed ${crashStr}, cashed ${targetStr}! +${win - bet} (${bal} tazos)${streak}`;
   }
   await recordLoss(user);
-  return `💥 Crashed at ${crashStr} — Target was ${targetStr}. Lost ${bet} chips. (${result.balance} chips)`;
+  return `💥 Crashed ${crashStr}, target ${targetStr}. -${bet} (${result.balance} tazos)`;
 }
 
 // --- War ---
@@ -741,7 +734,7 @@ export async function playWar(username: string, betAmount: number): Promise<stri
   if (wait !== null) return `⚔️ Wait ${wait}s before another game.`;
 
   const result = await placeBet(user, betAmount);
-  if (!result.ok) return `⚔️ Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `⚔️ Not enough tazos (${result.balance}).`;
   const { bet } = result;
   await setInstantCooldown(user);
 
@@ -756,16 +749,16 @@ export async function playWar(username: string, betAmount: number): Promise<stri
   const suitD = SUITS[Math.floor(Math.random() * SUITS.length)];
 
   if (pVal > dVal) {
-    const bal = await addChips(user, bet * 2);
+    const bal = await addTazos(user, bet * 2);
     const streak = await recordWin(user);
-    return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Won ${bet} chips! (${bal} chips)${streak}`;
+    return `⚔️ ${playerCard}${suitP} vs ${dealerCard}${suitD} +${bet}! (${bal} tazos)${streak}`;
   }
   if (pVal < dVal) {
     await recordLoss(user);
-    return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Dealer wins. Lost ${bet} chips. (${result.balance} chips)`;
+    return `⚔️ ${playerCard}${suitP} vs ${dealerCard}${suitD} -${bet}. (${result.balance} tazos)`;
   }
-  const bal = await addChips(user, bet);
-  return `⚔️ You: ${playerCard}${suitP} vs Dealer: ${dealerCard}${suitD} — Tie! ${bet} chips returned. (${bal} chips)`;
+  const bal = await addTazos(user, bet);
+  return `⚔️ ${playerCard}${suitP} vs ${dealerCard}${suitD} Tie! (${bal} tazos)`;
 }
 
 // --- Duel ---
@@ -792,7 +785,7 @@ export async function challengeDuel(challengerUsername: string, targetUsername: 
   if (wait !== null) return `⚔️ Wait ${wait}s before another game.`;
 
   const result = await placeBet(challenger, betAmount);
-  if (!result.ok) return `⚔️ Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `⚔️ Not enough tazos (${result.balance}).`;
   const { bet } = result;
 
   const duel: PendingDuel = {
@@ -804,10 +797,10 @@ export async function challengeDuel(challengerUsername: string, targetUsername: 
   await kv.set(duelKey(target), duel, { ex: DUEL_EXPIRE_SEC });
   await setInstantCooldown(challenger);
 
-  return `⚔️ ${challengerUsername.trim()} challenges ${targetUsername.trim()} to a ${bet}-chip duel! Type !accept within 60s.`;
+  return `⚔️ ${challengerUsername.trim()} challenges ${targetUsername.trim()} for ${bet} tazos! accept (60s)`;
 }
 
-/** Accept a pending duel. Both players' chips are at stake, 50/50 winner takes all. */
+/** Accept a pending duel. Both players' tazos are at stake, 50/50 winner takes all. */
 export async function acceptDuel(accepterUsername: string): Promise<string> {
   const accepter = normalizeUser(accepterUsername);
   const raw = await kv.get<PendingDuel>(duelKey(accepter));
@@ -816,15 +809,15 @@ export async function acceptDuel(accepterUsername: string): Promise<string> {
   const duel = raw as PendingDuel;
   if (Date.now() - duel.createdAt > DUEL_EXPIRE_SEC * 1000) {
     await kv.del(duelKey(accepter));
-    await addChips(duel.challenger, duel.bet);
-    return `⚔️ Duel expired. ${duel.challengerDisplay}'s ${duel.bet} chips refunded.`;
+    await addTazos(duel.challenger, duel.bet);
+    return `⚔️ Duel expired. ${duel.challengerDisplay}'s ${duel.bet} tazos refunded.`;
   }
 
-  const { ok, balance } = await deductChips(accepter, duel.bet);
+  const { ok, balance } = await deductTazos(accepter, duel.bet);
   if (!ok) {
     await kv.del(duelKey(accepter));
-    await addChips(duel.challenger, duel.bet);
-    return `⚔️ Not enough chips (need ${duel.bet}, have ${balance}). Duel cancelled, ${duel.challengerDisplay}'s chips returned.`;
+    await addTazos(duel.challenger, duel.bet);
+    return `⚔️ Not enough tazos (need ${duel.bet}, have ${balance}). Duel cancelled.`;
   }
 
   await kv.del(duelKey(accepter));
@@ -835,9 +828,9 @@ export async function acceptDuel(accepterUsername: string): Promise<string> {
   const winnerDisplay = challengerWins ? duel.challengerDisplay : accepterUsername.trim();
   const loserDisplay = challengerWins ? accepterUsername.trim() : duel.challengerDisplay;
 
-  const bal = await addChips(winner, totalPot);
+  const bal = await addTazos(winner, totalPot);
 
-  return `⚔️ ${winnerDisplay} defeats ${loserDisplay}! Won ${totalPot} chips! (${bal} chips)`;
+  return `⚔️ ${winnerDisplay} beats ${loserDisplay}! +${totalPot} (${bal} tazos)`;
 }
 
 // --- Heist ---
@@ -869,13 +862,13 @@ async function resolveHeist(heist: HeistState): Promise<string> {
     const payouts: string[] = [];
     for (const p of heist.participants) {
       const payout = Math.floor(p.bet * multiplier);
-      const bal = await addChips(p.user, payout);
+      const bal = await addTazos(p.user, payout);
       payouts.push(`${p.display} +${payout - p.bet} (${bal})`);
     }
     return `🏦💰 HEIST SUCCEEDED! ${numPlayers} robber${numPlayers > 1 ? 's' : ''} split the loot! ${payouts.join(', ')}`;
   }
 
-  return `🏦🚔 HEIST FAILED! Police caught ${numPlayers === 1 ? 'the lone robber' : `all ${numPlayers} robbers`}! ${totalPot} chips lost.`;
+  return `🏦🚔 HEIST FAILED! ${numPlayers === 1 ? 'Lone robber caught' : `All ${numPlayers} robbers caught`}! ${totalPot} tazos lost.`;
 }
 
 /** Auto-resolve expired heists (called by cron). Returns result message or null. */
@@ -910,7 +903,7 @@ export async function joinOrStartHeist(username: string, betAmount: number): Pro
     }
 
     const result = await placeBet(user, betAmount);
-    if (!result.ok) return `🏦 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+    if (!result.ok) return `🏦 Not enough tazos (${result.balance}).`;
     const { bet } = result;
     await setInstantCooldown(user);
 
@@ -921,11 +914,11 @@ export async function joinOrStartHeist(username: string, betAmount: number): Pro
     const rate = heistSuccessRate(existing.participants.length);
     const timeLeft = Math.ceil((HEIST_JOIN_WINDOW_MS - (Date.now() - existing.startedAt)) / 1000);
 
-    return `🏦 ${display} joins the heist with ${bet} chips! (${existing.participants.length} robbers, ${totalPot} at stake, ${rate}% odds, ${timeLeft}s left)`;
+    return `🏦 ${display} joins! ${bet} tazos (${existing.participants.length} robbers, ${totalPot} pot, ${rate}%, ${timeLeft}s)`;
   }
 
   const result = await placeBet(user, betAmount);
-  if (!result.ok) return `🏦 Not enough chips (${result.balance}). Chat to earn more or redeem channel points.`;
+  if (!result.ok) return `🏦 Not enough tazos (${result.balance}).`;
   const { bet } = result;
   await setInstantCooldown(user);
 
@@ -935,7 +928,7 @@ export async function joinOrStartHeist(username: string, betAmount: number): Pro
   };
   await kv.set(HEIST_KEY, newHeist, { ex: HEIST_TTL_SEC });
 
-  return `🏦 HEIST STARTED! ${display} bets ${bet} chips. Type !heist [amount] to join! (60s)`;
+  return `🏦 HEIST STARTED! ${display} bets ${bet} tazos. !heist [amount] to join! (60s)`;
 }
 
 /** Check heist status (called when !heist is used without an amount during an active heist). */
@@ -954,8 +947,8 @@ export async function getHeistStatus(): Promise<string | null> {
 
 const RAFFLE_KEY = 'raffle_active';
 const RAFFLE_LAST_AT_KEY = 'raffle_last_at';
-const RAFFLE_TTL_SEC = 600; // 10 min TTL safety net (well beyond entry window + cron interval)
-const RAFFLE_ENTRY_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+const RAFFLE_TTL_SEC = 300; // 5 min TTL safety net
+const RAFFLE_ENTRY_WINDOW_MS = 60 * 1000; // 1 minute
 const RAFFLE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between raffles
 const RAFFLE_DEFAULT_PRIZE = 50;
 
@@ -995,10 +988,10 @@ export async function startRaffle(prize = RAFFLE_DEFAULT_PRIZE): Promise<string>
     keyword,
   };
   await kv.set(RAFFLE_KEY, raffle, { ex: RAFFLE_TTL_SEC });
-  return `🎰 RAFFLE! Type '${keyword}' in chat to enter! Drawing in 2 minutes — winner gets ${prize} chips!`;
+  return `🎰 RAFFLE! Type '${keyword}' in chat to enter! Drawing in 1 minute — winner gets ${prize} tazos! Spam it for more entries!`;
 }
 
-/** Try to enter a raffle via keyword match. Returns reply if matched, null otherwise (silent for non-matches). */
+/** Try to enter a raffle via keyword match. Silent — always returns null (no chat reply). Each match = one more entry (spam for more chances). */
 export async function tryRaffleKeywordEntry(username: string, content: string): Promise<string | null> {
   const word = content.trim().toLowerCase();
   if (!word || word.length > 20) return null;
@@ -1010,14 +1003,12 @@ export async function tryRaffleKeywordEntry(username: string, content: string): 
 
   const user = normalizeUser(username);
   const display = username.trim();
-  if (raffle.participants.some(p => p.user === user)) return null;
-
   raffle.participants.push({ user, display });
   await kv.set(RAFFLE_KEY, raffle, { ex: RAFFLE_TTL_SEC });
-  return `🎰 ${display} joined the raffle! (${raffle.participants.length} entered)`;
+  return null;
 }
 
-/** Resolve the active raffle. Returns result message or null if nothing to resolve. */
+/** Resolve the active raffle. Picks winner weighted by number of entries. */
 export async function resolveRaffle(): Promise<string | null> {
   const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
   if (!raffle) return null;
@@ -1029,10 +1020,11 @@ export async function resolveRaffle(): Promise<string | null> {
   if (raffle.participants.length === 0) return null;
 
   const winner = raffle.participants[Math.floor(Math.random() * raffle.participants.length)];
-  const bal = await addChips(winner.user, raffle.prize);
+  const bal = await addTazos(winner.user, raffle.prize);
   if (winner.display) await setLeaderboardDisplayName(winner.user, winner.display);
 
-  return `🎰 RAFFLE WINNER! ${winner.display} wins ${raffle.prize} chips! (${bal} chips)`;
+  const unique = new Set(raffle.participants.map(p => p.user)).size;
+  return `🎰 RAFFLE WINNER! ${winner.display} wins ${raffle.prize} tazos! (${bal} total) — ${unique} entered`;
 }
 
 /** Check if enough time has passed to start a new raffle. */
@@ -1049,20 +1041,20 @@ export async function getRaffleStatus(): Promise<string | null> {
   const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
   if (!raffle) return null;
   if (Date.now() - raffle.startedAt >= RAFFLE_ENTRY_WINDOW_MS) return null;
+  const unique = new Set(raffle.participants.map(p => p.user)).size;
   const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - (Date.now() - raffle.startedAt)) / 1000);
-  return `🎰 Active raffle: ${raffle.participants.length} entered, ${raffle.prize} chip prize, ${timeLeft}s left. Type '${raffle.keyword}' to enter!`;
+  return `🎰 Active raffle: ${unique} entered (${raffle.participants.length} entries), ${raffle.prize} tazo prize, ${timeLeft}s left. Type '${raffle.keyword}' to enter!`;
 }
 
-/** Get a mid-raffle reminder if the raffle is roughly halfway through (50-75% of entry window). */
+/** Get a mid-raffle reminder. Only fires once (between 40-80% of entry window). */
 export async function getRaffleReminder(): Promise<string | null> {
   const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
   if (!raffle) return null;
   const elapsed = Date.now() - raffle.startedAt;
-  const halfPoint = RAFFLE_ENTRY_WINDOW_MS * 0.5;
-  const threeQuarterPoint = RAFFLE_ENTRY_WINDOW_MS * 0.75;
-  if (elapsed < halfPoint || elapsed >= threeQuarterPoint) return null;
+  if (elapsed < RAFFLE_ENTRY_WINDOW_MS * 0.4 || elapsed >= RAFFLE_ENTRY_WINDOW_MS * 0.8) return null;
+  const unique = new Set(raffle.participants.map(p => p.user)).size;
   const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - elapsed) / 1000);
-  return `🎰 Raffle ending soon! ${raffle.participants.length} entered so far — type '${raffle.keyword}' to enter! (${timeLeft}s left, ${raffle.prize} chips)`;
+  return `🎰 Raffle ending soon! ${unique} entered — type '${raffle.keyword}' for more entries! (${timeLeft}s left, ${raffle.prize} tazos)`;
 }
 
 // --- Chat Activity / Top Chatter ---
@@ -1166,24 +1158,24 @@ export async function resolveTopChatter(): Promise<string | null> {
   const excluded = await getLeaderboardExclusions();
   if (excluded.has(winner.user)) return null;
 
-  const bal = await addChips(winner.user, TOP_CHATTER_PRIZE);
+  const bal = await addTazos(winner.user, TOP_CHATTER_PRIZE);
   const names = (await kv.hgetall<Record<string, string>>(LEADERBOARD_DISPLAY_NAMES_KEY)) ?? {};
   const displayName = names[winner.user] ?? winner.user;
 
-  return `💬 Top chatter this hour: ${displayName} (${winner.count} messages) — +${TOP_CHATTER_PRIZE} chips! (${bal} chips)`;
+  return `💬 Top chatter this hour: ${displayName} (${winner.count} messages) — +${TOP_CHATTER_PRIZE} tazos! (${bal} tazos)`;
 }
 
-// --- Chip Drops ---
+// --- Tazo Drops ---
 
-const CHIP_DROP_KEY = 'chip_drop_active';
-const CHIP_DROP_LAST_AT_KEY = 'chip_drop_last_at';
-const CHIP_DROP_TTL_SEC = 180;
-const CHIP_DROP_WINDOW_MS = 2 * 60 * 1000;
-const CHIP_DROP_INTERVAL_MS = 15 * 60 * 1000;
-const CHIP_DROP_PRIZE = 5;
-const CHIP_DROP_MAX_WINNERS = 5;
+const TAZO_DROP_KEY = 'chip_drop_active'; // KV key unchanged
+const TAZO_DROP_LAST_AT_KEY = 'chip_drop_last_at'; // KV key unchanged
+const TAZO_DROP_TTL_SEC = 180;
+const TAZO_DROP_WINDOW_MS = 2 * 60 * 1000;
+const TAZO_DROP_INTERVAL_MS = 15 * 60 * 1000;
+const TAZO_DROP_PRIZE = 5;
+const TAZO_DROP_MAX_WINNERS = 5;
 
-interface ChipDropState {
+interface TazoDropState {
   keyword: string;
   prize: number;
   maxWinners: number;
@@ -1191,53 +1183,53 @@ interface ChipDropState {
   startedAt: number;
 }
 
-export async function startChipDrop(prize = CHIP_DROP_PRIZE, maxWinners = CHIP_DROP_MAX_WINNERS): Promise<string> {
+export async function startTazoDrop(prize = TAZO_DROP_PRIZE, maxWinners = TAZO_DROP_MAX_WINNERS): Promise<string> {
   const keyword = RAFFLE_KEYWORDS[Math.floor(Math.random() * RAFFLE_KEYWORDS.length)];
-  const drop: ChipDropState = { keyword, prize, maxWinners, winners: [], startedAt: Date.now() };
-  await kv.set(CHIP_DROP_KEY, drop, { ex: CHIP_DROP_TTL_SEC });
-  return `💧 Chip drop! First ${maxWinners} to type '${keyword}' get ${prize} chips!`;
+  const drop: TazoDropState = { keyword, prize, maxWinners, winners: [], startedAt: Date.now() };
+  await kv.set(TAZO_DROP_KEY, drop, { ex: TAZO_DROP_TTL_SEC });
+  return `💧 Tazo drop! First ${maxWinners} to type '${keyword}' get ${prize} tazos!`;
 }
 
-export async function tryChipDropEntry(username: string, content: string): Promise<string | null> {
+export async function tryTazoDropEntry(username: string, content: string): Promise<string | null> {
   const word = content.trim().toLowerCase();
   if (!word || word.length > 20) return null;
-  const drop = await kv.get<ChipDropState>(CHIP_DROP_KEY);
+  const drop = await kv.get<TazoDropState>(TAZO_DROP_KEY);
   if (!drop) return null;
-  if (Date.now() - drop.startedAt >= CHIP_DROP_WINDOW_MS) return null;
+  if (Date.now() - drop.startedAt >= TAZO_DROP_WINDOW_MS) return null;
   if (word !== drop.keyword) return null;
   const user = normalizeUser(username);
   if (drop.winners.some(w => w.user === user)) return null;
   const display = username.trim();
   drop.winners.push({ user, display });
-  const bal = await addChips(user, drop.prize);
+  const bal = await addTazos(user, drop.prize);
   if (display) await setLeaderboardDisplayName(user, display);
   const full = drop.winners.length >= drop.maxWinners;
   if (full) {
-    await kv.del(CHIP_DROP_KEY);
-    await kv.set(CHIP_DROP_LAST_AT_KEY, String(Date.now()));
-    return `💧 ${display} grabbed ${drop.prize} chips! (${bal} chips) — Drop complete!`;
+    await kv.del(TAZO_DROP_KEY);
+    await kv.set(TAZO_DROP_LAST_AT_KEY, String(Date.now()));
+    return `💧 ${display} grabbed ${drop.prize} tazos! (${bal} tazos) — Drop complete!`;
   }
-  await kv.set(CHIP_DROP_KEY, drop, { ex: CHIP_DROP_TTL_SEC });
-  return `💧 ${display} grabbed ${drop.prize} chips! (${bal} chips) — ${drop.maxWinners - drop.winners.length} left!`;
+  await kv.set(TAZO_DROP_KEY, drop, { ex: TAZO_DROP_TTL_SEC });
+  return `💧 ${display} grabbed ${drop.prize} tazos! (${bal} tazos) — ${drop.maxWinners - drop.winners.length} left!`;
 }
 
-export async function shouldStartChipDrop(): Promise<boolean> {
-  const existing = await kv.get<ChipDropState>(CHIP_DROP_KEY);
+export async function shouldStartTazoDrop(): Promise<boolean> {
+  const existing = await kv.get<TazoDropState>(TAZO_DROP_KEY);
   if (existing) return false;
-  const lastAt = await kv.get<string>(CHIP_DROP_LAST_AT_KEY);
-  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : CHIP_DROP_INTERVAL_MS;
-  return elapsed >= CHIP_DROP_INTERVAL_MS;
+  const lastAt = await kv.get<string>(TAZO_DROP_LAST_AT_KEY);
+  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : TAZO_DROP_INTERVAL_MS;
+  return elapsed >= TAZO_DROP_INTERVAL_MS;
 }
 
-export async function resolveExpiredChipDrop(): Promise<string | null> {
-  const drop = await kv.get<ChipDropState>(CHIP_DROP_KEY);
+export async function resolveExpiredTazoDrop(): Promise<string | null> {
+  const drop = await kv.get<TazoDropState>(TAZO_DROP_KEY);
   if (!drop) return null;
-  if (Date.now() - drop.startedAt < CHIP_DROP_WINDOW_MS) return null;
-  await kv.del(CHIP_DROP_KEY);
-  await kv.set(CHIP_DROP_LAST_AT_KEY, String(Date.now()));
+  if (Date.now() - drop.startedAt < TAZO_DROP_WINDOW_MS) return null;
+  await kv.del(TAZO_DROP_KEY);
+  await kv.set(TAZO_DROP_LAST_AT_KEY, String(Date.now()));
   if (drop.winners.length === 0) return null;
   const names = drop.winners.map(w => w.display).join(', ');
-  return `💧 Drop ended! ${drop.winners.length} grabbed chips: ${names}`;
+  return `💧 Drop ended! ${drop.winners.length} grabbed tazos: ${names}`;
 }
 
 // --- Chat Challenges ---
@@ -1262,7 +1254,7 @@ interface ChatChallengeState {
 export async function startChatChallenge(target = CHAT_CHALLENGE_TARGET, prize = CHAT_CHALLENGE_PRIZE): Promise<string> {
   const challenge: ChatChallengeState = { target, prize, startedAt: Date.now(), participants: {}, messageCount: 0 };
   await kv.set(CHAT_CHALLENGE_KEY, challenge, { ex: CHAT_CHALLENGE_TTL_SEC });
-  return `🎯 CHAT CHALLENGE! Send ${target} messages in 2 minutes and everyone gets ${prize} chips! Go go go!`;
+  return `🎯 CHAT CHALLENGE! Send ${target} messages in 2 minutes and everyone gets ${prize} tazos! Go go go!`;
 }
 
 export async function trackChallengeMessage(username: string): Promise<void> {
@@ -1287,8 +1279,8 @@ export async function resolveChatChallenge(): Promise<string | null> {
   await kv.set(CHAT_CHALLENGE_LAST_AT_KEY, String(Date.now()));
   const users = Object.keys(challenge.participants);
   if (challenge.messageCount >= challenge.target && users.length > 0) {
-    await Promise.all(users.map(u => addChips(u, challenge.prize)));
-    return `🎯 Challenge complete! ${challenge.messageCount}/${challenge.target} messages — ${users.length} chatters each earned ${challenge.prize} chips!`;
+    await Promise.all(users.map(u => addTazos(u, challenge.prize)));
+    return `🎯 Challenge complete! ${challenge.messageCount}/${challenge.target} messages — ${users.length} chatters each earned ${challenge.prize} tazos!`;
   }
   return `🎯 Challenge failed! Only ${challenge.messageCount}/${challenge.target} messages. Better luck next time!`;
 }
@@ -1304,7 +1296,7 @@ export async function shouldStartChatChallenge(): Promise<boolean> {
 // --- Win Streaks ---
 
 const WIN_STREAK_KEY = 'win_streak';
-const WIN_STREAK_MILESTONES: Array<[number, number]> = [[3, 3], [5, 10], [10, 25]];
+const WIN_STREAK_MILESTONES: Array<[number, number]> = [[3, 25], [5, 50], [10, 150], [15, 500]];
 
 export async function recordWin(username: string): Promise<string> {
   const user = normalizeUser(username);
@@ -1317,8 +1309,8 @@ export async function recordWin(username: string): Promise<string> {
     const milestone = WIN_STREAK_MILESTONES.find(([streak]) => streak === next);
     if (milestone) {
       const bonus = milestone[1];
-      const bal = await addChips(user, bonus);
-      return ` 🔥 ${next} wins in a row! +${bonus} bonus! (${bal} chips)`;
+      const bal = await addTazos(user, bonus);
+      return ` 🔥 ${next} wins! +${bonus} bonus! (${bal} tazos)`;
     }
     if (next >= 2) return ` 🔥 ${next} streak!`;
   } catch { /* silent */ }
@@ -1364,9 +1356,9 @@ export async function checkParticipationStreak(username: string): Promise<string
     const milestone = PARTICIPATION_MILESTONES.find(([days]) => days === streak);
     if (milestone) {
       const bonus = milestone[1];
-      const bal = await addChips(user, bonus);
+      const bal = await addTazos(user, bonus);
       const display = username.trim();
-      return `📅 ${display} — ${streak}-day chat streak! +${bonus} chips! (${bal} chips)`;
+      return `📅 ${display} — ${streak}-day streak! +${bonus} tazos! (${bal} tazos)`;
     }
   } catch { /* silent */ }
   return null;
@@ -1377,12 +1369,30 @@ export async function checkParticipationStreak(username: string): Promise<string
 type AttackCategory = 'physical' | 'magic' | 'ranged' | 'special';
 
 const ATTACK_WORDS: Record<string, AttackCategory> = {
+  // Physical
   attack: 'physical', punch: 'physical', kick: 'physical', uppercut: 'physical',
-  slap: 'physical', headbutt: 'physical', elbow: 'physical',
+  slap: 'physical', headbutt: 'physical', elbow: 'physical', smash: 'physical',
+  crush: 'physical', slam: 'physical', tackle: 'physical', stomp: 'physical',
+  chop: 'physical', strike: 'physical', hammer: 'physical', clobber: 'physical',
+  'drop kick': 'physical', 'body slam': 'physical', 'power punch': 'physical',
+  'flying kick': 'physical', 'ground pound': 'physical',
+  // Magic
   fireball: 'magic', lightning: 'magic', ice: 'magic', freeze: 'magic',
-  thunder: 'magic', blast: 'magic',
+  thunder: 'magic', blast: 'magic', burn: 'magic', shock: 'magic',
+  zap: 'magic', meteor: 'magic', inferno: 'magic', blizzard: 'magic',
+  'lightning bolt': 'magic', 'fire blast': 'magic', 'ice beam': 'magic',
+  'thunder strike': 'magic', 'shadow bolt': 'magic', 'arcane blast': 'magic',
+  // Ranged
   shoot: 'ranged', snipe: 'ranged', arrow: 'ranged', throw: 'ranged',
+  hurl: 'ranged', launch: 'ranged', fire: 'ranged', aim: 'ranged',
+  'head shot': 'ranged', 'double tap': 'ranged', 'quick shot': 'ranged',
+  'power shot': 'ranged', 'triple shot': 'ranged',
+  // Special
   insult: 'special', roast: 'special', curse: 'special', hex: 'special',
+  taunt: 'special', mock: 'special', jinx: 'special', doom: 'special',
+  banish: 'special', smite: 'special', nuke: 'special', obliterate: 'special',
+  'yo mama': 'special', 'spirit bomb': 'special', 'death stare': 'special',
+  'dark magic': 'special', 'soul strike': 'special',
 };
 
 const ATTACK_WORD_LIST = Object.keys(ATTACK_WORDS);
@@ -1395,14 +1405,30 @@ interface BossDefinition {
 }
 
 const BOSS_ROSTER: BossDefinition[] = [
-  { name: 'Goblin', maxHp: 300, weakness: 'physical', resistance: 'magic' },
-  { name: 'Dragon', maxHp: 600, weakness: 'magic', resistance: 'physical' },
-  { name: 'Kraken', maxHp: 500, weakness: 'ranged', resistance: 'physical' },
-  { name: 'Troll', maxHp: 400, weakness: 'magic', resistance: 'ranged' },
-  { name: 'Skeleton King', maxHp: 500, weakness: 'special', resistance: 'physical' },
-  { name: 'Shadow Witch', maxHp: 400, weakness: 'physical', resistance: 'magic' },
-  { name: 'Ice Giant', maxHp: 600, weakness: 'magic', resistance: 'ranged' },
-  { name: 'Rat King', maxHp: 300, weakness: 'ranged', resistance: 'special' },
+  { name: 'xQc', maxHp: 400, weakness: 'special', resistance: 'physical' },
+  { name: 'Trainwreck', maxHp: 400, weakness: 'physical', resistance: 'magic' },
+  { name: 'Adin Ross', maxHp: 400, weakness: 'magic', resistance: 'special' },
+  { name: 'Roshtein', maxHp: 400, weakness: 'ranged', resistance: 'magic' },
+  { name: 'Nickmercs', maxHp: 350, weakness: 'ranged', resistance: 'physical' },
+  { name: 'YourRAGE', maxHp: 350, weakness: 'magic', resistance: 'physical' },
+  { name: 'Stable Ronaldo', maxHp: 350, weakness: 'special', resistance: 'ranged' },
+  { name: 'WestCol', maxHp: 350, weakness: 'physical', resistance: 'special' },
+  { name: 'Ice Poseidon', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Sneako', maxHp: 300, weakness: 'special', resistance: 'physical' },
+  { name: 'Jynxzi', maxHp: 300, weakness: 'physical', resistance: 'magic' },
+  { name: 'Fanum', maxHp: 300, weakness: 'ranged', resistance: 'special' },
+  { name: 'TheGrefg', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Plaqueboymax', maxHp: 300, weakness: 'special', resistance: 'physical' },
+  { name: 'Amouranth', maxHp: 250, weakness: 'ranged', resistance: 'special' },
+  { name: 'Sketch', maxHp: 250, weakness: 'physical', resistance: 'magic' },
+  { name: 'Suspendas', maxHp: 250, weakness: 'magic', resistance: 'physical' },
+  { name: 'Mike Majlak', maxHp: 250, weakness: 'special', resistance: 'ranged' },
+  { name: 'JiDion', maxHp: 250, weakness: 'ranged', resistance: 'magic' },
+  { name: 'BruceDropEmOff', maxHp: 250, weakness: 'physical', resistance: 'special' },
+  { name: 'N3on', maxHp: 200, weakness: 'special', resistance: 'ranged' },
+  { name: 'Fousey', maxHp: 200, weakness: 'magic', resistance: 'physical' },
+  { name: 'Vitaly', maxHp: 200, weakness: 'physical', resistance: 'magic' },
+  { name: 'Corinna Kopf', maxHp: 200, weakness: 'ranged', resistance: 'special' },
 ];
 
 const BOSS_KEY = 'boss_active';
@@ -1413,6 +1439,7 @@ const BOSS_INTERVAL_MS = 50 * 60 * 1000;
 const BOSS_REWARD_POOL = 100;
 const BOSS_ATTACK_COOLDOWN_MS = 5_000;
 const BOSS_ATTACK_COOLDOWN_KEY = 'boss_attack_cd';
+const BOSS_REMINDER_INTERVAL_MS = 60_000;
 
 interface BossState {
   name: string;
@@ -1422,7 +1449,28 @@ interface BossState {
   resistance: AttackCategory;
   attackers: Record<string, number>;
   startedAt: number;
+  lastAttackAt: number;
   reward: number;
+}
+
+const BOSS_REMINDER_MESSAGES = [
+  (name: string, hp: number, maxHp: number, weakness: string) =>
+    `⚔️ ${name} is still wreaking havoc! ${hp}/${maxHp} HP. Weak to ${weakness}! Attack now!`,
+  (name: string, hp: number, maxHp: number, weakness: string) =>
+    `⚔️ ${name} is destroying everything! ${hp}/${maxHp} HP left. Use ${weakness} attacks!`,
+  (name: string, hp: number, maxHp: number, weakness: string) =>
+    `⚔️ Nobody's fighting ${name}?! ${hp}/${maxHp} HP. Try ${weakness} moves!`,
+  (name: string, hp: number, maxHp: number, weakness: string) =>
+    `⚔️ ${name} laughs at your cowardice! ${hp}/${maxHp} HP. ${weakness} is super effective!`,
+];
+
+export async function getBossReminder(): Promise<string | null> {
+  const boss = await kv.get<BossState>(BOSS_KEY);
+  if (!boss) return null;
+  if (Date.now() - boss.startedAt >= BOSS_WINDOW_MS) return null;
+  if (Date.now() - boss.lastAttackAt < BOSS_REMINDER_INTERVAL_MS) return null;
+  const msg = BOSS_REMINDER_MESSAGES[Math.floor(Math.random() * BOSS_REMINDER_MESSAGES.length)];
+  return msg(boss.name, boss.hp, boss.maxHp, boss.weakness);
 }
 
 export async function startBossEvent(): Promise<string> {
@@ -1436,7 +1484,7 @@ export async function startBossEvent(): Promise<string> {
   const boss: BossState = {
     name: def.name, hp: def.maxHp, maxHp: def.maxHp,
     weakness: def.weakness, resistance: def.resistance,
-    attackers: {}, startedAt: Date.now(), reward: BOSS_REWARD_POOL,
+    attackers: {}, startedAt: Date.now(), lastAttackAt: Date.now(), reward: BOSS_REWARD_POOL,
   };
   await kv.set(BOSS_KEY, boss, { ex: BOSS_TTL_SEC });
   const words = Object.entries(ATTACK_WORDS).reduce((acc, [w, cat]) => {
@@ -1444,8 +1492,8 @@ export async function startBossEvent(): Promise<string> {
     acc[cat].push(w);
     return acc;
   }, {} as Record<string, string[]>);
-  const examples = Object.values(words).map(ws => ws[0]).join(' ');
-  return `⚔️ A Wild ${def.name} appears! ${def.maxHp} HP. Weak to ${def.weakness}, resists ${def.resistance}. Try: ${examples}`;
+  const examples = Object.values(words).map(ws => ws[0]).join(', ');
+  return `⚔️ ${def.name} appears! ${def.maxHp} HP. Weak to ${def.weakness}, resists ${def.resistance}. Try: ${examples}`;
 }
 
 export async function tryBossAttack(username: string, content: string): Promise<string | null> {
@@ -1459,10 +1507,9 @@ export async function tryBossAttack(username: string, content: string): Promise<
   const user = normalizeUser(username);
   const display = username.trim();
 
-  // Per-user cooldown
   const cdKey = `${BOSS_ATTACK_COOLDOWN_KEY}:${user}`;
-  const lastAttack = await kv.get<number>(cdKey);
-  if (lastAttack && Date.now() - lastAttack < BOSS_ATTACK_COOLDOWN_MS) return null;
+  const lastAtk = await kv.get<number>(cdKey);
+  if (lastAtk && Date.now() - lastAtk < BOSS_ATTACK_COOLDOWN_MS) return null;
   await kv.set(cdKey, Date.now(), { ex: 10 });
 
   let baseDmg = 5 + Math.floor(Math.random() * 21);
@@ -1477,6 +1524,7 @@ export async function tryBossAttack(username: string, content: string): Promise<
 
   boss.hp = Math.max(0, boss.hp - baseDmg);
   boss.attackers[user] = (boss.attackers[user] ?? 0) + baseDmg;
+  boss.lastAttackAt = Date.now();
   if (display) await setLeaderboardDisplayName(user, display);
 
   if (boss.hp <= 0) {
@@ -1488,7 +1536,7 @@ export async function tryBossAttack(username: string, content: string): Promise<
     const rewards: string[] = [];
     for (const [u, dmg] of attackerEntries) {
       const share = Math.max(3, Math.round((dmg / totalDmg) * boss.reward));
-      const bal = await addChips(u, share);
+      const bal = await addTazos(u, share);
       const dname = names[u] ?? u;
       rewards.push(`${dname} +${share}`);
     }
@@ -1513,14 +1561,23 @@ export async function resolveExpiredBoss(): Promise<string | null> {
   if (Date.now() - boss.startedAt < BOSS_WINDOW_MS) return null;
   await kv.del(BOSS_KEY);
   await kv.set(BOSS_LAST_AT_KEY, String(Date.now()));
-  return `⚔️ The ${boss.name} escaped! Better luck next time.`;
+  return `⚔️ ${boss.name} escaped! Better luck next time.`;
 }
 
 // --- Active event check (prevents overlapping events) ---
 
 export async function hasActiveEvent(): Promise<boolean> {
   const [raffle, drop, challenge, boss] = await Promise.all([
-    kv.get(RAFFLE_KEY), kv.get(CHIP_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
+    kv.get(RAFFLE_KEY), kv.get(TAZO_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
   ]);
   return !!(raffle || drop || challenge || boss);
+}
+
+export async function resetEventTimestamps(): Promise<void> {
+  await Promise.all([
+    kv.del(RAFFLE_LAST_AT_KEY),
+    kv.del(TAZO_DROP_LAST_AT_KEY),
+    kv.del(CHAT_CHALLENGE_LAST_AT_KEY),
+    kv.del(BOSS_LAST_AT_KEY),
+  ]);
 }

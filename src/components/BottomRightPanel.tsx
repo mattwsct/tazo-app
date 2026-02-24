@@ -211,8 +211,8 @@ export default function BottomRightPanel({
 
     const subsUntil = settings.subGoalCelebrationUntil;
     const kicksUntil = settings.kicksGoalCelebrationUntil;
-    const subTarget = settings.subGoalTarget ?? 10;
-    const kicksTarget = settings.kicksGoalTarget ?? 1000;
+    const subTarget = settings.subGoalTarget ?? 5;
+    const kicksTarget = settings.kicksGoalTarget ?? 100;
 
     const maybeBump = async (type: 'subs' | 'kicks', until: number | undefined, count: number, target: number, bumpedRef: React.MutableRefObject<number | null>) => {
       if (until == null || Date.now() < until || count < target || bumpedRef.current === until) return;
@@ -221,7 +221,7 @@ export default function BottomRightPanel({
         const res = await fetch('/api/bump-goal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type }),
+          body: JSON.stringify({ type, count }),
         });
         const data = res.ok ? await res.json() : null;
         if (data?.bumped && refreshSettings) await refreshSettings();
@@ -267,7 +267,7 @@ export default function BottomRightPanel({
 
   const renderLeaderboard = () => (
     <div className="overlay-box leaderboard-box">
-      <div className="leaderboard-title">🃏 Top Chips</div>
+      <div className="leaderboard-title">🃏 Top Tazos</div>
       <div className="leaderboard-subtitle">Resets each stream</div>
       <div className="leaderboard-entries">
         {gamblingLeaderboardTop.length > 0 ? (
@@ -275,11 +275,11 @@ export default function BottomRightPanel({
             <div key={u.username} className="leaderboard-entry">
               <span className="leaderboard-rank">#{i + 1}</span>
               <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
-              <span className="leaderboard-chips">{u.chips} chips</span>
+              <span className="leaderboard-chips">{u.chips} tazos</span>
             </div>
           ))
         ) : (
-          <div className="leaderboard-entry leaderboard-empty">No chips yet — !deal to play blackjack!</div>
+          <div className="leaderboard-entry leaderboard-empty">No tazos yet — !deal to play!</div>
         )}
       </div>
     </div>

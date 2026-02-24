@@ -24,38 +24,41 @@ export async function getGoalCelebration(): Promise<CelebrationState> {
   }
 }
 
-/** Set celebration window when goal is reached. Only sets if not already celebrating. */
+/** Set celebration window when goal is reached. Returns true if a new celebration was set. */
 export async function setGoalCelebrationIfNeeded(
   type: GoalType,
   currentCount: number,
   target: number
-): Promise<void> {
-  if (currentCount < target) return;
+): Promise<boolean> {
+  if (currentCount < target) return false;
   try {
     const state = await getGoalCelebration();
     const untilKey = type === 'subs' ? 'subsUntil' : 'kicksUntil';
     const existing = state[untilKey];
     const now = Date.now();
-    if (existing != null && existing > now) return; // already celebrating
+    if (existing != null && existing > now) return false;
     await kv.set(GOAL_CELEBRATION_KEY, {
       ...state,
       [untilKey]: now + CELEBRATION_DURATION_MS,
     });
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[StreamGoals] Celebration set for ${type} until ${new Date(now + CELEBRATION_DURATION_MS).toISOString()}`);
-    }
+    return true;
   } catch (e) {
     console.warn('[StreamGoals] Failed to set celebration:', e);
+    return false;
   }
 }
 
-/** Bump goal target by increment and clear celebration. Returns new target. */
+/** Bump goal target by increment with smart snap. Returns new target. */
 export async function bumpGoalTarget(
   type: GoalType,
   currentTarget: number,
-  increment: number
+  increment: number,
+  currentCount?: number
 ): Promise<number> {
-  const newTarget = Math.max(1, currentTarget + Math.max(0, increment));
+  const inc = Math.max(1, increment);
+  const count = currentCount ?? 0;
+  const snapTarget = (Math.floor(count / inc) + 1) * inc;
+  const newTarget = Math.max(currentTarget + inc, snapTarget);
   try {
     const state = await getGoalCelebration();
     const untilKey = type === 'subs' ? 'subsUntil' : 'kicksUntil';

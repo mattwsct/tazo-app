@@ -30,11 +30,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const merged = mergeSettingsWithDefaults(settings ?? {});
     const target = type === 'subs'
-      ? (merged.subGoalTarget ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget ?? 10)
-      : (merged.kicksGoalTarget ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget ?? 1000);
+      ? (merged.subGoalTarget ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget ?? 5)
+      : (merged.kicksGoalTarget ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget ?? 100);
     const increment = type === 'subs'
-      ? (merged.subGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.subGoalIncrement ?? 10)
-      : (merged.kicksGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement ?? 1000);
+      ? (merged.subGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.subGoalIncrement ?? 5)
+      : (merged.kicksGoalIncrement ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement ?? 100);
 
     const count = type === 'subs' ? goals.subs : goals.kicks;
     const until = type === 'subs' ? celebration.subsUntil : celebration.kicksUntil;
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ bumped: false, reason: 'celebration not ended or goal not reached' }, { status: 200 });
     }
 
-    const newTarget = await bumpGoalTarget(type, target, increment);
+    const newTarget = await bumpGoalTarget(type, target, increment, count);
     return NextResponse.json({ bumped: true, newTarget });
   } catch (e) {
     console.warn('[bump-goal]', e);

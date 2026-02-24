@@ -16,14 +16,17 @@ async function ensureSessionStarted(): Promise<void> {
   }
 }
 
-/** Reset goals when stream starts. */
+/** Reset goals and targets when stream starts. */
 export async function resetStreamGoalsOnStreamStart(): Promise<void> {
   try {
     await kv.set(STREAM_GOALS_SUBS_KEY, 0);
     await kv.set(STREAM_GOALS_KICKS_KEY, 0);
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[StreamGoals] Reset on stream start');
-    }
+    const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
+    await kv.set('overlay_settings', {
+      ...settings,
+      subGoalTarget: 5,
+      kicksGoalTarget: 100,
+    });
   } catch (e) {
     console.warn('[StreamGoals] Failed to reset:', e);
   }

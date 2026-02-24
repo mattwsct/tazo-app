@@ -33,17 +33,17 @@ export interface OverlaySettings {
   /** Comma or newline-separated usernames to exclude from leaderboard (e.g. bots, your own name). */
   leaderboardExcludedBots?: string;
   showOverlayAlerts?: boolean;
-  /** Master switch: gambling (blackjack) enabled. When false, commands disabled and chips hidden. */
+  /** Master switch: gambling enabled. When false, commands disabled and tazos hidden. */
   gamblingEnabled?: boolean;
   /** Top N for gambling leaderboard. */
   gamblingLeaderboardTopN?: number;
-  /** Channel point reward title to redeem for chips (exact match, case-insensitive). Empty = disabled. */
+  /** Channel point reward title to redeem for tazos (exact match, case-insensitive). Empty = disabled. */
   chipRewardTitle?: string;
-  /** Chips granted per channel point redemption (when chipRewardTitle matches). */
+  /** Tazos granted per channel point redemption (when chipRewardTitle matches). */
   chipRewardChips?: number;
   /** Auto-start raffles every ~30 min when live. */
   autoRaffleEnabled?: boolean;
-  /** Auto chip drops every ~15 min. */
+  /** Auto tazo drops every ~15 min. */
   chipDropsEnabled?: boolean;
   /** Chat challenges every ~20-30 min. */
   chatChallengesEnabled?: boolean;
@@ -53,7 +53,7 @@ export interface OverlaySettings {
   winStreaksEnabled?: boolean;
   /** Participation streak rewards. */
   participationStreaksEnabled?: boolean;
-  /** Chip rewards for subs, gifts, kicks. */
+  /** Tazo rewards for subs, gifts, kicks. */
   subGiftChipRewards?: boolean;
   /** Individual game toggles (all default true, only apply when gamblingEnabled). */
   blackjackEnabled?: boolean;
@@ -68,7 +68,7 @@ export interface OverlaySettings {
   /** Utility command toggles. */
   convertEnabled?: boolean;
   mathEnabled?: boolean;
-  /** Runtime: top chips (from get-settings). */
+  /** Runtime: top tazos (from get-settings). */
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
@@ -114,9 +114,16 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   leaderboardExcludedBots: '',
   gamblingEnabled: true,
   gamblingLeaderboardTopN: 5,
-  chipRewardTitle: 'Buy Chips',
+  chipRewardTitle: 'Buy Tazos',
   chipRewardChips: 50,
   showOverlayAlerts: true,
+  autoRaffleEnabled: true,
+  chipDropsEnabled: true,
+  chatChallengesEnabled: true,
+  bossEventsEnabled: true,
+  winStreaksEnabled: true,
+  participationStreaksEnabled: true,
+  subGiftChipRewards: true,
   blackjackEnabled: true,
   slotsEnabled: true,
   rouletteEnabled: true,
@@ -129,11 +136,11 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   convertEnabled: true,
   mathEnabled: true,
   showSubGoal: false,
-  subGoalTarget: 10, // ~$50 at typical sub price
-  subGoalIncrement: 10,
+  subGoalTarget: 5,
+  subGoalIncrement: 5,
   showKicksGoal: false,
-  kicksGoalTarget: 1000, // 1000 kicks = $10
-  kicksGoalIncrement: 1000,
+  kicksGoalTarget: 100,
+  kicksGoalIncrement: 100,
 };
 
 // Valid settings schema for validation

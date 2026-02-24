@@ -34,8 +34,8 @@ export function parsePollDurationVariant(content: string): { duration: number; r
   return { duration, rest };
 }
 
-/** Parse !poll <question?> [opts] — question before ?, options after. Comma-separated or space-separated (each word if no commas). No options = Yes/No. */
-export function parsePollCommand(content: string): { question: string; options: PollOption[] } | null {
+/** Parse !poll <question?> [opts] — question before ?, options after. Comma-separated or space-separated. No options after ? = open-ended. No ? at all = closed Yes/No. */
+export function parsePollCommand(content: string): { question: string; options: PollOption[]; mode: 'closed' | 'open' } | null {
   const trimmed = content.trim();
   if (!trimmed.toLowerCase().startsWith('!poll ')) return null;
   const rest = trimmed.slice(6).trim();
@@ -43,6 +43,10 @@ export function parsePollCommand(content: string): { question: string; options: 
   const question = qMark >= 0 ? rest.slice(0, qMark + 1).trim() : rest;
   const after = qMark >= 0 ? rest.slice(qMark + 1).trim() : '';
   if (!question) return null;
+
+  if (qMark >= 0 && (!after || after.length === 0)) {
+    return { question, options: [], mode: 'open' };
+  }
 
   let options: PollOption[];
   if (!after || after.length === 0) {
@@ -55,12 +59,11 @@ export function parsePollCommand(content: string): { question: string; options: 
       ? after.split(',').map((p) => p.trim()).filter(Boolean)
       : after.split(/\s+/).map((p) => p.trim()).filter(Boolean);
     if (parts.length === 0) return null;
-    // Filter out conjunctions etc. ("Yes or no" → "or" shouldn't be an option)
     const filtered = parts.filter((p) => !BANNED_OPTION_WORDS.has(p.toLowerCase()));
-    if (filtered.length < 2) return null; // Need at least 2 options
+    if (filtered.length < 2) return null;
     options = filtered.map((label) => ({ label, votes: 0, voters: {} }));
   }
-  return { question, options };
+  return { question, options, mode: 'closed' };
 }
 
 /** Max lengths for poll content (chars). */

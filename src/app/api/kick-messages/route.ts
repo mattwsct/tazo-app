@@ -62,8 +62,8 @@ export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   chatBroadcastAltitude: false,
   chatBroadcastAltitudeMinM: 50,
   chatBroadcastAltitudeTimeoutMin: 5,
-  chatBroadcastWellnessSteps: false,
-  chatBroadcastWellnessDistance: false,
+  chatBroadcastWellnessSteps: true,
+  chatBroadcastWellnessDistance: true,
   chatBroadcastWellnessFlights: false,
   chatBroadcastWellnessActiveCalories: false,
 };

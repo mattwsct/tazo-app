@@ -1,11 +1,11 @@
 /**
- * !addchips chat command: broadcaster and mods can add chips to any user.
- * Usage: !addchips user 50 or !addchips 50 user
+ * !addtazos chat command: broadcaster and mods can add tazos to any user.
+ * Usage: !addtazos user 50 or !addtazos 50 user
  */
 
 import { kv } from '@vercel/kv';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
-import { addChipsAsAdmin } from '@/utils/blackjack-storage';
+import { addTazosAsAdmin } from '@/utils/blackjack-storage';
 
 function isModOrBroadcaster(
   sender: unknown,
@@ -26,32 +26,32 @@ function isModOrBroadcaster(
   return false;
 }
 
-export interface HandleAddChipsResult {
+export interface HandleAddTazosResult {
   handled: boolean;
   reply?: string;
 }
 
 /**
- * Handle !addchips <user> <amount> or !addchips <amount> <user> — add chips to a user. Broadcaster and mods only.
+ * Handle !addtazos <user> <amount> or !addtazos <amount> <user>. Broadcaster and mods only.
  */
-export async function handleAddChipsCommand(
+export async function handleAddTazosCommand(
   content: string,
   senderUsername: string,
   payload: Record<string, unknown>
-): Promise<HandleAddChipsResult> {
+): Promise<HandleAddTazosResult> {
   const trimmed = content.trim();
-  if (!trimmed.toLowerCase().startsWith('!addchips')) return { handled: false };
+  if (!trimmed.toLowerCase().startsWith('!addtazos') && !trimmed.toLowerCase().startsWith('!addchips')) return { handled: false };
 
   const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
   if (!isModOrBroadcaster(payload.sender, senderUsername, broadcasterSlug)) {
-    return { handled: true, reply: '🃏 Only broadcaster and mods can use !addchips.' };
+    return { handled: true, reply: '🃏 Only broadcaster and mods can use !addtazos.' };
   }
 
-  const match = trimmed.match(/^!addchips\s+(.+)$/i);
+  const match = trimmed.match(/^!add(?:tazos|chips)\s+(.+)$/i);
   const argsStr = match?.[1]?.trim() ?? '';
   const parts = argsStr.split(/\s+/).filter(Boolean);
   if (parts.length !== 2) {
-    return { handled: true, reply: '🃏 Usage: !addchips user 50 or !addchips 50 user' };
+    return { handled: true, reply: '🃏 Usage: !addtazos user 50 or !addtazos 50 user' };
   }
 
   const num0 = parseInt(parts[0], 10);
@@ -71,12 +71,12 @@ export async function handleAddChipsCommand(
     amount = num0;
     username = parts[1];
   } else {
-    return { handled: true, reply: '🃏 Usage: !addchips user 50 or !addchips 50 user' };
+    return { handled: true, reply: '🃏 Usage: !addtazos user 50 or !addtazos 50 user' };
   }
 
-  const added = await addChipsAsAdmin(username, amount);
+  const added = await addTazosAsAdmin(username, amount);
   if (added === 0) {
     return { handled: true, reply: '🃏 Invalid amount (must be ≥ 1).' };
   }
-  return { handled: true, reply: `🃏 Added ${added} chips to ${username}.` };
+  return { handled: true, reply: `🃏 +${added} tazos to ${username}.` };
 }

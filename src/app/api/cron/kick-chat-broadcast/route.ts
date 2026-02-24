@@ -32,9 +32,9 @@ import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-tit
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import {
   checkAndResolveExpiredHeist, resolveRaffle, shouldStartRaffle, startRaffle, getRaffleReminder, resolveTopChatter,
-  shouldStartChipDrop, startChipDrop, resolveExpiredChipDrop,
+  shouldStartTazoDrop, startTazoDrop, resolveExpiredTazoDrop,
   shouldStartChatChallenge, startChatChallenge, resolveChatChallenge,
-  shouldStartBossEvent, startBossEvent, resolveExpiredBoss,
+  shouldStartBossEvent, startBossEvent, resolveExpiredBoss, getBossReminder,
   hasActiveEvent,
 } from '@/utils/blackjack-storage';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
@@ -282,11 +282,12 @@ export async function GET(request: NextRequest) {
   }
 
   // Wellness milestones: steps, distance, flights, active calories (only when live)
-  const hasWellnessToggles =
-    storedAlert?.chatBroadcastWellnessSteps ||
-    storedAlert?.chatBroadcastWellnessDistance ||
-    storedAlert?.chatBroadcastWellnessFlights ||
-    storedAlert?.chatBroadcastWellnessActiveCalories;
+  // Steps/distance default ON (opt-out via !== false); flights/calories default OFF (opt-in via === true)
+  const wellnessStepsOn = storedAlert?.chatBroadcastWellnessSteps !== false;
+  const wellnessDistanceOn = storedAlert?.chatBroadcastWellnessDistance !== false;
+  const wellnessFlightsOn = storedAlert?.chatBroadcastWellnessFlights === true;
+  const wellnessCaloriesOn = storedAlert?.chatBroadcastWellnessActiveCalories === true;
+  const hasWellnessToggles = wellnessStepsOn || wellnessDistanceOn || wellnessFlightsOn || wellnessCaloriesOn;
   if (hasWellnessToggles && isLive) {
     const [stepsSince, distanceSince, flightsSince, activeCalSince, milestonesLast] = await Promise.all([
       getStepsSinceStreamStart(),
@@ -323,7 +324,7 @@ export async function GET(request: NextRequest) {
     };
 
     await checkAndSend(
-      storedAlert?.chatBroadcastWellnessSteps === true,
+      wellnessStepsOn,
       stepsSince,
       WELLNESS_MILESTONES.steps,
       milestonesLast.steps,
@@ -333,7 +334,7 @@ export async function GET(request: NextRequest) {
       (n) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n)
     );
     await checkAndSend(
-      storedAlert?.chatBroadcastWellnessDistance === true,
+      wellnessDistanceOn,
       distanceSince,
       WELLNESS_MILESTONES.distanceKm,
       milestonesLast.distanceKm,
@@ -343,7 +344,7 @@ export async function GET(request: NextRequest) {
       (n) => String(Math.round(n))
     );
     await checkAndSend(
-      storedAlert?.chatBroadcastWellnessFlights === true,
+      wellnessFlightsOn,
       flightsSince,
       WELLNESS_MILESTONES.flightsClimbed,
       milestonesLast.flightsClimbed,
@@ -353,7 +354,7 @@ export async function GET(request: NextRequest) {
       String
     );
     await checkAndSend(
-      storedAlert?.chatBroadcastWellnessActiveCalories === true,
+      wellnessCaloriesOn,
       activeCalSince,
       WELLNESS_MILESTONES.activeCalories,
       milestonesLast.activeCalories,
@@ -444,7 +445,9 @@ export async function GET(request: NextRequest) {
         }
       }
       const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
-      if (autoRaffleEnabled && await shouldStartRaffle()) {
+      const shouldRaffle = await shouldStartRaffle();
+      console.log('[Cron HR] RAFFLE_CHECK', JSON.stringify({ autoRaffleEnabled, shouldRaffle }));
+      if (autoRaffleEnabled && shouldRaffle) {
         const announcement = await startRaffle();
         await sendKickChatMessage(accessToken, announcement);
         sent++;
@@ -453,25 +456,34 @@ export async function GET(request: NextRequest) {
     } catch (err) {
       console.error('[Cron HR] RAFFLE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
+  } else {
+    console.log('[Cron HR] SKIP_RAFFLES', JSON.stringify({ reason: 'not_live' }));
   }
 
-  // Chip drops: resolve/start (only when live)
+  // Tazo drops: resolve/start (only when live)
   if (isLive) {
     try {
-      const dropResult = await resolveExpiredChipDrop();
+      const dropResult = await resolveExpiredTazoDrop();
       if (dropResult) {
         await sendKickChatMessage(accessToken, dropResult);
         sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_resolve', msgPreview: dropResult.slice(0, 80) }));
       }
-      const chipDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
-      if (chipDropsEnabled && !(await hasActiveEvent()) && await shouldStartChipDrop()) {
-        const announcement = await startChipDrop();
+      const tazoDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
+      const activeEvent = await hasActiveEvent();
+      const shouldDrop = await shouldStartTazoDrop();
+      console.log('[Cron HR] TAZO_DROP_CHECK', JSON.stringify({ tazoDropsEnabled, activeEvent, shouldDrop }));
+      if (tazoDropsEnabled && !activeEvent && shouldDrop) {
+        const announcement = await startTazoDrop();
         await sendKickChatMessage(accessToken, announcement);
         sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_start', msgPreview: announcement.slice(0, 80) }));
       }
     } catch (err) {
-      console.error('[Cron HR] CHIP_DROP_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+      console.error('[Cron HR] TAZO_DROP_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
     }
+  } else {
+    console.log('[Cron HR] SKIP_TAZO_DROPS', JSON.stringify({ reason: 'not_live' }));
   }
 
   // Chat challenges: resolve/start (only when live)
@@ -493,19 +505,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Boss events: resolve/start (only when live)
+  // Boss events: resolve/start/remind (only when live)
   if (isLive) {
     try {
       const bossResult = await resolveExpiredBoss();
       if (bossResult) {
         await sendKickChatMessage(accessToken, bossResult);
         sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_resolve', msgPreview: bossResult.slice(0, 80) }));
+      }
+      const bossReminder = await getBossReminder();
+      if (bossReminder) {
+        await sendKickChatMessage(accessToken, bossReminder);
+        sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_reminder', msgPreview: bossReminder.slice(0, 80) }));
       }
       const bossEventsEnabled = overlaySettings?.bossEventsEnabled !== false;
-      if (bossEventsEnabled && !(await hasActiveEvent()) && await shouldStartBossEvent()) {
+      const shouldBoss = await shouldStartBossEvent();
+      console.log('[Cron HR] BOSS_CHECK', JSON.stringify({ bossEventsEnabled, shouldBoss }));
+      if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss) {
         const announcement = await startBossEvent();
         await sendKickChatMessage(accessToken, announcement);
         sent++;
+        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_start', msgPreview: announcement.slice(0, 80) }));
       }
     } catch (err) {
       console.error('[Cron HR] BOSS_EVENT_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));

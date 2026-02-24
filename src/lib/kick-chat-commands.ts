@@ -29,7 +29,7 @@ import {
   stand as blackjackStand,
   double as blackjackDouble,
   split as blackjackSplit,
-  getChips,
+  getTazos,
   getGamblingLeaderboardTop,
   isGamblingEnabled,
   isSettingEnabled,
@@ -159,7 +159,7 @@ export const KICK_CHAT_COMMANDS = [
   'hit',
   'double',
   'split',
-  'chips',
+  'tazos',
   'slots',
   'spin',
   'roulette',
@@ -173,6 +173,7 @@ export const KICK_CHAT_COMMANDS = [
   'games',
   'heist',
   'convert',
+  'cv',
   'math',
 ] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
@@ -208,7 +209,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'hit') return { cmd: 'hit' };
   if (cmd === 'double') return { cmd: 'double' };
   if (cmd === 'split') return { cmd: 'split' };
-  if (cmd === 'chips') return { cmd: 'chips', arg };
+  if (cmd === 'tazos' || cmd === 'chips') return { cmd: 'tazos', arg };
   if (cmd === 'slots' || cmd === 'spin') return { cmd: 'slots', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'roulette') return { cmd: 'roulette', arg: parts.slice(1).join(' ') };
   if (cmd === 'dice') return { cmd: 'dice', arg: parts.slice(1).join(' ') };
@@ -219,7 +220,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'gamba' || cmd === 'gamble') return { cmd: 'gamble', arg: arg ?? parts.slice(1).join(' ') };
   if (cmd === 'games') return { cmd: 'games' };
   if (cmd === 'heist') return { cmd: 'heist', arg };
-  if (cmd === 'convert') return { cmd: 'convert', arg: parts.slice(1).join(' ') };
+  if (cmd === 'convert' || cmd === 'cv') return { cmd: 'convert', arg: parts.slice(1).join(' ') };
   if (cmd === 'math' || cmd === 'calc') return { cmd: 'math', arg: parts.slice(1).join(' ') };
   return null;
 }
@@ -261,9 +262,9 @@ export async function handleKickChatCommand(
     const gamblingOn = await isGamblingEnabled();
     if (!gamblingOn) return '🃏 Gambling is disabled for this stream.';
     const top = await getGamblingLeaderboardTop(5);
-    if (top.length === 0) return '🃏 No chips yet this stream. !deal <amount> to play blackjack — everyone starts with 100 chips.';
+    if (top.length === 0) return '🃏 No tazos yet! !deal <amount> to play — start with 100 tazos.';
     const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.chips}`).join(' | ');
-    return `🃏 Top chips (resets each stream): ${lines}`;
+    return `🃏 Top tazos: ${lines}`;
   }
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();
@@ -286,8 +287,8 @@ export async function handleKickChatCommand(
   if (cmd === 'stand') {
     const bjGame = await getActiveGame(user);
     if (bjGame) return blackjackStand(user);
-    const standChips = await getChips(user);
-    return `🃏 No active hand. !deal <amount> to play. You have ${standChips} chips.`;
+    const standBal = await getTazos(user);
+    return `🃏 No active hand. !deal <amount> to play. (${standBal} tazos)`;
   }
   if (cmd === 'calories') return getWellnessCaloriesResponse();
   if (cmd === 'flights') return getWellnessFlightsResponse();
@@ -326,7 +327,7 @@ export async function handleKickChatCommand(
     return `🔢 ${expr.replace(/\*/g, '×').replace(/\//g, '÷')} = ${formatted}`;
   }
   // Gambling (all require gambling enabled)
-  const gamblingCmds = ['chips', 'deal', 'bj', 'hit', 'double', 'split', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games', 'heist'];
+  const gamblingCmds = ['tazos', 'deal', 'bj', 'hit', 'double', 'split', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games', 'heist'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return '🃏 Gambling is disabled for this stream.';
@@ -347,14 +348,14 @@ export async function handleKickChatCommand(
   if (toggleKey && !(await isSettingEnabled(toggleKey))) {
     return `🃏 That game is currently disabled.`;
   }
-  if (cmd === 'chips') {
+  if (cmd === 'tazos') {
     if (!user) return null;
     const targetUser = (arg ?? '').trim() || user;
-    const chips = await getChips(targetUser);
+    const bal = await getTazos(targetUser);
     if (targetUser.toLowerCase() === user.toLowerCase()) {
-      return `🃏 You have ${chips} chips. !games for options. Redeem channel points for more chips.`;
+      return `🃏 ${bal} tazos. !games for options.`;
     }
-    return `🃏 ${targetUser} has ${chips} chips (resets each stream).`;
+    return `🃏 ${targetUser}: ${bal} tazos`;
   }
   if (cmd === 'deal' || cmd === 'bj') {
     if (!user) return null;
@@ -437,7 +438,7 @@ export async function handleKickChatCommand(
       if (await isSettingEnabled(g.toggle)) enabled.push(g.cmd);
     }
     if (enabled.length === 0) return '🎲 No games are currently enabled.';
-    return `🎲 Games: ${enabled.join(' ')} — Use max/all to go all-in. !chips for balance.`;
+    return `🎲 Games: ${enabled.join(' ')} — Use max/all to go all-in. !tazos for balance.`;
   }
   if (cmd === 'heist') {
     if (!user) return null;
