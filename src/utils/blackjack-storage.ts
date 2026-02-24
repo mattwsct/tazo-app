@@ -950,20 +950,40 @@ const RAFFLE_LAST_AT_KEY = 'raffle_last_at';
 const RAFFLE_TTL_SEC = 600; // 10 min TTL safety net
 const RAFFLE_ENTRY_WINDOW_MS = 60 * 1000; // 1 minute
 const RAFFLE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between raffles
-const RAFFLE_DEFAULT_PRIZE = 50;
+const RAFFLE_RECENT_KEY = 'raffle_recent_keywords';
+const RAFFLE_RECENT_MAX = 30;
 
 const RAFFLE_KEYWORDS = [
-  'tazo', 'wazo', 'lazo', 'ratzo', 'gayzo', 'nontent',
-  'yoink', 'poggers', 'monke', 'bonk', 'sheesh', 'vibes',
-  'bruh', 'noice', 'stonks', 'woop', 'snag', 'bingo',
-  'lemon', 'mango', 'panda', 'cobra', 'pixel', 'turbo',
-  'blaze', 'crispy', 'groovy', 'zippy', 'chunky', 'spicy',
-  'ninja', 'wizard', 'goblin', 'yeet', 'dingo', 'quack',
-  'noodle', 'taco', 'waffle', 'banana', 'rocket', 'thunder',
+  // Internet slang
+  'rizz', 'sigma', 'based', 'slay', 'goat', 'sus', 'cap', 'bet', 'gyat',
+  'yeet', 'vibe', 'bruh', 'fire', 'dub', 'cope', 'mald', 'valid', 'mid',
+  'lit', 'aura', 'cooked', 'ratio', 'pog', 'kek', 'npc', 'banger', 'glaze',
+  'seethe', 'bussin', 'skibidi', 'demure', 'fanum', 'ong', 'sheesh', 'bonk',
+  'stonks', 'yoink', 'noice', 'chad', 'simp', 'drip', 'flex', 'savage',
+  'beast', 'legend', 'vibes', 'toxic', 'squad', 'hype', 'goated', 'zamn',
+  'pluh', 'dawg', 'chill', 'facts', 'juicy', 'crispy', 'finesse', 'spicy',
+  'tazo',
+  // Streamer names (from boss roster)
+  'ice', 'sam', 'ebz', 'mando', 'abz', 'sjc', 'andy', 'moxie', 'eddie',
+  'moises', 'shoovy', 'deepak', 'carldo', 'fousey', 'n3on', 'alexis',
+  'jandro', 'hito', 'kimmee', 'nanatty', 'shotime',
 ];
 
-function pickRaffleKeyword(): string {
-  return RAFFLE_KEYWORDS[Math.floor(Math.random() * RAFFLE_KEYWORDS.length)];
+function pickRafflePrize(): number {
+  const roll = Math.random();
+  if (roll < 0.6) return 25 + Math.floor(Math.random() * 26);       // 60%: 25-50
+  if (roll < 0.9) return 50 + Math.floor(Math.random() * 51);       // 30%: 50-100
+  return 100 + Math.floor(Math.random() * 51);                      // 10%: 100-150
+}
+
+async function pickRaffleKeyword(): Promise<string> {
+  const recent = (await kv.get<string[]>(RAFFLE_RECENT_KEY)) ?? [];
+  const available = RAFFLE_KEYWORDS.filter(k => !recent.includes(k));
+  const pool = available.length > 0 ? available : RAFFLE_KEYWORDS;
+  const keyword = pool[Math.floor(Math.random() * pool.length)];
+  const updated = [...recent, keyword].slice(-RAFFLE_RECENT_MAX);
+  await kv.set(RAFFLE_RECENT_KEY, updated);
+  return keyword;
 }
 
 interface RaffleState {
@@ -974,13 +994,14 @@ interface RaffleState {
 }
 
 /** Start a new raffle. Returns announcement message. */
-export async function startRaffle(prize = RAFFLE_DEFAULT_PRIZE): Promise<string> {
+export async function startRaffle(prize?: number): Promise<string> {
   const existing = await kv.get<RaffleState>(RAFFLE_KEY);
   if (existing && Date.now() - existing.startedAt < RAFFLE_ENTRY_WINDOW_MS) {
     const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - (Date.now() - existing.startedAt)) / 1000);
     return `🎰 Raffle already active! Type '${existing.keyword}' to enter (${timeLeft}s left).`;
   }
-  const keyword = pickRaffleKeyword();
+  const keyword = await pickRaffleKeyword();
+  if (prize === undefined) prize = pickRafflePrize();
   const raffle: RaffleState = {
     participants: [],
     startedAt: Date.now(),
@@ -1184,7 +1205,7 @@ interface TazoDropState {
 }
 
 export async function startTazoDrop(prize = TAZO_DROP_PRIZE, maxWinners = TAZO_DROP_MAX_WINNERS): Promise<string> {
-  const keyword = RAFFLE_KEYWORDS[Math.floor(Math.random() * RAFFLE_KEYWORDS.length)];
+  const keyword = await pickRaffleKeyword();
   const drop: TazoDropState = { keyword, prize, maxWinners, winners: [], startedAt: Date.now() };
   await kv.set(TAZO_DROP_KEY, drop, { ex: TAZO_DROP_TTL_SEC });
   return `💧 Tazo drop! First ${maxWinners} to type '${keyword}' get ${prize} tazos!`;
