@@ -953,37 +953,145 @@ const RAFFLE_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes between raffles
 const RAFFLE_RECENT_KEY = 'raffle_recent_keywords';
 const RAFFLE_RECENT_MAX = 30;
 
-const RAFFLE_KEYWORDS = [
-  // Internet slang
-  'rizz', 'sigma', 'based', 'slay', 'goat', 'sus', 'cap', 'bet', 'gyat',
-  'yeet', 'vibe', 'bruh', 'fire', 'dub', 'cope', 'mald', 'valid', 'mid',
-  'lit', 'aura', 'cooked', 'ratio', 'pog', 'kek', 'npc', 'banger', 'glaze',
-  'seethe', 'bussin', 'skibidi', 'demure', 'fanum', 'ong', 'sheesh', 'bonk',
-  'stonks', 'yoink', 'noice', 'chad', 'simp', 'drip', 'flex', 'savage',
-  'beast', 'legend', 'vibes', 'toxic', 'squad', 'hype', 'goated', 'zamn',
-  'pluh', 'dawg', 'chill', 'facts', 'juicy', 'crispy', 'finesse', 'spicy',
-  'tazo',
-  // Streamer names (from boss roster)
-  'ice', 'sam', 'ebz', 'mando', 'abz', 'sjc', 'andy', 'moxie', 'eddie',
-  'moises', 'shoovy', 'deepak', 'carldo', 'fousey', 'n3on', 'alexis',
-  'jandro', 'hito', 'kimmee', 'nanatty', 'shotime',
+type RaffleKeyword = { word: string; display?: string; prize: number };
+
+const RAFFLE_KEYWORDS: RaffleKeyword[] = [
+  // Tier 1 — 50 tazos (short internet slang + very short boss names)
+  { word: 'rizz', prize: 50 },
+  { word: 'sigma', prize: 50 },
+  { word: 'based', prize: 50 },
+  { word: 'slay', prize: 50 },
+  { word: 'goat', prize: 50 },
+  { word: 'sus', prize: 50 },
+  { word: 'cap', prize: 50 },
+  { word: 'bet', prize: 50 },
+  { word: 'gyat', prize: 50 },
+  { word: 'yeet', prize: 50 },
+  { word: 'vibe', prize: 50 },
+  { word: 'bruh', prize: 50 },
+  { word: 'fire', prize: 50 },
+  { word: 'dub', prize: 50 },
+  { word: 'cope', prize: 50 },
+  { word: 'mald', prize: 50 },
+  { word: 'lit', prize: 50 },
+  { word: 'aura', prize: 50 },
+  { word: 'pog', prize: 50 },
+  { word: 'kek', prize: 50 },
+  { word: 'npc', prize: 50 },
+  { word: 'ong', prize: 50 },
+  { word: 'sheesh', prize: 50 },
+  { word: 'bonk', prize: 50 },
+  { word: 'chad', prize: 50 },
+  { word: 'simp', prize: 50 },
+  { word: 'drip', prize: 50 },
+  { word: 'hype', prize: 50 },
+  { word: 'zamn', prize: 50 },
+  { word: 'dawg', prize: 50 },
+  { word: 'facts', prize: 50 },
+  { word: 'tazo', prize: 50 },
+  { word: 'sam', display: 'Sam', prize: 50 },
+  { word: 'ebz', display: 'EBZ', prize: 50 },
+  { word: 'abz', display: 'ABZ', prize: 50 },
+  { word: 'sjc', display: 'SJC', prize: 50 },
+  { word: 'xqc', display: 'xQc', prize: 50 },
+  { word: 'n3on', display: 'n3on', prize: 50 },
+  { word: 'andy', display: 'Andy', prize: 50 },
+  // Tier 2 — 100 tazos (medium slang + medium-length boss names)
+  { word: 'cooked', prize: 100 },
+  { word: 'ratio', prize: 100 },
+  { word: 'banger', prize: 100 },
+  { word: 'glaze', prize: 100 },
+  { word: 'seethe', prize: 100 },
+  { word: 'bussin', prize: 100 },
+  { word: 'skibidi', prize: 100 },
+  { word: 'demure', prize: 100 },
+  { word: 'fanum', prize: 100 },
+  { word: 'stonks', prize: 100 },
+  { word: 'noice', prize: 100 },
+  { word: 'beast', prize: 100 },
+  { word: 'legend', prize: 100 },
+  { word: 'vibes', prize: 100 },
+  { word: 'toxic', prize: 100 },
+  { word: 'squad', prize: 100 },
+  { word: 'goated', prize: 100 },
+  { word: 'chill', prize: 100 },
+  { word: 'juicy', prize: 100 },
+  { word: 'crispy', prize: 100 },
+  { word: 'finesse', prize: 100 },
+  { word: 'spicy', prize: 100 },
+  { word: 'savage', prize: 100 },
+  { word: 'flex', prize: 100 },
+  { word: 'mando', display: 'Mando', prize: 100 },
+  { word: 'sneako', display: 'SNEAKO', prize: 100 },
+  { word: 'jandro', display: 'Jandro', prize: 100 },
+  { word: 'fousey', display: 'fousey', prize: 100 },
+  { word: 'shotime', display: 'Shotime', prize: 100 },
+  { word: 'kangjoel', display: 'kangjoel', prize: 100 },
+  { word: 'kimmee', display: 'kimmee', prize: 100 },
+  { word: 'alexis', display: 'Alexis', prize: 100 },
+  { word: 'moxie', display: 'Moxie', prize: 100 },
+  { word: 'iduncle', display: 'iDuncle', prize: 100 },
+  { word: 'lordhito', display: 'LordHito', prize: 100 },
+  { word: 'shoovy', display: 'shoovy', prize: 100 },
+  { word: 'nanatty', display: 'nanatty', prize: 100 },
+  { word: 'deepak', display: 'Deepak', prize: 100 },
+  { word: 'hyubsama', display: 'hyubsama', prize: 100 },
+  { word: 'vnthony', display: 'vnthony', prize: 100 },
+  { word: 'moises', display: 'Moises', prize: 100 },
+  { word: 'eddie', display: 'Eddie', prize: 100 },
+  { word: 'carldo', display: 'carldo', prize: 100 },
+  { word: 'mhyochi', display: 'mhyochi', prize: 100 },
+  { word: 'ricegum', display: 'RiceGum', prize: 100 },
+  { word: 'cobbruvs', display: 'Cobbruvs', prize: 100 },
+  { word: 'robcdee', display: 'Robcdee', prize: 100 },
+  { word: 'clavicular', display: 'Clavicular', prize: 100 },
+  // Tier 3 — 150 tazos (longer boss names + two-word boss names)
+  { word: 'hamptonbrandon', display: 'HamptonBrandon', prize: 150 },
+  { word: 'asianandy', display: 'AsianAndy', prize: 150 },
+  { word: 'burgerplanet', display: 'BurgerPlanet', prize: 150 },
+  { word: 'amouranth', display: 'Amouranth', prize: 150 },
+  { word: 'stevewilldoit', display: 'SteveWillDoIt', prize: 150 },
+  { word: 'joeykaotyk', display: 'JoeyKaotyk', prize: 150 },
+  { word: 'peeguutv', display: 'PeeguuTV', prize: 150 },
+  { word: 'ac7ionman', display: 'Ac7ionman', prize: 150 },
+  { word: 'suspendas', display: 'Suspendas', prize: 150 },
+  { word: 'taemin1998', display: 'TAEMIN1998', prize: 150 },
+  { word: 'nickwhite', display: 'nickwhite', prize: 150 },
+  { word: 'nicklee', display: 'nicklee', prize: 150 },
+  { word: 'hanridge', display: 'Hanridge', prize: 150 },
+  { word: 'xenathewitch', display: 'Xenathewitch', prize: 150 },
+  { word: 'dtanmanb', display: 'dtanmanb', prize: 150 },
+  { word: 'aloeirl', display: 'aloeirl', prize: 150 },
+  { word: 'chickenandy', display: 'ChickenAndy', prize: 150 },
+  { word: 'jjstream', display: 'jjstream', prize: 150 },
+  { word: 'wvagabond', display: 'wvagabond', prize: 150 },
+  { word: 'cristravels', display: 'CRISTRAVELS', prize: 150 },
+  { word: 'bennymack', display: 'bennymack', prize: 150 },
+  { word: 'captaingee', display: 'CaptainGee', prize: 150 },
+  { word: 'dbr666', display: 'DBR666', prize: 150 },
+  { word: 'santamaria', display: 'Santamaria', prize: 150 },
+  { word: 'lettievision', display: 'LettieVision', prize: 150 },
+  { word: 'adrianahlee', display: 'AdrianahLee', prize: 150 },
+  { word: 'floridaboy', display: 'FloridaBoy', prize: 150 },
+  { word: 'garydavid', display: 'garydavid', prize: 150 },
+  { word: 'nanapips', display: 'Nanapips', prize: 150 },
+  { word: 'ddurantv', display: 'DDURANTV', prize: 150 },
+  { word: 'slightlyhomeless', display: 'Slightlyhomeless', prize: 150 },
+  { word: 'muratstyle', display: 'Muratstyle', prize: 150 },
+  { word: 'ice poseidon', display: 'Ice Poseidon', prize: 150 },
+  { word: 'adin ross', display: 'Adin Ross', prize: 150 },
+  { word: 'bradley martin', display: 'Bradley Martin', prize: 150 },
+  { word: 'andy dick', display: 'Andy Dick', prize: 150 },
 ];
 
-function pickRafflePrize(): number {
-  const roll = Math.random();
-  if (roll < 0.6) return 25 + Math.floor(Math.random() * 26);       // 60%: 25-50
-  if (roll < 0.9) return 50 + Math.floor(Math.random() * 51);       // 30%: 50-100
-  return 100 + Math.floor(Math.random() * 51);                      // 10%: 100-150
-}
-
-async function pickRaffleKeyword(): Promise<string> {
+async function pickRaffleKeyword(): Promise<{ keyword: string; display: string; prize: number }> {
   const recent = (await kv.get<string[]>(RAFFLE_RECENT_KEY)) ?? [];
-  const available = RAFFLE_KEYWORDS.filter(k => !recent.includes(k));
+  const available = RAFFLE_KEYWORDS.filter(k => !recent.includes(k.word));
   const pool = available.length > 0 ? available : RAFFLE_KEYWORDS;
-  const keyword = pool[Math.floor(Math.random() * pool.length)];
-  const updated = [...recent, keyword].slice(-RAFFLE_RECENT_MAX);
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+  const updated = [...recent, picked.word].slice(-RAFFLE_RECENT_MAX);
   await kv.set(RAFFLE_RECENT_KEY, updated);
-  return keyword;
+  return { keyword: picked.word, display: picked.display ?? picked.word, prize: picked.prize };
 }
 
 interface RaffleState {
@@ -991,31 +1099,33 @@ interface RaffleState {
   startedAt: number;
   prize: number;
   keyword: string;
+  keywordDisplay: string;
 }
 
 /** Start a new raffle. Returns announcement message. */
-export async function startRaffle(prize?: number): Promise<string> {
+export async function startRaffle(prizeOverride?: number): Promise<string> {
   const existing = await kv.get<RaffleState>(RAFFLE_KEY);
   if (existing && Date.now() - existing.startedAt < RAFFLE_ENTRY_WINDOW_MS) {
     const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - (Date.now() - existing.startedAt)) / 1000);
-    return `🎰 Raffle already active! Type '${existing.keyword}' to enter (${timeLeft}s left).`;
+    return `🎰 Raffle already active! Type '${existing.keywordDisplay ?? existing.keyword}' to enter (${timeLeft}s left).`;
   }
-  const keyword = await pickRaffleKeyword();
-  if (prize === undefined) prize = pickRafflePrize();
+  const { keyword, display, prize: tieredPrize } = await pickRaffleKeyword();
+  const prize = prizeOverride ?? tieredPrize;
   const raffle: RaffleState = {
     participants: [],
     startedAt: Date.now(),
     prize,
     keyword,
+    keywordDisplay: display,
   };
   await kv.set(RAFFLE_KEY, raffle, { ex: RAFFLE_TTL_SEC });
-  return `🎰 RAFFLE! Type '${keyword}' in chat to enter! Drawing in 1 minute — winner gets ${prize} tazos! Spam it for more entries!`;
+  return `🎰 RAFFLE! Type '${display}' in chat to enter! Drawing in 1 minute — winner gets ${prize} tazos! Spam it for more entries!`;
 }
 
 /** Try to enter a raffle via keyword match. Silent — always returns null (no chat reply). Each match = one more entry (spam for more chances). */
 export async function tryRaffleKeywordEntry(username: string, content: string): Promise<string | null> {
   const word = content.trim().toLowerCase();
-  if (!word || word.length > 20) return null;
+  if (!word || word.length > 40) return null;
 
   const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
   if (!raffle) return null;
@@ -1192,12 +1302,13 @@ const TAZO_DROP_KEY = 'chip_drop_active'; // KV key unchanged
 const TAZO_DROP_LAST_AT_KEY = 'chip_drop_last_at'; // KV key unchanged
 const TAZO_DROP_TTL_SEC = 180;
 const TAZO_DROP_WINDOW_MS = 2 * 60 * 1000;
-const TAZO_DROP_INTERVAL_MS = 8 * 60 * 1000; // 8 min
+const TAZO_DROP_INTERVAL_MS = 10 * 60 * 1000; // 10 min
 const TAZO_DROP_PRIZE = 10;
 const TAZO_DROP_MAX_WINNERS = 5;
 
 interface TazoDropState {
   keyword: string;
+  keywordDisplay: string;
   prize: number;
   maxWinners: number;
   winners: Array<{ user: string; display: string }>;
@@ -1205,15 +1316,15 @@ interface TazoDropState {
 }
 
 export async function startTazoDrop(prize = TAZO_DROP_PRIZE, maxWinners = TAZO_DROP_MAX_WINNERS): Promise<string> {
-  const keyword = await pickRaffleKeyword();
-  const drop: TazoDropState = { keyword, prize, maxWinners, winners: [], startedAt: Date.now() };
+  const { keyword, display } = await pickRaffleKeyword();
+  const drop: TazoDropState = { keyword, keywordDisplay: display, prize, maxWinners, winners: [], startedAt: Date.now() };
   await kv.set(TAZO_DROP_KEY, drop, { ex: TAZO_DROP_TTL_SEC });
-  return `💧 Tazo drop! First ${maxWinners} to type '${keyword}' get ${prize} tazos!`;
+  return `💧 Tazo drop! First ${maxWinners} to type '${display}' get ${prize} tazos!`;
 }
 
 export async function tryTazoDropEntry(username: string, content: string): Promise<string | null> {
   const word = content.trim().toLowerCase();
-  if (!word || word.length > 20) return null;
+  if (!word || word.length > 40) return null;
   const drop = await kv.get<TazoDropState>(TAZO_DROP_KEY);
   if (!drop) return null;
   if (Date.now() - drop.startedAt >= TAZO_DROP_WINDOW_MS) return null;
@@ -1261,7 +1372,7 @@ const CHAT_CHALLENGE_KEY = 'chat_challenge_active';
 const CHAT_CHALLENGE_LAST_AT_KEY = 'chat_challenge_last_at';
 const CHAT_CHALLENGE_TTL_SEC = 180;
 const CHAT_CHALLENGE_WINDOW_MS = 2 * 60 * 1000;
-const CHAT_CHALLENGE_INTERVAL_MS = 12 * 60 * 1000; // 12 min
+const CHAT_CHALLENGE_INTERVAL_MS = 15 * 60 * 1000; // 15 min
 const CHAT_CHALLENGE_TARGET = 50;
 const CHAT_CHALLENGE_PRIZE = 10;
 const CHAT_CHALLENGE_MAX_PER_USER = 3;
