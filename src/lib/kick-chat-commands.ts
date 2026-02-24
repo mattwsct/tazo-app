@@ -442,13 +442,13 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'heist') {
     if (!user) return null;
-    const bet = parseBet(arg, 0);
+    const bet = parseBet(arg);
     if (bet < 1) {
       const status = await getHeistStatus();
       if (status) return status;
       const expired = await checkAndResolveExpiredHeist();
       if (expired) return expired;
-      return '🏦 Usage: !heist <amount> — Start or join a group heist. More robbers = better odds!';
+      return '🏦 !heist [amount] — Start or join a group heist. Default 5 tazos. More robbers = better odds!';
     }
     return joinOrStartHeist(user, bet);
   }
