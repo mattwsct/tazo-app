@@ -25,7 +25,7 @@ import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { onStreamStarted } from '@/utils/stats-storage';
 import {
   addViewTimeChips, resetGamblingOnStreamStart, isGamblingEnabled, addChipsAsAdmin,
-  trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryChipDropEntry, tryBossAttack,
+  trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryChipDropEntry, tryBossAttack, startBossEvent,
   trackChallengeMessage, checkParticipationStreak,
 } from '@/utils/blackjack-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
@@ -255,6 +255,36 @@ export async function POST(request: NextRequest) {
             await sendKickChatMessage(accessToken, raffleReply);
           } catch (err) {
             console.error('[Kick webhook] !raffle reply failed:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    // !boss — broadcaster/mod only: manually start a boss battle
+    if (trimmedLower === '!boss' || trimmedLower.startsWith('!boss ')) {
+      const senderObj = payload.sender as Record<string, unknown> | undefined;
+      const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+      const isAuthorized = (() => {
+        if (!senderObj || typeof senderObj !== 'object') return false;
+        const identity = senderObj.identity as Record<string, unknown> | undefined;
+        const role = String(identity?.role ?? senderObj.role ?? '').toLowerCase();
+        const rolesArr = senderObj.roles as string[] | undefined;
+        const rolesLower = Array.isArray(rolesArr) ? rolesArr.map((r) => String(r).toLowerCase()) : [];
+        if (role === 'moderator' || role === 'owner' || role === 'broadcaster') return true;
+        if (rolesLower.includes('moderator') || rolesLower.includes('owner') || rolesLower.includes('broadcaster')) return true;
+        if (senderObj.is_moderator === true || senderObj.moderator === true || senderObj.isModerator === true) return true;
+        if (sender.toLowerCase() === (broadcasterSlug ?? '').toLowerCase()) return true;
+        return false;
+      })();
+      if (isAuthorized) {
+        const bossReply = await startBossEvent();
+        const accessToken = await getValidAccessToken();
+        if (accessToken) {
+          try {
+            await sendKickChatMessage(accessToken, bossReply);
+          } catch (err) {
+            console.error('[Kick webhook] !boss reply failed:', err instanceof Error ? err.message : String(err));
           }
         }
       }

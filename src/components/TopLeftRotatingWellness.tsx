@@ -64,8 +64,8 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
   const slides = useMemo<SlotType[]>(() => {
     const s: SlotType[] = [];
     if (timezoneValid && date) s.push('date');
-    if (settings.showSteps !== false && stepsFresh && wellness?.stepsSinceStreamStart != null && wellness.stepsSinceStreamStart >= 0) s.push('steps');
-    if (settings.showDistance !== false && stepsFresh && wellness?.distanceSinceStreamStart != null && wellness.distanceSinceStreamStart > 0) s.push('distance');
+    if (settings.showSteps !== false && stepsFresh && wellness?.stepsSinceStreamStart != null && wellness.stepsSinceStreamStart > 0) s.push('steps');
+    if (settings.showDistance !== false && stepsFresh && wellness?.distanceSinceStreamStart != null && wellness.distanceSinceStreamStart >= 0.1) s.push('distance');
     return s;
   }, [timezoneValid, date, settings.showSteps, settings.showDistance, stepsFresh, wellness]);
 

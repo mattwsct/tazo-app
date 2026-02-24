@@ -954,7 +954,7 @@ export async function getHeistStatus(): Promise<string | null> {
 
 const RAFFLE_KEY = 'raffle_active';
 const RAFFLE_LAST_AT_KEY = 'raffle_last_at';
-const RAFFLE_TTL_SEC = 300; // 5 min TTL safety net
+const RAFFLE_TTL_SEC = 600; // 10 min TTL safety net (well beyond entry window + cron interval)
 const RAFFLE_ENTRY_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
 const RAFFLE_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between raffles
 const RAFFLE_DEFAULT_PRIZE = 50;
@@ -1051,6 +1051,18 @@ export async function getRaffleStatus(): Promise<string | null> {
   if (Date.now() - raffle.startedAt >= RAFFLE_ENTRY_WINDOW_MS) return null;
   const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - (Date.now() - raffle.startedAt)) / 1000);
   return `🎰 Active raffle: ${raffle.participants.length} entered, ${raffle.prize} chip prize, ${timeLeft}s left. Type '${raffle.keyword}' to enter!`;
+}
+
+/** Get a mid-raffle reminder if the raffle is roughly halfway through (50-75% of entry window). */
+export async function getRaffleReminder(): Promise<string | null> {
+  const raffle = await kv.get<RaffleState>(RAFFLE_KEY);
+  if (!raffle) return null;
+  const elapsed = Date.now() - raffle.startedAt;
+  const halfPoint = RAFFLE_ENTRY_WINDOW_MS * 0.5;
+  const threeQuarterPoint = RAFFLE_ENTRY_WINDOW_MS * 0.75;
+  if (elapsed < halfPoint || elapsed >= threeQuarterPoint) return null;
+  const timeLeft = Math.ceil((RAFFLE_ENTRY_WINDOW_MS - elapsed) / 1000);
+  return `🎰 Raffle ending soon! ${raffle.participants.length} entered so far — type '${raffle.keyword}' to enter! (${timeLeft}s left, ${raffle.prize} chips)`;
 }
 
 // --- Chat Activity / Top Chatter ---
@@ -1414,6 +1426,12 @@ interface BossState {
 }
 
 export async function startBossEvent(): Promise<string> {
+  const existing = await kv.get<BossState>(BOSS_KEY);
+  if (existing && Date.now() - existing.startedAt < BOSS_WINDOW_MS) {
+    const hpPct = Math.round((existing.hp / existing.maxHp) * 100);
+    const attackerCount = Object.keys(existing.attackers).length;
+    return `⚔️ ${existing.name} is still alive! ${existing.hp}/${existing.maxHp} HP (${hpPct}%). ${attackerCount} attacker${attackerCount !== 1 ? 's' : ''} so far. Weak to ${existing.weakness}!`;
+  }
   const def = BOSS_ROSTER[Math.floor(Math.random() * BOSS_ROSTER.length)];
   const boss: BossState = {
     name: def.name, hp: def.maxHp, maxHp: def.maxHp,

@@ -31,7 +31,7 @@ import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-tit
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import {
-  checkAndResolveExpiredHeist, resolveRaffle, shouldStartRaffle, startRaffle, resolveTopChatter,
+  checkAndResolveExpiredHeist, resolveRaffle, shouldStartRaffle, startRaffle, getRaffleReminder, resolveTopChatter,
   shouldStartChipDrop, startChipDrop, resolveExpiredChipDrop,
   shouldStartChatChallenge, startChatChallenge, resolveChatChallenge,
   shouldStartBossEvent, startBossEvent, resolveExpiredBoss,
@@ -436,6 +436,12 @@ export async function GET(request: NextRequest) {
         await sendKickChatMessage(accessToken, raffleResult);
         sent++;
         console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
+      } else {
+        const reminder = await getRaffleReminder();
+        if (reminder) {
+          await sendKickChatMessage(accessToken, reminder);
+          sent++;
+        }
       }
       const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
       if (autoRaffleEnabled && await shouldStartRaffle()) {
