@@ -1375,25 +1375,25 @@ export default function AdminPage() {
                   <div className="checkbox-group">
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.autoRaffleEnabled !== false} onChange={(e) => handleSettingsChange({ autoRaffleEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Auto-raffle every ~30 min when live</span>
+                      <span className="checkbox-text">Include raffle in rotation</span>
                     </label>
                   </div>
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.chipDropsEnabled !== false} onChange={(e) => handleSettingsChange({ chipDropsEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Tazo drops every ~15 min</span>
+                      <span className="checkbox-text">Include tazo drops in rotation</span>
                     </label>
                   </div>
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.chatChallengesEnabled !== false} onChange={(e) => handleSettingsChange({ chatChallengesEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Chat challenges every ~20-30 min</span>
+                      <span className="checkbox-text">Include chat challenges in rotation</span>
                     </label>
                   </div>
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.bossEventsEnabled !== false} onChange={(e) => handleSettingsChange({ bossEventsEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Boss events (alternates with others)</span>
+                      <span className="checkbox-text">Include boss events in rotation</span>
                     </label>
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
