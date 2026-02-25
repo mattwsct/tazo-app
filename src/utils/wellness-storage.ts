@@ -244,19 +244,12 @@ async function updateSession(config: SessionConfig, newValue: number): Promise<v
     const accumulated = existing?.accumulated ?? 0;
 
     if (shouldSkipSessionUpdate(lastImportState[config.importMetric], val, lastKnown, now)) {
-      const lastImp = lastImportState[config.importMetric];
-      console.log(`[Wellness session] SKIP ${config.importMetric}: duplicate (same value within 60s)`, {
-        incoming: val, accumulated, lastImport: lastImp,
-      });
       return;
     }
 
     // Additive mode: each push is the delta since last sync, add it directly
     const delta = val;
     const newAccumulated = config.roundAccumulated ? config.roundAccumulated(accumulated + delta) : accumulated + delta;
-    console.log(`[Wellness session] ${config.importMetric}:`, {
-      incoming: val, delta, accumulated, newAccumulated,
-    });
     await kv.set(config.kvKey, { accumulated: newAccumulated, lastKnown: val });
     await setLastImportMetric(config.importMetric, val);
   } catch (error) {

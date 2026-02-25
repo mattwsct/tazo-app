@@ -193,13 +193,6 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   return updates;
 }
 
-function getMetricNamesFromPayload(body: Record<string, unknown>): string[] {
-  const data = body.data as { metrics?: Array<{ name?: string }> } | undefined;
-  const metrics = data?.metrics;
-  if (!Array.isArray(metrics)) return [];
-  return metrics.map((m) => m?.name).filter((n): n is string => !!n);
-}
-
 export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-wellness-secret') || request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   const expected = process.env.WELLNESS_IMPORT_SECRET;
@@ -213,12 +206,7 @@ export async function POST(request: NextRequest) {
 
     // Health Auto Export format: { data: { metrics: [...] } }
     if (body.data && typeof body.data === 'object' && (body.data as { metrics?: unknown }).metrics) {
-      const metricNames = getMetricNamesFromPayload(body);
       Object.assign(updates, parseHealthAutoExport(body));
-      console.log('[Wellness import] Health Auto Export:', {
-        received: metricNames,
-        parsed: updates,
-      });
     }
 
     // Flat format (also allow overriding from flat fields if present)
@@ -242,15 +230,9 @@ export async function POST(request: NextRequest) {
     if (body.heartRate !== undefined) updates.heartRate = Math.max(0, Math.floor(parseNumber(body.heartRate) ?? 0));
     if (body.restingHeartRate !== undefined) updates.restingHeartRate = Math.max(0, Math.floor(parseNumber(body.restingHeartRate) ?? 0));
     if (Object.keys(updates).length === 0) {
-      const metricNames = getMetricNamesFromPayload(body);
-      console.warn('[Wellness import] No valid fields.', {
-        topLevelKeys: Object.keys(body),
-        healthAutoExportMetrics: metricNames.length ? metricNames : '(none)',
-      });
+      console.warn('[Wellness import] No valid fields.', { topLevelKeys: Object.keys(body) });
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
     }
-
-    console.log('[Wellness import] Saving:', updates);
 
     await updateWellnessData(updates);
 
