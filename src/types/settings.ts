@@ -150,7 +150,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showKicksGoal: false,
   kicksGoalTarget: 100,
   kicksGoalIncrement: 100,
-  goalCelebrationDurationSec: 15,
+  goalCelebrationDurationSec: 60,
 };
 
 // Valid settings schema for validation

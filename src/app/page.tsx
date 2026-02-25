@@ -64,7 +64,7 @@ export default function AdminPage() {
   const [kicksGoalIncrementInput, setKicksGoalIncrementInput] = useState<string>('1000');
   const [subGoalSubtextInput, setSubGoalSubtextInput] = useState<string>('');
   const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState<string>('');
-  const [goalCelebrationDurationInput, setGoalCelebrationDurationInput] = useState<string>('15');
+  const [goalCelebrationDurationInput, setGoalCelebrationDurationInput] = useState<string>(String(DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec));
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subGoalIncrementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -693,7 +693,7 @@ export default function AdminPage() {
     setKicksGoalIncrementInput(String(settings.kicksGoalIncrement ?? 1000));
     setSubGoalSubtextInput(settings.subGoalSubtext ?? '');
     setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
-    setGoalCelebrationDurationInput(String(settings.goalCelebrationDurationSec ?? 15));
+    setGoalCelebrationDurationInput(String(settings.goalCelebrationDurationSec ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec));
   }, [settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalSubtext, settings.kicksGoalSubtext, settings.goalCelebrationDurationSec]);
 
   // Debounced handlers for number inputs (1s delay before saving)
@@ -760,7 +760,7 @@ export default function AdminPage() {
     if (goalCelebrationDurationTimeoutRef.current) clearTimeout(goalCelebrationDurationTimeoutRef.current);
     goalCelebrationDurationTimeoutRef.current = setTimeout(() => {
       goalCelebrationDurationTimeoutRef.current = null;
-      const n = Math.max(1, Math.min(300, parseInt(value, 10) || 15));
+      const n = Math.max(1, Math.min(300, parseInt(value, 10) || DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!));
       handleSettingsChange({ goalCelebrationDurationSec: n });
     }, 1000);
   }, [handleSettingsChange]);

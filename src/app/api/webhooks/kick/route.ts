@@ -36,6 +36,7 @@ import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsS
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals, trackSubGifter, trackKicksGifter } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
+import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -466,7 +467,7 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
         const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
         if (celebrated) {
@@ -491,7 +492,7 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
         const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
         if (celebrated) {
@@ -518,7 +519,7 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
         const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
         if (celebrated) {
@@ -546,7 +547,7 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.kicksGoalTarget as number) ?? 100;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
         const celebrated = await setGoalCelebrationIfNeeded('kicks', goals.kicks, target, celebMs);
         if (celebrated) {
