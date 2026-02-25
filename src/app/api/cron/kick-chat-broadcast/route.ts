@@ -31,11 +31,10 @@ import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-tit
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import {
-  checkAndResolveExpiredHeist, resolveRaffle, shouldStartRaffle, startRaffle, getRaffleReminder, resolveTopChatter,
-  shouldStartTazoDrop, startTazoDrop, resolveExpiredTazoDrop,
-  shouldStartChatChallenge, startChatChallenge, resolveChatChallenge,
-  shouldStartBossEvent, startBossEvent, resolveExpiredBoss, getBossReminder,
-  hasActiveEvent,
+  checkAndResolveExpiredHeist, resolveRaffle, getRaffleReminder, resolveTopChatter,
+  resolveExpiredTazoDrop, resolveChatChallenge,
+  resolveExpiredBoss, getBossReminder,
+  shouldStartAnyAutoGame, pickAndStartAutoGame,
 } from '@/utils/gambling-storage';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
@@ -87,7 +86,7 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; chatChallengesEnabled?: boolean; bossEventsEnabled?: boolean }>(OVERLAY_SETTINGS_KEY),
+    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; chatChallengesEnabled?: boolean; bossEventsEnabled?: boolean; autoGameIntervalMin?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
@@ -155,25 +154,6 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[Cron HR] RAFFLE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
-  try {
-    const autoRaffleEnabled = overlaySettings?.autoRaffleEnabled !== false;
-    const shouldRaffle = await shouldStartRaffle();
-    console.log('[Cron HR] RAFFLE_CHECK', JSON.stringify({ autoRaffleEnabled, shouldRaffle }));
-    if (diagnostic) Object.assign(debug, { autoRaffleEnabled, raffleShouldStart: shouldRaffle });
-    if (autoRaffleEnabled && shouldRaffle && isLive) {
-      const announcement = await startRaffle();
-      try {
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_start', msgPreview: announcement.slice(0, 80) }));
-      } catch (sendErr) {
-        await kv.del('raffle_active');
-        console.error('[Cron HR] RAFFLE_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
-      }
-    }
-  } catch (err) {
-    console.error('[Cron HR] RAFFLE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
 
   // Tazo drops: always resolve, only auto-start when live
   try {
@@ -186,26 +166,6 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[Cron HR] TAZO_DROP_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
-  try {
-    const tazoDropsEnabled = overlaySettings?.chipDropsEnabled !== false;
-    const activeEvent = await hasActiveEvent();
-    const shouldDrop = await shouldStartTazoDrop();
-    console.log('[Cron HR] TAZO_DROP_CHECK', JSON.stringify({ tazoDropsEnabled, activeEvent, shouldDrop }));
-    if (diagnostic) Object.assign(debug, { tazoDropsEnabled, activeEvent, shouldDrop });
-    if (tazoDropsEnabled && !activeEvent && shouldDrop && isLive) {
-      const announcement = await startTazoDrop();
-      try {
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_start', msgPreview: announcement.slice(0, 80) }));
-      } catch (sendErr) {
-        await kv.del('chip_drop_active');
-        console.error('[Cron HR] TAZO_DROP_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
-      }
-    }
-  } catch (err) {
-    console.error('[Cron HR] TAZO_DROP_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
 
   // Chat challenges: always resolve, only auto-start when live
   try {
@@ -216,23 +176,6 @@ export async function GET(request: NextRequest) {
     }
   } catch (err) {
     console.error('[Cron HR] CHAT_CHALLENGE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-  try {
-    const chatChallengesEnabled = overlaySettings?.chatChallengesEnabled !== false;
-    const chatChallengeShouldStart = await shouldStartChatChallenge();
-    if (diagnostic) Object.assign(debug, { chatChallengesEnabled, chatChallengeShouldStart });
-    if (chatChallengesEnabled && !(await hasActiveEvent()) && chatChallengeShouldStart && isLive) {
-      const announcement = await startChatChallenge();
-      try {
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-      } catch (sendErr) {
-        await kv.del('chat_challenge_active');
-        console.error('[Cron HR] CHAT_CHALLENGE_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
-      }
-    }
-  } catch (err) {
-    console.error('[Cron HR] CHAT_CHALLENGE_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
   // Boss events: always resolve + remind, only auto-start when live
@@ -252,24 +195,29 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[Cron HR] BOSS_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
+
+  // Unified auto games: single alternating scheduler
   try {
-    const bossEventsEnabled = overlaySettings?.bossEventsEnabled !== false;
-    const shouldBoss = await shouldStartBossEvent();
-    console.log('[Cron HR] BOSS_CHECK', JSON.stringify({ bossEventsEnabled, shouldBoss }));
-    if (diagnostic) Object.assign(debug, { bossEventsEnabled, bossShouldStart: shouldBoss });
-    if (bossEventsEnabled && !(await hasActiveEvent()) && shouldBoss && isLive) {
-      const announcement = await startBossEvent();
-      try {
-        await sendKickChatMessage(accessToken, announcement);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_start', msgPreview: announcement.slice(0, 80) }));
-      } catch (sendErr) {
-        await kv.del('boss_active');
-        console.error('[Cron HR] BOSS_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
+    const shouldStart = await shouldStartAnyAutoGame(overlaySettings ?? undefined);
+    if (diagnostic) Object.assign(debug, { autoGameShouldStart: shouldStart });
+    if (shouldStart && isLive) {
+      const announcement = await pickAndStartAutoGame(overlaySettings ?? {});
+      if (announcement) {
+        try {
+          await sendKickChatMessage(accessToken, announcement);
+          sent++;
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'auto_game_start', msgPreview: announcement.slice(0, 80) }));
+        } catch (sendErr) {
+          await kv.del('raffle_active');
+          await kv.del('chip_drop_active');
+          await kv.del('chat_challenge_active');
+          await kv.del('boss_active');
+          console.error('[Cron HR] AUTO_GAME_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
+        }
       }
     }
   } catch (err) {
-    console.error('[Cron HR] BOSS_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+    console.error('[Cron HR] AUTO_GAME_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
   // Top chatter: only when live

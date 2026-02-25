@@ -1013,27 +1013,28 @@ const RAFFLE_KEYWORDS: RaffleKeyword[] = [
   { word: 'blessed', prize: 100 },
   { word: 'vibing', prize: 100 },
   { word: 'streamer', prize: 100 },
-  // Tier 3 — 150 tazos (longer internet culture references)
+  // Tier 3 — 150 tazos (single-word internet culture references, no compound words)
   { word: 'rickrolled', prize: 150 },
   { word: 'amogus', prize: 150 },
-  { word: 'big brain', display: 'Big Brain', prize: 150 },
-  { word: 'galaxy brain', display: 'Galaxy Brain', prize: 150 },
-  { word: 'main character', display: 'Main Character', prize: 150 },
-  { word: 'no cap', display: 'No Cap', prize: 150 },
-  { word: 'rent free', display: 'Rent Free', prize: 150 },
-  { word: 'plot armor', display: 'Plot Armor', prize: 150 },
-  { word: 'side quest', display: 'Side Quest', prize: 150 },
-  { word: 'final boss', display: 'Final Boss', prize: 150 },
-  { word: 'npc energy', display: 'NPC Energy', prize: 150 },
-  { word: 'lore drop', display: 'Lore Drop', prize: 150 },
-  { word: 'its giving', display: 'Its Giving', prize: 150 },
-  { word: 'deez nuts', display: 'Deez Nuts', prize: 150 },
-  { word: 'built different', display: 'Built Different', prize: 150 },
-  { word: 'down bad', display: 'Down Bad', prize: 150 },
+  { word: 'zoomer', prize: 150 },
+  { word: 'boomer', prize: 150 },
+  { word: 'valid', prize: 150 },
+  { word: 'vibes', prize: 150 },
+  { word: 'zesty', prize: 150 },
+  { word: 'yolo', prize: 150 },
+  { word: 'bet', prize: 150 },
+  { word: 'facts', prize: 150 },
+  { word: 'mid', prize: 150 },
+  { word: 'peak', prize: 150 },
+  { word: 'banger', prize: 150 },
+  { word: 'lit', prize: 150 },
+  { word: 'epic', prize: 150 },
+  { word: 'fire', prize: 150 },
+  { word: 'wholesome', prize: 150 },
+  { word: 'cozy', prize: 150 },
   { word: 'delulu', prize: 150 },
   { word: 'unhinged', prize: 150 },
-  { word: 'understood the assignment', display: 'Understood the Assignment', prize: 150 },
-  { word: 'living legend', display: 'Living Legend', prize: 150 },
+  { word: 'legend', prize: 150 },
 ];
 
 async function pickRaffleKeyword(): Promise<{ keyword: string; display: string; prize: number }> {
@@ -1541,6 +1542,14 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Bradley Martin', maxHp: 400, weakness: 'ranged', resistance: 'special' },
   { name: 'SteveWillDoIt', maxHp: 400, weakness: 'special', resistance: 'magic' },
   { name: 'Andy Dick', maxHp: 400, weakness: 'physical', resistance: 'ranged' },
+  { name: 'Vitaly', maxHp: 400, weakness: 'ranged', resistance: 'special' },
+  { name: 'Danny Mullen', maxHp: 400, weakness: 'magic', resistance: 'physical' },
+  { name: 'BruceDropEmOff', maxHp: 400, weakness: 'physical', resistance: 'ranged' },
+  { name: 'Agent', maxHp: 400, weakness: 'special', resistance: 'magic' },
+  { name: 'Trainwreckstv', maxHp: 400, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Destiny', maxHp: 400, weakness: 'ranged', resistance: 'physical' },
+  { name: 'Greek', maxHp: 400, weakness: 'special', resistance: 'ranged' },
+  { name: 'Roshtein', maxHp: 400, weakness: 'physical', resistance: 'special' },
   // Tier 2 — 350 HP
   { name: 'Mando', maxHp: 350, weakness: 'magic', resistance: 'physical' },
   { name: 'ABZ', maxHp: 350, weakness: 'ranged', resistance: 'special' },
@@ -1556,6 +1565,14 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Jandro', maxHp: 350, weakness: 'physical', resistance: 'special' },
   { name: 'fousey', maxHp: 350, weakness: 'magic', resistance: 'ranged' },
   { name: 'Shotime', maxHp: 350, weakness: 'ranged', resistance: 'magic' },
+  { name: 'Nmplol', maxHp: 350, weakness: 'physical', resistance: 'magic' },
+  { name: 'Esfand', maxHp: 350, weakness: 'magic', resistance: 'special' },
+  { name: 'Maya', maxHp: 350, weakness: 'ranged', resistance: 'physical' },
+  { name: 'Jinnytty', maxHp: 350, weakness: 'special', resistance: 'ranged' },
+  { name: 'Hachubby', maxHp: 350, weakness: 'magic', resistance: 'physical' },
+  { name: 'Emiru', maxHp: 350, weakness: 'physical', resistance: 'special' },
+  { name: 'Sodapoppin', maxHp: 350, weakness: 'special', resistance: 'magic' },
+  { name: 'Adept', maxHp: 350, weakness: 'ranged', resistance: 'magic' },
   // Tier 3 — 300 HP
   { name: 'kangjoel', maxHp: 300, weakness: 'special', resistance: 'ranged' },
   { name: 'TAEMIN1998', maxHp: 300, weakness: 'physical', resistance: 'magic' },
@@ -1572,6 +1589,13 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'LordHito', maxHp: 300, weakness: 'special', resistance: 'ranged' },
   { name: 'Andy', maxHp: 300, weakness: 'physical', resistance: 'magic' },
   { name: 'ChickenAndy', maxHp: 300, weakness: 'magic', resistance: 'physical' },
+  { name: 'QTCinderella', maxHp: 300, weakness: 'ranged', resistance: 'special' },
+  { name: 'RichCampbell', maxHp: 300, weakness: 'special', resistance: 'physical' },
+  { name: 'Mizkif', maxHp: 300, weakness: 'physical', resistance: 'magic' },
+  { name: 'NickiNFLeep', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
+  { name: 'NickPolom', maxHp: 300, weakness: 'ranged', resistance: 'special' },
+  { name: 'Lacari', maxHp: 300, weakness: 'special', resistance: 'magic' },
+  { name: 'Cyr', maxHp: 300, weakness: 'magic', resistance: 'physical' },
   // Tier 4 — 250 HP
   { name: 'jjstream', maxHp: 250, weakness: 'ranged', resistance: 'special' },
   { name: 'shoovy', maxHp: 250, weakness: 'special', resistance: 'physical' },
@@ -1587,8 +1611,14 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'DBR666', maxHp: 250, weakness: 'magic', resistance: 'physical' },
   { name: 'Eddie', maxHp: 250, weakness: 'ranged', resistance: 'special' },
   { name: 'Santamaria', maxHp: 250, weakness: 'special', resistance: 'ranged' },
+  { name: 'ExtraEmily', maxHp: 250, weakness: 'physical', resistance: 'magic' },
+  { name: 'JustaMinx', maxHp: 250, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Veibae', maxHp: 250, weakness: 'ranged', resistance: 'special' },
+  { name: 'Alinity', maxHp: 250, weakness: 'special', resistance: 'physical' },
+  { name: 'SweetAnita', maxHp: 250, weakness: 'physical', resistance: 'special' },
+  { name: 'ConnorEatsPants', maxHp: 250, weakness: 'magic', resistance: 'physical' },
   // Tier 5 — 200 HP
-  { name: 'LettieVision', maxHp: 200, weakness: 'physical', resistance: 'magic' },
+  { name: 'LettyVision', maxHp: 200, weakness: 'physical', resistance: 'magic' },
   { name: 'AdrianahLee', maxHp: 200, weakness: 'magic', resistance: 'special' },
   { name: 'FloridaBoy', maxHp: 200, weakness: 'ranged', resistance: 'physical' },
   { name: 'garydavid', maxHp: 200, weakness: 'special', resistance: 'ranged' },
@@ -1598,6 +1628,9 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Slightlyhomeless', maxHp: 200, weakness: 'special', resistance: 'physical' },
   { name: 'Muratstyle', maxHp: 200, weakness: 'physical', resistance: 'ranged' },
   { name: 'mhyochi', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Ayeitskate', maxHp: 200, weakness: 'ranged', resistance: 'special' },
+  { name: 'Stanz', maxHp: 200, weakness: 'special', resistance: 'physical' },
+  { name: 'DevinNash', maxHp: 200, weakness: 'physical', resistance: 'magic' },
 ];
 
 const BOSS_KEY = 'boss_active';
@@ -1686,7 +1719,9 @@ export async function startBossEvent(): Promise<string> {
     acc[cat].push(w);
     return acc;
   }, {} as Record<string, string[]>);
-  const examples = Object.values(words).map(ws => ws[0]).join(', ');
+  const examples = Object.values(words)
+    .map(ws => ws[Math.floor(Math.random() * ws.length)])
+    .join(', ');
   return `⚔️ ${def.name} appears! ${def.maxHp} HP. Weak to ${def.weakness}, resists ${def.resistance}. Try: ${examples}`;
 }
 
@@ -1761,10 +1796,74 @@ export async function resolveExpiredBoss(): Promise<string | null> {
 // --- Active event check (prevents overlapping events) ---
 
 export async function hasActiveEvent(): Promise<boolean> {
-  const [drop, challenge, boss] = await Promise.all([
-    kv.get(TAZO_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
+  const [raffle, drop, challenge, boss] = await Promise.all([
+    kv.get(RAFFLE_KEY), kv.get(TAZO_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
   ]);
-  return !!(drop || challenge || boss);
+  return !!(raffle || drop || challenge || boss);
+}
+
+// --- Unified auto game scheduler (single alternating timer) ---
+
+const AUTO_GAME_LAST_AT_KEY = 'auto_game_last_at';
+
+type AutoGameOverlaySettings = {
+  autoRaffleEnabled?: boolean;
+  chipDropsEnabled?: boolean;
+  chatChallengesEnabled?: boolean;
+  bossEventsEnabled?: boolean;
+  autoGameIntervalMin?: number;
+};
+
+export async function shouldStartAnyAutoGame(settings?: AutoGameOverlaySettings): Promise<boolean> {
+  const active = await hasActiveEvent();
+  if (active) return false;
+  const intervalMin = settings?.autoGameIntervalMin ?? 5;
+  const intervalMs = Math.max(1, intervalMin) * 60 * 1000;
+  const lastAt = await kv.get<string>(AUTO_GAME_LAST_AT_KEY);
+  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : intervalMs;
+  return elapsed >= intervalMs;
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): Promise<string | null> {
+  const enabled: Array<'raffle' | 'drop' | 'challenge' | 'boss'> = [];
+  if (settings.autoRaffleEnabled !== false) enabled.push('raffle');
+  if (settings.chipDropsEnabled !== false) enabled.push('drop');
+  if (settings.chatChallengesEnabled !== false) enabled.push('challenge');
+  if (settings.bossEventsEnabled !== false) enabled.push('boss');
+  if (enabled.length === 0) return null;
+
+  const shuffled = shuffleArray(enabled);
+  const chosen = shuffled[0];
+
+  let announcement: string;
+  switch (chosen) {
+    case 'raffle':
+      announcement = await startRaffle();
+      break;
+    case 'drop':
+      announcement = await startTazoDrop();
+      break;
+    case 'challenge':
+      announcement = await startChatChallenge();
+      break;
+    case 'boss':
+      announcement = await startBossEvent();
+      break;
+    default:
+      return null;
+  }
+
+  await kv.set(AUTO_GAME_LAST_AT_KEY, String(Date.now()));
+  return announcement;
 }
 
 export async function resetEventTimestamps(): Promise<void> {
@@ -1773,6 +1872,7 @@ export async function resetEventTimestamps(): Promise<void> {
     kv.del(TAZO_DROP_LAST_AT_KEY),
     kv.del(CHAT_CHALLENGE_LAST_AT_KEY),
     kv.del(BOSS_LAST_AT_KEY),
+    kv.del(AUTO_GAME_LAST_AT_KEY),
   ]);
 }
 

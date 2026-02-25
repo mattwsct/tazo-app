@@ -1393,8 +1393,22 @@ export default function AdminPage() {
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.bossEventsEnabled !== false} onChange={(e) => handleSettingsChange({ bossEventsEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Boss events every ~45-60 min</span>
+                      <span className="checkbox-text">Boss events (alternates with others)</span>
                     </label>
+                  </div>
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label className="input-label" style={{ margin: 0 }}>
+                      Minutes between auto games:
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={settings.autoGameIntervalMin ?? 5}
+                      onChange={(e) => handleSettingsChange({ autoGameIntervalMin: Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 5)) })}
+                      className="number-input"
+                      style={{ width: 64 }}
+                    />
                   </div>
                   <div style={{ marginTop: 12 }}>
                     <button

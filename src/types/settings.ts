@@ -49,6 +49,8 @@ export interface OverlaySettings {
   chatChallengesEnabled?: boolean;
   /** Boss events every ~45-60 min. */
   bossEventsEnabled?: boolean;
+  /** Minutes between auto games (raffle/drops/challenges/boss). Default 5. */
+  autoGameIntervalMin?: number;
   /** Win streak bonuses on gambling wins. */
   winStreaksEnabled?: boolean;
   /** Participation streak rewards. */
@@ -129,6 +131,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   chipDropsEnabled: true,
   chatChallengesEnabled: true,
   bossEventsEnabled: true,
+  autoGameIntervalMin: 5,
   winStreaksEnabled: true,
   participationStreaksEnabled: true,
   subGiftChipRewards: true,
@@ -181,6 +184,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   chipDropsEnabled: 'boolean',
   chatChallengesEnabled: 'boolean',
   bossEventsEnabled: 'boolean',
+  autoGameIntervalMin: 'number',
   winStreaksEnabled: 'boolean',
   participationStreaksEnabled: 'boolean',
   subGiftChipRewards: 'boolean',
