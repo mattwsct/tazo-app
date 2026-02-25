@@ -32,9 +32,9 @@ function formatHeight(cm: number): string {
 }
 
 function formatDistance(km: number): string {
-  const kmStr = String(Math.round(km));
-  const mi = String(Math.round(kmToMiles(km)));
-  return `${kmStr} km (${mi} mi)`;
+  const kmStr = km.toFixed(1);
+  const miStr = kmToMiles(km).toFixed(1);
+  return `${kmStr} km (${miStr} mi)`;
 }
 
 export async function getWellnessStepsResponse(): Promise<string> {
