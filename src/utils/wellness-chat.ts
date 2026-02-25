@@ -9,6 +9,7 @@ import {
   getFlightsSinceStreamStart,
   getActiveCaloriesSinceStreamStart,
   getMetricUpdatedAt,
+  getLastSessionMetricUpdateAt,
 } from '@/utils/wellness-storage';
 import { kmToMiles } from '@/utils/unit-conversions';
 
@@ -38,21 +39,33 @@ function formatDistance(km: number): string {
 }
 
 export async function getWellnessStepsResponse(): Promise<string> {
-  const [steps, wellness] = await Promise.all([getStepsSinceStreamStart(), getWellnessData()]);
+  const [steps, wellness, sessionAt] = await Promise.all([
+    getStepsSinceStreamStart(),
+    getWellnessData(),
+    getLastSessionMetricUpdateAt('steps'),
+  ]);
   if (steps <= 0) return '👟 No step data this stream yet.';
-  const age = formatDataAge(getMetricUpdatedAt(wellness, 'steps'));
+  const age = formatDataAge(sessionAt || getMetricUpdatedAt(wellness, 'steps'));
   return `👟 ${steps.toLocaleString()} steps this stream${age}`;
 }
 
 export async function getWellnessDistanceResponse(): Promise<string> {
-  const [km, wellness] = await Promise.all([getDistanceSinceStreamStart(), getWellnessData()]);
+  const [km, wellness, sessionAt] = await Promise.all([
+    getDistanceSinceStreamStart(),
+    getWellnessData(),
+    getLastSessionMetricUpdateAt('distanceKm'),
+  ]);
   if (km <= 0) return '🚶 No walking/running distance this stream yet.';
-  const age = formatDataAge(getMetricUpdatedAt(wellness, 'distanceKm'));
+  const age = formatDataAge(sessionAt || getMetricUpdatedAt(wellness, 'distanceKm'));
   return `🚶 ${formatDistance(km)} walked/run this stream${age}`;
 }
 
 export async function getWellnessCaloriesResponse(): Promise<string> {
-  const [wellness, activeSince] = await Promise.all([getWellnessData(), getActiveCaloriesSinceStreamStart()]);
+  const [wellness, activeSince, sessionAt] = await Promise.all([
+    getWellnessData(),
+    getActiveCaloriesSinceStreamStart(),
+    getLastSessionMetricUpdateAt('activeCalories'),
+  ]);
   const resting = wellness?.restingCalories ?? 0;
   const total = wellness?.totalCalories;
   if (activeSince <= 0 && resting <= 0) return '🔥 No calorie data this stream yet.';
@@ -60,14 +73,20 @@ export async function getWellnessCaloriesResponse(): Promise<string> {
   if (activeSince > 0) parts.push(`${activeSince} active cal (stream)`);
   if (resting > 0) parts.push(`${resting} resting cal (today)`);
   if ((total ?? 0) > 0 && parts.length === 0) parts.push(`${total} total cal`);
-  const age = formatDataAge(getMetricUpdatedAt(wellness, ['activeCalories', 'restingCalories', 'totalCalories']));
+  const age = formatDataAge(
+    sessionAt || getMetricUpdatedAt(wellness, ['activeCalories', 'restingCalories', 'totalCalories'])
+  );
   return `🔥 ${parts.join(' · ')}${age}`;
 }
 
 export async function getWellnessFlightsResponse(): Promise<string> {
-  const [flights, wellness] = await Promise.all([getFlightsSinceStreamStart(), getWellnessData()]);
+  const [flights, wellness, sessionAt] = await Promise.all([
+    getFlightsSinceStreamStart(),
+    getWellnessData(),
+    getLastSessionMetricUpdateAt('flightsClimbed'),
+  ]);
   if (flights <= 0) return '🪜 No flights climbed this stream yet.';
-  const age = formatDataAge(getMetricUpdatedAt(wellness, 'flightsClimbed'));
+  const age = formatDataAge(sessionAt || getMetricUpdatedAt(wellness, 'flightsClimbed'));
   return `🪜 ${flights} flight${flights === 1 ? '' : 's'} climbed this stream${age}`;
 }
 
@@ -110,13 +129,18 @@ export async function getWellnessWeightResponse(): Promise<string> {
 }
 
 export async function getWellnessSummaryResponse(): Promise<string> {
-  const [wellness, steps, distance, flights, activeSince] = await Promise.all([
-    getWellnessData(),
-    getStepsSinceStreamStart(),
-    getDistanceSinceStreamStart(),
-    getFlightsSinceStreamStart(),
-    getActiveCaloriesSinceStreamStart(),
-  ]);
+  const [wellness, steps, distance, flights, activeSince, stepsAt, distanceAt, flightsAt, caloriesAt] =
+    await Promise.all([
+      getWellnessData(),
+      getStepsSinceStreamStart(),
+      getDistanceSinceStreamStart(),
+      getFlightsSinceStreamStart(),
+      getActiveCaloriesSinceStreamStart(),
+      getLastSessionMetricUpdateAt('steps'),
+      getLastSessionMetricUpdateAt('distanceKm'),
+      getLastSessionMetricUpdateAt('flightsClimbed'),
+      getLastSessionMetricUpdateAt('activeCalories'),
+    ]);
 
   const parts: string[] = [];
   if (steps > 0) parts.push(`👟 ${steps.toLocaleString()} steps`);
@@ -138,8 +162,10 @@ export async function getWellnessSummaryResponse(): Promise<string> {
   }
 
   if (parts.length === 0) return '📊 No wellness data yet.';
-  const age = formatDataAge(getMetricUpdatedAt(wellness, [
+  const sessionMax = Math.max(stepsAt, distanceAt, flightsAt, caloriesAt);
+  const wellnessMax = getMetricUpdatedAt(wellness, [
     'steps', 'distanceKm', 'flightsClimbed', 'activeCalories', 'heartRate', 'restingHeartRate',
-  ]));
+  ]);
+  const age = formatDataAge(sessionMax || wellnessMax);
   return `📊 ${parts.join(' · ')}${age}`;
 }

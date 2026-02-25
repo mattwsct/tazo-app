@@ -45,6 +45,14 @@ export async function getLastSessionUpdateAt(): Promise<number> {
   return latest;
 }
 
+/** Timestamp when a specific session metric was last imported. */
+export async function getLastSessionMetricUpdateAt(
+  metric: keyof WellnessLastImport
+): Promise<number> {
+  const state = await getLastImport();
+  return state[metric]?.at ?? 0;
+}
+
 async function setLastImportMetric(metric: keyof WellnessLastImport, value: number): Promise<void> {
   try {
     const existing = await getLastImport();
