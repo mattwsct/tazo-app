@@ -87,6 +87,8 @@ export interface OverlaySettings {
   kicksGoalIncrement?: number;
   /** Optional second line for kicks goal */
   kicksGoalSubtext?: string;
+  /** How long the 100% bar shows before auto-incrementing (seconds). */
+  goalCelebrationDurationSec?: number;
   /** Runtime: celebration window end (ms) — show 100% until this time. */
   subGoalCelebrationUntil?: number;
   kicksGoalCelebrationUntil?: number;
@@ -148,6 +150,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showKicksGoal: false,
   kicksGoalTarget: 100,
   kicksGoalIncrement: 100,
+  goalCelebrationDurationSec: 15,
 };
 
 // Valid settings schema for validation
@@ -202,6 +205,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalTarget: 'number',
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
+  goalCelebrationDurationSec: 'number',
 };
 
 // SSE message types

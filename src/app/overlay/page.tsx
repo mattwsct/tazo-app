@@ -1330,18 +1330,27 @@ function OverlayPage() {
     return null;
   }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
 
+  const prevLocationLevelsRef = useRef<string[]>([]);
   const locationLevels = useMemo(() => {
-    if (settings.locationDisplay === 'hidden') return [];
-    if (settings.locationDisplay === 'custom') {
+    let next: string[];
+    if (settings.locationDisplay === 'hidden') {
+      next = [];
+    } else if (settings.locationDisplay === 'custom') {
       const custom = settings.customLocation?.trim();
-      return custom ? [custom] : [];
+      next = custom ? [custom] : [];
+    } else if (hasCompleteLocationData(lastRawLocation.current)) {
+      next = getLocationLevels(lastRawLocation.current, settings.locationDisplay as 'city' | 'state' | 'country');
+    } else if (location?.primary) {
+      next = [location.primary];
+    } else if (location?.secondary) {
+      next = [location.secondary];
+    } else {
+      next = [];
     }
-    if (hasCompleteLocationData(lastRawLocation.current)) {
-      return getLocationLevels(lastRawLocation.current, settings.locationDisplay as 'city' | 'state' | 'country');
-    }
-    if (location?.primary) return [location.primary];
-    if (location?.secondary) return [location.secondary];
-    return [];
+    const prev = prevLocationLevelsRef.current;
+    if (prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
+    prevLocationLevelsRef.current = next;
+    return next;
   }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data

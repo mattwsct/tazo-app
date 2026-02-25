@@ -28,7 +28,8 @@ export async function getGoalCelebration(): Promise<CelebrationState> {
 export async function setGoalCelebrationIfNeeded(
   type: GoalType,
   currentCount: number,
-  target: number
+  target: number,
+  durationMs?: number
 ): Promise<boolean> {
   if (currentCount < target) return false;
   try {
@@ -37,9 +38,10 @@ export async function setGoalCelebrationIfNeeded(
     const existing = state[untilKey];
     const now = Date.now();
     if (existing != null && existing > now) return false;
+    const duration = durationMs != null && durationMs > 0 ? durationMs : CELEBRATION_DURATION_MS;
     await kv.set(GOAL_CELEBRATION_KEY, {
       ...state,
-      [untilKey]: now + CELEBRATION_DURATION_MS,
+      [untilKey]: now + duration,
     });
     return true;
   } catch (e) {

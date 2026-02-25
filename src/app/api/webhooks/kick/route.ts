@@ -466,8 +466,9 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
@@ -490,8 +491,9 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
@@ -516,8 +518,9 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
@@ -543,8 +546,9 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.kicksGoalTarget as number) ?? 100;
+      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? 15) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('kicks', goals.kicks, target);
+        const celebrated = await setGoalCelebrationIfNeeded('kicks', goals.kicks, target, celebMs);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});

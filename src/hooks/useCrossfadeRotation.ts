@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 const CROSSFADE_DURATION_MS = 500;
 
@@ -19,17 +19,27 @@ export function useCrossfadeRotation<T>(slides: T[], cycleDurationMs: number): C
   const slidesRef = useRef<T[]>([]);
 
   const slidesKey = slides.join(',');
+  const slideCount = slides.length;
+
+  // Stabilise slides ref — only update when content actually changes
+  const prevSlidesKeyRef = useRef(slidesKey);
   useEffect(() => {
+    if (prevSlidesKeyRef.current !== slidesKey) {
+      prevSlidesKeyRef.current = slidesKey;
+    }
     slidesRef.current = slides;
   }, [slidesKey, slides]);
 
+  // Clamp activeIndex when the number of slides shrinks
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (slides.length === 0) return;
-    setActiveIndex((prev) => Math.min(prev, Math.max(0, slides.length - 1)));
-  }, [slides.length, slides]);
+    if (slideCount === 0) return;
+    setActiveIndex((prev) => Math.min(prev, Math.max(0, slideCount - 1)));
+  }, [slideCount]);
 
+  // Rotation timer — only restart when slide count or cycle duration changes
   useEffect(() => {
-    if (slides.length <= 1) return;
+    if (slideCount <= 1) return;
 
     const tick = () => {
       const current = slidesRef.current;
@@ -55,11 +65,13 @@ export function useCrossfadeRotation<T>(slides: T[], cycleDurationMs: number): C
       clearTimeout(initialTimeout);
       if (intervalId) clearInterval(intervalId);
     };
-  }, [slides.length, cycleDurationMs]);
+  }, [slideCount, cycleDurationMs]);
 
+  // Crossfade transition — only trigger on activeIndex changes from the
+  // rotation timer, not from slide-content updates that don't affect indices.
   useEffect(() => {
     if (activeIndex === displayedIndex && outgoingIndex === null) return;
-    if (slides.length === 0) return;
+    if (slideCount === 0) return;
 
     setOutgoingIndex(displayedIndex);
 
@@ -73,7 +85,13 @@ export function useCrossfadeRotation<T>(slides: T[], cycleDurationMs: number): C
     return () => {
       if (transitionRef.current) clearTimeout(transitionRef.current);
     };
-  }, [activeIndex, displayedIndex, outgoingIndex, slides.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex]);
 
-  return { activeIndex, displayedIndex, outgoingIndex, slides };
+  // Return a stable slides reference — only changes when content changes
+  // so downstream components don't re-render on every GPS tick.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableSlides = useMemo(() => slides, [slidesKey]);
+
+  return { activeIndex, displayedIndex, outgoingIndex, slides: stableSlides };
 }

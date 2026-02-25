@@ -64,12 +64,14 @@ export default function AdminPage() {
   const [kicksGoalIncrementInput, setKicksGoalIncrementInput] = useState<string>('1000');
   const [subGoalSubtextInput, setSubGoalSubtextInput] = useState<string>('');
   const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState<string>('');
+  const [goalCelebrationDurationInput, setGoalCelebrationDurationInput] = useState<string>('15');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subGoalIncrementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalIncrementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const goalCelebrationDurationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
@@ -89,14 +91,18 @@ export default function AdminPage() {
   });
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickChatBroadcastStreamTitle, setKickChatBroadcastStreamTitle] = useState(false);
+  const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
+  const [kickChatBroadcastLocationIntervalMin, setKickChatBroadcastLocationIntervalMin] = useState(5);
   const [kickChatBroadcastWeather, setKickChatBroadcastWeather] = useState(false);
   const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
   const [kickChatBroadcastHeartrateMinBpm, setKickChatBroadcastHeartrateMinBpm] = useState(100);
   const [kickChatBroadcastHeartrateVeryHighBpm, setKickChatBroadcastHeartrateVeryHighBpm] = useState(120);
   const [kickChatBroadcastSpeed, setKickChatBroadcastSpeed] = useState(false);
   const [kickChatBroadcastSpeedMinKmh, setKickChatBroadcastSpeedMinKmh] = useState(20);
+  const [kickChatBroadcastSpeedTimeoutMin, setKickChatBroadcastSpeedTimeoutMin] = useState(5);
   const [kickChatBroadcastAltitude, setKickChatBroadcastAltitude] = useState(false);
   const [kickChatBroadcastAltitudeMinM, setKickChatBroadcastAltitudeMinM] = useState(50);
+  const [kickChatBroadcastAltitudeTimeoutMin, setKickChatBroadcastAltitudeTimeoutMin] = useState(5);
   const [kickChatBroadcastWellnessSteps, setKickChatBroadcastWellnessSteps] = useState(true);
   const [kickChatBroadcastWellnessDistance, setKickChatBroadcastWellnessDistance] = useState(true);
   const [kickChatBroadcastWellnessFlights, setKickChatBroadcastWellnessFlights] = useState(false);
@@ -255,14 +261,18 @@ export default function AdminPage() {
         if (d.templateEnabled) setKickTemplateEnabled((prev) => ({ ...prev, ...d.templateEnabled }));
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
         if (d.alertSettings?.chatBroadcastStreamTitle !== undefined) setKickChatBroadcastStreamTitle(d.alertSettings.chatBroadcastStreamTitle);
+        if (d.alertSettings?.chatBroadcastLocation !== undefined) setKickChatBroadcastLocation(d.alertSettings.chatBroadcastLocation);
+        if (d.alertSettings?.chatBroadcastLocationIntervalMin != null) setKickChatBroadcastLocationIntervalMin(d.alertSettings.chatBroadcastLocationIntervalMin);
         if (d.alertSettings?.chatBroadcastWeather !== undefined) setKickChatBroadcastWeather(d.alertSettings.chatBroadcastWeather);
         if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
         if (d.alertSettings?.chatBroadcastHeartrateMinBpm != null) setKickChatBroadcastHeartrateMinBpm(d.alertSettings.chatBroadcastHeartrateMinBpm);
         if (d.alertSettings?.chatBroadcastHeartrateVeryHighBpm != null) setKickChatBroadcastHeartrateVeryHighBpm(d.alertSettings.chatBroadcastHeartrateVeryHighBpm);
         if (d.alertSettings?.chatBroadcastSpeed !== undefined) setKickChatBroadcastSpeed(d.alertSettings.chatBroadcastSpeed);
         if (d.alertSettings?.chatBroadcastSpeedMinKmh != null) setKickChatBroadcastSpeedMinKmh(d.alertSettings.chatBroadcastSpeedMinKmh);
+        if (d.alertSettings?.chatBroadcastSpeedTimeoutMin != null) setKickChatBroadcastSpeedTimeoutMin(d.alertSettings.chatBroadcastSpeedTimeoutMin);
         if (d.alertSettings?.chatBroadcastAltitude !== undefined) setKickChatBroadcastAltitude(d.alertSettings.chatBroadcastAltitude);
         if (d.alertSettings?.chatBroadcastAltitudeMinM != null) setKickChatBroadcastAltitudeMinM(d.alertSettings.chatBroadcastAltitudeMinM);
+        if (d.alertSettings?.chatBroadcastAltitudeTimeoutMin != null) setKickChatBroadcastAltitudeTimeoutMin(d.alertSettings.chatBroadcastAltitudeTimeoutMin);
         if (d.alertSettings?.chatBroadcastWellnessSteps !== undefined) setKickChatBroadcastWellnessSteps(d.alertSettings.chatBroadcastWellnessSteps);
         if (d.alertSettings?.chatBroadcastWellnessDistance !== undefined) setKickChatBroadcastWellnessDistance(d.alertSettings.chatBroadcastWellnessDistance);
         if (d.alertSettings?.chatBroadcastWellnessFlights !== undefined) setKickChatBroadcastWellnessFlights(d.alertSettings.chatBroadcastWellnessFlights);
@@ -440,6 +450,8 @@ export default function AdminPage() {
     alertSettings?: Partial<{
       minimumKicks: number;
       chatBroadcastStreamTitle: boolean;
+      chatBroadcastLocation: boolean;
+      chatBroadcastLocationIntervalMin: number;
       chatBroadcastWeather: boolean;
       chatBroadcastHeartrate: boolean;
       chatBroadcastHeartrateMinBpm: number;
@@ -462,16 +474,18 @@ export default function AdminPage() {
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
       chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
+      chatBroadcastLocation: kickChatBroadcastLocation,
+      chatBroadcastLocationIntervalMin: kickChatBroadcastLocationIntervalMin,
       chatBroadcastWeather: kickChatBroadcastWeather,
       chatBroadcastHeartrate: kickChatBroadcastHeartrate,
       chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
       chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
       chatBroadcastSpeed: kickChatBroadcastSpeed,
       chatBroadcastSpeedMinKmh: kickChatBroadcastSpeedMinKmh,
-      chatBroadcastSpeedTimeoutMin: 5,
+      chatBroadcastSpeedTimeoutMin: kickChatBroadcastSpeedTimeoutMin,
       chatBroadcastAltitude: kickChatBroadcastAltitude,
       chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
-      chatBroadcastAltitudeTimeoutMin: 5,
+      chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
       chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
       chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
       chatBroadcastWellnessFlights: kickChatBroadcastWellnessFlights,
@@ -494,20 +508,22 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastLocation, kickChatBroadcastLocationIntervalMin, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
     chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
+    chatBroadcastLocation: kickChatBroadcastLocation,
+    chatBroadcastLocationIntervalMin: kickChatBroadcastLocationIntervalMin,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
     chatBroadcastSpeed: kickChatBroadcastSpeed,
     chatBroadcastSpeedMinKmh: kickChatBroadcastSpeedMinKmh,
-    chatBroadcastSpeedTimeoutMin: 5,
+    chatBroadcastSpeedTimeoutMin: kickChatBroadcastSpeedTimeoutMin,
     chatBroadcastAltitude: kickChatBroadcastAltitude,
     chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
-    chatBroadcastAltitudeTimeoutMin: 5,
+    chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
     chatBroadcastWeather: kickChatBroadcastWeather,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
@@ -516,15 +532,17 @@ export default function AdminPage() {
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
     chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
+    chatBroadcastLocation: kickChatBroadcastLocation,
+    chatBroadcastLocationIntervalMin: kickChatBroadcastLocationIntervalMin,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
     chatBroadcastSpeed: kickChatBroadcastSpeed,
     chatBroadcastSpeedMinKmh: kickChatBroadcastSpeedMinKmh,
-    chatBroadcastSpeedTimeoutMin: 5,
+    chatBroadcastSpeedTimeoutMin: kickChatBroadcastSpeedTimeoutMin,
     chatBroadcastAltitude: kickChatBroadcastAltitude,
     chatBroadcastAltitudeMinM: kickChatBroadcastAltitudeMinM,
-    chatBroadcastAltitudeTimeoutMin: 5,
+    chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
     chatBroadcastWeather: kickChatBroadcastWeather,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
@@ -675,7 +693,8 @@ export default function AdminPage() {
     setKicksGoalIncrementInput(String(settings.kicksGoalIncrement ?? 1000));
     setSubGoalSubtextInput(settings.subGoalSubtext ?? '');
     setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
-  }, [settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalSubtext, settings.kicksGoalSubtext]);
+    setGoalCelebrationDurationInput(String(settings.goalCelebrationDurationSec ?? 15));
+  }, [settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalSubtext, settings.kicksGoalSubtext, settings.goalCelebrationDurationSec]);
 
   // Debounced handlers for number inputs (1s delay before saving)
   const handleSubGoalTargetChange = useCallback((value: string) => {
@@ -736,6 +755,16 @@ export default function AdminPage() {
     }, 1000);
   }, [handleSettingsChange]);
 
+  const handleGoalCelebrationDurationChange = useCallback((value: string) => {
+    setGoalCelebrationDurationInput(value);
+    if (goalCelebrationDurationTimeoutRef.current) clearTimeout(goalCelebrationDurationTimeoutRef.current);
+    goalCelebrationDurationTimeoutRef.current = setTimeout(() => {
+      goalCelebrationDurationTimeoutRef.current = null;
+      const n = Math.max(1, Math.min(300, parseInt(value, 10) || 15));
+      handleSettingsChange({ goalCelebrationDurationSec: n });
+    }, 1000);
+  }, [handleSettingsChange]);
+
   useEffect(() => {
     return () => {
       if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
@@ -744,6 +773,7 @@ export default function AdminPage() {
       if (kicksGoalIncrementTimeoutRef.current) clearTimeout(kicksGoalIncrementTimeoutRef.current);
       if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
       if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
+      if (goalCelebrationDurationTimeoutRef.current) clearTimeout(goalCelebrationDurationTimeoutRef.current);
     };
   }, []);
 
@@ -1551,6 +1581,14 @@ export default function AdminPage() {
                   </div>
                 )}
                 {(settings.showSubGoal || settings.showKicksGoal) && (
+                  <div style={{ marginLeft: '24px', marginTop: 12 }}>
+                    <div className="admin-select-wrap">
+                      <label>Celebration duration (seconds before auto-increment)</label>
+                      <input type="number" className="text-input" value={goalCelebrationDurationInput} onChange={(e) => handleGoalCelebrationDurationChange(e.target.value)} min={1} max={300} />
+                    </div>
+                  </div>
+                )}
+                {(settings.showSubGoal || settings.showKicksGoal) && (
                   <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
                     <div className="stream-goals-override-fields">
                       {settings.showSubGoal && (
@@ -1612,6 +1650,18 @@ export default function AdminPage() {
             <div className="setting-group">
               <div className="broadcast-options-list">
                 <label className="checkbox-label-row broadcast-checkbox-item">
+                  <input type="checkbox" checked={kickChatBroadcastLocation} onChange={(e) => { setKickChatBroadcastLocation(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastLocation: e.target.checked } }); }} className="checkbox-input" />
+                  <span className="radio-icon" aria-hidden="true">📍</span>
+                  <span>Location — periodic location update</span>
+                </label>
+                {kickChatBroadcastLocation && (
+                  <div className="broadcast-option-detail">
+                    <label className="checkbox-label-row-sm">
+                      Every <input type="number" className="text-input number-input" value={kickChatBroadcastLocationIntervalMin} onChange={(e) => { setKickChatBroadcastLocationIntervalMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
+                    </label>
+                  </div>
+                )}
+                <label className="checkbox-label-row broadcast-checkbox-item">
                   <input type="checkbox" checked={kickChatBroadcastStreamTitle} onChange={(e) => { setKickChatBroadcastStreamTitle(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastStreamTitle: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon" aria-hidden="true">📺</span>
                   <span>Stream title — on title change</span>
@@ -1645,9 +1695,14 @@ export default function AdminPage() {
                 </label>
                 {kickChatBroadcastSpeed && (
                   <div className="broadcast-option-detail">
-                    <label className="checkbox-label-row-sm">
-                      Min <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedMinKmh} onChange={(e) => { setKickChatBroadcastSpeedMinKmh(Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20))); scheduleKickMessagesSave(); }} min={0} max={500} /> km/h
-                    </label>
+                    <div className="form-row-wrap">
+                      <label className="checkbox-label-row-sm">
+                        Min <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedMinKmh} onChange={(e) => { setKickChatBroadcastSpeedMinKmh(Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20))); scheduleKickMessagesSave(); }} min={0} max={500} /> km/h
+                      </label>
+                      <label className="checkbox-label-row-sm">
+                        Cooldown <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedTimeoutMin} onChange={(e) => { setKickChatBroadcastSpeedTimeoutMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
+                      </label>
+                    </div>
                   </div>
                 )}
                 <label className="checkbox-label-row broadcast-checkbox-item">
@@ -1657,9 +1712,14 @@ export default function AdminPage() {
                 </label>
                 {kickChatBroadcastAltitude && (
                   <div className="broadcast-option-detail">
-                    <label className="checkbox-label-row-sm">
-                      Min <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeMinM} onChange={(e) => { setKickChatBroadcastAltitudeMinM(Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50))); scheduleKickMessagesSave(); }} min={0} max={9000} /> m
-                    </label>
+                    <div className="form-row-wrap">
+                      <label className="checkbox-label-row-sm">
+                        Min <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeMinM} onChange={(e) => { setKickChatBroadcastAltitudeMinM(Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50))); scheduleKickMessagesSave(); }} min={0} max={9000} /> m
+                      </label>
+                      <label className="checkbox-label-row-sm">
+                        Cooldown <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeTimeoutMin} onChange={(e) => { setKickChatBroadcastAltitudeTimeoutMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
+                      </label>
+                    </div>
                   </div>
                 )}
                 <label className="checkbox-label-row broadcast-checkbox-item">
