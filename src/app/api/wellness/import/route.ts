@@ -206,7 +206,13 @@ export async function POST(request: NextRequest) {
 
     // Health Auto Export format: { data: { metrics: [...] } }
     if (body.data && typeof body.data === 'object' && (body.data as { metrics?: unknown }).metrics) {
+      const data = body.data as { metrics?: Array<{ name?: string }> };
+      const metricNames = (data.metrics ?? []).map(m => m?.name).filter(Boolean) as string[];
       Object.assign(updates, parseHealthAutoExport(body));
+      console.log('[Wellness import] Health Auto Export:', {
+        received: metricNames,
+        parsed: updates,
+      });
     }
 
     // Flat format (also allow overriding from flat fields if present)
@@ -234,6 +240,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
     }
 
+    console.log('[Wellness import] Saving:', updates);
     await updateWellnessData(updates);
 
     if (updates.steps !== undefined) {
