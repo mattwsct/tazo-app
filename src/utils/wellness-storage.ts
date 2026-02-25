@@ -249,11 +249,23 @@ async function updateSession(config: SessionConfig, newValue: number): Promise<v
     const accumulated = existing?.accumulated ?? 0;
 
     if (shouldSkipSessionUpdate(lastImportState[config.importMetric], val, lastKnown, now)) {
+      const lastImp = lastImportState[config.importMetric];
+      const reason = lastImp && val === lastImp.value && (now - lastImp.at) < DEDUP_SAME_VALUE_MS
+        ? 'duplicate (same value within 60s)'
+        : 'stale (lower value within 90s)';
+      console.log(`[Wellness session] SKIP ${config.importMetric}: ${reason}`, {
+        incoming: val, lastKnown, accumulated, lastImport: lastImp,
+      });
       return;
     }
 
-    const delta = val >= lastKnown ? val - lastKnown : val;
+    const isDailyReset = val < lastKnown;
+    const delta = isDailyReset ? val : val - lastKnown;
     const newAccumulated = config.roundAccumulated ? config.roundAccumulated(accumulated + delta) : accumulated + delta;
+    console.log(`[Wellness session] ${config.importMetric}:`, {
+      incoming: val, lastKnown, delta, accumulated, newAccumulated,
+      ...(isDailyReset ? { note: 'daily reset detected (incoming < lastKnown)' } : {}),
+    });
     await kv.set(config.kvKey, { accumulated: newAccumulated, lastKnown: val });
     await setLastImportMetric(config.importMetric, val);
   } catch (error) {

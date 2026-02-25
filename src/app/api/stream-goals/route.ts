@@ -4,8 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { kv } from '@vercel/kv';
 import { getStreamGoals, setStreamGoals } from '@/utils/stream-goals-storage';
+import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
+import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +36,22 @@ export async function PATCH(request: NextRequest) {
     await setStreamGoals(body);
     void broadcastAlertsAndLeaderboard();
     const goals = await getStreamGoals();
+
+    const settings = await kv.get<Record<string, unknown>>('overlay_settings');
+    const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
+    if (goals.subs > 0) {
+      const subTarget = (settings?.subGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget!;
+      if (goals.subs >= subTarget) {
+        await setGoalCelebrationIfNeeded('subs', goals.subs, subTarget, celebMs);
+      }
+    }
+    if (goals.kicks > 0) {
+      const kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
+      if (goals.kicks >= kicksTarget) {
+        await setGoalCelebrationIfNeeded('kicks', goals.kicks, kicksTarget, celebMs);
+      }
+    }
+
     return NextResponse.json(goals);
   } catch (err) {
     console.warn('[stream-goals] PATCH failed:', err);

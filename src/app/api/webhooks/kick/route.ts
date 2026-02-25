@@ -27,7 +27,7 @@ import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
   trackChallengeMessage, checkParticipationStreak, resetEventTimestamps,
-  getAttackList, giftTazos, requestTazos, acceptTazoRequest, denyTazoRequest,
+  getAttackList, giftTazos,
 } from '@/utils/gambling-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
@@ -342,16 +342,10 @@ export async function POST(request: NextRequest) {
       if (bjResponse) { await replyNonCmd(bjResponse); return NextResponse.json({ received: true }, { status: 200 }); }
     }
 
-    // 5. Bare-word accept/deny (duels + tazo requests)
+    // 5. Bare-word accept (duels)
     if (bareWord === 'accept') {
       const acceptResponse = await handleKickChatCommand({ cmd: 'accept' }, sender);
       if (acceptResponse) { await replyNonCmd(acceptResponse); return NextResponse.json({ received: true }, { status: 200 }); }
-      const tazoAccept = await acceptTazoRequest(sender);
-      if (tazoAccept) { await replyNonCmd(tazoAccept); return NextResponse.json({ received: true }, { status: 200 }); }
-    }
-    if (bareWord === 'deny') {
-      const tazoDeny = await denyTazoRequest(sender);
-      if (tazoDeny) { await replyNonCmd(tazoDeny); return NextResponse.json({ received: true }, { status: 200 }); }
     }
 
     // 6. Challenge message tracking (always, silent)

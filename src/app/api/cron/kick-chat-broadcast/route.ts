@@ -355,7 +355,6 @@ export async function GET(request: NextRequest) {
               try {
                 await sendKickChatMessage(accessToken, chatMsg);
                 sent++;
-                lastMsgToStore = chatMsg;
                 console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'stream_title', msgPreview: chatMsg.slice(0, 80) }));
               } catch (err) {
                 console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'stream_title', error: err instanceof Error ? err.message : String(err) }));
@@ -486,7 +485,7 @@ export async function GET(request: NextRequest) {
       const crossed = milestones.filter((m) => current >= m && (lastSent == null || m > lastSent));
       const highest = crossed.length > 0 ? Math.max(...crossed) : null;
       if (highest != null) {
-        const msg = `${emoji} ${fmt(highest)} ${unit} this stream!`;
+        const msg = `${emoji} ${fmt(current)} ${unit} and counting!`;
         try {
           await sendKickChatMessage(accessToken, msg);
           sent++;

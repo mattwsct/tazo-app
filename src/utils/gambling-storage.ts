@@ -956,132 +956,84 @@ const RAFFLE_RECENT_MAX = 30;
 type RaffleKeyword = { word: string; display?: string; prize: number };
 
 const RAFFLE_KEYWORDS: RaffleKeyword[] = [
-  // Tier 1 — 50 tazos (short internet slang + very short boss names)
-  { word: 'rizz', prize: 50 },
-  { word: 'sigma', prize: 50 },
+  // Tier 1 — 50 tazos (short, well-known internet culture words)
   { word: 'based', prize: 50 },
+  { word: 'sigma', prize: 50 },
+  { word: 'rizz', prize: 50 },
   { word: 'slay', prize: 50 },
   { word: 'goat', prize: 50 },
   { word: 'sus', prize: 50 },
-  { word: 'cap', prize: 50 },
-  { word: 'bet', prize: 50 },
-  { word: 'gyat', prize: 50 },
-  { word: 'yeet', prize: 50 },
-  { word: 'vibe', prize: 50 },
-  { word: 'bruh', prize: 50 },
-  { word: 'fire', prize: 50 },
-  { word: 'dub', prize: 50 },
-  { word: 'cope', prize: 50 },
-  { word: 'mald', prize: 50 },
-  { word: 'lit', prize: 50 },
-  { word: 'aura', prize: 50 },
   { word: 'pog', prize: 50 },
-  { word: 'kek', prize: 50 },
-  { word: 'npc', prize: 50 },
-  { word: 'ong', prize: 50 },
-  { word: 'sheesh', prize: 50 },
-  { word: 'bonk', prize: 50 },
   { word: 'chad', prize: 50 },
   { word: 'simp', prize: 50 },
   { word: 'drip', prize: 50 },
-  { word: 'hype', prize: 50 },
-  { word: 'zamn', prize: 50 },
-  { word: 'dawg', prize: 50 },
-  { word: 'facts', prize: 50 },
+  { word: 'noob', prize: 50 },
+  { word: 'gg', prize: 50 },
+  { word: 'afk', prize: 50 },
+  { word: 'bruh', prize: 50 },
+  { word: 'woke', prize: 50 },
+  { word: 'flex', prize: 50 },
+  { word: 'stan', prize: 50 },
+  { word: 'nerf', prize: 50 },
+  { word: 'buff', prize: 50 },
+  { word: 'glitch', prize: 50 },
+  { word: 'spam', prize: 50 },
+  { word: 'troll', prize: 50 },
+  { word: 'lag', prize: 50 },
+  { word: 'ping', prize: 50 },
+  { word: 'clutch', prize: 50 },
+  { word: 'grind', prize: 50 },
+  { word: 'meta', prize: 50 },
+  { word: 'loot', prize: 50 },
+  { word: 'dank', prize: 50 },
   { word: 'tazo', prize: 50 },
-  { word: 'sam', display: 'Sam', prize: 50 },
-  { word: 'ebz', display: 'EBZ', prize: 50 },
-  { word: 'abz', display: 'ABZ', prize: 50 },
-  { word: 'sjc', display: 'SJC', prize: 50 },
-  { word: 'xqc', display: 'xQc', prize: 50 },
-  { word: 'n3on', display: 'n3on', prize: 50 },
-  { word: 'andy', display: 'Andy', prize: 50 },
-  // Tier 2 — 100 tazos (medium slang + medium-length boss names)
-  { word: 'cooked', prize: 100 },
-  { word: 'ratio', prize: 100 },
-  { word: 'banger', prize: 100 },
-  { word: 'glaze', prize: 100 },
-  { word: 'seethe', prize: 100 },
+  // Tier 2 — 100 tazos (medium internet culture terms)
+  { word: 'pogchamp', display: 'PogChamp', prize: 100 },
+  { word: 'pepega', display: 'Pepega', prize: 100 },
+  { word: 'stonks', prize: 100 },
+  { word: 'sheesh', prize: 100 },
   { word: 'bussin', prize: 100 },
   { word: 'skibidi', prize: 100 },
-  { word: 'demure', prize: 100 },
-  { word: 'fanum', prize: 100 },
-  { word: 'stonks', prize: 100 },
-  { word: 'noice', prize: 100 },
-  { word: 'beast', prize: 100 },
-  { word: 'legend', prize: 100 },
-  { word: 'vibes', prize: 100 },
-  { word: 'toxic', prize: 100 },
-  { word: 'squad', prize: 100 },
-  { word: 'goated', prize: 100 },
-  { word: 'chill', prize: 100 },
-  { word: 'juicy', prize: 100 },
-  { word: 'crispy', prize: 100 },
-  { word: 'finesse', prize: 100 },
-  { word: 'spicy', prize: 100 },
-  { word: 'savage', prize: 100 },
-  { word: 'flex', prize: 100 },
-  { word: 'mando', display: 'Mando', prize: 100 },
-  { word: 'sneako', display: 'SNEAKO', prize: 100 },
-  { word: 'jandro', display: 'Jandro', prize: 100 },
-  { word: 'fousey', display: 'fousey', prize: 100 },
-  { word: 'shotime', display: 'Shotime', prize: 100 },
-  { word: 'kangjoel', display: 'kangjoel', prize: 100 },
-  { word: 'kimmee', display: 'kimmee', prize: 100 },
-  { word: 'alexis', display: 'Alexis', prize: 100 },
-  { word: 'moxie', display: 'Moxie', prize: 100 },
-  { word: 'iduncle', display: 'iDuncle', prize: 100 },
-  { word: 'lordhito', display: 'LordHito', prize: 100 },
-  { word: 'shoovy', display: 'shoovy', prize: 100 },
-  { word: 'nanatty', display: 'nanatty', prize: 100 },
-  { word: 'deepak', display: 'Deepak', prize: 100 },
-  { word: 'hyubsama', display: 'hyubsama', prize: 100 },
-  { word: 'vnthony', display: 'vnthony', prize: 100 },
-  { word: 'moises', display: 'Moises', prize: 100 },
-  { word: 'eddie', display: 'Eddie', prize: 100 },
-  { word: 'carldo', display: 'carldo', prize: 100 },
-  { word: 'mhyochi', display: 'mhyochi', prize: 100 },
-  { word: 'ricegum', display: 'RiceGum', prize: 100 },
-  { word: 'cobbruvs', display: 'Cobbruvs', prize: 100 },
-  { word: 'robcdee', display: 'Robcdee', prize: 100 },
-  { word: 'clavicular', display: 'Clavicular', prize: 100 },
-  // Tier 3 — 150 tazos (longer boss names + two-word boss names)
-  { word: 'hamptonbrandon', display: 'HamptonBrandon', prize: 150 },
-  { word: 'asianandy', display: 'AsianAndy', prize: 150 },
-  { word: 'burgerplanet', display: 'BurgerPlanet', prize: 150 },
-  { word: 'amouranth', display: 'Amouranth', prize: 150 },
-  { word: 'stevewilldoit', display: 'SteveWillDoIt', prize: 150 },
-  { word: 'joeykaotyk', display: 'JoeyKaotyk', prize: 150 },
-  { word: 'peeguutv', display: 'PeeguuTV', prize: 150 },
-  { word: 'ac7ionman', display: 'Ac7ionman', prize: 150 },
-  { word: 'suspendas', display: 'Suspendas', prize: 150 },
-  { word: 'taemin1998', display: 'TAEMIN1998', prize: 150 },
-  { word: 'nickwhite', display: 'nickwhite', prize: 150 },
-  { word: 'nicklee', display: 'nicklee', prize: 150 },
-  { word: 'hanridge', display: 'Hanridge', prize: 150 },
-  { word: 'xenathewitch', display: 'Xenathewitch', prize: 150 },
-  { word: 'dtanmanb', display: 'dtanmanb', prize: 150 },
-  { word: 'aloeirl', display: 'aloeirl', prize: 150 },
-  { word: 'chickenandy', display: 'ChickenAndy', prize: 150 },
-  { word: 'jjstream', display: 'jjstream', prize: 150 },
-  { word: 'wvagabond', display: 'wvagabond', prize: 150 },
-  { word: 'cristravels', display: 'CRISTRAVELS', prize: 150 },
-  { word: 'bennymack', display: 'bennymack', prize: 150 },
-  { word: 'captaingee', display: 'CaptainGee', prize: 150 },
-  { word: 'dbr666', display: 'DBR666', prize: 150 },
-  { word: 'santamaria', display: 'Santamaria', prize: 150 },
-  { word: 'lettievision', display: 'LettieVision', prize: 150 },
-  { word: 'adrianahlee', display: 'AdrianahLee', prize: 150 },
-  { word: 'floridaboy', display: 'FloridaBoy', prize: 150 },
-  { word: 'garydavid', display: 'garydavid', prize: 150 },
-  { word: 'nanapips', display: 'Nanapips', prize: 150 },
-  { word: 'ddurantv', display: 'DDURANTV', prize: 150 },
-  { word: 'slightlyhomeless', display: 'Slightlyhomeless', prize: 150 },
-  { word: 'muratstyle', display: 'Muratstyle', prize: 150 },
-  { word: 'ice poseidon', display: 'Ice Poseidon', prize: 150 },
-  { word: 'adin ross', display: 'Adin Ross', prize: 150 },
-  { word: 'bradley martin', display: 'Bradley Martin', prize: 150 },
-  { word: 'andy dick', display: 'Andy Dick', prize: 150 },
+  { word: 'gigachad', display: 'GigaChad', prize: 100 },
+  { word: 'copium', prize: 100 },
+  { word: 'hopium', prize: 100 },
+  { word: 'sadge', display: 'Sadge', prize: 100 },
+  { word: 'monkas', display: 'monkaS', prize: 100 },
+  { word: 'kekw', display: 'KEKW', prize: 100 },
+  { word: 'lowkey', prize: 100 },
+  { word: 'highkey', prize: 100 },
+  { word: 'respawn', prize: 100 },
+  { word: 'ragequit', prize: 100 },
+  { word: 'speedrun', prize: 100 },
+  { word: 'sussy', prize: 100 },
+  { word: 'facepalm', prize: 100 },
+  { word: 'normie', prize: 100 },
+  { word: 'tryhard', prize: 100 },
+  { word: 'cursed', prize: 100 },
+  { word: 'blessed', prize: 100 },
+  { word: 'vibing', prize: 100 },
+  { word: 'streamer', prize: 100 },
+  // Tier 3 — 150 tazos (longer internet culture references)
+  { word: 'rickrolled', prize: 150 },
+  { word: 'amogus', prize: 150 },
+  { word: 'big brain', display: 'Big Brain', prize: 150 },
+  { word: 'galaxy brain', display: 'Galaxy Brain', prize: 150 },
+  { word: 'main character', display: 'Main Character', prize: 150 },
+  { word: 'no cap', display: 'No Cap', prize: 150 },
+  { word: 'rent free', display: 'Rent Free', prize: 150 },
+  { word: 'plot armor', display: 'Plot Armor', prize: 150 },
+  { word: 'side quest', display: 'Side Quest', prize: 150 },
+  { word: 'final boss', display: 'Final Boss', prize: 150 },
+  { word: 'npc energy', display: 'NPC Energy', prize: 150 },
+  { word: 'lore drop', display: 'Lore Drop', prize: 150 },
+  { word: 'its giving', display: 'Its Giving', prize: 150 },
+  { word: 'deez nuts', display: 'Deez Nuts', prize: 150 },
+  { word: 'built different', display: 'Built Different', prize: 150 },
+  { word: 'down bad', display: 'Down Bad', prize: 150 },
+  { word: 'delulu', prize: 150 },
+  { word: 'unhinged', prize: 150 },
+  { word: 'understood the assignment', display: 'Understood the Assignment', prize: 150 },
+  { word: 'living legend', display: 'Living Legend', prize: 150 },
 ];
 
 async function pickRaffleKeyword(): Promise<{ keyword: string; display: string; prize: number }> {
@@ -1786,7 +1738,7 @@ export async function tryBossAttack(username: string, content: string): Promise<
   }
 
   await kv.set(BOSS_KEY, boss, { ex: BOSS_TTL_SEC });
-  return `⚔️ ${display} uses ${word} on ${boss.name} for ${baseDmg} dmg${effectText}! (${boss.hp}/${boss.maxHp} HP)`;
+  return `⚔️ ${display} uses ${word} on ${boss.name} for ${baseDmg} dmg${effectText || '!'} (${boss.hp}/${boss.maxHp} HP)`;
 }
 
 export async function shouldStartBossEvent(): Promise<boolean> {
@@ -1824,21 +1776,7 @@ export async function resetEventTimestamps(): Promise<void> {
   ]);
 }
 
-// --- Tazo Gifting & Requests ---
-
-const TAZO_REQUEST_KEY_PREFIX = 'tazo_request:';
-const TAZO_REQUEST_EXPIRE_SEC = 60;
-
-interface PendingTazoRequest {
-  requester: string;
-  requesterDisplay: string;
-  amount: number;
-  createdAt: number;
-}
-
-function tazoRequestKey(target: string): string {
-  return `${TAZO_REQUEST_KEY_PREFIX}${target}`;
-}
+// --- Tazo Gifting ---
 
 export async function giftTazos(senderUsername: string, recipientUsername: string, amount: number): Promise<string> {
   const sender = normalizeUser(senderUsername);
@@ -1852,53 +1790,4 @@ export async function giftTazos(senderUsername: string, recipientUsername: strin
   const recipientBal = await addTazos(recipient, amount);
   const senderBal = balance - amount;
   return `🎁 ${senderUsername.trim()} gifted ${amount} tazos to ${recipientUsername.trim()}! (${senderBal} | ${recipientBal} tazos)`;
-}
-
-export async function requestTazos(requesterUsername: string, targetUsername: string, amount: number): Promise<string> {
-  const requester = normalizeUser(requesterUsername);
-  const target = normalizeUser(targetUsername);
-  if (requester === target) return '🙏 You can\'t ask yourself for tazos.';
-  if (amount < 1) return '🙏 Minimum request is 1 tazo.';
-
-  const req: PendingTazoRequest = {
-    requester,
-    requesterDisplay: requesterUsername.trim(),
-    amount,
-    createdAt: Date.now(),
-  };
-  await kv.set(tazoRequestKey(target), req, { ex: TAZO_REQUEST_EXPIRE_SEC });
-  return `🙏 ${requesterUsername.trim()} is asking ${targetUsername.trim()} for ${amount} tazos! accept or deny (60s)`;
-}
-
-export async function acceptTazoRequest(targetUsername: string): Promise<string | null> {
-  const target = normalizeUser(targetUsername);
-  const raw = await kv.get<PendingTazoRequest>(tazoRequestKey(target));
-  if (!raw) return null;
-
-  const req = raw as PendingTazoRequest;
-  if (Date.now() - req.createdAt > TAZO_REQUEST_EXPIRE_SEC * 1000) {
-    await kv.del(tazoRequestKey(target));
-    return null;
-  }
-
-  const { ok, balance } = await deductTazos(target, req.amount);
-  if (!ok) {
-    await kv.del(tazoRequestKey(target));
-    return `🎁 Not enough tazos to give (have ${balance}). Request cancelled.`;
-  }
-
-  const requesterBal = await addTazos(req.requester, req.amount);
-  await kv.del(tazoRequestKey(target));
-  const targetBal = balance - req.amount;
-  return `🎁 ${targetUsername.trim()} gave ${req.requesterDisplay} ${req.amount} tazos! (${targetBal} | ${requesterBal} tazos)`;
-}
-
-export async function denyTazoRequest(targetUsername: string): Promise<string | null> {
-  const target = normalizeUser(targetUsername);
-  const raw = await kv.get<PendingTazoRequest>(tazoRequestKey(target));
-  if (!raw) return null;
-
-  const req = raw as PendingTazoRequest;
-  await kv.del(tazoRequestKey(target));
-  return `❌ ${targetUsername.trim()} denied ${req.requesterDisplay}'s request.`;
 }

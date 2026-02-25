@@ -215,10 +215,9 @@ export async function POST(request: NextRequest) {
     if (body.data && typeof body.data === 'object' && (body.data as { metrics?: unknown }).metrics) {
       const metricNames = getMetricNamesFromPayload(body);
       Object.assign(updates, parseHealthAutoExport(body));
-      // Log received metrics and parsed updates — visible in Vercel Dashboard → Logs
       console.log('[Wellness import] Health Auto Export:', {
         received: metricNames,
-        parsed: Object.keys(updates),
+        parsed: updates,
       });
     }
 
@@ -251,8 +250,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
     }
 
-    // Log what we're saving (helps debug e.g. weight missing)
-    console.log('[Wellness import] Saving:', Object.keys(updates));
+    console.log('[Wellness import] Saving:', updates);
 
     await updateWellnessData(updates);
 
