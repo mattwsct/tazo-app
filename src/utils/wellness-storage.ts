@@ -2,9 +2,10 @@
 // Human health data from Health Auto Export (steps, calories, distance, flights, etc.)
 // Separate from stats (stream-session speed/altitude/heart rate from Pulsoid/RTIRL)
 //
-// Steps session: Tracks steps accumulated since stream start, surviving daily resets.
-// Health Auto Export sends daily step count that resets at midnight — we accumulate deltas
-// and reset only when stream goes live.
+// Steps session: Tracks steps accumulated since stream start.
+// Health Auto Export "Since last sync" mode sends incremental deltas each push — we add each
+// value directly. No cumulative/daily-reset logic; midnight is handled by the app if it sends
+// all new data since last sync. Reset only when stream goes live.
 
 import { kv } from '@vercel/kv';
 
@@ -23,8 +24,7 @@ interface WellnessLastImport {
   activeCalories?: { value: number; at: number };
 }
 
-const DEDUP_SAME_VALUE_MS = 60_000;   // Same value within 60s → treat as duplicate
-const DEDUP_STALE_LOWER_MS = 90_000;  // Lower value within 90s of last import → likely out-of-order, skip
+const DEDUP_SAME_VALUE_MS = 60_000;   // Same value within 60s → treat as duplicate push
 
 async function getLastImport(): Promise<WellnessLastImport> {
   try {
@@ -57,22 +57,17 @@ async function setLastImportMetric(metric: keyof WellnessLastImport, value: numb
   }
 }
 
-/** Returns true if we should skip this session update (duplicate or stale/out-of-order). */
+/** Returns true if we should skip this session update (duplicate push only). */
 function shouldSkipSessionUpdate(
   lastImport: { value: number; at: number } | undefined,
   newValue: number,
-  lastKnown: number,
+  _lastKnown: number,
   now: number
 ): boolean {
   if (!lastImport) return false;
 
   // Same value within window → duplicate push, skip
   if (newValue === lastImport.value && (now - lastImport.at) < DEDUP_SAME_VALUE_MS) {
-    return true;
-  }
-
-  // Lower value shortly after last import → likely out-of-order (e.g. 15k then 10k), don't treat as daily reset
-  if (newValue < lastKnown && (now - lastImport.at) < DEDUP_STALE_LOWER_MS) {
     return true;
   }
 
@@ -250,21 +245,17 @@ async function updateSession(config: SessionConfig, newValue: number): Promise<v
 
     if (shouldSkipSessionUpdate(lastImportState[config.importMetric], val, lastKnown, now)) {
       const lastImp = lastImportState[config.importMetric];
-      const reason = lastImp && val === lastImp.value && (now - lastImp.at) < DEDUP_SAME_VALUE_MS
-        ? 'duplicate (same value within 60s)'
-        : 'stale (lower value within 90s)';
-      console.log(`[Wellness session] SKIP ${config.importMetric}: ${reason}`, {
-        incoming: val, lastKnown, accumulated, lastImport: lastImp,
+      console.log(`[Wellness session] SKIP ${config.importMetric}: duplicate (same value within 60s)`, {
+        incoming: val, accumulated, lastImport: lastImp,
       });
       return;
     }
 
-    const isDailyReset = val < lastKnown;
-    const delta = isDailyReset ? val : val - lastKnown;
+    // Additive mode: each push is the delta since last sync, add it directly
+    const delta = val;
     const newAccumulated = config.roundAccumulated ? config.roundAccumulated(accumulated + delta) : accumulated + delta;
     console.log(`[Wellness session] ${config.importMetric}:`, {
-      incoming: val, lastKnown, delta, accumulated, newAccumulated,
-      ...(isDailyReset ? { note: 'daily reset detected (incoming < lastKnown)' } : {}),
+      incoming: val, delta, accumulated, newAccumulated,
     });
     await kv.set(config.kvKey, { accumulated: newAccumulated, lastKnown: val });
     await setLastImportMetric(config.importMetric, val);

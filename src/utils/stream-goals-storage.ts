@@ -5,6 +5,7 @@
 
 import { kv } from '@vercel/kv';
 import { getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
+import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 
 const STREAM_GOALS_SUBS_KEY = 'stream_goals_subs';
 const STREAM_GOALS_KICKS_KEY = 'stream_goals_kicks';
@@ -86,11 +87,18 @@ export async function trackKicksGifter(username: string, amount: number): Promis
   }
 }
 
-function topFromRecord(data: Record<string, number> | null): { username: string; amount: number } | undefined {
+function topFromRecord(
+  data: Record<string, number> | null,
+  excluded: Set<string>
+): { username: string; amount: number } | undefined {
   if (!data) return undefined;
   let best: { username: string; amount: number } | undefined;
-  for (const [username, amount] of Object.entries(data)) {
-    if (!best || amount > best.amount) best = { username, amount };
+  const entries = Object.entries(data)
+    .filter(([u]) => !excluded.has((u || '').trim().toLowerCase()))
+    .sort(([, a], [, b]) => b - a);
+  if (entries.length > 0) {
+    const [username, amount] = entries[0];
+    best = { username, amount };
   }
   return best;
 }
@@ -103,17 +111,18 @@ export async function getStreamGoals(): Promise<{
   topKicksGifter?: { username: string; amount: number };
 }> {
   try {
-    const [subs, kicks, subGifters, kicksGifters] = await Promise.all([
+    const [subs, kicks, subGifters, kicksGifters, excluded] = await Promise.all([
       kv.get<number>(STREAM_GOALS_SUBS_KEY),
       kv.get<number>(STREAM_GOALS_KICKS_KEY),
       kv.get<Record<string, number>>(STREAM_TOP_SUB_GIFTERS_KEY),
       kv.get<Record<string, number>>(STREAM_TOP_KICKS_GIFTERS_KEY),
+      getLeaderboardExclusions(),
     ]);
     return {
       subs: Math.max(0, subs ?? 0),
       kicks: Math.max(0, kicks ?? 0),
-      topSubGifter: topFromRecord(subGifters),
-      topKicksGifter: topFromRecord(kicksGifters),
+      topSubGifter: topFromRecord(subGifters, excluded),
+      topKicksGifter: topFromRecord(kicksGifters, excluded),
     };
   } catch {
     return { subs: 0, kicks: 0 };

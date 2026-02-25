@@ -1504,7 +1504,7 @@ export default function AdminPage() {
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.giftEnabled !== false} onChange={(e) => handleSettingsChange({ giftEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!gift — tazo transfers</span>
+                      <span className="checkbox-text">!gift / !give — tazo transfers</span>
                     </label>
                   </div>
                   <div className="setting-separator" style={{ margin: '1rem 0' }} />
