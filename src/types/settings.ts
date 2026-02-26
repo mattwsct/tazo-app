@@ -21,6 +21,8 @@ export interface OverlaySettings {
   mapZoomLevel: MapZoomLevel;
   showSteps: boolean;
   showDistance?: boolean;
+  showActiveCalories?: boolean;
+  showFlights?: boolean;
   showSpeed?: boolean;
   showAltitude?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
@@ -87,8 +89,6 @@ export interface OverlaySettings {
   kicksGoalIncrement?: number;
   /** Optional second line for kicks goal */
   kicksGoalSubtext?: string;
-  /** How long the 100% bar shows before auto-incrementing (seconds). */
-  goalCelebrationDurationSec?: number;
   /** IANA timezone for weekly/monthly leaderboard resets (e.g. "Asia/Bangkok"). */
   streamerTimezone?: string;
   /** Show individual earned leaderboard periods in overlay rotation. */
@@ -126,6 +126,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   mapZoomLevel: 'match',
   showSteps: true,
   showDistance: true,
+  showActiveCalories: true,
+  showFlights: true,
   showSpeed: true,
   showAltitude: true,
   showLeaderboard: true,
@@ -162,7 +164,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showKicksGoal: false,
   kicksGoalTarget: 100,
   kicksGoalIncrement: 100,
-  goalCelebrationDurationSec: 60,
   streamerTimezone: 'UTC',
   showWeeklyEarnedLb: true,
   showMonthlyEarnedLb: true,
@@ -184,6 +185,8 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   mapZoomLevel: 'string',
   showSteps: 'boolean',
   showDistance: 'boolean',
+  showActiveCalories: 'boolean',
+  showFlights: 'boolean',
   showSpeed: 'boolean',
   showAltitude: 'boolean',
   showLeaderboard: 'boolean',
@@ -222,7 +225,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalTarget: 'number',
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
-  goalCelebrationDurationSec: 'number',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
   showMonthlyEarnedLb: 'boolean',

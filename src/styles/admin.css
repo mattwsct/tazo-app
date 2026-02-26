@@ -1868,6 +1868,23 @@ body {
   margin: 0.25rem 0;
 }
 
+.admin-advanced-details {
+  padding: 0.5rem 0;
+}
+
+.admin-advanced-details summary {
+  list-style: none;
+  padding: 0.4rem 0;
+}
+
+.admin-advanced-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-advanced-details summary:hover {
+  opacity: 1;
+}
+
 .broadcast-status-warning {
   color: #fbbf24;
 }

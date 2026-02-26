@@ -421,7 +421,7 @@ export async function GET(request: NextRequest) {
       const crossed = milestones.filter((m) => current >= m && (lastSent == null || m > lastSent));
       const highest = crossed.length > 0 ? Math.max(...crossed) : null;
       if (highest != null) {
-        const msg = `${emoji} ${fmt(current)} ${unit} and counting!`;
+        const msg = `${emoji} Exceeded ${fmt(highest)} ${unit}! (${fmt(current)} ${unit} total)`;
         try {
           await sendKickChatMessage(accessToken, msg);
           sent++;
@@ -451,7 +451,7 @@ export async function GET(request: NextRequest) {
       'distanceKm',
       '🚶',
       'km',
-      (n) => String(Math.round(n))
+      (n) => n % 1 === 0 ? String(n) : n.toFixed(1)
     );
     await checkAndSend(
       wellnessFlightsOn,

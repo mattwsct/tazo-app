@@ -51,9 +51,10 @@ export default function BottomRightPanel({
   const earnedWeekly = settings.earnedLeaderboardWeekly ?? [];
   const earnedMonthly = settings.earnedLeaderboardMonthly ?? [];
   const earnedLifetime = settings.earnedLeaderboardLifetime ?? [];
-  const showWeeklyEarnedLb = settings.showWeeklyEarnedLb !== false && gamblingEnabled;
-  const showMonthlyEarnedLb = settings.showMonthlyEarnedLb !== false && gamblingEnabled;
-  const showLifetimeEarnedLb = settings.showLifetimeEarnedLb !== false && gamblingEnabled;
+  // Gate earned slides by showLeaderboard — when leaderboard is off, hide all slides (including empty weekly/monthly/lifetime)
+  const showWeeklyEarnedLb = showLeaderboard && settings.showWeeklyEarnedLb !== false && gamblingEnabled;
+  const showMonthlyEarnedLb = showLeaderboard && settings.showMonthlyEarnedLb !== false && gamblingEnabled;
+  const showLifetimeEarnedLb = showLeaderboard && settings.showLifetimeEarnedLb !== false && gamblingEnabled;
   const lbCycleMs = Math.max(5, settings.leaderboardRotationSec ?? 15) * 1000;
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
   const showOverlayAlerts = settings.showOverlayAlerts !== false;

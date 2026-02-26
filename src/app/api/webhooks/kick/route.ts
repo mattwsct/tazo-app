@@ -37,7 +37,6 @@ import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsS
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals, trackSubGifter, trackKicksGifter } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
-import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -449,8 +448,6 @@ export async function POST(request: NextRequest) {
 
   // Push overlay alerts for follows, subs, gifts, kicks
   const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
-  const subGiftSettings = await kv.get<{ subGiftChipRewards?: boolean }>('overlay_settings');
-  const subGiftChipRewards = subGiftSettings?.subGiftChipRewards !== false;
   let didAlertOrLeaderboard = false;
   if (eventNorm === 'channel.followed') {
     const follower = getUsername(payload.follower);
@@ -462,7 +459,6 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalSubs(1),
         pushSubAlert(subscriber),
-        ...(subUser && subGiftChipRewards ? [addTazosAsAdmin(subUser, 25)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
@@ -470,9 +466,8 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
@@ -487,7 +482,6 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         addStreamGoalSubs(1),
         pushResubAlert(subscriber, duration > 0 ? duration : undefined),
-        ...(resubUser && subGiftChipRewards ? [addTazosAsAdmin(resubUser, 25)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
@@ -495,9 +489,8 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
@@ -514,7 +507,6 @@ export async function POST(request: NextRequest) {
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
         ...(gifterUser ? [trackSubGifter(gifterUser, count)] : []),
-        ...(gifterUser && subGiftChipRewards ? [addTazosAsAdmin(gifterUser, 25 * count)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
@@ -522,9 +514,8 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target, celebMs);
+        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
@@ -542,7 +533,6 @@ export async function POST(request: NextRequest) {
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),
         ...(kickUser ? [trackKicksGifter(kickUser, amount)] : []),
-        ...(kickUser && subGiftChipRewards ? [addTazosAsAdmin(kickUser, 10 * amount)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([
@@ -550,9 +540,8 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.kicksGoalTarget as number) ?? 100;
-      const celebMs = ((settings?.goalCelebrationDurationSec as number) ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!) * 1000;
       if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('kicks', goals.kicks, target, celebMs);
+        const celebrated = await setGoalCelebrationIfNeeded('kicks', goals.kicks, target);
         if (celebrated) {
           const token = await getValidAccessToken();
           if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});

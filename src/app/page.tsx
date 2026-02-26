@@ -60,18 +60,12 @@ export default function AdminPage() {
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
-  const [subGoalIncrementInput, setSubGoalIncrementInput] = useState<string>('10');
-  const [kicksGoalIncrementInput, setKicksGoalIncrementInput] = useState<string>('1000');
   const [subGoalSubtextInput, setSubGoalSubtextInput] = useState<string>('');
   const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState<string>('');
-  const [goalCelebrationDurationInput, setGoalCelebrationDurationInput] = useState<string>(String(DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec));
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const subGoalIncrementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const kicksGoalIncrementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const goalCelebrationDurationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
@@ -634,14 +628,6 @@ export default function AdminPage() {
     }
   }, [settings]);
 
-  // Auto-detect browser timezone and save it if not already set
-  useEffect(() => {
-    if (settings.streamerTimezone) return;
-    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (detected) handleSettingsChange({ streamerTimezone: detected });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.streamerTimezone]);
-
   // Debounced custom location handler
   const handleCustomLocationChange = useCallback((value: string) => {
     setCustomLocationInput(value);
@@ -690,16 +676,13 @@ export default function AdminPage() {
     };
   }, []);
 
-  // Sync sub/kicks goal target, increment, and subtext inputs from settings
+  // Sync sub/kicks goal step inputs from settings (show the step/increment, not the snapped target)
   useEffect(() => {
-    setSubGoalTargetInput(String(settings.subGoalTarget ?? 10));
-    setKicksGoalTargetInput(String(settings.kicksGoalTarget ?? 1000));
-    setSubGoalIncrementInput(String(settings.subGoalIncrement ?? 10));
-    setKicksGoalIncrementInput(String(settings.kicksGoalIncrement ?? 1000));
+    setSubGoalTargetInput(String(settings.subGoalIncrement ?? settings.subGoalTarget ?? 10));
+    setKicksGoalTargetInput(String(settings.kicksGoalIncrement ?? settings.kicksGoalTarget ?? 1000));
     setSubGoalSubtextInput(settings.subGoalSubtext ?? '');
     setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
-    setGoalCelebrationDurationInput(String(settings.goalCelebrationDurationSec ?? DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec));
-  }, [settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalSubtext, settings.kicksGoalSubtext, settings.goalCelebrationDurationSec]);
+  }, [settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalSubtext, settings.kicksGoalSubtext]);
 
   // Debounced handlers for number inputs (1s delay before saving)
   const handleSubGoalTargetChange = useCallback((value: string) => {
@@ -708,9 +691,12 @@ export default function AdminPage() {
     subGoalTargetTimeoutRef.current = setTimeout(() => {
       subGoalTargetTimeoutRef.current = null;
       const n = Math.max(1, parseInt(value, 10) || 1);
-      handleSettingsChange({ subGoalTarget: n });
+      const count = settings.streamGoals?.subs ?? 0;
+      const snapped = count >= n ? (Math.floor(count / n) + 1) * n : n;
+      // input stays showing n (the step), not snapped — user sees their multiplier
+      handleSettingsChange({ subGoalTarget: snapped, subGoalIncrement: n });
     }, 1000);
-  }, [handleSettingsChange]);
+  }, [handleSettingsChange, settings.streamGoals]);
 
   const handleKicksGoalTargetChange = useCallback((value: string) => {
     setKicksGoalTargetInput(value);
@@ -718,29 +704,12 @@ export default function AdminPage() {
     kicksGoalTargetTimeoutRef.current = setTimeout(() => {
       kicksGoalTargetTimeoutRef.current = null;
       const n = Math.max(1, parseInt(value, 10) || 1);
-      handleSettingsChange({ kicksGoalTarget: n });
+      const count = settings.streamGoals?.kicks ?? 0;
+      const snapped = count >= n ? (Math.floor(count / n) + 1) * n : n;
+      // input stays showing n (the step), not snapped
+      handleSettingsChange({ kicksGoalTarget: snapped, kicksGoalIncrement: n });
     }, 1000);
-  }, [handleSettingsChange]);
-
-  const handleSubGoalIncrementChange = useCallback((value: string) => {
-    setSubGoalIncrementInput(value);
-    if (subGoalIncrementTimeoutRef.current) clearTimeout(subGoalIncrementTimeoutRef.current);
-    subGoalIncrementTimeoutRef.current = setTimeout(() => {
-      subGoalIncrementTimeoutRef.current = null;
-      const n = Math.max(1, parseInt(value, 10) || 1);
-      handleSettingsChange({ subGoalIncrement: n });
-    }, 1000);
-  }, [handleSettingsChange]);
-
-  const handleKicksGoalIncrementChange = useCallback((value: string) => {
-    setKicksGoalIncrementInput(value);
-    if (kicksGoalIncrementTimeoutRef.current) clearTimeout(kicksGoalIncrementTimeoutRef.current);
-    kicksGoalIncrementTimeoutRef.current = setTimeout(() => {
-      kicksGoalIncrementTimeoutRef.current = null;
-      const n = Math.max(1, parseInt(value, 10) || 1);
-      handleSettingsChange({ kicksGoalIncrement: n });
-    }, 1000);
-  }, [handleSettingsChange]);
+  }, [handleSettingsChange, settings.streamGoals]);
 
   const handleSubGoalSubtextChange = useCallback((value: string) => {
     setSubGoalSubtextInput(value);
@@ -760,25 +729,12 @@ export default function AdminPage() {
     }, 1000);
   }, [handleSettingsChange]);
 
-  const handleGoalCelebrationDurationChange = useCallback((value: string) => {
-    setGoalCelebrationDurationInput(value);
-    if (goalCelebrationDurationTimeoutRef.current) clearTimeout(goalCelebrationDurationTimeoutRef.current);
-    goalCelebrationDurationTimeoutRef.current = setTimeout(() => {
-      goalCelebrationDurationTimeoutRef.current = null;
-      const n = Math.max(1, Math.min(300, parseInt(value, 10) || DEFAULT_OVERLAY_SETTINGS.goalCelebrationDurationSec!));
-      handleSettingsChange({ goalCelebrationDurationSec: n });
-    }, 1000);
-  }, [handleSettingsChange]);
-
   useEffect(() => {
     return () => {
       if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
       if (kicksGoalTargetTimeoutRef.current) clearTimeout(kicksGoalTargetTimeoutRef.current);
-      if (subGoalIncrementTimeoutRef.current) clearTimeout(subGoalIncrementTimeoutRef.current);
-      if (kicksGoalIncrementTimeoutRef.current) clearTimeout(kicksGoalIncrementTimeoutRef.current);
       if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
       if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
-      if (goalCelebrationDurationTimeoutRef.current) clearTimeout(goalCelebrationDurationTimeoutRef.current);
     };
   }, []);
 
@@ -953,10 +909,11 @@ export default function AdminPage() {
               </div>
           </CollapsibleSection>
 
-          {/* Location & map — overlay display, stored location, map */}
-          <CollapsibleSection id="location-map" title="📍 Location & map">
+          {/* Location, map & overlay — merged for IRL: where am I + what do I show */}
+          <CollapsibleSection id="location-map" title="📍 Location, map &amp; overlay">
             <div className="setting-group">
-              {/* Current location — prominent at top for quick visibility */}
+              {/* A: Current location */}
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Current location</h4>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -973,7 +930,6 @@ export default function AdminPage() {
                     <>
                       <div style={{ fontSize: '1.15rem', fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>
                         {(() => {
-                          // Format from raw + current overlay settings so granularity changes apply instantly (no wait for save)
                           const loc = kickStreamTitleRawLocation && settings.locationDisplay !== 'hidden'
                             ? formatLocation(kickStreamTitleRawLocation, settings.locationDisplay)
                             : { primary: storedLocation.primary, secondary: storedLocation.secondary };
@@ -1004,6 +960,8 @@ export default function AdminPage() {
                 </button>
               </div>
 
+              {/* B: Location display & map */}
+              <h4 className="subsection-label" style={{ marginBottom: 8, marginTop: 20 }}>Location display &amp; map</h4>
               <div className="admin-select-wrap">
                 <label>Location — overlay, chat (!location), stream title, minimap</label>
                 <div className="option-buttons" role="group" aria-label="Location display">
@@ -1047,10 +1005,8 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
-            </div>
-            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <label className="group-label">Map</label>
-              <div className="admin-select-wrap" style={{ opacity: settings.locationDisplay === 'hidden' ? 0.6 : 1 }}>
+              <div className="admin-select-wrap" style={{ marginTop: '16px', opacity: settings.locationDisplay === 'hidden' ? 0.6 : 1 }}>
+                <label>Map</label>
                 <div className="option-buttons" role="group" aria-label="Map display">
                   <button
                     type="button"
@@ -1077,6 +1033,187 @@ export default function AdminPage() {
                     🚫 Hidden
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* C: Overlay toggles */}
+            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Overlay — what appears on stream</h4>
+              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-left (wellness)</h5>
+              <div className="checkbox-group" style={{ marginBottom: 12 }}>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showSteps ?? true} onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Steps</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showDistance ?? true} onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Distance</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showActiveCalories ?? true} onChange={(e) => handleSettingsChange({ showActiveCalories: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Active calories</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showFlights ?? true} onChange={(e) => handleSettingsChange({ showFlights: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Flights climbed</span>
+                </label>
+              </div>
+              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-right (location)</h5>
+              <div className="checkbox-group" style={{ marginBottom: 12 }}>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showWeather ?? false} onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Weather</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showAltitude ?? true} onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Altitude</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showSpeed ?? true} onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Speed</span>
+                </label>
+              </div>
+              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Bottom-right &amp; alerts</h5>
+              <div className="checkbox-group">
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showGoalsRotation !== false} onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Show rotating section (leaderboard, goals, poll)</span>
+                </label>
+                <label className="checkbox-label" style={{ marginTop: 4 }}>
+                  <input type="checkbox" checked={settings.showOverlayAlerts ?? true} onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
+                </label>
+              </div>
+              <div className="button-row" style={{ marginTop: 12 }}>
+                <span className="group-label" style={{ marginRight: 8 }}>Test alert:</span>
+                {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      try {
+                        const res = await authenticatedFetch('/api/overlay-alerts/test', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type }),
+                        });
+                        if (res.ok) setToast({ type: 'saved', message: `Test ${type} alert sent` });
+                        else setToast({ type: 'error', message: 'Test failed' });
+                      } catch {
+                        setToast({ type: 'error', message: 'Test failed' });
+                      }
+                    }}
+                  >
+                    {type === 'sub' && '🎉 Sub'}
+                    {type === 'resub' && '💪 Resub'}
+                    {type === 'giftSub' && '🎁 Gift'}
+                    {type === 'kicks' && '💰 Kicks'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* Stream goals — common for IRL */}
+          <CollapsibleSection id="stream-goals" title="🎯 Stream goals">
+            <div className="setting-group">
+              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.showSubGoal ?? false}
+                    onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Sub goal — include in rotation</span>
+                </label>
+                {settings.showSubGoal && (
+                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
+                    <div className="admin-select-wrap">
+                      <label>Sub goal step (milestone interval)</label>
+                      <input type="number" className="text-input" value={subGoalTargetInput} onChange={(e) => handleSubGoalTargetChange(e.target.value)} min={1} />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Sub goal subtext (optional second line)</label>
+                      <input type="text" className="text-input" value={subGoalSubtextInput} onChange={(e) => handleSubGoalSubtextChange(e.target.value)} placeholder="e.g. 10 subs = 10 min extra stream" />
+                    </div>
+                  </div>
+                )}
+                <label className="checkbox-label" style={{ marginTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={settings.showKicksGoal ?? false}
+                    onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Kicks goal — include in rotation</span>
+                </label>
+                {settings.showKicksGoal && (
+                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
+                    <div className="admin-select-wrap">
+                      <label>Kicks goal step (milestone interval)</label>
+                      <input type="number" className="text-input" value={kicksGoalTargetInput} onChange={(e) => handleKicksGoalTargetChange(e.target.value)} min={1} />
+                    </div>
+                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                      <label>Kicks goal subtext (optional second line)</label>
+                      <input type="text" className="text-input" value={kicksGoalSubtextInput} onChange={(e) => handleKicksGoalSubtextChange(e.target.value)} placeholder="e.g. Help me hit $50!" />
+                    </div>
+                  </div>
+                )}
+                {(settings.showSubGoal || settings.showKicksGoal) && (
+                  <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                    <div className="stream-goals-override-fields">
+                      {settings.showSubGoal && (
+                        <div className="admin-select-wrap">
+                          <label>Current subs</label>
+                          <input key={`subs-${settings.streamGoals?.subs ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.subs ?? 0} id="stream-goals-subs-input" min={0} />
+                        </div>
+                      )}
+                      {settings.showKicksGoal && (
+                        <div className="admin-select-wrap">
+                          <label>Current kicks</label>
+                          <input key={`kicks-${settings.streamGoals?.kicks ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.kicks ?? 0} id="stream-goals-kicks-input" min={0} />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          try {
+                            const body: { subs?: number; kicks?: number } = {};
+                            if (settings.showSubGoal) {
+                              const el = document.getElementById('stream-goals-subs-input') as HTMLInputElement;
+                              if (el) body.subs = Math.max(0, parseInt(el.value, 10) || 0);
+                            }
+                            if (settings.showKicksGoal) {
+                              const el = document.getElementById('stream-goals-kicks-input') as HTMLInputElement;
+                              if (el) body.kicks = Math.max(0, parseInt(el.value, 10) || 0);
+                            }
+                            if (Object.keys(body).length === 0) return;
+                            const r = await authenticatedFetch('/api/stream-goals', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(body),
+                            });
+                            const data = await r.json();
+                            if (r.ok && data) {
+                              setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? 0 } }));
+                              setToast({ type: 'saved', message: 'Goals updated' });
+                            } else {
+                              setToast({ type: 'error', message: 'Update failed' });
+                            }
+                          } catch {
+                            setToast({ type: 'error', message: 'Update failed' });
+                          }
+                          setTimeout(() => setToast(null), 2000);
+                        }}
+                      >
+                        Update
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CollapsibleSection>
@@ -1185,124 +1322,7 @@ export default function AdminPage() {
             
           </CollapsibleSection>
 
-          {/* === OVERLAY === */}
-          <CollapsibleSection id="overlay" title="🖥️ Overlay display">
-            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Top-left &amp; top-right rotation</h3>
-            <div className="setting-group">
-              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-left (wellness — Health Auto Export)</h4>
-              <div className="checkbox-group" style={{ marginBottom: 8 }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showSteps ?? true}
-                    onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Steps — from Health Auto Export</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showDistance ?? true}
-                    onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Distance — when walking/running detected</span>
-                </label>
-            </div>
-            </div>
-            
-            <div className="setting-group" style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Top-right (location data)</h4>
-              <div className="checkbox-group" style={{ marginBottom: 8 }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showWeather ?? false}
-                    onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Weather — temp &amp; conditions from GPS location</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showAltitude ?? true}
-                    onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Altitude — shows when ≥50m change from session start</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showSpeed ?? true}
-                    onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Speed — shows when ≥10 km/h</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="setting-separator" style={{ margin: '1.25rem 0' }} />
-
-            <h3 className="subsection-label" style={{ marginBottom: 8 }}>Bottom-right rotation &amp; alerts</h3>
-            <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showGoalsRotation !== false}
-                    onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Show rotating section (leaderboard, goals, poll)</span>
-                </label>
-              </div>
-              <div className="checkbox-group" style={{ marginTop: '8px', marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showOverlayAlerts ?? true}
-                    onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
-                </label>
-              </div>
-              <div className="button-row" style={{ marginTop: '12px' }}>
-                <span className="group-label" style={{ marginRight: '8px' }}>Test alert:</span>
-                {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    className="btn btn-secondary btn-small"
-                    onClick={async () => {
-                      try {
-                        const res = await authenticatedFetch('/api/overlay-alerts/test', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ type }),
-                        });
-                        if (res.ok) setToast({ type: 'saved', message: `Test ${type} alert sent` });
-                        else setToast({ type: 'error', message: 'Test failed' });
-                      } catch {
-                        setToast({ type: 'error', message: 'Test failed' });
-                      }
-                    }}
-                  >
-                    {type === 'sub' && '🎉 Sub'}
-                    {type === 'resub' && '💪 Resub'}
-                    {type === 'giftSub' && '🎁 Gift'}
-                    {type === 'kicks' && '💰 Kicks'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CollapsibleSection>
-
-          {/* === GAMBLING & EVENTS === */}
+          {/* Gambling & events */}
           <CollapsibleSection id="gambling" title="🎰 Gambling & events">
             <div className="setting-group">
               <div className="checkbox-group" style={{ marginBottom: '12px' }}>
@@ -1318,72 +1338,14 @@ export default function AdminPage() {
               </div>
               {settings.gamblingEnabled !== false && (
                 <>
-                  <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                    <label>Tazos leaderboard</label>
-                    <select
-                      className="admin-select-big"
-                      value={settings.showLeaderboard !== false ? 'true' : 'false'}
-                      onChange={(e) => handleSettingsChange({ showLeaderboard: e.target.value === 'true' })}
-                    >
-                      <option value="true">🃏 Show in rotation</option>
-                      <option value="false">🚫 Hidden</option>
-                    </select>
-                  </div>
-                  {settings.showLeaderboard !== false && (
-                    <div className="admin-select-wrap">
-                      <label>Top N tazos</label>
-                      <select
-                        className="admin-select-big"
-                        value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
-                        onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
-                      >
-                        {[1, 3, 5, 10].map((n) => (
-                          <option key={n} value={n}>Top {n}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className="admin-select-wrap">
-                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span>Streamer timezone <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>(weekly/monthly reset)</span></span>
-                      <button
-                        type="button"
-                        style={{ fontSize: '0.7rem', opacity: 0.6, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: '0 0 2px 0', textDecoration: 'underline' }}
-                        onClick={() => {
-                          const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                          if (detected) handleSettingsChange({ streamerTimezone: detected });
-                        }}
-                      >auto-detect</button>
-                    </label>
-                    <select
-                      className="admin-select-big"
-                      value={settings.streamerTimezone ?? 'UTC'}
-                      onChange={(e) => handleSettingsChange({ streamerTimezone: e.target.value })}
-                    >
-                      {(() => {
-                        const detected = typeof window !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : null;
-                        const presets = [
-                          'UTC', 'America/New_York', 'America/Chicago', 'America/Denver',
-                          'America/Los_Angeles', 'America/Toronto', 'America/Vancouver',
-                          'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Amsterdam',
-                          'Asia/Bangkok', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Seoul',
-                          'Asia/Kolkata', 'Asia/Dubai', 'Asia/Jakarta',
-                          'Australia/Sydney', 'Australia/Melbourne', 'Pacific/Auckland',
-                        ];
-                        const allTz = detected && !presets.includes(detected) ? [detected, ...presets] : presets;
-                        return allTz.map((tz) => (
-                          <option key={tz} value={tz}>{tz}{tz === detected ? ' (your location)' : ''}</option>
-                        ));
-                      })()}
-                    </select>
-                  </div>
                   <div className="admin-select-wrap" style={{ marginBottom: '8px' }}>
-                    <label>Earned leaderboard slides</label>
+                    <label>Tazos leaderboard slides</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
                       {([
-                        ['showWeeklyEarnedLb', '📊 Weekly'] as const,
-                        ['showMonthlyEarnedLb', '📊 Monthly'] as const,
-                        ['showLifetimeEarnedLb', '🏆 All-time'] as const,
+                        ['showLeaderboard', '🃏 Stream (top tazos)'] as const,
+                        ['showWeeklyEarnedLb', '📊 Weekly earned'] as const,
+                        ['showMonthlyEarnedLb', '📊 Monthly earned'] as const,
+                        ['showLifetimeEarnedLb', '🏆 All-time earned'] as const,
                       ] as [keyof typeof settings, string][]).map(([key, label]) => (
                         <label key={key} className="checkbox-label" style={{ fontSize: '0.85rem' }}>
                           <input
@@ -1397,29 +1359,20 @@ export default function AdminPage() {
                       ))}
                     </div>
                   </div>
-                  <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                    <label>Leaderboard rotation <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>(seconds per slide)</span></label>
-                    <select
-                      className="admin-select-big"
-                      value={settings.leaderboardRotationSec ?? 15}
-                      onChange={(e) => handleSettingsChange({ leaderboardRotationSec: Number(e.target.value) })}
-                    >
-                      {[5, 10, 15, 20, 30, 45, 60].map(n => (
-                        <option key={n} value={n}>{n}s</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="admin-select-wrap">
-                    <label>Excluded users (comma separated)</label>
-                    <textarea
-                      className="text-input"
-                      value={leaderboardExcludedBotsInput}
-                      onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
-                      placeholder="e.g. nightbot, moobot, streamelements"
-                      rows={2}
-                      style={{ resize: 'vertical', minHeight: 50 }}
-                    />
-                  </div>
+                  {settings.showLeaderboard !== false && (
+                    <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
+                      <label>Top N tazos</label>
+                      <select
+                        className="admin-select-big"
+                        value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
+                        onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
+                      >
+                        {[1, 3, 5, 10].map((n) => (
+                          <option key={n} value={n}>Top {n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
                     <label>Channel point reward name (redeem for tazos)</label>
                     <input
@@ -1441,8 +1394,33 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  <div className="setting-separator" style={{ margin: '1rem 0' }} />
-                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Automated events</h4>
+                  <details className="admin-advanced-details" style={{ marginTop: 20 }}>
+                    <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>Advanced options</summary>
+                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                      <div className="admin-select-wrap">
+                        <label>Excluded users (comma separated)</label>
+                        <textarea
+                          className="text-input"
+                          value={leaderboardExcludedBotsInput}
+                          onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
+                          placeholder="e.g. nightbot, moobot, streamelements"
+                          rows={2}
+                          style={{ resize: 'vertical', minHeight: 50 }}
+                        />
+                      </div>
+                      <div className="admin-select-wrap" style={{ marginTop: 12 }}>
+                        <label>Leaderboard rotation (seconds per slide)</label>
+                        <select
+                          className="admin-select-big"
+                          value={settings.leaderboardRotationSec ?? 15}
+                          onChange={(e) => handleSettingsChange({ leaderboardRotationSec: Number(e.target.value) })}
+                        >
+                          {[5, 10, 15, 20, 30, 45, 60].map(n => (
+                            <option key={n} value={n}>{n}s</option>
+                          ))}
+                        </select>
+                      </div>
+                      <h4 className="subsection-label" style={{ marginTop: 20, marginBottom: 8 }}>Automated events</h4>
                   <div className="checkbox-group">
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.autoRaffleEnabled !== false} onChange={(e) => handleSettingsChange({ autoRaffleEnabled: e.target.checked })} className="checkbox-input" />
@@ -1497,30 +1475,18 @@ export default function AdminPage() {
                       className="button-secondary"
                       style={{ padding: '6px 12px', fontSize: 12 }}
                     >
-                      Reset event timestamps
+                        Reset event timestamps
                     </button>
                   </div>
+                    </div>
+                  </details>
 
-                  <div className="setting-separator" style={{ margin: '1rem 0' }} />
-                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Bonus rewards</h4>
-                  <div className="checkbox-group">
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.winStreaksEnabled !== false} onChange={(e) => handleSettingsChange({ winStreaksEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Win streak bonuses</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.subGiftChipRewards !== false} onChange={(e) => handleSettingsChange({ subGiftChipRewards: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Tazo rewards for subs/gifts/kicks</span>
-                    </label>
-                  </div>
                 </>
               )}
             </div>
           </CollapsibleSection>
 
-          {/* === CHAT COMMANDS === */}
+          {/* Chat commands */}
           <CollapsibleSection id="chat-commands" title="💬 Chat commands">
             <div className="setting-group">
               {settings.gamblingEnabled !== false && (
@@ -1546,12 +1512,6 @@ export default function AdminPage() {
                   </div>
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.rouletteEnabled !== false} onChange={(e) => handleSettingsChange({ rouletteEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!roulette — red/black/number</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
                       <input type="checkbox" checked={settings.diceEnabled !== false} onChange={(e) => handleSettingsChange({ diceEnabled: e.target.checked })} className="checkbox-input" />
                       <span className="checkbox-text">!dice — high/low roll</span>
                     </label>
@@ -1562,30 +1522,41 @@ export default function AdminPage() {
                       <span className="checkbox-text">!crash — cash out before crash</span>
                     </label>
                   </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.warEnabled !== false} onChange={(e) => handleSettingsChange({ warEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!war — card war</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.duelEnabled !== false} onChange={(e) => handleSettingsChange({ duelEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!duel — challenge another player</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.heistEnabled !== false} onChange={(e) => handleSettingsChange({ heistEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!heist — group heist</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.giftEnabled !== false} onChange={(e) => handleSettingsChange({ giftEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!gift / !give — tazo transfers</span>
-                    </label>
-                  </div>
+                  <details className="admin-advanced-details" style={{ marginTop: 12 }}>
+                    <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>More games</summary>
+                    <div style={{ marginTop: 12, marginLeft: 4 }}>
+                      <div className="checkbox-group">
+                        <label className="checkbox-label">
+                          <input type="checkbox" checked={settings.rouletteEnabled !== false} onChange={(e) => handleSettingsChange({ rouletteEnabled: e.target.checked })} className="checkbox-input" />
+                          <span className="checkbox-text">!roulette — red/black/number</span>
+                        </label>
+                      </div>
+                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                        <label className="checkbox-label">
+                          <input type="checkbox" checked={settings.warEnabled !== false} onChange={(e) => handleSettingsChange({ warEnabled: e.target.checked })} className="checkbox-input" />
+                          <span className="checkbox-text">!war — card war</span>
+                        </label>
+                      </div>
+                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                        <label className="checkbox-label">
+                          <input type="checkbox" checked={settings.duelEnabled !== false} onChange={(e) => handleSettingsChange({ duelEnabled: e.target.checked })} className="checkbox-input" />
+                          <span className="checkbox-text">!duel — challenge another player</span>
+                        </label>
+                      </div>
+                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                        <label className="checkbox-label">
+                          <input type="checkbox" checked={settings.heistEnabled !== false} onChange={(e) => handleSettingsChange({ heistEnabled: e.target.checked })} className="checkbox-input" />
+                          <span className="checkbox-text">!heist — group heist</span>
+                        </label>
+                      </div>
+                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                        <label className="checkbox-label">
+                          <input type="checkbox" checked={settings.giftEnabled !== false} onChange={(e) => handleSettingsChange({ giftEnabled: e.target.checked })} className="checkbox-input" />
+                          <span className="checkbox-text">!gift / !give — tazo transfers</span>
+                        </label>
+                      </div>
+                    </div>
+                  </details>
                   <div className="setting-separator" style={{ margin: '1rem 0' }} />
                 </>
               )}
@@ -1605,126 +1576,7 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          {/* === STREAM GOALS === */}
-          <CollapsibleSection id="stream-goals" title="🎯 Stream goals">
-            <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showSubGoal ?? false}
-                    onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Sub goal — include in rotation</span>
-                </label>
-                {settings.showSubGoal && (
-                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
-                    <div className="admin-select-wrap">
-                      <label>Sub goal target</label>
-                      <input type="number" className="text-input" value={subGoalTargetInput} onChange={(e) => handleSubGoalTargetChange(e.target.value)} min={1} />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Auto-increment amount (when goal is reached)</label>
-                      <input type="number" className="text-input" value={subGoalIncrementInput} onChange={(e) => handleSubGoalIncrementChange(e.target.value)} min={1} />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Sub goal subtext (optional second line)</label>
-                      <input type="text" className="text-input" value={subGoalSubtextInput} onChange={(e) => handleSubGoalSubtextChange(e.target.value)} placeholder="e.g. 10 subs = 10 min extra stream" />
-                    </div>
-                  </div>
-                )}
-                <label className="checkbox-label" style={{ marginTop: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={settings.showKicksGoal ?? false}
-                    onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Kicks goal — include in rotation</span>
-                </label>
-                {settings.showKicksGoal && (
-                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
-                    <div className="admin-select-wrap">
-                      <label>Kicks goal target</label>
-                      <input type="number" className="text-input" value={kicksGoalTargetInput} onChange={(e) => handleKicksGoalTargetChange(e.target.value)} min={1} />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Auto-increment amount (when goal is reached)</label>
-                      <input type="number" className="text-input" value={kicksGoalIncrementInput} onChange={(e) => handleKicksGoalIncrementChange(e.target.value)} min={1} />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Kicks goal subtext (optional second line)</label>
-                      <input type="text" className="text-input" value={kicksGoalSubtextInput} onChange={(e) => handleKicksGoalSubtextChange(e.target.value)} placeholder="e.g. Help me hit $50!" />
-                    </div>
-                  </div>
-                )}
-                {(settings.showSubGoal || settings.showKicksGoal) && (
-                  <div style={{ marginLeft: '24px', marginTop: 12 }}>
-                    <div className="admin-select-wrap">
-                      <label>Celebration duration (seconds before auto-increment)</label>
-                      <input type="number" className="text-input" value={goalCelebrationDurationInput} onChange={(e) => handleGoalCelebrationDurationChange(e.target.value)} min={1} max={300} />
-                    </div>
-                  </div>
-                )}
-                {(settings.showSubGoal || settings.showKicksGoal) && (
-                  <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-                    <div className="stream-goals-override-fields">
-                      {settings.showSubGoal && (
-                        <div className="admin-select-wrap">
-                          <label>Current subs</label>
-                          <input key={`subs-${settings.streamGoals?.subs ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.subs ?? 0} id="stream-goals-subs-input" min={0} />
-                        </div>
-                      )}
-                      {settings.showKicksGoal && (
-                        <div className="admin-select-wrap">
-                          <label>Current kicks</label>
-                          <input key={`kicks-${settings.streamGoals?.kicks ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.kicks ?? 0} id="stream-goals-kicks-input" min={0} />
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          try {
-                            const body: { subs?: number; kicks?: number } = {};
-                            if (settings.showSubGoal) {
-                              const el = document.getElementById('stream-goals-subs-input') as HTMLInputElement;
-                              if (el) body.subs = Math.max(0, parseInt(el.value, 10) || 0);
-                            }
-                            if (settings.showKicksGoal) {
-                              const el = document.getElementById('stream-goals-kicks-input') as HTMLInputElement;
-                              if (el) body.kicks = Math.max(0, parseInt(el.value, 10) || 0);
-                            }
-                            if (Object.keys(body).length === 0) return;
-                            const r = await authenticatedFetch('/api/stream-goals', {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(body),
-                            });
-                            const data = await r.json();
-                            if (r.ok && data) {
-                              setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? 0 } }));
-                              setToast({ type: 'saved', message: 'Goals updated' });
-                            } else {
-                              setToast({ type: 'error', message: 'Update failed' });
-                            }
-                          } catch {
-                            setToast({ type: 'error', message: 'Update failed' });
-                          }
-                          setTimeout(() => setToast(null), 2000);
-                        }}
-                      >
-                        Update
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </CollapsibleSection>
-
-          {/* === CHAT BROADCASTS === */}
+          {/* Chat broadcasts */}
           <CollapsibleSection id="chat-broadcasts" title="📢 Chat broadcasts">
             <div className="setting-group">
               <div className="broadcast-options-list">
@@ -1751,57 +1603,6 @@ export default function AdminPage() {
                   <span>Weather — rain, storm, snow, fog, etc.</span>
                 </label>
                 <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input type="checkbox" checked={kickChatBroadcastHeartrate} onChange={(e) => { setKickChatBroadcastHeartrate(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastHeartrate: e.target.checked } }); }} className="checkbox-input" />
-                  <span className="radio-icon" aria-hidden="true">❤️</span>
-                  <span>Heart rate — when exceeds thresholds below</span>
-                </label>
-                {kickChatBroadcastHeartrate && (
-                  <div className="broadcast-option-detail">
-                    <div className="form-row-wrap">
-                      <label className="checkbox-label-row-sm">
-                        High: <input type="number" className="text-input number-input" value={kickChatBroadcastHeartrateMinBpm} onChange={(e) => { setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100))); scheduleKickMessagesSave(); }} min={0} max={250} /> BPM
-                      </label>
-                      <label className="checkbox-label-row-sm">
-                        Very high: <input type="number" className="text-input number-input" value={kickChatBroadcastHeartrateVeryHighBpm} onChange={(e) => { setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120))); scheduleKickMessagesSave(); }} min={0} max={250} /> BPM
-                      </label>
-                    </div>
-                  </div>
-                )}
-                <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input type="checkbox" checked={kickChatBroadcastSpeed} onChange={(e) => { setKickChatBroadcastSpeed(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastSpeed: e.target.checked } }); }} className="checkbox-input" />
-                  <span className="radio-icon" aria-hidden="true">🚀</span>
-                  <span>Speed — new top speed above min below</span>
-                </label>
-                {kickChatBroadcastSpeed && (
-                  <div className="broadcast-option-detail">
-                    <div className="form-row-wrap">
-                      <label className="checkbox-label-row-sm">
-                        Min <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedMinKmh} onChange={(e) => { setKickChatBroadcastSpeedMinKmh(Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20))); scheduleKickMessagesSave(); }} min={0} max={500} /> km/h
-                      </label>
-                      <label className="checkbox-label-row-sm">
-                        Cooldown <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedTimeoutMin} onChange={(e) => { setKickChatBroadcastSpeedTimeoutMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
-                      </label>
-                    </div>
-                  </div>
-                )}
-                <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input type="checkbox" checked={kickChatBroadcastAltitude} onChange={(e) => { setKickChatBroadcastAltitude(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastAltitude: e.target.checked } }); }} className="checkbox-input" />
-                  <span className="radio-icon" aria-hidden="true">⛰️</span>
-                  <span>Altitude — new top altitude above min below</span>
-                </label>
-                {kickChatBroadcastAltitude && (
-                  <div className="broadcast-option-detail">
-                    <div className="form-row-wrap">
-                      <label className="checkbox-label-row-sm">
-                        Min <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeMinM} onChange={(e) => { setKickChatBroadcastAltitudeMinM(Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50))); scheduleKickMessagesSave(); }} min={0} max={9000} /> m
-                      </label>
-                      <label className="checkbox-label-row-sm">
-                        Cooldown <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeTimeoutMin} onChange={(e) => { setKickChatBroadcastAltitudeTimeoutMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
-                      </label>
-                    </div>
-                  </div>
-                )}
-                <label className="checkbox-label-row broadcast-checkbox-item">
                   <input type="checkbox" checked={kickChatBroadcastWellnessSteps} onChange={(e) => { setKickChatBroadcastWellnessSteps(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessSteps: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon">👟</span>
                   <span>Steps — at 1k, 2k, 5k, 10k…</span>
@@ -1811,16 +1612,72 @@ export default function AdminPage() {
                   <span className="radio-icon">🚶</span>
                   <span>Distance — at 1, 2, 5, 10 km…</span>
                 </label>
-                <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input type="checkbox" checked={kickChatBroadcastWellnessFlights} onChange={(e) => { setKickChatBroadcastWellnessFlights(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessFlights: e.target.checked } }); }} className="checkbox-input" />
-                  <span className="radio-icon">🪜</span>
-                  <span>Flights climbed — at 5, 10, 25, 50…</span>
-                </label>
-                <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input type="checkbox" checked={kickChatBroadcastWellnessActiveCalories} onChange={(e) => { setKickChatBroadcastWellnessActiveCalories(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessActiveCalories: e.target.checked } }); }} className="checkbox-input" />
-                  <span className="radio-icon">🔥</span>
-                  <span>Active calories — at 100, 250, 500, 1k…</span>
-                </label>
+                <details className="admin-advanced-details" style={{ marginTop: 12 }}>
+                  <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>Advanced options</summary>
+                  <div style={{ marginTop: 12 }}>
+                    <label className="checkbox-label-row broadcast-checkbox-item">
+                      <input type="checkbox" checked={kickChatBroadcastHeartrate} onChange={(e) => { setKickChatBroadcastHeartrate(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastHeartrate: e.target.checked } }); }} className="checkbox-input" />
+                      <span className="radio-icon" aria-hidden="true">❤️</span>
+                      <span>Heart rate — when exceeds thresholds</span>
+                    </label>
+                    {kickChatBroadcastHeartrate && (
+                      <div className="broadcast-option-detail">
+                        <div className="form-row-wrap">
+                          <label className="checkbox-label-row-sm">
+                            High: <input type="number" className="text-input number-input" value={kickChatBroadcastHeartrateMinBpm} onChange={(e) => { setKickChatBroadcastHeartrateMinBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 100))); scheduleKickMessagesSave(); }} min={0} max={250} /> BPM
+                          </label>
+                          <label className="checkbox-label-row-sm">
+                            Very high: <input type="number" className="text-input number-input" value={kickChatBroadcastHeartrateVeryHighBpm} onChange={(e) => { setKickChatBroadcastHeartrateVeryHighBpm(Math.max(0, Math.min(250, parseInt(e.target.value, 10) || 120))); scheduleKickMessagesSave(); }} min={0} max={250} /> BPM
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    <label className="checkbox-label-row broadcast-checkbox-item">
+                      <input type="checkbox" checked={kickChatBroadcastSpeed} onChange={(e) => { setKickChatBroadcastSpeed(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastSpeed: e.target.checked } }); }} className="checkbox-input" />
+                      <span className="radio-icon" aria-hidden="true">🚀</span>
+                      <span>Speed — new top speed above min</span>
+                    </label>
+                    {kickChatBroadcastSpeed && (
+                      <div className="broadcast-option-detail">
+                        <div className="form-row-wrap">
+                          <label className="checkbox-label-row-sm">
+                            Min <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedMinKmh} onChange={(e) => { setKickChatBroadcastSpeedMinKmh(Math.max(0, Math.min(500, parseInt(e.target.value, 10) || 20))); scheduleKickMessagesSave(); }} min={0} max={500} /> km/h
+                          </label>
+                          <label className="checkbox-label-row-sm">
+                            Cooldown <input type="number" className="text-input number-input" value={kickChatBroadcastSpeedTimeoutMin} onChange={(e) => { setKickChatBroadcastSpeedTimeoutMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    <label className="checkbox-label-row broadcast-checkbox-item">
+                      <input type="checkbox" checked={kickChatBroadcastAltitude} onChange={(e) => { setKickChatBroadcastAltitude(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastAltitude: e.target.checked } }); }} className="checkbox-input" />
+                      <span className="radio-icon" aria-hidden="true">⛰️</span>
+                      <span>Altitude — new top altitude above min</span>
+                    </label>
+                    {kickChatBroadcastAltitude && (
+                      <div className="broadcast-option-detail">
+                        <div className="form-row-wrap">
+                          <label className="checkbox-label-row-sm">
+                            Min <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeMinM} onChange={(e) => { setKickChatBroadcastAltitudeMinM(Math.max(0, Math.min(9000, parseInt(e.target.value, 10) || 50))); scheduleKickMessagesSave(); }} min={0} max={9000} /> m
+                          </label>
+                          <label className="checkbox-label-row-sm">
+                            Cooldown <input type="number" className="text-input number-input" value={kickChatBroadcastAltitudeTimeoutMin} onChange={(e) => { setKickChatBroadcastAltitudeTimeoutMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                    <label className="checkbox-label-row broadcast-checkbox-item">
+                      <input type="checkbox" checked={kickChatBroadcastWellnessFlights} onChange={(e) => { setKickChatBroadcastWellnessFlights(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessFlights: e.target.checked } }); }} className="checkbox-input" />
+                      <span className="radio-icon">🪜</span>
+                      <span>Flights climbed — at 5, 10, 25, 50…</span>
+                    </label>
+                    <label className="checkbox-label-row broadcast-checkbox-item">
+                      <input type="checkbox" checked={kickChatBroadcastWellnessActiveCalories} onChange={(e) => { setKickChatBroadcastWellnessActiveCalories(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessActiveCalories: e.target.checked } }); }} className="checkbox-input" />
+                      <span className="radio-icon">🔥</span>
+                      <span>Active calories — at 100, 250, 500, 1k…</span>
+                    </label>
+                  </div>
+                </details>
               </div>
             </div>
           </CollapsibleSection>
@@ -1854,7 +1711,7 @@ export default function AdminPage() {
                     </label>
                     {kickPollEnabled && (
                       <>
-                        <div className="admin-select-wrap">
+                        <div className="admin-select-wrap" style={{ marginTop: 12 }}>
                           <label>Duration (sec)</label>
                           <select
                             className="admin-select-big"
@@ -1880,6 +1737,9 @@ export default function AdminPage() {
                             })()}
                           </select>
                         </div>
+                        <details className="admin-advanced-details" style={{ marginTop: 12 }}>
+                          <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>Advanced options</summary>
+                          <div style={{ marginTop: 12 }}>
                         <div className="kick-group-options" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
                           <span className="kick-group-options-label">Who can start polls:</span>
                           <label className="checkbox-label-row">
@@ -2040,6 +1900,8 @@ export default function AdminPage() {
                           <strong>!poll</strong> Question? Option1, Option2 — defaults to Yes/No if no options given.<br />
                           <strong>!rank</strong> Option1, Option2, Option3 — viewers vote for their favorite.
                         </p>
+                          </div>
+                        </details>
                       </>
                     )}
                   </div>

@@ -6,7 +6,7 @@
 import { kv } from '@vercel/kv';
 
 const GOAL_CELEBRATION_KEY = 'stream_goal_celebration';
-const CELEBRATION_DURATION_MS = 15_000; // 15s to let gifters see the full bar
+const CELEBRATION_DURATION_MS = 60_000; // 60s celebration window before auto-incrementing
 
 export type GoalType = 'subs' | 'kicks';
 

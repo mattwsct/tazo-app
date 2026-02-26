@@ -1336,31 +1336,12 @@ export async function resolveExpiredTazoDrop(): Promise<string | null> {
 
 // --- Win Streaks ---
 
-const WIN_STREAK_KEY = 'win_streak';
-const WIN_STREAK_MILESTONES: Array<[number, number]> = [[3, 25], [5, 50], [10, 150], [15, 500]];
-
-export async function recordWin(username: string): Promise<string> {
-  const user = normalizeUser(username);
-  try {
-    const s = await kv.get<{ winStreaksEnabled?: boolean }>('overlay_settings');
-    if (s?.winStreaksEnabled === false) return '';
-    const current = parseKvInt(await kv.hget<number>(WIN_STREAK_KEY, user), 0);
-    const next = current + 1;
-    await kv.hset(WIN_STREAK_KEY, { [user]: next });
-    const milestone = WIN_STREAK_MILESTONES.find(([streak]) => streak === next);
-    if (milestone) {
-      const bonus = milestone[1];
-      const bal = await addTazos(user, bonus);
-      return ` 🔥 ${next} wins! +${bonus} bonus! (${bal} tazos)`;
-    }
-    if (next >= 2) return ` 🔥 ${next} streak!`;
-  } catch { /* silent */ }
+export async function recordWin(_username: string): Promise<string> {
   return '';
 }
 
-export async function recordLoss(username: string): Promise<void> {
-  const user = normalizeUser(username);
-  try { await kv.hset(WIN_STREAK_KEY, { [user]: 0 }); } catch { /* silent */ }
+export async function recordLoss(_username: string): Promise<void> {
+  /* no-op */
 }
 
 // --- Participation Streaks ---

@@ -46,7 +46,6 @@ async function handleGET() {
       : [[], [], []];
 
     const cel = celebration as { subsUntil?: number; kicksUntil?: number };
-    const celebMs = ((merged.goalCelebrationDurationSec ?? 15) as number) * 1000;
 
     // Auto-trigger celebration if goal is already met but no celebration is pending.
     // setGoalCelebrationIfNeeded is idempotent — only writes when no active window exists.
@@ -54,12 +53,12 @@ async function handleGET() {
       const subTarget = merged.subGoalTarget ?? 5;
       const kicksTarget = merged.kicksGoalTarget ?? 100;
       if ((streamGoals as { subs: number }).subs >= subTarget) {
-        const started = await setGoalCelebrationIfNeeded('subs', (streamGoals as { subs: number }).subs, subTarget, celebMs);
-        if (started) cel.subsUntil = Date.now() + celebMs;
+        const started = await setGoalCelebrationIfNeeded('subs', (streamGoals as { subs: number }).subs, subTarget);
+        if (started) cel.subsUntil = Date.now() + 60_000;
       }
       if ((streamGoals as { kicks: number }).kicks >= kicksTarget) {
-        const started = await setGoalCelebrationIfNeeded('kicks', (streamGoals as { kicks: number }).kicks, kicksTarget, celebMs);
-        if (started) cel.kicksUntil = Date.now() + celebMs;
+        const started = await setGoalCelebrationIfNeeded('kicks', (streamGoals as { kicks: number }).kicks, kicksTarget);
+        if (started) cel.kicksUntil = Date.now() + 60_000;
       }
     }
 
