@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession, updateActiveCaloriesSession } from '@/utils/wellness-storage';
+import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession, updateActiveCaloriesSession, getWellnessData } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 
 export const dynamic = 'force-dynamic';
@@ -238,6 +238,16 @@ export async function POST(request: NextRequest) {
     if (Object.keys(updates).length === 0) {
       console.warn('[Wellness import] No valid fields.', { topLevelKeys: Object.keys(body) });
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
+    }
+
+    // Auto-calculate BMI from weight + height when BMI wasn't supplied directly
+    if (updates.weightKg && !updates.bodyMassIndex) {
+      const heightCm = updates.heightCm ?? (await getWellnessData())?.heightCm;
+      if (heightCm && heightCm > 0) {
+        const heightM = heightCm / 100;
+        updates.bodyMassIndex = Math.round((updates.weightKg / (heightM * heightM)) * 10) / 10;
+        console.log('[Wellness import] BMI auto-calculated:', { weightKg: updates.weightKg, heightCm, bmi: updates.bodyMassIndex });
+      }
     }
 
     console.log('[Wellness import] Saving:', updates);
