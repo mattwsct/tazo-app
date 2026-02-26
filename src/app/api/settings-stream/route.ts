@@ -107,10 +107,10 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Check every 15s for settings changes (1 mget per check)
       const checkInterval = setInterval(checkForUpdates, 15000);
       
-      // Heartbeat every 10s so client knows connection is alive (avoids "polling fallback" when nothing changed)
+      // Heartbeat every 8s — must arrive before the 15s polling-fallback threshold
       const heartbeatInterval = setInterval(() => {
         sendSSE(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
-      }, 10000);
+      }, 8000);
       
       // Cleanup on close
       request.signal.addEventListener('abort', () => {
@@ -128,10 +128,11 @@ export async function GET(request: NextRequest): Promise<Response> {
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
-      // If credentials are needed, specify exact origin; otherwise omit credentials header.
-      'Access-Control-Allow-Origin': '*'
+      // Disable proxy/nginx buffering so each SSE frame is flushed immediately
+      'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': '*',
     },
   });
 } 

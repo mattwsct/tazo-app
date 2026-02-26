@@ -42,8 +42,17 @@ export function useOverlaySettings(): [
       }
     };
 
+    let sseReconnectId: ReturnType<typeof setTimeout> | null = null;
+    let currentEventSource: EventSource | null = null;
+
     const setupSSE = () => {
+      // Cancel any pending reconnect before creating a new connection
+      if (sseReconnectId) { clearTimeout(sseReconnectId); sseReconnectId = null; }
+      if (currentEventSource) { try { currentEventSource.close(); } catch { /* ignore */ } }
+
       const eventSource = new EventSource('/api/settings-stream');
+      currentEventSource = eventSource;
+
       eventSource.onopen = () => {
         if (process.env.NODE_ENV === 'development') {
           OverlayLogger.settings('SSE connected — updates will appear rapidly when admin saves');
@@ -52,7 +61,7 @@ export function useOverlaySettings(): [
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          lastSseUpdateRef.current = Date.now(); // any message = connection alive (heartbeat, connected, settings_update)
+          lastSseUpdateRef.current = Date.now();
           if (data.type === 'settings_update') {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- type/timestamp excluded from settingsData
             const { type: _t, timestamp: _ts, ...settingsData } = data;
@@ -77,28 +86,32 @@ export function useOverlaySettings(): [
         }
       };
       eventSource.onerror = () => {
-        if (eventSource.readyState === EventSource.CLOSED) return;
-        if (process.env.NODE_ENV === 'development') {
-          OverlayLogger.warn('SSE connection error — reconnecting in 1s, polling will be used as fallback');
-        }
+        // Always close and schedule a reconnect — regardless of readyState.
+        // The CLOSED guard was the original bug: if the server returned an error or the
+        // connection was terminated before our first heartbeat, readyState would be CLOSED
+        // and the old guard would return early, leaving the client permanently in polling fallback.
         try { eventSource.close(); } catch { /* ignore */ }
-        setTimeout(() => { try { setupSSE(); } catch { /* ignore */ } }, 1000);
+        if (currentEventSource !== eventSource) return; // already superseded
+        currentEventSource = null;
+        if (sseReconnectId) return; // reconnect already scheduled
+        sseReconnectId = setTimeout(() => {
+          sseReconnectId = null;
+          setupSSE();
+        }, 2000);
       };
-      return eventSource;
     };
 
     // Delay SSE until page has loaded to reduce "connection interrupted while loading" during nav/refresh
-    let eventSource: EventSource | null = null;
     let sseDelayId: ReturnType<typeof setTimeout> | null = null;
     const startSSE = () => {
-      sseDelayId = setTimeout(() => { eventSource = setupSSE(); }, 500);
+      sseDelayId = setTimeout(() => setupSSE(), 500);
     };
     loadSettingsRef.current = loadSettings;
     loadSettings().then(() => {
       if (document.readyState === 'complete') startSSE();
       else window.addEventListener('load', startSSE, { once: true });
     }).catch(() => {
-      sseDelayId = setTimeout(() => { eventSource = setupSSE(); }, 2000);
+      sseDelayId = setTimeout(() => setupSSE(), 2000);
     });
 
     const pollInterval = 5000; // 5s for settings
@@ -169,7 +182,8 @@ export function useOverlaySettings(): [
     return () => {
       window.removeEventListener('load', startSSE);
       if (sseDelayId) clearTimeout(sseDelayId);
-      if (eventSource) eventSource.close();
+      if (sseReconnectId) clearTimeout(sseReconnectId);
+      if (currentEventSource) { try { currentEventSource.close(); } catch { /* ignore */ } }
       clearInterval(poll);
       clearInterval(fastPoll);
     };
