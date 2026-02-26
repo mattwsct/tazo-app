@@ -114,78 +114,94 @@ export function useOverlaySettings(): [
       sseDelayId = setTimeout(() => setupSSE(), 2000);
     });
 
-    const pollInterval = 5000; // 5s for settings
-    const poll = setInterval(async () => {
+    // Single adaptive polling loop — replaces the old separate 2s fast-poll + 5s slow-poll.
+    // Base interval: 2s (needed for alert expiry). On consecutive network failures the interval
+    // backs off exponentially up to 30s, then resets to 2s on the first successful response.
+    // The poll is skipped entirely when SSE has been healthy within the last 15s.
+    const POLL_BASE_MS = 2000;
+    const POLL_MAX_MS = 30000;
+    let pollFailures = 0;
+    let pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const schedulePoll = (delayMs: number) => {
+      pollTimeoutId = setTimeout(runPoll, delayMs);
+    };
+
+    const applySettingsData = (data: Record<string, unknown>, replace: boolean) => {
+      const merged = mergeSettingsWithDefaults(data as Partial<OverlaySettings>);
+      // Always preserve runtime leaderboard/alert/goal fields from the fetch
+      const patch = {
+        gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && (data.gamblingLeaderboardTop as unknown[]).length > 0 ? data.gamblingLeaderboardTop as OverlaySettings['gamblingLeaderboardTop'] : undefined,
+        earnedLeaderboardWeekly: data.earnedLeaderboardWeekly as OverlaySettings['earnedLeaderboardWeekly'] | undefined,
+        earnedLeaderboardMonthly: data.earnedLeaderboardMonthly as OverlaySettings['earnedLeaderboardMonthly'] | undefined,
+        earnedLeaderboardLifetime: data.earnedLeaderboardLifetime as OverlaySettings['earnedLeaderboardLifetime'] | undefined,
+        overlayAlerts: data.overlayAlerts as OverlaySettings['overlayAlerts'] | undefined,
+        streamGoals: data.streamGoals as OverlaySettings['streamGoals'] | undefined,
+        subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil as number | undefined : undefined,
+        kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil as number | undefined : undefined,
+      };
+      setSettings((prev) => {
+        const base: OverlaySettings = replace ? merged : { ...prev, ...merged };
+        return {
+          ...base,
+          gamblingLeaderboardTop: patch.gamblingLeaderboardTop ?? prev.gamblingLeaderboardTop ?? [],
+          earnedLeaderboardWeekly: patch.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
+          earnedLeaderboardMonthly: patch.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
+          earnedLeaderboardLifetime: patch.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
+          overlayAlerts: patch.overlayAlerts ?? prev.overlayAlerts,
+          streamGoals: patch.streamGoals ?? prev.streamGoals,
+          subGoalCelebrationUntil: ('subGoalCelebrationUntil' in data) ? patch.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
+          kicksGoalCelebrationUntil: ('kicksGoalCelebrationUntil' in data) ? patch.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
+        };
+      });
+    };
+
+    const runPoll = async () => {
+      const sseFresh = Date.now() - lastSseUpdateRef.current < 15000;
+      if (sseFresh) {
+        // SSE is alive — no need to poll, come back in 2s to check alerts if SSE goes stale
+        schedulePoll(POLL_BASE_MS);
+        return;
+      }
+      if (process.env.NODE_ENV === 'development' && lastSseUpdateRef.current > 0) {
+        OverlayLogger.settings('Polling fallback — SSE has not updated in 15s, fetching settings');
+      }
       try {
-        // Skip poll if SSE updated recently (saves KV reads)
-        if (Date.now() - lastSseUpdateRef.current < 15000) return;
-        if (process.env.NODE_ENV === 'development' && lastSseUpdateRef.current > 0) {
-          OverlayLogger.settings('Polling fallback — SSE has not updated in 15s, fetching settings');
-        }
         const res = await fetch(`/api/get-settings?_t=${Date.now()}`, NO_CACHE_FETCH_OPTIONS);
         if (res.ok) {
-          const data = await res.json();
-          if (data && createSettingsHash(data) !== lastSettingsHash.current) {
-            lastSettingsHash.current = createSettingsHash(data);
-            setSettings((prev) => ({
-              ...data,
-              gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
-              earnedLeaderboardWeekly: data.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
-              earnedLeaderboardMonthly: data.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
-              earnedLeaderboardLifetime: data.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
-              overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
-            }));
-          } else if (data) {
-            setSettings((prev) => ({
-              ...prev,
-              gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
-              earnedLeaderboardWeekly: data.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
-              earnedLeaderboardMonthly: data.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
-              earnedLeaderboardLifetime: data.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
-              overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
-              streamGoals: data.streamGoals ?? prev.streamGoals,
-              subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
-              kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
-            }));
+          const data = await res.json() as Record<string, unknown> | null;
+          if (data) {
+            const hash = createSettingsHash(mergeSettingsWithDefaults(data as Partial<OverlaySettings>));
+            applySettingsData(data, hash !== lastSettingsHash.current);
+            if (hash !== lastSettingsHash.current) lastSettingsHash.current = hash;
+            settingsLoadedRef.current = true;
           }
+          // Success — reset backoff
+          pollFailures = 0;
+          schedulePoll(POLL_BASE_MS);
+        } else {
+          schedulePoll(POLL_BASE_MS);
         }
       } catch (error) {
-        OverlayLogger.warn('Settings polling failed', { error: error instanceof Error ? error.message : String(error) });
+        pollFailures++;
+        // Back off exponentially: 2s → 4s → 8s → 16s → 30s cap
+        const backoff = Math.min(POLL_BASE_MS * Math.pow(2, pollFailures - 1), POLL_MAX_MS);
+        if (process.env.NODE_ENV === 'development') {
+          OverlayLogger.warn('Settings polling failed', { error: error instanceof Error ? error.message : String(error), backoffMs: backoff });
+        }
+        schedulePoll(backoff);
       }
-    }, pollInterval);
+    };
 
-    // Fast poll for alerts (never skipped) — alerts expire in 15s, so we need frequent fetches
-    const fastPollInterval = 2000; // 2s
-    const fastPoll = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/get-settings?_t=${Date.now()}`, NO_CACHE_FETCH_OPTIONS);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data) return;
-        // Preserve previous leaderboard when fetch returns empty to avoid flash
-        setSettings((prev) => ({
-          ...prev,
-          gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
-          earnedLeaderboardWeekly: data.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
-          earnedLeaderboardMonthly: data.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
-          earnedLeaderboardLifetime: data.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
-          overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
-          streamGoals: data.streamGoals ?? prev.streamGoals,
-          subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
-          kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
-        }));
-      } catch {
-        /* ignore */
-      }
-    }, fastPollInterval);
+    // Start the adaptive poll loop
+    schedulePoll(POLL_BASE_MS);
 
     return () => {
       window.removeEventListener('load', startSSE);
       if (sseDelayId) clearTimeout(sseDelayId);
       if (sseReconnectId) clearTimeout(sseReconnectId);
+      if (pollTimeoutId) clearTimeout(pollTimeoutId);
       if (currentEventSource) { try { currentEventSource.close(); } catch { /* ignore */ } }
-      clearInterval(poll);
-      clearInterval(fastPoll);
     };
   }, []);
 
