@@ -47,6 +47,9 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
   const allowedNonSchema = [
     'pollState',
     'gamblingLeaderboardTop',
+    'earnedLeaderboardWeekly',
+    'earnedLeaderboardMonthly',
+    'earnedLeaderboardLifetime',
     'overlayAlerts',
     'streamGoals',
     'subGoalCelebrationUntil',
@@ -87,6 +90,9 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const runtimeOnlyKeys = [
     'pollState',
     'gamblingLeaderboardTop',
+    'earnedLeaderboardWeekly',
+    'earnedLeaderboardMonthly',
+    'earnedLeaderboardLifetime',
     'overlayAlerts',
     'streamGoals',
     'subGoalCelebrationUntil',
