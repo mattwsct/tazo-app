@@ -123,9 +123,6 @@ export default function AdminPage() {
   const [kickPollEveryoneCanStart, setKickPollEveryoneCanStart] = useState(false);
   const [kickPollModsCanStart, setKickPollModsCanStart] = useState(true);
   const [kickPollVipsCanStart, setKickPollVipsCanStart] = useState(false);
-  const [wellnessData, setWellnessData] = useState<Record<string, string | number | undefined>>({});
-  const [wellnessLoading, setWellnessLoading] = useState(false);
-  const [wellnessSaving, setWellnessSaving] = useState(false);
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);

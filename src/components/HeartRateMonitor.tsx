@@ -416,7 +416,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     } else if (hasFallbackData && wellnessFallback!.bpm > 0) {
       setLastPersistedBpm({ bpm: wellnessFallback!.bpm, at: Date.now() });
     }
-  }, [hasLiveData, hasFallbackData, heartRate.bpm, wellnessFallback?.bpm]);
+  }, [hasLiveData, hasFallbackData, heartRate.bpm, wellnessFallback]);
 
   // Clear persisted when too old
   useEffect(() => {

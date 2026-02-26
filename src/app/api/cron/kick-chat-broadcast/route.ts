@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
 
   // Unified auto games: single alternating scheduler
   try {
-    const shouldStart = await shouldStartAnyAutoGame(overlaySettings ?? undefined);
+    const shouldStart = await shouldStartAnyAutoGame(overlaySettings ?? undefined, isLive);
     if (diagnostic) Object.assign(debug, { autoGameShouldStart: shouldStart });
     if (shouldStart) {
       const announcement = await pickAndStartAutoGame(overlaySettings ?? {});
@@ -281,7 +281,7 @@ export async function GET(request: NextRequest) {
               // ignore
             }
           }
-          let lastMsgToStore = formattedForTitle ?? '';
+          const lastMsgToStore = formattedForTitle ?? '';
           const shouldAnnounce = (chatBroadcastStreamTitle && titleChanged && newFullTitle) || (chatBroadcastLocation && locationChanged);
           if (shouldAnnounce) {
             const chatMsg = titleChanged && newFullTitle

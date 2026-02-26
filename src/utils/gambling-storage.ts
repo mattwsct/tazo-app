@@ -1432,8 +1432,6 @@ const ATTACK_WORDS: Record<string, AttackCategory> = {
   'ok boomer': 'special', 'thats cap': 'special', 'caught in 4k': 'special',
 };
 
-const ATTACK_WORD_LIST = Object.keys(ATTACK_WORDS);
-
 interface BossDefinition {
   name: string;
   maxHp: number;
@@ -1740,7 +1738,7 @@ export async function tryBossAttack(username: string, content: string): Promise<
     const rewards: string[] = [];
     for (const [u, dmg] of attackerEntries) {
       const share = Math.max(3, Math.round((dmg / totalDmg) * boss.reward));
-      const bal = await addTazos(u, share);
+      await addTazos(u, share);
       const dname = names[u] ?? u;
       rewards.push(`${dname} +${share}`);
     }
@@ -1791,14 +1789,25 @@ type AutoGameOverlaySettings = {
   autoGameIntervalMin?: number;
 };
 
-export async function shouldStartAnyAutoGame(settings?: AutoGameOverlaySettings): Promise<boolean> {
+export async function shouldStartAnyAutoGame(settings?: AutoGameOverlaySettings, isLive?: boolean): Promise<boolean> {
   const active = await hasActiveEvent();
   if (active) return false;
   const intervalMin = settings?.autoGameIntervalMin ?? 5;
   const intervalMs = Math.max(1, intervalMin) * 60 * 1000;
   const lastAt = await kv.get<string>(AUTO_GAME_LAST_AT_KEY);
   const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : intervalMs;
-  return elapsed >= intervalMs;
+  if (elapsed < intervalMs) return false;
+
+  // Offline gate: only start a game if a real human has chatted since the last game was started.
+  // This prevents games from firing into an empty chat when the stream is offline.
+  if (!isLive) {
+    const lastHumanChat = await kv.get<string>('offline_human_chat_at');
+    if (!lastHumanChat) return false;
+    const lastGame = lastAt ? parseInt(lastAt, 10) : 0;
+    if (parseInt(lastHumanChat, 10) <= lastGame) return false;
+  }
+
+  return true;
 }
 
 function shuffleArray<T>(arr: T[]): T[] {

@@ -26,6 +26,7 @@ interface WellnessData {
 
 export default function TopLeftRotatingWellness({ date, timezoneValid, settings }: TopLeftRotatingWellnessProps) {
   const [wellness, setWellness] = useState<WellnessData | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let mounted = true;
@@ -41,6 +42,7 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
             updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
             lastSessionUpdateAt: typeof data.lastSessionUpdateAt === 'number' ? data.lastSessionUpdateAt : undefined,
           });
+          setNow(Date.now());
         }
       } catch {
         // Ignore fetch errors
@@ -58,8 +60,8 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
   const stepsFresh = useMemo(() => {
     const latest = Math.max(wellness?.updatedAt ?? 0, wellness?.lastSessionUpdateAt ?? 0);
     if (!latest) return false;
-    return Date.now() - latest <= TIMERS.WELLNESS_STALE_MS;
-  }, [wellness?.updatedAt, wellness?.lastSessionUpdateAt]);
+    return now - latest <= TIMERS.WELLNESS_STALE_MS;
+  }, [now, wellness?.updatedAt, wellness?.lastSessionUpdateAt]);
 
   const slides = useMemo<SlotType[]>(() => {
     const s: SlotType[] = [];

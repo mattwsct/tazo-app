@@ -6,7 +6,6 @@ import GoalProgressBar from './GoalProgressBar';
 
 const ALERT_DISPLAY_MS = 8000;
 const GOALS_CYCLE_DURATION_MS = 32000; // 4x base rotation (8s)
-const DEFAULT_LB_CYCLE_MS = 15000;
 const CROSSFADE_DURATION_MS = 500;
 
 type GoalSlide = 'subs' | 'kicks';
@@ -110,7 +109,6 @@ export default function BottomRightPanel({
     setOutgoingGoal(null);
   }, [goalSlides, activeGoal]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- displayedGoal, outgoingGoal are outputs
   useEffect(() => {
     if (activeGoal == null || goalSlides.length === 0) return;
     if (activeGoal === displayedGoal && !outgoingGoal) return;

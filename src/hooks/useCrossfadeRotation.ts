@@ -31,7 +31,6 @@ export function useCrossfadeRotation<T>(slides: T[], cycleDurationMs: number): C
   }, [slidesKey, slides]);
 
   // Clamp activeIndex when the number of slides shrinks
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (slideCount === 0) return;
     setActiveIndex((prev) => Math.min(prev, Math.max(0, slideCount - 1)));

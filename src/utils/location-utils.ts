@@ -503,7 +503,6 @@ function getNextBroadestCategory(
     return null;
   };
 
-  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
   const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
   const countryInfo = getCountry(location);
   const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;

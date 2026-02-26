@@ -27,8 +27,9 @@ import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
   resetEventTimestamps,
-  getAttackList, giftTazos,
+  getAttackList,
 } from '@/utils/gambling-storage';
+import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
@@ -188,6 +189,23 @@ export async function POST(request: NextRequest) {
     try {
       await kv.set(KICK_LAST_CHAT_MESSAGE_AT_KEY, Date.now());
     } catch { /* ignore */ }
+    // Track human chat activity for offline auto-game gate.
+    // Excludes @-prefixed bot accounts, the broadcaster slug, and users in the leaderboard exclusions list.
+    void (async () => {
+      try {
+        const senderNorm = sender.trim().toLowerCase();
+        if (!senderNorm.startsWith('@')) {
+          const [broadcasterSlug, excluded] = await Promise.all([
+            kv.get<string>(KICK_BROADCASTER_SLUG_KEY),
+            getLeaderboardExclusions(),
+          ]);
+          const isBroadcaster = broadcasterSlug && senderNorm === broadcasterSlug.trim().toLowerCase();
+          if (!isBroadcaster && !excluded.has(senderNorm)) {
+            await kv.set('offline_human_chat_at', String(Date.now()));
+          }
+        }
+      } catch { /* ignore */ }
+    })();
     const pollResult = await handleChatPoll(content, sender, payload);
     if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
 

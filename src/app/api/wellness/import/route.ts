@@ -35,9 +35,6 @@ function parseNumber(val: unknown): number | undefined {
   return undefined;
 }
 
-function parseString(val: unknown): string | undefined {
-  return typeof val === 'string' && val.trim() ? val.trim() : undefined;
-}
 
 /** Health Auto Export metrics format: { name, units?, data: [{ qty, date, source?, Avg?, Min?, Max? }] } */
 interface HealthMetric {

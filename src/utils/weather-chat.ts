@@ -37,7 +37,7 @@ export function condenseWeatherDescription(desc: string): string {
   if (!desc || !desc.trim()) return desc;
   const d = desc.toLowerCase().trim();
   // Strip intensity/cloud-cover modifiers
-  let core = d
+  const core = d
     .replace(/^(very heavy|heavy intensity|heavy|moderate|light intensity|light|extreme)\s+/i, '')
     .replace(/^(few|broken|overcast|scattered)\s+/i, '')
     .replace(/\s+with\s+(light\s+)?(heavy\s+)?rain$/i, '')
