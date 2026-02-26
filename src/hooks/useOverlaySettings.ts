@@ -66,6 +66,8 @@ export function useOverlaySettings(): [
               earnedLeaderboardLifetime: merged.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
               overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: merged.streamGoals ?? prev.streamGoals,
+              subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
+              kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
             }));
             lastSettingsHash.current = createSettingsHash(merged);
             settingsLoadedRef.current = true;

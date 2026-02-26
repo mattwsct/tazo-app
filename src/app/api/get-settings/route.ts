@@ -10,7 +10,7 @@ import { getEarnedLeaderboard } from '@/utils/tazo-vault-storage';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
-import { getGoalCelebration } from '@/utils/stream-goals-celebration';
+import { getGoalCelebration, setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +45,24 @@ async function handleGET() {
         ])
       : [[], [], []];
 
+    const cel = celebration as { subsUntil?: number; kicksUntil?: number };
+    const celebMs = ((merged.goalCelebrationDurationSec ?? 15) as number) * 1000;
+
+    // Auto-trigger celebration if goal is already met but no celebration is pending.
+    // setGoalCelebrationIfNeeded is idempotent — only writes when no active window exists.
+    if (needGoals) {
+      const subTarget = merged.subGoalTarget ?? 5;
+      const kicksTarget = merged.kicksGoalTarget ?? 100;
+      if ((streamGoals as { subs: number }).subs >= subTarget) {
+        const started = await setGoalCelebrationIfNeeded('subs', (streamGoals as { subs: number }).subs, subTarget, celebMs);
+        if (started) cel.subsUntil = Date.now() + celebMs;
+      }
+      if ((streamGoals as { kicks: number }).kicks >= kicksTarget) {
+        const started = await setGoalCelebrationIfNeeded('kicks', (streamGoals as { kicks: number }).kicks, kicksTarget, celebMs);
+        if (started) cel.kicksUntil = Date.now() + celebMs;
+      }
+    }
+
     const combinedSettings = {
       ...merged,
       gamblingLeaderboardTop,
@@ -53,8 +71,8 @@ async function handleGET() {
       earnedLeaderboardLifetime: earnedLifetime,
       overlayAlerts,
       streamGoals,
-      subGoalCelebrationUntil: (celebration as { subsUntil?: number }).subsUntil,
-      kicksGoalCelebrationUntil: (celebration as { kicksUntil?: number }).kicksUntil,
+      subGoalCelebrationUntil: cel.subsUntil,
+      kicksGoalCelebrationUntil: cel.kicksUntil,
     };
 
     // Log at most once per 30s in dev to avoid log spam (get-settings is polled frequently)
