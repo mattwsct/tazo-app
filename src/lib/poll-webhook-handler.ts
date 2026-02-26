@@ -5,6 +5,7 @@
 import { kv } from '@vercel/kv';
 import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
+import { addTazosForReward } from '@/utils/gambling-storage';
 import {
   parsePollCommand,
   parseRankCommand,
@@ -333,6 +334,7 @@ export async function handleChatPoll(
           console.log('[poll] webhook: winner+empty queue, starting immediately (skip queue msg)');
         }
         void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
+        void addTazosForReward(senderUsername, 25);
         await setPollState(null);
         const state: PollState = {
           id: `poll_${Date.now()}`,
@@ -364,6 +366,7 @@ export async function handleChatPoll(
         durationSeconds: effectiveDuration,
       };
       const newQueue = [...queue, newPoll];
+      void addTazosForReward(senderUsername, 25);
       await setPollQueue(newQueue);
 
       const position = newQueue.length;
@@ -379,6 +382,7 @@ export async function handleChatPoll(
       console.log('[poll] webhook: starting new poll (no active/winner)', parsed.question?.slice(0, 40));
     }
     void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
+    void addTazosForReward(senderUsername, 25);
     const state: PollState = {
       id: `poll_${Date.now()}`,
       question: parsed.question,
@@ -435,8 +439,11 @@ export async function handleChatPoll(
 
   const vote = parseVote(contentTrimmed, initialState.options);
   if (vote) {
+    // Reward 5 tazos on first vote in this poll (before mutating state)
+    const isFirstVote = !initialState.options.some(o => (o.voters?.[senderUsername] ?? 0) > 0);
     applyVote(initialState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? true);
     void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
+    if (isFirstVote) void addTazosForReward(senderUsername, 5);
     const stateNow = await getPollState();
     if (stateNow?.id !== initialState.id) return { handled: true };
     await setPollState(initialState);

@@ -49,12 +49,12 @@ export interface OverlaySettings {
   chatChallengesEnabled?: boolean;
   /** Boss events every ~45-60 min. */
   bossEventsEnabled?: boolean;
+  /** Auto streamer polls (random question with 5 boss names as options) in auto-game rotation. */
+  autoPollEnabled?: boolean;
   /** Minutes between auto games (raffle/drops/challenges/boss). Default 5. */
   autoGameIntervalMin?: number;
   /** Win streak bonuses on gambling wins. */
   winStreaksEnabled?: boolean;
-  /** Participation streak rewards. */
-  participationStreaksEnabled?: boolean;
   /** Tazo rewards for subs, gifts, kicks. */
   subGiftChipRewards?: boolean;
   /** Individual game toggles (all default true, only apply when gamblingEnabled). */
@@ -131,9 +131,9 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   chipDropsEnabled: true,
   chatChallengesEnabled: true,
   bossEventsEnabled: true,
+  autoPollEnabled: true,
   autoGameIntervalMin: 5,
   winStreaksEnabled: true,
-  participationStreaksEnabled: true,
   subGiftChipRewards: true,
   blackjackEnabled: true,
   slotsEnabled: true,
@@ -184,9 +184,9 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   chipDropsEnabled: 'boolean',
   chatChallengesEnabled: 'boolean',
   bossEventsEnabled: 'boolean',
+  autoPollEnabled: 'boolean',
   autoGameIntervalMin: 'number',
   winStreaksEnabled: 'boolean',
-  participationStreaksEnabled: 'boolean',
   subGiftChipRewards: 'boolean',
   blackjackEnabled: 'boolean',
   slotsEnabled: 'boolean',

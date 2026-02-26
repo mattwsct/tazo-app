@@ -6,6 +6,9 @@
 
 import { kv } from '@vercel/kv';
 import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
+import { getPollState, setPollState } from '@/lib/poll-store';
+import { generateAutoPoll } from '@/utils/auto-poll-content';
+import type { PollState } from '@/types/poll';
 
 const VIEW_TAZOS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 const VIEW_TAZOS_PER_INTERVAL = 10;
@@ -1411,45 +1414,6 @@ export async function recordLoss(username: string): Promise<void> {
 
 // --- Participation Streaks ---
 
-const PARTICIPATION_STREAK_KEY = 'participation_streak';
-const PARTICIPATION_MILESTONES: Array<[number, number]> = [[3, 5], [7, 15], [14, 30], [30, 50]];
-
-interface ParticipationData {
-  lastDate: string;
-  streak: number;
-}
-
-function todayDateStr(): string {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-}
-
-export async function checkParticipationStreak(username: string): Promise<string | null> {
-  const user = normalizeUser(username);
-  try {
-    const s = await kv.get<{ participationStreaksEnabled?: boolean }>('overlay_settings');
-    if (s?.participationStreaksEnabled === false) return null;
-    const today = todayDateStr();
-    const data = await kv.hget<ParticipationData>(PARTICIPATION_STREAK_KEY, user);
-    if (data?.lastDate === today) return null;
-
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const yesterdayStr = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth() + 1).padStart(2, '0')}-${String(yesterday.getUTCDate()).padStart(2, '0')}`;
-
-    const streak = (data?.lastDate === yesterdayStr) ? (data.streak + 1) : 1;
-    await kv.hset(PARTICIPATION_STREAK_KEY, { [user]: JSON.stringify({ lastDate: today, streak }) });
-
-    const milestone = PARTICIPATION_MILESTONES.find(([days]) => days === streak);
-    if (milestone) {
-      const bonus = milestone[1];
-      const bal = await addTazos(user, bonus);
-      const display = username.trim();
-      return `📅 ${display} — ${streak}-day streak! +${bonus} tazos! (${bal} tazos)`;
-    }
-  } catch { /* silent */ }
-  return null;
-}
 
 // --- Boss Events ---
 
@@ -1525,6 +1489,9 @@ interface BossDefinition {
   weakness: AttackCategory;
   resistance: AttackCategory;
 }
+
+/** All boss/streamer names — used by auto polls. Automatically stays in sync when bosses are added. */
+export const BOSS_ROSTER_NAMES: string[] = [];
 
 const BOSS_ROSTER: BossDefinition[] = [
   // Tier 1 — 400 HP
@@ -1632,6 +1599,9 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Stanz', maxHp: 200, weakness: 'special', resistance: 'physical' },
   { name: 'DevinNash', maxHp: 200, weakness: 'physical', resistance: 'magic' },
 ];
+
+// Populate exported names array from the roster (avoids duplication)
+BOSS_ROSTER_NAMES.push(...BOSS_ROSTER.map(b => b.name));
 
 const BOSS_KEY = 'boss_active';
 const BOSS_LAST_AT_KEY = 'boss_last_at';
@@ -1796,10 +1766,12 @@ export async function resolveExpiredBoss(): Promise<string | null> {
 // --- Active event check (prevents overlapping events) ---
 
 export async function hasActiveEvent(): Promise<boolean> {
-  const [raffle, drop, challenge, boss] = await Promise.all([
+  const [raffle, drop, challenge, boss, pollState] = await Promise.all([
     kv.get(RAFFLE_KEY), kv.get(TAZO_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
+    getPollState(),
   ]);
-  return !!(raffle || drop || challenge || boss);
+  const pollActive = pollState !== null && (pollState.status === 'active' || pollState.status === 'winner');
+  return !!(raffle || drop || challenge || boss || pollActive);
 }
 
 // --- Unified auto game scheduler (single alternating timer) ---
@@ -1811,6 +1783,7 @@ type AutoGameOverlaySettings = {
   chipDropsEnabled?: boolean;
   chatChallengesEnabled?: boolean;
   bossEventsEnabled?: boolean;
+  autoPollEnabled?: boolean;
   autoGameIntervalMin?: number;
 };
 
@@ -1833,12 +1806,29 @@ function shuffleArray<T>(arr: T[]): T[] {
   return out;
 }
 
+export async function startAutoPoll(): Promise<string> {
+  const { question, options } = generateAutoPoll(BOSS_ROSTER_NAMES);
+  const duration = 60;
+  const state: PollState = {
+    id: `auto_poll_${Date.now()}`,
+    question,
+    options,
+    startedAt: Date.now(),
+    durationSeconds: duration,
+    status: 'active',
+  };
+  await setPollState(state);
+  const nameList = options.map(o => `'${o.label}'`).join(', ');
+  return `📊 Poll (${duration}s): ${question} Type ${nameList} to vote!`;
+}
+
 export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): Promise<string | null> {
-  const enabled: Array<'raffle' | 'drop' | 'challenge' | 'boss'> = [];
+  const enabled: Array<'raffle' | 'drop' | 'challenge' | 'boss' | 'poll'> = [];
   if (settings.autoRaffleEnabled !== false) enabled.push('raffle');
   if (settings.chipDropsEnabled !== false) enabled.push('drop');
   if (settings.chatChallengesEnabled !== false) enabled.push('challenge');
   if (settings.bossEventsEnabled !== false) enabled.push('boss');
+  if (settings.autoPollEnabled !== false) enabled.push('poll');
   if (enabled.length === 0) return null;
 
   const shuffled = shuffleArray(enabled);
@@ -1857,6 +1847,9 @@ export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): P
       break;
     case 'boss':
       announcement = await startBossEvent();
+      break;
+    case 'poll':
+      announcement = await startAutoPoll();
       break;
     default:
       return null;
@@ -1882,12 +1875,15 @@ export async function giftTazos(senderUsername: string, recipientUsername: strin
   const sender = normalizeUser(senderUsername);
   const recipient = normalizeUser(recipientUsername);
   if (sender === recipient) return '🎁 You can\'t gift tazos to yourself.';
-  if (amount < 1) return '🎁 Minimum gift is 1 tazo.';
 
-  const { ok, balance } = await deductTazos(sender, amount);
+  const currentBal = await getTazos(sender);
+  if (currentBal < 1) return '🎁 You have no tazos to gift.';
+  const actual = Math.min(amount, currentBal); // clamps Infinity and any overage to full balance
+
+  const { ok, balance } = await deductTazos(sender, actual);
   if (!ok) return `🎁 Not enough tazos (have ${balance}).`;
 
-  const recipientBal = await addTazos(recipient, amount);
-  const senderBal = balance - amount;
-  return `🎁 ${senderUsername.trim()} gifted ${amount} tazos to ${recipientUsername.trim()}! (${senderBal} | ${recipientBal} tazos)`;
+  const recipientBal = await addTazos(recipient, actual);
+  const senderBal = balance - actual;
+  return `🎁 ${senderUsername.trim()} gifted ${actual} tazos to ${recipientUsername.trim()}! (${senderBal} | ${recipientBal} tazos)`;
 }

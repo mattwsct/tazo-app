@@ -1396,6 +1396,12 @@ export default function AdminPage() {
                       <span className="checkbox-text">Include boss events in rotation</span>
                     </label>
                   </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.autoPollEnabled !== false} onChange={(e) => handleSettingsChange({ autoPollEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Include streamer polls in rotation</span>
+                    </label>
+                  </div>
                   <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <label className="input-label" style={{ margin: 0 }}>
                       Minutes between auto games:
@@ -1436,12 +1442,6 @@ export default function AdminPage() {
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.winStreaksEnabled !== false} onChange={(e) => handleSettingsChange({ winStreaksEnabled: e.target.checked })} className="checkbox-input" />
                       <span className="checkbox-text">Win streak bonuses</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.participationStreaksEnabled !== false} onChange={(e) => handleSettingsChange({ participationStreaksEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Participation streak rewards</span>
                     </label>
                   </div>
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>

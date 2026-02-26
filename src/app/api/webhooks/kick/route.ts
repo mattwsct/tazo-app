@@ -26,7 +26,7 @@ import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
 import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
-  trackChallengeMessage, checkParticipationStreak, resetEventTimestamps,
+  trackChallengeMessage, resetEventTimestamps,
   getAttackList, giftTazos,
 } from '@/utils/gambling-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
@@ -350,12 +350,6 @@ export async function POST(request: NextRequest) {
 
     // 6. Challenge message tracking (always, silent)
     void trackChallengeMessage(sender);
-
-    // 7. Participation streak check (fire-and-forget)
-    void (async () => {
-      const streakMsg = await checkParticipationStreak(sender);
-      if (streakMsg) await replyNonCmd(streakMsg);
-    })();
 
     return NextResponse.json({ received: true }, { status: 200 });
   }

@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
   try {
     const shouldStart = await shouldStartAnyAutoGame(overlaySettings ?? undefined);
     if (diagnostic) Object.assign(debug, { autoGameShouldStart: shouldStart });
-    if (shouldStart && isLive) {
+    if (shouldStart) {
       const announcement = await pickAndStartAutoGame(overlaySettings ?? {});
       if (announcement) {
         try {
