@@ -1357,6 +1357,38 @@ export default function AdminPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="admin-select-wrap" style={{ marginBottom: '8px' }}>
+                    <label>Earned leaderboard slides</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                      {([
+                        ['showWeeklyEarnedLb', '📊 Weekly'] as const,
+                        ['showMonthlyEarnedLb', '📊 Monthly'] as const,
+                        ['showLifetimeEarnedLb', '🏆 All-time'] as const,
+                      ] as [keyof typeof settings, string][]).map(([key, label]) => (
+                        <label key={key} className="checkbox-label" style={{ fontSize: '0.85rem' }}>
+                          <input
+                            type="checkbox"
+                            className="checkbox-input"
+                            checked={settings[key] !== false}
+                            onChange={(e) => handleSettingsChange({ [key]: e.target.checked })}
+                          />
+                          <span className="checkbox-text">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
+                    <label>Leaderboard rotation <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>(seconds per slide)</span></label>
+                    <select
+                      className="admin-select-big"
+                      value={settings.leaderboardRotationSec ?? 15}
+                      onChange={(e) => handleSettingsChange({ leaderboardRotationSec: Number(e.target.value) })}
+                    >
+                      {[5, 10, 15, 20, 30, 45, 60].map(n => (
+                        <option key={n} value={n}>{n}s</option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="admin-select-wrap">
                     <label>Excluded users (comma separated)</label>
                     <textarea

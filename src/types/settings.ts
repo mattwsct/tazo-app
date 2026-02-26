@@ -91,6 +91,12 @@ export interface OverlaySettings {
   goalCelebrationDurationSec?: number;
   /** IANA timezone for weekly/monthly leaderboard resets (e.g. "Asia/Bangkok"). */
   streamerTimezone?: string;
+  /** Show individual earned leaderboard periods in overlay rotation. */
+  showWeeklyEarnedLb?: boolean;
+  showMonthlyEarnedLb?: boolean;
+  showLifetimeEarnedLb?: boolean;
+  /** Seconds each leaderboard slide is shown before crossfading to the next. Default 15. */
+  leaderboardRotationSec?: number;
   /** Runtime: earned leaderboard data (weekly/monthly/lifetime). */
   earnedLeaderboardWeekly?: { username: string; earned: number }[];
   earnedLeaderboardMonthly?: { username: string; earned: number }[];
@@ -158,6 +164,10 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   kicksGoalIncrement: 100,
   goalCelebrationDurationSec: 60,
   streamerTimezone: 'UTC',
+  showWeeklyEarnedLb: true,
+  showMonthlyEarnedLb: true,
+  showLifetimeEarnedLb: true,
+  leaderboardRotationSec: 15,
 };
 
 // Valid settings schema for validation
@@ -214,6 +224,10 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalSubtext: 'string',
   goalCelebrationDurationSec: 'number',
   streamerTimezone: 'string',
+  showWeeklyEarnedLb: 'boolean',
+  showMonthlyEarnedLb: 'boolean',
+  showLifetimeEarnedLb: 'boolean',
+  leaderboardRotationSec: 'number',
 };
 
 // SSE message types

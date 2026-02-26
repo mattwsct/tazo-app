@@ -6,7 +6,7 @@ import GoalProgressBar from './GoalProgressBar';
 
 const ALERT_DISPLAY_MS = 8000;
 const GOALS_CYCLE_DURATION_MS = 32000; // 4x base rotation (8s)
-const LB_CYCLE_DURATION_MS = 15000; // 15s per leaderboard slide
+const DEFAULT_LB_CYCLE_MS = 15000;
 const CROSSFADE_DURATION_MS = 500;
 
 type GoalSlide = 'subs' | 'kicks';
@@ -52,6 +52,10 @@ export default function BottomRightPanel({
   const earnedWeekly = settings.earnedLeaderboardWeekly ?? [];
   const earnedMonthly = settings.earnedLeaderboardMonthly ?? [];
   const earnedLifetime = settings.earnedLeaderboardLifetime ?? [];
+  const showWeeklyEarnedLb = settings.showWeeklyEarnedLb !== false && gamblingEnabled;
+  const showMonthlyEarnedLb = settings.showMonthlyEarnedLb !== false && gamblingEnabled;
+  const showLifetimeEarnedLb = settings.showLifetimeEarnedLb !== false && gamblingEnabled;
+  const lbCycleMs = Math.max(5, settings.leaderboardRotationSec ?? 15) * 1000;
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
 
@@ -187,23 +191,30 @@ export default function BottomRightPanel({
   // SECTION 2: Leaderboard / Poll crossfade rotation
   // =============================================
 
-  // Build the slide list from available data (always show stream lb; show earned only when data exists)
+  // Build slide list from toggles — slides always present when enabled (empty data shows placeholder)
   const lbSlides = useMemo((): LbSlide[] => {
-    const slides: LbSlide[] = ['stream'];
-    if (earnedWeekly.length > 0) slides.push('weekly');
-    if (earnedMonthly.length > 0) slides.push('monthly');
-    if (earnedLifetime.length > 0) slides.push('lifetime');
+    const slides: LbSlide[] = [];
+    if (showLeaderboard) slides.push('stream');
+    if (showWeeklyEarnedLb) slides.push('weekly');
+    if (showMonthlyEarnedLb) slides.push('monthly');
+    if (showLifetimeEarnedLb) slides.push('lifetime');
     return slides;
-  }, [earnedWeekly.length, earnedMonthly.length, earnedLifetime.length]);
+  }, [showLeaderboard, showWeeklyEarnedLb, showMonthlyEarnedLb, showLifetimeEarnedLb]);
 
   const lbSlidesRef = useRef<LbSlide[]>(lbSlides);
   useEffect(() => { lbSlidesRef.current = lbSlides; }, [lbSlides]);
 
-  const [activeLbSlide, setActiveLbSlide] = useState<LbSlide>('stream');
+  const [activeLbSlide, setActiveLbSlide] = useState<LbSlide>(lbSlides[0] ?? 'stream');
 
-  // Cycle through lb slides (wall-clock aligned)
+  // Reset active slide when slide list changes (e.g. toggle off current slide)
   useEffect(() => {
-    if (!showLeaderboard || lbSlides.length <= 1) return;
+    if (lbSlides.length === 0) return;
+    setActiveLbSlide(prev => lbSlides.includes(prev) ? prev : lbSlides[0]);
+  }, [lbSlides]);
+
+  // Cycle through lb slides (wall-clock aligned, uses configurable speed)
+  useEffect(() => {
+    if (lbSlides.length <= 1) return;
     const tick = () => {
       const current = lbSlidesRef.current;
       if (current.length <= 1) return;
@@ -212,14 +223,14 @@ export default function BottomRightPanel({
         return current[(idx >= 0 ? idx + 1 : 1) % current.length];
       });
     };
-    const msUntilNext = LB_CYCLE_DURATION_MS - (Date.now() % LB_CYCLE_DURATION_MS);
+    const msUntilNext = lbCycleMs - (Date.now() % lbCycleMs);
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const initialTimeout = setTimeout(() => {
       tick();
-      intervalId = setInterval(tick, LB_CYCLE_DURATION_MS);
+      intervalId = setInterval(tick, lbCycleMs);
     }, msUntilNext);
     return () => { clearTimeout(initialTimeout); if (intervalId) clearInterval(intervalId); };
-  }, [showLeaderboard, lbSlides.length]);
+  }, [lbSlides.length, lbCycleMs]);
 
   // Poll overrides active lb slide; resume cycling after poll ends
   const lbTarget: LbPollSlide = showPoll ? 'poll' : activeLbSlide;
@@ -296,7 +307,7 @@ export default function BottomRightPanel({
 
   const hasGoalsContent = showGoalsRotation && goalSlides.length > 0;
   const hasGoalAlertContent = !hasGoalsContent && (hasSubTarget || hasKicksTarget) && (subsAlert != null || kicksAlert != null);
-  const hasLbPollContent = showLeaderboard || showPoll || earnedWeekly.length > 0 || earnedMonthly.length > 0 || earnedLifetime.length > 0;
+  const hasLbPollContent = lbSlides.length > 0 || showPoll;
   const hasContent = hasGoalsContent || hasGoalAlertContent || hasLbPollContent;
 
   if (!hasContent) return null;

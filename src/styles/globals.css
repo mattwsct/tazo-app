@@ -287,6 +287,7 @@ html, body {
   min-width: 140px;
   overflow: visible;
   padding: var(--gap-md) var(--gap-xl);
+  text-align: right;
 }
 
 .leaderboard-box .leaderboard-entries {
@@ -319,6 +320,7 @@ html, body {
   gap: 8px;
   font-weight: 600;
   line-height: 1.1;
+  width: 100%;
 }
 
 .leaderboard-entry.leaderboard-empty {
@@ -326,11 +328,14 @@ html, body {
   opacity: 0.75;
   font-weight: 500;
   font-style: italic;
+  text-align: right;
+  justify-content: flex-end;
 }
 
 .leaderboard-rank {
   opacity: 0.8;
-  min-width: 2.5em;
+  width: 2.5em;
+  flex-shrink: 0;
   text-align: left;
 }
 
@@ -340,11 +345,14 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.35;
+  text-align: right;
 }
 
 .leaderboard-chips {
   flex-shrink: 0;
   color: rgba(251, 191, 36, 0.95);
+  text-align: right;
+  padding-left: 8px;
 }
 
 /* === CYCLING SLIDES (leaderboard, subs goal, kicks goal) === */

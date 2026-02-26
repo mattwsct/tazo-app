@@ -61,6 +61,9 @@ export function useOverlaySettings(): [
             setSettings((prev) => ({
               ...merged,
               gamblingLeaderboardTop: Array.isArray(merged.gamblingLeaderboardTop) && merged.gamblingLeaderboardTop.length > 0 ? merged.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
+              earnedLeaderboardWeekly: merged.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
+              earnedLeaderboardMonthly: merged.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
+              earnedLeaderboardLifetime: merged.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
               overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: merged.streamGoals ?? prev.streamGoals,
             }));
@@ -112,12 +115,18 @@ export function useOverlaySettings(): [
             setSettings((prev) => ({
               ...data,
               gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
+              earnedLeaderboardWeekly: data.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
+              earnedLeaderboardMonthly: data.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
+              earnedLeaderboardLifetime: data.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
             }));
-          } else if (data && (data.gamblingLeaderboardTop || data.overlayAlerts || data.streamGoals || 'subGoalCelebrationUntil' in data || 'kicksGoalCelebrationUntil' in data)) {
+          } else if (data) {
             setSettings((prev) => ({
               ...prev,
               gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
+              earnedLeaderboardWeekly: data.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
+              earnedLeaderboardMonthly: data.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
+              earnedLeaderboardLifetime: data.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
               overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: data.streamGoals ?? prev.streamGoals,
               subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
@@ -142,6 +151,9 @@ export function useOverlaySettings(): [
         setSettings((prev) => ({
           ...prev,
           gamblingLeaderboardTop: Array.isArray(data.gamblingLeaderboardTop) && data.gamblingLeaderboardTop.length > 0 ? data.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
+          earnedLeaderboardWeekly: data.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
+          earnedLeaderboardMonthly: data.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
+          earnedLeaderboardLifetime: data.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
           overlayAlerts: data.overlayAlerts ?? prev.overlayAlerts,
           streamGoals: data.streamGoals ?? prev.streamGoals,
           subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
