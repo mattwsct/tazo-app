@@ -26,7 +26,7 @@ import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
 import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
-  trackChallengeMessage, resetEventTimestamps,
+  resetEventTimestamps,
   getAttackList, giftTazos,
 } from '@/utils/gambling-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
@@ -347,9 +347,6 @@ export async function POST(request: NextRequest) {
       const acceptResponse = await handleKickChatCommand({ cmd: 'accept' }, sender);
       if (acceptResponse) { await replyNonCmd(acceptResponse); return NextResponse.json({ received: true }, { status: 200 }); }
     }
-
-    // 6. Challenge message tracking (always, silent)
-    void trackChallengeMessage(sender);
 
     return NextResponse.json({ received: true }, { status: 200 });
   }

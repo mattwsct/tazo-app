@@ -45,8 +45,6 @@ export interface OverlaySettings {
   autoRaffleEnabled?: boolean;
   /** Auto tazo drops every ~15 min. */
   chipDropsEnabled?: boolean;
-  /** Chat challenges every ~20-30 min. */
-  chatChallengesEnabled?: boolean;
   /** Boss events every ~45-60 min. */
   bossEventsEnabled?: boolean;
   /** Auto streamer polls (random question with 5 boss names as options) in auto-game rotation. */
@@ -91,6 +89,12 @@ export interface OverlaySettings {
   kicksGoalSubtext?: string;
   /** How long the 100% bar shows before auto-incrementing (seconds). */
   goalCelebrationDurationSec?: number;
+  /** IANA timezone for weekly/monthly leaderboard resets (e.g. "Asia/Bangkok"). */
+  streamerTimezone?: string;
+  /** Runtime: earned leaderboard data (weekly/monthly/lifetime). */
+  earnedLeaderboardWeekly?: { username: string; earned: number }[];
+  earnedLeaderboardMonthly?: { username: string; earned: number }[];
+  earnedLeaderboardLifetime?: { username: string; earned: number }[];
   /** Runtime: celebration window end (ms) — show 100% until this time. */
   subGoalCelebrationUntil?: number;
   kicksGoalCelebrationUntil?: number;
@@ -129,7 +133,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showOverlayAlerts: true,
   autoRaffleEnabled: true,
   chipDropsEnabled: true,
-  chatChallengesEnabled: true,
   bossEventsEnabled: true,
   autoPollEnabled: true,
   autoGameIntervalMin: 5,
@@ -154,11 +157,12 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   kicksGoalTarget: 100,
   kicksGoalIncrement: 100,
   goalCelebrationDurationSec: 60,
+  streamerTimezone: 'UTC',
 };
 
 // Valid settings schema for validation
-// Note: 'pollState', 'gamblingLeaderboardTop', 'overlayAlerts', 'streamGoals', 'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil' are runtime, not persisted
-export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'gamblingLeaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'subGoalCelebrationUntil' | 'kicksGoalCelebrationUntil'>, 'boolean' | 'string' | 'number'> = {
+// Note: runtime fields are not persisted to KV
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'gamblingLeaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'subGoalCelebrationUntil' | 'kicksGoalCelebrationUntil' | 'earnedLeaderboardWeekly' | 'earnedLeaderboardMonthly' | 'earnedLeaderboardLifetime'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   customLocation: 'string',
   showCountryName: 'boolean',
@@ -182,7 +186,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   chipRewardChips: 'number',
   autoRaffleEnabled: 'boolean',
   chipDropsEnabled: 'boolean',
-  chatChallengesEnabled: 'boolean',
   bossEventsEnabled: 'boolean',
   autoPollEnabled: 'boolean',
   autoGameIntervalMin: 'number',
@@ -210,6 +213,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
   goalCelebrationDurationSec: 'number',
+  streamerTimezone: 'string',
 };
 
 // SSE message types

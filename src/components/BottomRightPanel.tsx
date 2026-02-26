@@ -6,10 +6,12 @@ import GoalProgressBar from './GoalProgressBar';
 
 const ALERT_DISPLAY_MS = 8000;
 const GOALS_CYCLE_DURATION_MS = 32000; // 4x base rotation (8s)
+const LB_CYCLE_DURATION_MS = 15000; // 15s per leaderboard slide
 const CROSSFADE_DURATION_MS = 500;
 
 type GoalSlide = 'subs' | 'kicks';
-type LbPollSlide = 'leaderboard' | 'poll';
+type LbSlide = 'stream' | 'weekly' | 'monthly' | 'lifetime';
+type LbPollSlide = LbSlide | 'poll';
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -47,6 +49,9 @@ export default function BottomRightPanel({
   const showGoalsRotation = settings.showGoalsRotation !== false;
   const leaderboardTopN = settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5;
   const gamblingLeaderboardTop = settings.gamblingLeaderboardTop ?? [];
+  const earnedWeekly = settings.earnedLeaderboardWeekly ?? [];
+  const earnedMonthly = settings.earnedLeaderboardMonthly ?? [];
+  const earnedLifetime = settings.earnedLeaderboardLifetime ?? [];
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
 
@@ -179,10 +184,45 @@ export default function BottomRightPanel({
   }, [showGoalsRotation, goalSlides.length, goalSlidesKey]);
 
   // =============================================
-  // SECTION 2: Leaderboard / Poll crossfade
+  // SECTION 2: Leaderboard / Poll crossfade rotation
   // =============================================
 
-  const lbTarget: LbPollSlide = showPoll ? 'poll' : 'leaderboard';
+  // Build the slide list from available data (always show stream lb; show earned only when data exists)
+  const lbSlides = useMemo((): LbSlide[] => {
+    const slides: LbSlide[] = ['stream'];
+    if (earnedWeekly.length > 0) slides.push('weekly');
+    if (earnedMonthly.length > 0) slides.push('monthly');
+    if (earnedLifetime.length > 0) slides.push('lifetime');
+    return slides;
+  }, [earnedWeekly.length, earnedMonthly.length, earnedLifetime.length]);
+
+  const lbSlidesRef = useRef<LbSlide[]>(lbSlides);
+  useEffect(() => { lbSlidesRef.current = lbSlides; }, [lbSlides]);
+
+  const [activeLbSlide, setActiveLbSlide] = useState<LbSlide>('stream');
+
+  // Cycle through lb slides (wall-clock aligned)
+  useEffect(() => {
+    if (!showLeaderboard || lbSlides.length <= 1) return;
+    const tick = () => {
+      const current = lbSlidesRef.current;
+      if (current.length <= 1) return;
+      setActiveLbSlide(prev => {
+        const idx = current.indexOf(prev);
+        return current[(idx >= 0 ? idx + 1 : 1) % current.length];
+      });
+    };
+    const msUntilNext = LB_CYCLE_DURATION_MS - (Date.now() % LB_CYCLE_DURATION_MS);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const initialTimeout = setTimeout(() => {
+      tick();
+      intervalId = setInterval(tick, LB_CYCLE_DURATION_MS);
+    }, msUntilNext);
+    return () => { clearTimeout(initialTimeout); if (intervalId) clearInterval(intervalId); };
+  }, [showLeaderboard, lbSlides.length]);
+
+  // Poll overrides active lb slide; resume cycling after poll ends
+  const lbTarget: LbPollSlide = showPoll ? 'poll' : activeLbSlide;
   const [lbDisplayed, setLbDisplayed] = useState<LbPollSlide>(lbTarget);
   const [lbOutgoing, setLbOutgoing] = useState<LbPollSlide | null>(null);
   const lbTransRef = useRef<NodeJS.Timeout | null>(null);
@@ -256,7 +296,7 @@ export default function BottomRightPanel({
 
   const hasGoalsContent = showGoalsRotation && goalSlides.length > 0;
   const hasGoalAlertContent = !hasGoalsContent && (hasSubTarget || hasKicksTarget) && (subsAlert != null || kicksAlert != null);
-  const hasLbPollContent = showLeaderboard || showPoll;
+  const hasLbPollContent = showLeaderboard || showPoll || earnedWeekly.length > 0 || earnedMonthly.length > 0 || earnedLifetime.length > 0;
   const hasContent = hasGoalsContent || hasGoalAlertContent || hasLbPollContent;
 
   if (!hasContent) return null;
@@ -265,7 +305,7 @@ export default function BottomRightPanel({
   // Render helpers
   // =============================================
 
-  const renderLeaderboard = () => (
+  const renderStreamLeaderboard = () => (
     <div className="overlay-box leaderboard-box">
       <div className="leaderboard-title">🃏 Top Tazos</div>
       <div className="leaderboard-subtitle">Resets each stream</div>
@@ -280,6 +320,30 @@ export default function BottomRightPanel({
           ))
         ) : (
           <div className="leaderboard-entry leaderboard-empty">No tazos yet — !deal to play!</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderEarnedLeaderboard = (
+    title: string,
+    subtitle: string,
+    entries: { username: string; earned: number }[],
+  ) => (
+    <div className="overlay-box leaderboard-box">
+      <div className="leaderboard-title">{title}</div>
+      <div className="leaderboard-subtitle">{subtitle}</div>
+      <div className="leaderboard-entries">
+        {entries.length > 0 ? (
+          entries.slice(0, leaderboardTopN).map((u, i) => (
+            <div key={u.username} className="leaderboard-entry">
+              <span className="leaderboard-rank">#{i + 1}</span>
+              <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
+              <span className="leaderboard-chips">{u.earned}</span>
+            </div>
+          ))
+        ) : (
+          <div className="leaderboard-entry leaderboard-empty">No earned tazos yet!</div>
         )}
       </div>
     </div>
@@ -326,7 +390,10 @@ export default function BottomRightPanel({
   };
 
   const renderLbPollSlide = (type: LbPollSlide, isOutgoing = false) => {
-    if (type === 'leaderboard') return showLeaderboard ? renderLeaderboard() : null;
+    if (type === 'stream') return showLeaderboard ? renderStreamLeaderboard() : null;
+    if (type === 'weekly') return renderEarnedLeaderboard('📊 Weekly Earned', 'Resets every Monday', earnedWeekly);
+    if (type === 'monthly') return renderEarnedLeaderboard('📊 Monthly Earned', 'Resets 1st of month', earnedMonthly);
+    if (type === 'lifetime') return renderEarnedLeaderboard('🏆 All-Time Earned', 'Never resets', earnedLifetime);
     return isOutgoing ? pollChildrenCacheRef.current : (children || pollChildrenCacheRef.current);
   };
 

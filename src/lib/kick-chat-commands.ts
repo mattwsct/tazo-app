@@ -46,6 +46,7 @@ import {
   checkAndResolveExpiredHeist,
   giftTazos,
 } from '@/utils/gambling-storage';
+import { getEarnedLeaderboard } from '@/utils/tazo-vault-storage';
 import {
   parseConvertArgs,
   convertUnit,
@@ -190,7 +191,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'ping') return { cmd: 'ping' };
   if (cmd === 'uptime') return { cmd: 'uptime' };
   if (cmd === 'followers') return { cmd: 'followers' };
-  if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard' };
+  if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard', arg: parts.slice(1).join(' ') };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
   if (cmd === 'steps') return { cmd: 'steps' };
   if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
@@ -264,10 +265,19 @@ export async function handleKickChatCommand(
   if (cmd === 'leaderboard') {
     const gamblingOn = await isGamblingEnabled();
     if (!gamblingOn) return '🃏 Gambling is disabled for this stream.';
+    const sub = (arg ?? '').trim().toLowerCase();
+    if (sub === 'weekly' || sub === 'monthly' || sub === 'alltime' || sub === 'lifetime' || sub === 'all') {
+      const period = (sub === 'alltime' || sub === 'lifetime' || sub === 'all') ? 'lifetime' : sub as 'weekly' | 'monthly';
+      const top = await getEarnedLeaderboard(period, 5);
+      if (top.length === 0) return `📊 No ${period === 'lifetime' ? 'all-time' : period} earned tazos yet — play to get on the board!`;
+      const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.earned}`).join(' | ');
+      const label = period === 'lifetime' ? 'All-time earned' : period === 'weekly' ? 'This week' : 'This month';
+      return `📊 ${label}: ${lines}`;
+    }
     const top = await getGamblingLeaderboardTop(5);
     if (top.length === 0) return '🃏 No tazos yet! !deal <amount> to play — start with 100 tazos.';
     const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.chips}`).join(' | ');
-    return `🃏 Top tazos: ${lines}`;
+    return `🃏 Stream tazos: ${lines} | !lb weekly/monthly/alltime`;
   }
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();

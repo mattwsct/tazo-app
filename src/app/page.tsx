@@ -1339,6 +1339,25 @@ export default function AdminPage() {
                     </div>
                   )}
                   <div className="admin-select-wrap">
+                    <label>Streamer timezone <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>(weekly/monthly reset)</span></label>
+                    <select
+                      className="admin-select-big"
+                      value={settings.streamerTimezone ?? 'UTC'}
+                      onChange={(e) => handleSettingsChange({ streamerTimezone: e.target.value })}
+                    >
+                      {[
+                        'UTC', 'America/New_York', 'America/Chicago', 'America/Denver',
+                        'America/Los_Angeles', 'America/Toronto', 'America/Vancouver',
+                        'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Amsterdam',
+                        'Asia/Bangkok', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Seoul',
+                        'Asia/Kolkata', 'Asia/Dubai', 'Asia/Jakarta',
+                        'Australia/Sydney', 'Australia/Melbourne', 'Pacific/Auckland',
+                      ].map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="admin-select-wrap">
                     <label>Excluded users (comma separated)</label>
                     <textarea
                       className="text-input"
@@ -1386,12 +1405,6 @@ export default function AdminPage() {
                   </div>
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.chatChallengesEnabled !== false} onChange={(e) => handleSettingsChange({ chatChallengesEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Include chat challenges in rotation</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
                       <input type="checkbox" checked={settings.bossEventsEnabled !== false} onChange={(e) => handleSettingsChange({ bossEventsEnabled: e.target.checked })} className="checkbox-input" />
                       <span className="checkbox-text">Include boss events in rotation</span>
                     </label>
@@ -1399,7 +1412,7 @@ export default function AdminPage() {
                   <div className="checkbox-group" style={{ marginTop: '4px' }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.autoPollEnabled !== false} onChange={(e) => handleSettingsChange({ autoPollEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Include streamer polls in rotation</span>
+                      <span className="checkbox-text">Include auto polls in rotation</span>
                     </label>
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -8,6 +8,7 @@ import { kv } from '@vercel/kv';
 import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 import { getPollState, setPollState } from '@/lib/poll-store';
 import { generateAutoPoll } from '@/utils/auto-poll-content';
+import { recordTazosEarned } from '@/utils/tazo-vault-storage';
 import type { PollState } from '@/types/poll';
 
 const VIEW_TAZOS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
@@ -183,6 +184,8 @@ async function addTazos(user: string, amount: number): Promise<number> {
     kv.hset(TAZOS_BALANCE_KEY, { [user]: String(newBal) }),
     kv.zadd(GAMBLING_LEADERBOARD_KEY, { score: newBal, member: user }),
   ]);
+  // Record earned tazos to weekly/monthly/lifetime boards (fire-and-forget)
+  void recordTazosEarned(user, amount);
   return newBal;
 }
 
@@ -232,6 +235,7 @@ export async function addViewTimeTazos(username: string): Promise<number> {
     ];
     if (username?.trim()) updates.push(setLeaderboardDisplayName(user, username.trim()));
     await Promise.all(updates);
+    void recordTazosEarned(user, tazosToAdd);
     return tazosToAdd;
   } catch {
     return 0;
@@ -1322,66 +1326,6 @@ export async function resolveExpiredTazoDrop(): Promise<string | null> {
   return `💧 Drop ended! ${drop.winners.length} grabbed tazos: ${names}`;
 }
 
-// --- Chat Challenges ---
-
-const CHAT_CHALLENGE_KEY = 'chat_challenge_active';
-const CHAT_CHALLENGE_LAST_AT_KEY = 'chat_challenge_last_at';
-const CHAT_CHALLENGE_TTL_SEC = 180;
-const CHAT_CHALLENGE_WINDOW_MS = 2 * 60 * 1000;
-const CHAT_CHALLENGE_INTERVAL_MS = 15 * 60 * 1000; // 15 min
-const CHAT_CHALLENGE_TARGET = 50;
-const CHAT_CHALLENGE_PRIZE = 10;
-const CHAT_CHALLENGE_MAX_PER_USER = 3;
-
-interface ChatChallengeState {
-  target: number;
-  prize: number;
-  startedAt: number;
-  participants: Record<string, number>;
-  messageCount: number;
-}
-
-export async function startChatChallenge(target = CHAT_CHALLENGE_TARGET, prize = CHAT_CHALLENGE_PRIZE): Promise<string> {
-  const challenge: ChatChallengeState = { target, prize, startedAt: Date.now(), participants: {}, messageCount: 0 };
-  await kv.set(CHAT_CHALLENGE_KEY, challenge, { ex: CHAT_CHALLENGE_TTL_SEC });
-  return `🎯 CHAT CHALLENGE! Send ${target} messages in 2 minutes and everyone gets ${prize} tazos! Go go go!`;
-}
-
-export async function trackChallengeMessage(username: string): Promise<void> {
-  try {
-    const challenge = await kv.get<ChatChallengeState>(CHAT_CHALLENGE_KEY);
-    if (!challenge) return;
-    if (Date.now() - challenge.startedAt >= CHAT_CHALLENGE_WINDOW_MS) return;
-    const user = normalizeUser(username);
-    const userCount = challenge.participants[user] ?? 0;
-    if (userCount >= CHAT_CHALLENGE_MAX_PER_USER) return;
-    challenge.participants[user] = userCount + 1;
-    challenge.messageCount++;
-    await kv.set(CHAT_CHALLENGE_KEY, challenge, { ex: CHAT_CHALLENGE_TTL_SEC });
-  } catch { /* silent */ }
-}
-
-export async function resolveChatChallenge(): Promise<string | null> {
-  const challenge = await kv.get<ChatChallengeState>(CHAT_CHALLENGE_KEY);
-  if (!challenge) return null;
-  if (Date.now() - challenge.startedAt < CHAT_CHALLENGE_WINDOW_MS) return null;
-  await kv.del(CHAT_CHALLENGE_KEY);
-  await kv.set(CHAT_CHALLENGE_LAST_AT_KEY, String(Date.now()));
-  const users = Object.keys(challenge.participants);
-  if (challenge.messageCount >= challenge.target && users.length > 0) {
-    await Promise.all(users.map(u => addTazos(u, challenge.prize)));
-    return `🎯 Challenge complete! ${challenge.messageCount}/${challenge.target} messages — ${users.length} chatters each earned ${challenge.prize} tazos!`;
-  }
-  return `🎯 Challenge failed! Only ${challenge.messageCount}/${challenge.target} messages. Better luck next time!`;
-}
-
-export async function shouldStartChatChallenge(): Promise<boolean> {
-  const existing = await kv.get<ChatChallengeState>(CHAT_CHALLENGE_KEY);
-  if (existing) return false;
-  const lastAt = await kv.get<string>(CHAT_CHALLENGE_LAST_AT_KEY);
-  const elapsed = lastAt ? Date.now() - parseInt(lastAt, 10) : CHAT_CHALLENGE_INTERVAL_MS;
-  return elapsed >= CHAT_CHALLENGE_INTERVAL_MS;
-}
 
 // --- Win Streaks ---
 
@@ -1766,12 +1710,12 @@ export async function resolveExpiredBoss(): Promise<string | null> {
 // --- Active event check (prevents overlapping events) ---
 
 export async function hasActiveEvent(): Promise<boolean> {
-  const [raffle, drop, challenge, boss, pollState] = await Promise.all([
-    kv.get(RAFFLE_KEY), kv.get(TAZO_DROP_KEY), kv.get(CHAT_CHALLENGE_KEY), kv.get(BOSS_KEY),
+  const [raffle, drop, boss, pollState] = await Promise.all([
+    kv.get(RAFFLE_KEY), kv.get(TAZO_DROP_KEY), kv.get(BOSS_KEY),
     getPollState(),
   ]);
   const pollActive = pollState !== null && (pollState.status === 'active' || pollState.status === 'winner');
-  return !!(raffle || drop || challenge || boss || pollActive);
+  return !!(raffle || drop || boss || pollActive);
 }
 
 // --- Unified auto game scheduler (single alternating timer) ---
@@ -1781,7 +1725,6 @@ const AUTO_GAME_LAST_AT_KEY = 'auto_game_last_at';
 type AutoGameOverlaySettings = {
   autoRaffleEnabled?: boolean;
   chipDropsEnabled?: boolean;
-  chatChallengesEnabled?: boolean;
   bossEventsEnabled?: boolean;
   autoPollEnabled?: boolean;
   autoGameIntervalMin?: number;
@@ -1823,10 +1766,9 @@ export async function startAutoPoll(): Promise<string> {
 }
 
 export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): Promise<string | null> {
-  const enabled: Array<'raffle' | 'drop' | 'challenge' | 'boss' | 'poll'> = [];
+  const enabled: Array<'raffle' | 'drop' | 'boss' | 'poll'> = [];
   if (settings.autoRaffleEnabled !== false) enabled.push('raffle');
   if (settings.chipDropsEnabled !== false) enabled.push('drop');
-  if (settings.chatChallengesEnabled !== false) enabled.push('challenge');
   if (settings.bossEventsEnabled !== false) enabled.push('boss');
   if (settings.autoPollEnabled !== false) enabled.push('poll');
   if (enabled.length === 0) return null;
@@ -1841,9 +1783,6 @@ export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): P
       break;
     case 'drop':
       announcement = await startTazoDrop();
-      break;
-    case 'challenge':
-      announcement = await startChatChallenge();
       break;
     case 'boss':
       announcement = await startBossEvent();
@@ -1863,7 +1802,6 @@ export async function resetEventTimestamps(): Promise<void> {
   await Promise.all([
     kv.del(RAFFLE_LAST_AT_KEY),
     kv.del(TAZO_DROP_LAST_AT_KEY),
-    kv.del(CHAT_CHALLENGE_LAST_AT_KEY),
     kv.del(BOSS_LAST_AT_KEY),
     kv.del(AUTO_GAME_LAST_AT_KEY),
   ]);

@@ -6,6 +6,8 @@ import { OverlayLogger } from '@/lib/logger';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { POLL_STATE_KEY, type PollState } from '@/types/poll';
 import { getGamblingLeaderboardTop } from '@/utils/gambling-storage';
+import { getEarnedLeaderboard } from '@/utils/tazo-vault-storage';
+import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 import { getGoalCelebration } from '@/utils/stream-goals-celebration';
@@ -26,16 +28,29 @@ async function handleGET() {
     const showLeaderboard = merged.showLeaderboard !== false && gamblingEnabled;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
     const leaderboardTopN = merged.gamblingLeaderboardTopN ?? merged.leaderboardTopN ?? 5;
-    const [gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
+
+    const [gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration, excludedUsers] = await Promise.all([
       showLeaderboard ? getGamblingLeaderboardTop(leaderboardTopN) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
       needGoals ? getGoalCelebration() : {},
+      showLeaderboard ? getLeaderboardExclusions() : Promise.resolve(new Set<string>()),
     ]);
+
+    const [earnedWeekly, earnedMonthly, earnedLifetime] = showLeaderboard
+      ? await Promise.all([
+          getEarnedLeaderboard('weekly', leaderboardTopN, excludedUsers as Set<string>),
+          getEarnedLeaderboard('monthly', leaderboardTopN, excludedUsers as Set<string>),
+          getEarnedLeaderboard('lifetime', leaderboardTopN, excludedUsers as Set<string>),
+        ])
+      : [[], [], []];
 
     const combinedSettings = {
       ...merged,
       gamblingLeaderboardTop,
+      earnedLeaderboardWeekly: earnedWeekly,
+      earnedLeaderboardMonthly: earnedMonthly,
+      earnedLeaderboardLifetime: earnedLifetime,
       overlayAlerts,
       streamGoals,
       subGoalCelebrationUntil: (celebration as { subsUntil?: number }).subsUntil,

@@ -20,6 +20,7 @@
     "fix-icloud": "bash scripts/fix-icloud-sync.sh"
   },
   "dependencies": {
+    "@fontsource/montserrat": "^5.2.8",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.2",
     "@vercel/kv": "^3.0.0",

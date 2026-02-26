@@ -32,7 +32,7 @@ import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-tit
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import {
   checkAndResolveExpiredHeist, resolveRaffle, getRaffleReminder, resolveTopChatter,
-  resolveExpiredTazoDrop, resolveChatChallenge,
+  resolveExpiredTazoDrop,
   resolveExpiredBoss, getBossReminder,
   shouldStartAnyAutoGame, pickAndStartAutoGame,
 } from '@/utils/gambling-storage';
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; chatChallengesEnabled?: boolean; bossEventsEnabled?: boolean; autoGameIntervalMin?: number }>(OVERLAY_SETTINGS_KEY),
+    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGameIntervalMin?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
@@ -167,17 +167,6 @@ export async function GET(request: NextRequest) {
     console.error('[Cron HR] TAZO_DROP_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
   }
 
-  // Chat challenges: always resolve, only auto-start when live
-  try {
-    const challengeResult = await resolveChatChallenge();
-    if (challengeResult) {
-      await sendKickChatMessage(accessToken, challengeResult);
-      sent++;
-    }
-  } catch (err) {
-    console.error('[Cron HR] CHAT_CHALLENGE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-
   // Boss events: always resolve + remind, only auto-start when live
   try {
     const bossResult = await resolveExpiredBoss();
@@ -210,7 +199,6 @@ export async function GET(request: NextRequest) {
         } catch (sendErr) {
           await kv.del('raffle_active');
           await kv.del('chip_drop_active');
-          await kv.del('chat_challenge_active');
           await kv.del('boss_active');
           console.error('[Cron HR] AUTO_GAME_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
         }

@@ -17,8 +17,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
+import { kv } from '@vercel/kv';
 import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession, updateActiveCaloriesSession, getWellnessData } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
+
+const IMPORT_DEDUP_TTL_SEC = 30; // seconds — reject identical payloads within this window
 
 export const dynamic = 'force-dynamic';
 
@@ -249,6 +253,19 @@ export async function POST(request: NextRequest) {
         console.log('[Wellness import] BMI auto-calculated:', { weightKg: updates.weightKg, heightCm, bmi: updates.bodyMassIndex });
       }
     }
+
+    // Idempotency check — reject identical payloads within IMPORT_DEDUP_TTL_SEC
+    const dedupPayload = JSON.stringify(
+      Object.fromEntries(Object.entries(updates).sort(([a], [b]) => a.localeCompare(b)))
+    );
+    const dedupHash = createHash('sha256').update(dedupPayload).digest('hex').slice(0, 20);
+    const dedupKey = `wellness_import_dedup:${dedupHash}`;
+    const alreadySeen = await kv.get(dedupKey);
+    if (alreadySeen) {
+      console.log('[Wellness import] Duplicate payload ignored (within dedup window).', { hash: dedupHash });
+      return NextResponse.json({ ok: true, skipped: true });
+    }
+    await kv.set(dedupKey, 1, { ex: IMPORT_DEDUP_TTL_SEC });
 
     console.log('[Wellness import] Saving:', updates);
     await updateWellnessData(updates);
