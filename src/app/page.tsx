@@ -637,6 +637,14 @@ export default function AdminPage() {
     }
   }, [settings]);
 
+  // Auto-detect browser timezone and save it if not already set
+  useEffect(() => {
+    if (settings.streamerTimezone) return;
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (detected) handleSettingsChange({ streamerTimezone: detected });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.streamerTimezone]);
+
   // Debounced custom location handler
   const handleCustomLocationChange = useCallback((value: string) => {
     setCustomLocationInput(value);
@@ -1339,22 +1347,37 @@ export default function AdminPage() {
                     </div>
                   )}
                   <div className="admin-select-wrap">
-                    <label>Streamer timezone <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>(weekly/monthly reset)</span></label>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>Streamer timezone <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>(weekly/monthly reset)</span></span>
+                      <button
+                        type="button"
+                        style={{ fontSize: '0.7rem', opacity: 0.6, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: '0 0 2px 0', textDecoration: 'underline' }}
+                        onClick={() => {
+                          const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                          if (detected) handleSettingsChange({ streamerTimezone: detected });
+                        }}
+                      >auto-detect</button>
+                    </label>
                     <select
                       className="admin-select-big"
                       value={settings.streamerTimezone ?? 'UTC'}
                       onChange={(e) => handleSettingsChange({ streamerTimezone: e.target.value })}
                     >
-                      {[
-                        'UTC', 'America/New_York', 'America/Chicago', 'America/Denver',
-                        'America/Los_Angeles', 'America/Toronto', 'America/Vancouver',
-                        'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Amsterdam',
-                        'Asia/Bangkok', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Seoul',
-                        'Asia/Kolkata', 'Asia/Dubai', 'Asia/Jakarta',
-                        'Australia/Sydney', 'Australia/Melbourne', 'Pacific/Auckland',
-                      ].map((tz) => (
-                        <option key={tz} value={tz}>{tz}</option>
-                      ))}
+                      {(() => {
+                        const detected = typeof window !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : null;
+                        const presets = [
+                          'UTC', 'America/New_York', 'America/Chicago', 'America/Denver',
+                          'America/Los_Angeles', 'America/Toronto', 'America/Vancouver',
+                          'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Amsterdam',
+                          'Asia/Bangkok', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Seoul',
+                          'Asia/Kolkata', 'Asia/Dubai', 'Asia/Jakarta',
+                          'Australia/Sydney', 'Australia/Melbourne', 'Pacific/Auckland',
+                        ];
+                        const allTz = detected && !presets.includes(detected) ? [detected, ...presets] : presets;
+                        return allTz.map((tz) => (
+                          <option key={tz} value={tz}>{tz}{tz === detected ? ' (your location)' : ''}</option>
+                        ));
+                      })()}
                     </select>
                   </div>
                   <div className="admin-select-wrap" style={{ marginBottom: '8px' }}>

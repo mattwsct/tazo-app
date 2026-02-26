@@ -77,15 +77,17 @@ function getLocalMonthKey(timezone: string): string {
  */
 export async function recordTazosEarned(username: string, amount: number): Promise<void> {
   if (amount <= 0 || !username) return;
+  const user = username.trim().toLowerCase();
+  if (!user || user.startsWith('@')) return;
   try {
     const timezone = await getStreamerTimezone();
     const weekKey = `${VAULT_WEEKLY_PREFIX}${getLocalWeekKey(timezone)}`;
     const monthKey = `${VAULT_MONTHLY_PREFIX}${getLocalMonthKey(timezone)}`;
 
     await Promise.all([
-      kv.zincrby(weekKey, amount, username),
-      kv.zincrby(monthKey, amount, username),
-      kv.zincrby(VAULT_LIFETIME_KEY, amount, username),
+      kv.zincrby(weekKey, amount, user),
+      kv.zincrby(monthKey, amount, user),
+      kv.zincrby(VAULT_LIFETIME_KEY, amount, user),
     ]);
 
     // Refresh TTL on rolling keys each time they're written
@@ -127,7 +129,7 @@ export async function getEarnedLeaderboard(
     const result: { username: string; earned: number }[] = [];
     for (let i = 0; i < raw.length && result.length < n; i += 2) {
       const user = String(raw[i] ?? '').trim().toLowerCase();
-      if (!user || excluded.has(user)) continue;
+      if (!user || user.startsWith('@') || excluded.has(user)) continue;
       result.push({
         username: displayNames[user] ?? user,
         earned: Math.round(Number(raw[i + 1] ?? 0)),

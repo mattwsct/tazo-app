@@ -98,6 +98,11 @@ function normalizeUser(username: string): string {
   return username.trim().toLowerCase();
 }
 
+/** Returns true for bot/service accounts whose username starts with '@'. These are never awarded tazos or shown on leaderboards. */
+function isBotUsername(normalizedUser: string): boolean {
+  return normalizedUser.startsWith('@');
+}
+
 /** Check if gambling is enabled (from overlay settings). When false, all blackjack commands should be disabled. */
 export async function isGamblingEnabled(): Promise<boolean> {
   try {
@@ -178,6 +183,7 @@ async function placeBet(user: string, requestedBet: number): Promise<{ ok: false
 }
 
 async function addTazos(user: string, amount: number): Promise<number> {
+  if (isBotUsername(user)) return await getTazos(user);
   const bal = await getTazos(user);
   const newBal = bal + amount;
   await Promise.all([
@@ -212,6 +218,7 @@ export async function addTazosForReward(username: string, amount: number): Promi
 /** Award tazos for watch time (chat as heartbeat). 10 tazos per 10 min, no cap. */
 export async function addViewTimeTazos(username: string): Promise<number> {
   const user = normalizeUser(username);
+  if (isBotUsername(user)) return 0;
   if (!(await isGamblingEnabled())) return 0;
   const excluded = await getLeaderboardExclusions();
   if (excluded.has(user)) return 0;
@@ -267,7 +274,7 @@ export async function getGamblingLeaderboardTop(n: number): Promise<{ username: 
     const result: { username: string; chips: number }[] = [];
     for (let i = 0; i < raw.length && result.length < n; i += 2) {
       const user = String(raw[i] ?? '').trim().toLowerCase();
-      if (!user || excluded.has(user)) continue;
+      if (!user || user.startsWith('@') || excluded.has(user)) continue;
       result.push({
         username: names[user] ?? user,
         chips: Math.round(Number(raw[i + 1] ?? 0)),
@@ -1440,12 +1447,12 @@ export const BOSS_ROSTER_NAMES: string[] = [];
 const BOSS_ROSTER: BossDefinition[] = [
   // Tier 1 — 400 HP
   { name: 'Ice Poseidon', maxHp: 400, weakness: 'special', resistance: 'physical' },
-  { name: 'HamptonBrandon', maxHp: 400, weakness: 'physical', resistance: 'magic' },
+  { name: 'HAMPTONBRANDO', maxHp: 400, weakness: 'physical', resistance: 'magic' },
   { name: 'Sam', maxHp: 400, weakness: 'magic', resistance: 'special' },
   { name: 'AsianAndy', maxHp: 400, weakness: 'ranged', resistance: 'physical' },
-  { name: 'EBZ', maxHp: 400, weakness: 'special', resistance: 'ranged' },
+  { name: 'OfficialEbZ', maxHp: 400, weakness: 'special', resistance: 'ranged' },
   { name: 'BurgerPlanet', maxHp: 400, weakness: 'physical', resistance: 'special' },
-  { name: 'SJC', maxHp: 400, weakness: 'magic', resistance: 'ranged' },
+  { name: 'sjc_official', maxHp: 400, weakness: 'magic', resistance: 'ranged' },
   { name: 'Adin Ross', maxHp: 400, weakness: 'ranged', resistance: 'magic' },
   { name: 'xQc', maxHp: 400, weakness: 'special', resistance: 'physical' },
   { name: 'SNEAKO', maxHp: 400, weakness: 'physical', resistance: 'special' },
@@ -1459,8 +1466,8 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Agent', maxHp: 400, weakness: 'special', resistance: 'magic' },
   { name: 'Trainwreckstv', maxHp: 400, weakness: 'magic', resistance: 'ranged' },
   { name: 'Destiny', maxHp: 400, weakness: 'ranged', resistance: 'physical' },
-  { name: 'Greek', maxHp: 400, weakness: 'special', resistance: 'ranged' },
-  { name: 'Roshtein', maxHp: 400, weakness: 'physical', resistance: 'special' },
+  { name: 'iShowSpeed', maxHp: 400, weakness: 'magic', resistance: 'physical' },
+  { name: 'KaiCenat', maxHp: 400, weakness: 'ranged', resistance: 'special' },
   // Tier 2 — 350 HP
   { name: 'Mando', maxHp: 350, weakness: 'magic', resistance: 'physical' },
   { name: 'ABZ', maxHp: 350, weakness: 'ranged', resistance: 'special' },
@@ -1468,9 +1475,9 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'n3on', maxHp: 350, weakness: 'physical', resistance: 'magic' },
   { name: 'RiceGum', maxHp: 350, weakness: 'magic', resistance: 'special' },
   { name: 'Cobbruvs', maxHp: 350, weakness: 'ranged', resistance: 'physical' },
-  { name: 'Clavicular', maxHp: 350, weakness: 'special', resistance: 'magic' },
+  { name: 'clavicular', maxHp: 350, weakness: 'special', resistance: 'magic' },
   { name: 'Robcdee', maxHp: 350, weakness: 'physical', resistance: 'ranged' },
-  { name: 'JoeyKaotyk', maxHp: 350, weakness: 'magic', resistance: 'physical' },
+  { name: 'joeykaotyk', maxHp: 350, weakness: 'magic', resistance: 'physical' },
   { name: 'PeeguuTV', maxHp: 350, weakness: 'ranged', resistance: 'special' },
   { name: 'Ac7ionman', maxHp: 350, weakness: 'special', resistance: 'physical' },
   { name: 'Jandro', maxHp: 350, weakness: 'physical', resistance: 'special' },
@@ -1484,6 +1491,7 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Emiru', maxHp: 350, weakness: 'physical', resistance: 'special' },
   { name: 'Sodapoppin', maxHp: 350, weakness: 'special', resistance: 'magic' },
   { name: 'Adept', maxHp: 350, weakness: 'ranged', resistance: 'magic' },
+  { name: 'RampageJackson', maxHp: 350, weakness: 'special', resistance: 'physical' },
   // Tier 3 — 300 HP
   { name: 'kangjoel', maxHp: 300, weakness: 'special', resistance: 'ranged' },
   { name: 'TAEMIN1998', maxHp: 300, weakness: 'physical', resistance: 'magic' },
@@ -1501,12 +1509,14 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Andy', maxHp: 300, weakness: 'physical', resistance: 'magic' },
   { name: 'ChickenAndy', maxHp: 300, weakness: 'magic', resistance: 'physical' },
   { name: 'QTCinderella', maxHp: 300, weakness: 'ranged', resistance: 'special' },
-  { name: 'RichCampbell', maxHp: 300, weakness: 'special', resistance: 'physical' },
   { name: 'Mizkif', maxHp: 300, weakness: 'physical', resistance: 'magic' },
-  { name: 'NickiNFLeep', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
-  { name: 'NickPolom', maxHp: 300, weakness: 'ranged', resistance: 'special' },
-  { name: 'Lacari', maxHp: 300, weakness: 'special', resistance: 'magic' },
-  { name: 'Cyr', maxHp: 300, weakness: 'magic', resistance: 'physical' },
+  { name: 'JackDoherty', maxHp: 300, weakness: 'magic', resistance: 'ranged' },
+  { name: 'Lionqueennn', maxHp: 300, weakness: 'special', resistance: 'physical' },
+  { name: 'kiaraakitty', maxHp: 300, weakness: 'ranged', resistance: 'magic' },
+  { name: 'SilentDestroyer', maxHp: 300, weakness: 'physical', resistance: 'special' },
+  { name: 'dariusirl', maxHp: 300, weakness: 'magic', resistance: 'special' },
+  { name: 'ShakoMako', maxHp: 300, weakness: 'ranged', resistance: 'physical' },
+  { name: 'Siratopia', maxHp: 300, weakness: 'special', resistance: 'ranged' },
   // Tier 4 — 250 HP
   { name: 'jjstream', maxHp: 250, weakness: 'ranged', resistance: 'special' },
   { name: 'shoovy', maxHp: 250, weakness: 'special', resistance: 'physical' },
@@ -1523,11 +1533,19 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Eddie', maxHp: 250, weakness: 'ranged', resistance: 'special' },
   { name: 'Santamaria', maxHp: 250, weakness: 'special', resistance: 'ranged' },
   { name: 'ExtraEmily', maxHp: 250, weakness: 'physical', resistance: 'magic' },
-  { name: 'JustaMinx', maxHp: 250, weakness: 'magic', resistance: 'ranged' },
-  { name: 'Veibae', maxHp: 250, weakness: 'ranged', resistance: 'special' },
-  { name: 'Alinity', maxHp: 250, weakness: 'special', resistance: 'physical' },
-  { name: 'SweetAnita', maxHp: 250, weakness: 'physical', resistance: 'special' },
-  { name: 'ConnorEatsPants', maxHp: 250, weakness: 'magic', resistance: 'physical' },
+  { name: 'jasontheween', maxHp: 250, weakness: 'magic', resistance: 'ranged' },
+  { name: 'LouieX', maxHp: 250, weakness: 'special', resistance: 'physical' },
+  { name: 'SlyKane', maxHp: 250, weakness: 'physical', resistance: 'magic' },
+  { name: 'ItsmeSaiman', maxHp: 250, weakness: 'ranged', resistance: 'special' },
+  { name: 'aatoka', maxHp: 250, weakness: 'magic', resistance: 'physical' },
+  { name: 'SamPanday', maxHp: 250, weakness: 'special', resistance: 'ranged' },
+  { name: 'burtbronx', maxHp: 250, weakness: 'ranged', resistance: 'magic' },
+  { name: 'thewildlatina', maxHp: 250, weakness: 'physical', resistance: 'special' },
+  { name: 'Loulz', maxHp: 250, weakness: 'magic', resistance: 'ranged' },
+  { name: 'GagaTV', maxHp: 250, weakness: 'special', resistance: 'physical' },
+  { name: 'WoodBaby', maxHp: 250, weakness: 'ranged', resistance: 'magic' },
+  { name: 'MrBasedNYC', maxHp: 250, weakness: 'physical', resistance: 'ranged' },
+  { name: 'WestSideMike', maxHp: 250, weakness: 'magic', resistance: 'special' },
   // Tier 5 — 200 HP
   { name: 'LettyVision', maxHp: 200, weakness: 'physical', resistance: 'magic' },
   { name: 'AdrianahLee', maxHp: 200, weakness: 'magic', resistance: 'special' },
@@ -1539,9 +1557,52 @@ const BOSS_ROSTER: BossDefinition[] = [
   { name: 'Slightlyhomeless', maxHp: 200, weakness: 'special', resistance: 'physical' },
   { name: 'Muratstyle', maxHp: 200, weakness: 'physical', resistance: 'ranged' },
   { name: 'mhyochi', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
-  { name: 'Ayeitskate', maxHp: 200, weakness: 'ranged', resistance: 'special' },
-  { name: 'Stanz', maxHp: 200, weakness: 'special', resistance: 'physical' },
-  { name: 'DevinNash', maxHp: 200, weakness: 'physical', resistance: 'magic' },
+  { name: 'SweetErin', maxHp: 200, weakness: 'special', resistance: 'magic' },
+  { name: 'suziesmalls', maxHp: 200, weakness: 'ranged', resistance: 'physical' },
+  { name: 'MikeSmallsJr', maxHp: 200, weakness: 'magic', resistance: 'special' },
+  { name: 'markynextdoor', maxHp: 200, weakness: 'physical', resistance: 'magic' },
+  { name: 'sweatergxd', maxHp: 200, weakness: 'ranged', resistance: 'special' },
+  { name: 'ozemi', maxHp: 200, weakness: 'special', resistance: 'physical' },
+  { name: 'RelicKris', maxHp: 200, weakness: 'physical', resistance: 'ranged' },
+  { name: 'SwimmerNick', maxHp: 200, weakness: 'magic', resistance: 'physical' },
+  { name: 'ppim', maxHp: 200, weakness: 'ranged', resistance: 'magic' },
+  { name: 'Chenzo', maxHp: 200, weakness: 'special', resistance: 'ranged' },
+  { name: 'mattkeelan', maxHp: 200, weakness: 'physical', resistance: 'special' },
+  { name: 'Tazo', maxHp: 200, weakness: 'magic', resistance: 'physical' },
+  { name: 'conner', maxHp: 200, weakness: 'ranged', resistance: 'special' },
+  { name: 'whiz', maxHp: 200, weakness: 'special', resistance: 'magic' },
+  { name: '4_inches', maxHp: 200, weakness: 'physical', resistance: 'ranged' },
+  { name: 'corneliusthecat', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
+  { name: 'JakeFuture27', maxHp: 200, weakness: 'special', resistance: 'physical' },
+  { name: 'CRAZYTAWN', maxHp: 200, weakness: 'ranged', resistance: 'magic' },
+  { name: 'Maki95', maxHp: 200, weakness: 'physical', resistance: 'special' },
+  { name: 'PauRizzin', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
+  { name: 'CookSux', maxHp: 200, weakness: 'special', resistance: 'magic' },
+  { name: 'jaystreazy', maxHp: 200, weakness: 'ranged', resistance: 'physical' },
+  { name: 'SquidRon', maxHp: 200, weakness: 'magic', resistance: 'special' },
+  { name: 'JohnWhatsGoingOn', maxHp: 200, weakness: 'physical', resistance: 'magic' },
+  { name: 'peteyplastic', maxHp: 200, weakness: 'ranged', resistance: 'special' },
+  { name: 'NerdBallerTV', maxHp: 200, weakness: 'special', resistance: 'physical' },
+  { name: 'Sogee', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
+  { name: 'rellik', maxHp: 200, weakness: 'physical', resistance: 'special' },
+  { name: 'luplupka', maxHp: 200, weakness: 'ranged', resistance: 'magic' },
+  { name: 'bongbong_irl', maxHp: 200, weakness: 'special', resistance: 'ranged' },
+  { name: 'jino', maxHp: 200, weakness: 'physical', resistance: 'ranged' },
+  { name: 'SamBond', maxHp: 200, weakness: 'magic', resistance: 'physical' },
+  { name: 'OneSonicIRL', maxHp: 200, weakness: 'ranged', resistance: 'special' },
+  { name: 'zaddyzavid', maxHp: 200, weakness: 'special', resistance: 'magic' },
+  { name: 'Girit', maxHp: 200, weakness: 'physical', resistance: 'ranged' },
+  { name: 'jihogivenchy', maxHp: 200, weakness: 'magic', resistance: 'special' },
+  { name: 'ZuesIRL', maxHp: 200, weakness: 'ranged', resistance: 'physical' },
+  { name: 'HanWinters', maxHp: 200, weakness: 'special', resistance: 'physical' },
+  { name: 'mariafort', maxHp: 200, weakness: 'magic', resistance: 'ranged' },
+  { name: 'billyjohn', maxHp: 200, weakness: 'physical', resistance: 'magic' },
+  { name: 'withJENNY', maxHp: 200, weakness: 'ranged', resistance: 'special' },
+  { name: 'Edboys', maxHp: 200, weakness: 'special', resistance: 'ranged' },
+  { name: 'tyongeee', maxHp: 200, weakness: 'magic', resistance: 'physical' },
+  { name: 'Beats', maxHp: 200, weakness: 'physical', resistance: 'special' },
+  { name: 'FlexieFae', maxHp: 200, weakness: 'ranged', resistance: 'magic' },
+  { name: 'MetaMat', maxHp: 200, weakness: 'special', resistance: 'physical' },
 ];
 
 // Populate exported names array from the roster (avoids duplication)
