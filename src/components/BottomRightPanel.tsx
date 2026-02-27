@@ -367,7 +367,7 @@ export default function BottomRightPanel({
         target={settings.subGoalTarget ?? 10}
         formatValue={(n) => String(Math.round(n))}
         fillStyle="linear-gradient(90deg, rgba(139, 92, 246, 0.75) 0%, rgba(168, 85, 247, 0.9) 100%)"
-        subtext={settings.subGoalSubtext || (streamGoals.topSubGifter ? `Top: ${(streamGoals.topSubGifter.username || '').replace(/^@/, '')} (${streamGoals.topSubGifter.amount})` : undefined)}
+        subtext={settings.subGoalSubtext || (settings.showTopSubGifter !== false && streamGoals.topSubGifter ? `Top: ${(streamGoals.topSubGifter.username || '').replace(/^@/, '')} (${streamGoals.topSubGifter.amount})` : undefined)}
         activeAlert={subsAlert}
         alertLabel={subsAlert ? ALERT_LABELS[subsAlert.type] ?? subsAlert.type : undefined}
         celebrationUntil={settings.subGoalCelebrationUntil}
@@ -384,7 +384,7 @@ export default function BottomRightPanel({
         target={settings.kicksGoalTarget ?? 1000}
         formatValue={(n) => String(Math.round(n))}
         fillStyle="linear-gradient(90deg, rgba(16, 185, 129, 0.75) 0%, rgba(52, 211, 153, 0.95) 100%)"
-        subtext={settings.kicksGoalSubtext || (streamGoals.topKicksGifter ? `Top: ${(streamGoals.topKicksGifter.username || '').replace(/^@/, '')} (${streamGoals.topKicksGifter.amount})` : undefined)}
+        subtext={settings.kicksGoalSubtext || (settings.showTopKicksGifter !== false && streamGoals.topKicksGifter ? `Top: ${(streamGoals.topKicksGifter.username || '').replace(/^@/, '')} (${streamGoals.topKicksGifter.amount})` : undefined)}
         activeAlert={kicksAlert}
         alertLabel={kicksAlert ? ALERT_LABELS[kicksAlert.type] ?? kicksAlert.type : undefined}
         celebrationUntil={settings.kicksGoalCelebrationUntil}

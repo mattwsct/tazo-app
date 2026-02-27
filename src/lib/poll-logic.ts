@@ -22,12 +22,12 @@ const BANNED_OPTION_WORDS = new Set([
   'and', 'or', 'if', 'but', 'the', 'a', 'an', 'to', 'for', 'of', 'in', 'on', 'at',
 ]);
 
-/** Allowed duration variants: !poll15, !poll30, !poll60, !poll120 */
-export const POLL_DURATION_VARIANTS = [15, 30, 60, 120] as const;
+/** Allowed duration variants: !poll60, !poll120, !poll180, !poll300 */
+export const POLL_DURATION_VARIANTS = [60, 120, 180, 300] as const;
 
-/** Match !poll15, !poll30, !poll60, !poll120 — returns { duration, rest } or null. */
+/** Match !poll60, !poll120, !poll180, !poll300 — returns { duration, rest } or null. */
 export function parsePollDurationVariant(content: string): { duration: number; rest: string } | null {
-  const match = content.trim().match(/^!poll(15|30|60|120)(\s|$)/i);
+  const match = content.trim().match(/^!poll(60|120|180|300)(\s|$)/i);
   if (!match) return null;
   const duration = parseInt(match[1]!, 10);
   const rest = content.trim().slice(match[0]!.length).trim();

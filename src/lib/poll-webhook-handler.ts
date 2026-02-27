@@ -5,7 +5,7 @@
 import { kv } from '@vercel/kv';
 import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
-import { addTazosForReward } from '@/utils/gambling-storage';
+import { addTazosForReward, startAutoPoll } from '@/utils/gambling-storage';
 import {
   parsePollCommand,
   parseRankCommand,
@@ -130,7 +130,9 @@ function formatSecondsEstimate(sec: number): string {
 
 /** Build chat message for when a poll starts: question + how to vote. Exported for cron. */
 export function buildPollStartMessage(question: string, options: { label: string }[], durationSeconds: number): string {
-  const timeStr = durationSeconds === 60 ? '60 seconds' : durationSeconds === 30 ? '30 seconds' : `${durationSeconds} seconds`;
+  const timeStr = durationSeconds >= 60
+    ? `${Math.floor(durationSeconds / 60)}${durationSeconds % 60 !== 0 ? `:${String(durationSeconds % 60).padStart(2, '0')}` : ''} min`
+    : `${durationSeconds} sec`;
   const labels = options.map((o) => `'${o.label.toLowerCase()}'`);
   const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
   return `Poll started! ${question} Type ${optionStr} in chat to vote. (${timeStr})`;
@@ -270,9 +272,21 @@ export async function handleChatPoll(
     return { handled: true };
   }
 
-  // --- !poll with no args: show usage ---
+  // --- !poll with no args: start a random auto poll (broadcaster/mod only) ---
   if (isBarePoll) {
-    await replyChat(token, 'Usage: !poll Question? Option1, Option2 — defaults to Yes/No if no options given', messageId);
+    const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+    const roles = getSenderRoles(payload.sender);
+    const isModOrBroadcaster = roles.isMod || senderUsername.toLowerCase() === (broadcasterSlug?.toLowerCase() ?? '');
+    if (!isModOrBroadcaster) {
+      await replyChat(token, 'Usage: !poll Question? Option1, Option2 — or type !poll to start a random poll (mods only)', messageId);
+      return { handled: true };
+    }
+    if (initialState?.status === 'active') {
+      await replyChat(token, 'A poll is already active. Use !endpoll to end it first.', messageId);
+      return { handled: true };
+    }
+    const announcement = await startAutoPoll(settings.durationSeconds);
+    if (token) await sendKickChatMessage(token, announcement);
     return { handled: true };
   }
 

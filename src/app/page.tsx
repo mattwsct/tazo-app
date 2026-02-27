@@ -113,7 +113,7 @@ export default function AdminPage() {
   const [kickStreamTitleLoading, setKickStreamTitleLoading] = useState(false);
   const [kickStreamTitleSaving, setKickStreamTitleSaving] = useState(false);
   const [kickPollEnabled, setKickPollEnabled] = useState(false);
-  const [kickPollDuration, setKickPollDuration] = useState(60);
+  const [kickPollDuration, setKickPollDuration] = useState(120);
   const [kickPollEveryoneCanStart, setKickPollEveryoneCanStart] = useState(false);
   const [kickPollModsCanStart, setKickPollModsCanStart] = useState(true);
   const [kickPollVipsCanStart, setKickPollVipsCanStart] = useState(false);
@@ -1138,6 +1138,10 @@ export default function AdminPage() {
                       <label>Sub goal subtext (optional second line)</label>
                       <input type="text" className="text-input" value={subGoalSubtextInput} onChange={(e) => handleSubGoalSubtextChange(e.target.value)} placeholder="e.g. 10 subs = 10 min extra stream" />
                     </div>
+                    <label className="checkbox-label" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={settings.showTopSubGifter !== false} onChange={(e) => handleSettingsChange({ showTopSubGifter: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Show top sub gifter on progress bar</span>
+                    </label>
                   </div>
                 )}
                 <label className="checkbox-label" style={{ marginTop: 8 }}>
@@ -1159,6 +1163,10 @@ export default function AdminPage() {
                       <label>Kicks goal subtext (optional second line)</label>
                       <input type="text" className="text-input" value={kicksGoalSubtextInput} onChange={(e) => handleKicksGoalSubtextChange(e.target.value)} placeholder="e.g. Help me hit $50!" />
                     </div>
+                    <label className="checkbox-label" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={settings.showTopKicksGifter !== false} onChange={(e) => handleSettingsChange({ showTopKicksGifter: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Show top kicks gifter on progress bar</span>
+                    </label>
                   </div>
                 )}
                 {(settings.showSubGoal || settings.showKicksGoal) && (
@@ -1731,9 +1739,12 @@ export default function AdminPage() {
                             }}
                           >
                             {(() => {
-                              const presets = [5, 15, 30, 45, 60, 90, 120, 180, 300];
-                              const opts = [...new Set([...presets, Math.max(5, Math.min(300, kickPollDuration))])].sort((a, b) => a - b);
-                              return opts.map((n) => <option key={n} value={n}>{n} sec</option>);
+                              const presets = [60, 90, 120, 180, 300, 600];
+                              const opts = [...new Set([...presets, Math.max(60, Math.min(600, kickPollDuration))])].sort((a, b) => a - b);
+                              return opts.map((n) => {
+                                const label = n >= 60 ? `${Math.floor(n / 60)}${n % 60 !== 0 ? `:${String(n % 60).padStart(2, '0')}` : ''} min` : `${n} sec`;
+                                return <option key={n} value={n}>{label}</option>;
+                              });
                             })()}
                           </select>
                         </div>

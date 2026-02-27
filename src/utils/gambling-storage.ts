@@ -1768,6 +1768,7 @@ type AutoGameOverlaySettings = {
   bossEventsEnabled?: boolean;
   autoPollEnabled?: boolean;
   autoGameIntervalMin?: number;
+  pollDurationSeconds?: number;
 };
 
 export async function shouldStartAnyAutoGame(settings?: AutoGameOverlaySettings, isLive?: boolean): Promise<boolean> {
@@ -1800,9 +1801,9 @@ function shuffleArray<T>(arr: T[]): T[] {
   return out;
 }
 
-export async function startAutoPoll(): Promise<string> {
+export async function startAutoPoll(durationSeconds?: number): Promise<string> {
   const { question, options } = generateAutoPoll(BOSS_ROSTER_NAMES);
-  const duration = 60;
+  const duration = durationSeconds ?? 120;
   const state: PollState = {
     id: `auto_poll_${Date.now()}`,
     question,
@@ -1813,7 +1814,8 @@ export async function startAutoPoll(): Promise<string> {
   };
   await setPollState(state);
   const nameList = options.map(o => `'${o.label}'`).join(', ');
-  return `📊 Poll (${duration}s): ${question} Type ${nameList} to vote!`;
+  const durStr = duration >= 60 ? `${Math.round(duration / 60)}min` : `${duration}s`;
+  return `📊 Poll (${durStr}): ${question} Type ${nameList} to vote!`;
 }
 
 export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): Promise<string | null> {
@@ -1839,7 +1841,7 @@ export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): P
       announcement = await startBossEvent();
       break;
     case 'poll':
-      announcement = await startAutoPoll();
+      announcement = await startAutoPoll(settings.pollDurationSeconds);
       break;
     default:
       return null;

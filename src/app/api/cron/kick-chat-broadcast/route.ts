@@ -36,6 +36,7 @@ import {
   resolveExpiredBoss, getBossReminder,
   shouldStartAnyAutoGame, pickAndStartAutoGame,
 } from '@/utils/gambling-storage';
+import { getPollSettings } from '@/lib/poll-store';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
@@ -190,7 +191,8 @@ export async function GET(request: NextRequest) {
     const shouldStart = await shouldStartAnyAutoGame(overlaySettings ?? undefined, isLive);
     if (diagnostic) Object.assign(debug, { autoGameShouldStart: shouldStart });
     if (shouldStart) {
-      const announcement = await pickAndStartAutoGame(overlaySettings ?? {});
+      const pollSettings = await getPollSettings();
+      const announcement = await pickAndStartAutoGame({ ...(overlaySettings ?? {}), pollDurationSeconds: pollSettings.durationSeconds });
       if (announcement) {
         try {
           await sendKickChatMessage(accessToken, announcement);

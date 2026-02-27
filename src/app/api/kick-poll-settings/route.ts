@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as Partial<PollSettings>;
     const updates: Partial<PollSettings> = {};
     if (typeof body.enabled === 'boolean') updates.enabled = body.enabled;
-    if (typeof body.durationSeconds === 'number' && body.durationSeconds >= 5 && body.durationSeconds <= 300) {
+    if (typeof body.durationSeconds === 'number' && body.durationSeconds >= 60 && body.durationSeconds <= 600) {
       updates.durationSeconds = body.durationSeconds;
     }
     if (typeof body.everyoneCanStart === 'boolean') updates.everyoneCanStart = body.everyoneCanStart;

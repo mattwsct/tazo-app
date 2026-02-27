@@ -54,7 +54,7 @@ export interface PollSettings {
 
 export const DEFAULT_POLL_SETTINGS: PollSettings = {
   enabled: false,
-  durationSeconds: 60,
+  durationSeconds: 120,
   everyoneCanStart: false,
   modsCanStart: true,
   vipsCanStart: false,
