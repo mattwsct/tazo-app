@@ -1431,42 +1431,50 @@ export default function AdminPage() {
                       <h4 className="subsection-label" style={{ marginTop: 20, marginBottom: 8 }}>Automated events</h4>
                   <div className="checkbox-group">
                     <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.autoRaffleEnabled !== false} onChange={(e) => handleSettingsChange({ autoRaffleEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Include raffle in rotation</span>
+                      <input type="checkbox" checked={settings.autoGamesEnabled !== false} onChange={(e) => handleSettingsChange({ autoGamesEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text"><strong>Auto games enabled</strong></span>
                     </label>
                   </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                  {settings.autoGamesEnabled !== false && (<>
+                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={settings.autoRaffleEnabled !== false} onChange={(e) => handleSettingsChange({ autoRaffleEnabled: e.target.checked })} className="checkbox-input" />
+                      <span className="checkbox-text">Raffles</span>
+                    </label>
+                  </div>
+                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.chipDropsEnabled !== false} onChange={(e) => handleSettingsChange({ chipDropsEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Include tazo drops in rotation</span>
+                      <span className="checkbox-text">Tazo drops</span>
                     </label>
                   </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.bossEventsEnabled !== false} onChange={(e) => handleSettingsChange({ bossEventsEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Include boss events in rotation</span>
+                      <span className="checkbox-text">Boss events</span>
                     </label>
                   </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
                     <label className="checkbox-label">
                       <input type="checkbox" checked={settings.autoPollEnabled !== false} onChange={(e) => handleSettingsChange({ autoPollEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Include auto polls in rotation</span>
+                      <span className="checkbox-text">Auto polls</span>
                     </label>
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <label className="input-label" style={{ margin: 0 }}>
-                      Minutes between auto games:
+                      Wait after game ends (min):
                     </label>
                     <input
                       type="number"
                       min={1}
-                      max={60}
+                      max={120}
                       value={settings.autoGameIntervalMin ?? 5}
-                      onChange={(e) => handleSettingsChange({ autoGameIntervalMin: Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 5)) })}
+                      onChange={(e) => handleSettingsChange({ autoGameIntervalMin: Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5)) })}
                       className="number-input"
                       style={{ width: 64 }}
                     />
                   </div>
+                  </>)}
                   <div style={{ marginTop: 12 }}>
                     <button
                       type="button"

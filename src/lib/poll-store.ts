@@ -45,6 +45,8 @@ export async function getPollStateAndSettings(): Promise<{ state: PollState | nu
   return { state: state ?? null, settings };
 }
 
+const AUTO_GAME_LAST_AT_KEY = 'auto_game_last_at';
+
 export async function setPollState(state: PollState | null): Promise<void> {
   const updates: Promise<unknown>[] = [
     kv.set(POLL_STATE_KEY, state),
@@ -53,6 +55,11 @@ export async function setPollState(state: PollState | null): Promise<void> {
   // Track when poll ends for auto-start (no poll run in X min)
   if (state === null || state.status === 'winner') {
     updates.push(kv.set(LAST_POLL_ENDED_AT_KEY, Date.now()));
+  }
+  // When a poll naturally ends (reaches winner state), start the cooldown
+  // so the next auto game waits the configured interval after this poll finishes.
+  if (state?.status === 'winner') {
+    updates.push(kv.set(AUTO_GAME_LAST_AT_KEY, String(Date.now())));
   }
   await Promise.all(updates);
   // Fire-and-forget broadcast so overlays get instant updates (no await to avoid adding latency)

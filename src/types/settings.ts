@@ -51,7 +51,9 @@ export interface OverlaySettings {
   bossEventsEnabled?: boolean;
   /** Auto streamer polls (random question with 5 boss names as options) in auto-game rotation. */
   autoPollEnabled?: boolean;
-  /** Minutes between auto games (raffle/drops/challenges/boss). Default 5. */
+  /** Master switch: enable all auto games (raffle/drops/boss/polls). Default true. */
+  autoGamesEnabled?: boolean;
+  /** Minutes to wait after a game ends before starting the next. Default 5. */
   autoGameIntervalMin?: number;
   /** Win streak bonuses on gambling wins. */
   winStreaksEnabled?: boolean;
@@ -147,6 +149,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   chipDropsEnabled: true,
   bossEventsEnabled: true,
   autoPollEnabled: true,
+  autoGamesEnabled: true,
   autoGameIntervalMin: 5,
   winStreaksEnabled: true,
   subGiftChipRewards: true,
@@ -207,6 +210,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   chipDropsEnabled: 'boolean',
   bossEventsEnabled: 'boolean',
   autoPollEnabled: 'boolean',
+  autoGamesEnabled: 'boolean',
   autoGameIntervalMin: 'number',
   winStreaksEnabled: 'boolean',
   subGiftChipRewards: 'boolean',

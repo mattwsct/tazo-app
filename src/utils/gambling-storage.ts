@@ -1113,7 +1113,10 @@ export async function resolveRaffle(): Promise<string | null> {
   if (Date.now() - raffle.startedAt < RAFFLE_ENTRY_WINDOW_MS) return null;
 
   await kv.del(RAFFLE_KEY);
-  await kv.set(RAFFLE_LAST_AT_KEY, String(Date.now()));
+  await Promise.all([
+    kv.set(RAFFLE_LAST_AT_KEY, String(Date.now())),
+    kv.set(AUTO_GAME_LAST_AT_KEY, String(Date.now())),
+  ]);
 
   if (raffle.participants.length === 0) return '🎰 Raffle ended — no entries this time.';
 
@@ -1327,7 +1330,10 @@ export async function resolveExpiredTazoDrop(): Promise<string | null> {
   if (!drop) return null;
   if (Date.now() - drop.startedAt < TAZO_DROP_WINDOW_MS) return null;
   await kv.del(TAZO_DROP_KEY);
-  await kv.set(TAZO_DROP_LAST_AT_KEY, String(Date.now()));
+  await Promise.all([
+    kv.set(TAZO_DROP_LAST_AT_KEY, String(Date.now())),
+    kv.set(AUTO_GAME_LAST_AT_KEY, String(Date.now())),
+  ]);
   if (drop.winners.length === 0) return null;
   const names = drop.winners.map(w => w.display).join(', ');
   return `💧 Drop ended! ${drop.winners.length} grabbed tazos: ${names}`;
@@ -1712,7 +1718,10 @@ export async function tryBossAttack(username: string, content: string): Promise<
 
   if (boss.hp <= 0) {
     await kv.del(BOSS_KEY);
-    await kv.set(BOSS_LAST_AT_KEY, String(Date.now()));
+    await Promise.all([
+      kv.set(BOSS_LAST_AT_KEY, String(Date.now())),
+      kv.set(AUTO_GAME_LAST_AT_KEY, String(Date.now())),
+    ]);
     const attackerEntries = Object.entries(boss.attackers);
     const totalDmg = attackerEntries.reduce((s, [, d]) => s + d, 0);
     const names = (await kv.hgetall<Record<string, string>>(LEADERBOARD_DISPLAY_NAMES_KEY)) ?? {};
@@ -1743,7 +1752,10 @@ export async function resolveExpiredBoss(): Promise<string | null> {
   if (!boss) return null;
   if (Date.now() - boss.startedAt < BOSS_WINDOW_MS) return null;
   await kv.del(BOSS_KEY);
-  await kv.set(BOSS_LAST_AT_KEY, String(Date.now()));
+  await Promise.all([
+    kv.set(BOSS_LAST_AT_KEY, String(Date.now())),
+    kv.set(AUTO_GAME_LAST_AT_KEY, String(Date.now())),
+  ]);
   return `⚔️ ${boss.name} escaped! Better luck next time.`;
 }
 
@@ -1767,11 +1779,15 @@ type AutoGameOverlaySettings = {
   chipDropsEnabled?: boolean;
   bossEventsEnabled?: boolean;
   autoPollEnabled?: boolean;
+  /** Master switch: disable to stop all auto games. */
+  autoGamesEnabled?: boolean;
+  /** Minutes to wait after a game ends before starting the next. */
   autoGameIntervalMin?: number;
   pollDurationSeconds?: number;
 };
 
 export async function shouldStartAnyAutoGame(settings?: AutoGameOverlaySettings, isLive?: boolean): Promise<boolean> {
+  if (settings?.autoGamesEnabled === false) return false;
   const active = await hasActiveEvent();
   if (active) return false;
   const intervalMin = settings?.autoGameIntervalMin ?? 5;
@@ -1847,7 +1863,6 @@ export async function pickAndStartAutoGame(settings: AutoGameOverlaySettings): P
       return null;
   }
 
-  await kv.set(AUTO_GAME_LAST_AT_KEY, String(Date.now()));
   return announcement;
 }
 
