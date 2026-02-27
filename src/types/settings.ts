@@ -55,9 +55,9 @@ export interface OverlaySettings {
   autoGamesEnabled?: boolean;
   /** Minutes to wait after a game ends before starting the next. Default 5. */
   autoGameIntervalMin?: number;
-  /** Win streak bonuses on gambling wins. */
+  /** @deprecated Win streak bonuses — feature removed, kept for KV backwards compat. */
   winStreaksEnabled?: boolean;
-  /** Tazo rewards for subs, gifts, kicks. */
+  /** @deprecated Tazo rewards for subs/gifts/kicks — feature removed, kept for KV backwards compat. */
   subGiftChipRewards?: boolean;
   /** Individual game toggles (all default true, only apply when gamblingEnabled). */
   blackjackEnabled?: boolean;
