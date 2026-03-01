@@ -1013,7 +1013,7 @@ export default function AdminPage() {
                     onClick={() => handleSettingsChange({ showMinimap: false, minimapSpeedBased: true })}
                     disabled={settings.locationDisplay === 'hidden'}
                   >
-                    🏃 When moving (≥5 km/h)
+                    🏃 When moving (≥10 km/h)
                   </button>
                   <button
                     type="button"

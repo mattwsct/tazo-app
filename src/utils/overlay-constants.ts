@@ -32,7 +32,9 @@ export const TIMERS = {
   
   // Minimap and speed thresholds
   MINIMAP_FADE_DURATION: 1000, // 1 second
-  WALKING_PACE_THRESHOLD: 5, // km/h
+  WALKING_PACE_THRESHOLD: 10, // km/h — above brisk walking (5-7 km/h), clearly requires vehicle/cycling
+  MINIMAP_SPEED_MIN_READINGS: 5, // consecutive readings above threshold required
+  MINIMAP_SPEED_MIN_DURATION_MS: 20 * 1000, // readings must span at least 20s (filters out GPS spikes)
   SETTINGS_POLLING_INTERVAL: 20000, // 20 seconds (fallback; SSE preferred to reduce KV ops)
   POLL_VOTE_UPDATE_INTERVAL: 6000, // 6 seconds when active poll — balance of smoothness vs KV ops
   POLL_VOTE_UPDATE_FAST_SECONDS: 20, // When <20s left, poll every 2s for smoother finish and accurate countdown

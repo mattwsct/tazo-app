@@ -63,6 +63,8 @@ const {
   WALKING_PACE_THRESHOLD,
   MINIMAP_STALENESS_CHECK_INTERVAL,
   MINIMAP_HIDE_DELAY,
+  MINIMAP_SPEED_MIN_READINGS,
+  MINIMAP_SPEED_MIN_DURATION_MS,
   GPS_STALE_TIMEOUT,
   ALTITUDE_CHANGE_THRESHOLD_M,
   ALTITUDE_DISPLAY_DURATION_MS,
@@ -235,8 +237,9 @@ function OverlayPage() {
   // API rate limiting tracking (per-second only)
   // GPS update tracking for minimap
   const minimapFadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Track last 3 speed readings for minimap visibility (need 3 consecutive readings > 5 km/h)
-  const speedReadingsRef = useRef<number[]>([]); // Array of last 3 speed readings
+  // Track speed readings with timestamps for minimap visibility
+  // Need N consecutive readings above threshold spanning at least MIN_DURATION_MS to filter GPS spikes
+  const speedReadingsRef = useRef<{ speed: number; ts: number }[]>([]);
   
   // Minimap speed-based visibility tracking
   const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 5 km/h
@@ -260,8 +263,8 @@ function OverlayPage() {
 
   
   // Simplified minimap visibility logic:
-  // - Show: Speed > 5 km/h for 3 consecutive RTIRL updates
-  // - Hide: Speed < 5 km/h for more than 1 minute OR no GPS updates in 1 minute
+  // - Show: Speed ≥ 10 km/h for N consecutive RTIRL updates spanning ≥ 20s (filters GPS spikes)
+  // - Hide: Speed < 10 km/h for more than 1 minute OR no GPS updates in 1 minute
   const updateMinimapVisibility = useCallback(() => {
     // Hidden location mode → never show minimap (one setting controls both)
     if (settings.locationDisplay === 'hidden') {
@@ -297,13 +300,19 @@ function OverlayPage() {
       }
       
       // GPS is fresh - check speed readings
-      // Check if we have 3 consecutive readings > 5 km/h
-      const hasThreeHighSpeedReadings = speedReadingsRef.current.length >= 3 && 
-        speedReadingsRef.current.every(s => s > WALKING_PACE_THRESHOLD);
-      
+      // Require N consecutive readings all above threshold AND spanning at least MIN_DURATION_MS
+      // This prevents brief GPS spikes (1-3s) from triggering the minimap
+      const readings = speedReadingsRef.current;
+      const allAboveThreshold = readings.length >= MINIMAP_SPEED_MIN_READINGS &&
+        readings.every(r => r.speed > WALKING_PACE_THRESHOLD);
+      const durationMs = readings.length >= 2
+        ? readings[readings.length - 1].ts - readings[0].ts
+        : 0;
+      const hasSustainedHighSpeed = allAboveThreshold && durationMs >= MINIMAP_SPEED_MIN_DURATION_MS;
+
       if (speed > WALKING_PACE_THRESHOLD) {
-        // Speed > 5 km/h - show minimap if we have 3 consecutive readings > 5 km/h
-        if (hasThreeHighSpeedReadings) {
+        // Speed ≥ 10 km/h - show minimap only after sustained readings
+        if (hasSustainedHighSpeed) {
           // Reset low speed timer since we're moving
           lowSpeedStartTimeRef.current = null;
           
@@ -845,16 +854,18 @@ function OverlayPage() {
                 });
               }
               
-              // Track speed readings for minimap visibility (need 3 consecutive readings > 5 km/h)
+              // Track speed readings with timestamps for minimap visibility
               if (settingsRef.current.minimapSpeedBased) {
-                speedReadingsRef.current.push(roundedSpeed);
-                // Keep only last 3 readings
-                if (speedReadingsRef.current.length > 3) {
-                  speedReadingsRef.current.shift(); // Remove oldest reading
-                }
-                // Reset low speed timer when we get a new GPS update (GPS is fresh)
                 if (roundedSpeed > WALKING_PACE_THRESHOLD) {
+                  // Keep only the last N readings above threshold; drop all readings if speed drops
+                  speedReadingsRef.current.push({ speed: roundedSpeed, ts: now });
+                  if (speedReadingsRef.current.length > MINIMAP_SPEED_MIN_READINGS) {
+                    speedReadingsRef.current.shift();
+                  }
                   lowSpeedStartTimeRef.current = null;
+                } else {
+                  // Speed dropped — clear readings so we require a fresh sustained run
+                  speedReadingsRef.current = [];
                 }
               }
               
