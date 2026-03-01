@@ -1,19 +1,15 @@
 /**
- * Vercel Cron: Sends location and/or heart rate updates to Kick chat when enabled.
- * Pushes stream title updates when location changes and autoUpdateLocation is on.
+ * Vercel Cron: Sends heart rate and wellness updates to Kick chat when enabled.
+ * Silently pushes stream title updates when location changes and autoUpdateLocation is on.
  * Runs every 1 minute.
  *
- * Location (unified): Stream title + chat both run only when live, at most every N min (configurable).
- * - Stream title: when autoUpdateLocation is on
- * - Chat: when chatBroadcastLocation is on (toggle)
- *
+ * Location: Stream title updated silently (no chat announcement) when autoUpdateLocation is on.
  * Heart rate: high/very-high warning on threshold crossing. No spam until HR drops below, then exceeds again.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
-import { formatLocation } from '@/utils/location-utils';
 import type { LocationDisplayMode } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive } from '@/utils/stats-storage';
 import {
@@ -24,7 +20,6 @@ import {
   getWellnessMilestonesLastSent,
   setWellnessMilestoneLastSent,
 } from '@/utils/wellness-storage';
-import { getCountryFlagEmoji } from '@/utils/chat-utils';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
@@ -52,8 +47,16 @@ const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
 // Milestones for 48h+ streams — steps/distance can exceed limits
 const WELLNESS_MILESTONES = {
-  steps: [1000, 2000, 5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 75000, 100000],
-  distanceKm: [1, 2, 5, 10, 15, 20, 25, 30, 50, 75, 100],
+  steps: [
+    1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
+    11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000,
+    22000, 24000, 26000, 28000, 30000, 35000, 40000, 50000, 75000, 100000,
+  ],
+  distanceKm: [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    22, 24, 26, 28, 30, 35, 40, 50, 75, 100,
+  ],
   flightsClimbed: [5, 10, 25, 50, 75, 100, 150],
   activeCalories: [100, 250, 500, 1000, 1500, 2000, 3000, 5000],
 } as const;
@@ -227,89 +230,59 @@ export async function GET(request: NextRequest) {
 
   // ===== BROADCASTS (non-critical, can tolerate being skipped) =====
 
-  // Unified location: stream title + chat — both only when live, at most every N min
+  // Unified location: silently update stream title only — no chat announcements for auto-updates
   const autoUpdateLocation = streamTitleSettings?.autoUpdateLocation !== false;
-  const chatBroadcastStreamTitle = storedAlert?.chatBroadcastStreamTitle === true;
-  const chatBroadcastLocation = storedAlert?.chatBroadcastLocation === true;
   const intervalMin = (storedAlert?.chatBroadcastLocationIntervalMin as number) ?? 5;
   const intervalMs = intervalMin * 60 * 1000;
-  const wantsLocationUpdate = autoUpdateLocation || chatBroadcastLocation;
 
-  if (wantsLocationUpdate && isLive) {
-      const persistent = await getPersistentLocation();
-      const lastAt = typeof lastLocationAt === 'number' ? lastLocationAt : 0;
-      const intervalOk = now - lastAt >= intervalMs;
+  if (autoUpdateLocation && isLive) {
+    const persistent = await getPersistentLocation();
+    const lastAt = typeof lastLocationAt === 'number' ? lastLocationAt : 0;
+    const intervalOk = now - lastAt >= intervalMs;
 
-      if (persistent?.location && intervalOk) {
-        const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
-        const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
-        const customLoc = (overlaySettings?.customLocation as string) ?? '';
-        const formattedForTitle = getStreamTitleLocationPart(
-          persistent.location,
-          displayMode,
-          customLoc,
-          includeLocationInTitle
-        );
-        let formattedForChat: string | null = null;
-        if (displayMode !== 'hidden') {
-          const formatted = formatLocation(persistent.location, displayMode);
-          const parts: string[] = [];
-          if (formatted.primary?.trim()) parts.push(formatted.primary.trim());
-          if (formatted.secondary?.trim()) parts.push(formatted.secondary.trim());
-          const flag = persistent.location.countryCode ? getCountryFlagEmoji(persistent.location.countryCode.toUpperCase()) : '';
-          const locationStr = parts.length > 0 ? `${flag} ${parts.join(', ')}` : null;
-          formattedForChat = locationStr ? `Tazo has moved to ${locationStr}` : null;
-        }
+    if (persistent?.location && intervalOk) {
+      const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
+      const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
+      const customLoc = (overlaySettings?.customLocation as string) ?? '';
+      const formattedForTitle = getStreamTitleLocationPart(
+        persistent.location,
+        displayMode,
+        customLoc,
+        includeLocationInTitle
+      );
 
-        const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
-        let subInfoForTitle: { current: number; target: number } | undefined;
-        if (overlaySettings?.showSubCountInTitle) {
-          const goals = await getStreamGoals();
-          const subTarget = overlaySettings?.subGoalTarget ?? 5;
-          subInfoForTitle = { current: goals.subs, target: subTarget };
-        }
-        const newFullTitle = formattedForTitle ? buildStreamTitle(customTitle, formattedForTitle, subInfoForTitle) : '';
-        const titleChanged = formattedForTitle && newFullTitle !== currentTitle;
-        // Use formattedForTitle as dedup key so we don't re-send when location unchanged
-        const locationAnnouncedChanged = formattedForTitle && formattedForTitle !== lastLocationMsg;
-        const locationChanged = titleChanged || locationAnnouncedChanged;
-
-        if (locationChanged) {
-          if (autoUpdateLocation && titleChanged && formattedForTitle && newFullTitle) {
-            try {
-              const patchRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
-                method: 'PATCH',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${accessToken}`,
-                },
-                body: JSON.stringify({ stream_title: newFullTitle }),
-              });
-              if (patchRes.ok) sent++;
-            } catch {
-              // ignore
-            }
-          }
-          const lastMsgToStore = formattedForTitle ?? '';
-          const shouldAnnounce = (chatBroadcastStreamTitle && titleChanged && newFullTitle) || (chatBroadcastLocation && locationChanged);
-          if (shouldAnnounce) {
-            const chatMsg = titleChanged && newFullTitle
-              ? (formattedForTitle ? `Stream title updated to "${newFullTitle}" with new location` : `Stream title updated to "${newFullTitle}"`)
-              : formattedForChat;
-            if (chatMsg) {
-              try {
-                await sendKickChatMessage(accessToken, chatMsg);
-                sent++;
-                console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'stream_title', msgPreview: chatMsg.slice(0, 80) }));
-              } catch (err) {
-                console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'stream_title', error: err instanceof Error ? err.message : String(err) }));
-              }
-            }
-          }
-          await kv.set(KICK_BROADCAST_LAST_LOCATION_KEY, now);
-          await kv.set(KICK_BROADCAST_LAST_LOCATION_MSG_KEY, lastMsgToStore);
-        }
+      const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
+      let subInfoForTitle: { current: number; target: number } | undefined;
+      if (overlaySettings?.showSubCountInTitle) {
+        const goals = await getStreamGoals();
+        const subTarget = overlaySettings?.subGoalTarget ?? 5;
+        subInfoForTitle = { current: goals.subs, target: subTarget };
       }
+      const newFullTitle = formattedForTitle ? buildStreamTitle(customTitle, formattedForTitle, subInfoForTitle) : '';
+      const titleChanged = formattedForTitle && newFullTitle !== currentTitle;
+      // Dedup key tracks last location string to avoid redundant patches
+      const locationChanged = formattedForTitle && formattedForTitle !== lastLocationMsg;
+
+      if (titleChanged || locationChanged) {
+        if (titleChanged && newFullTitle) {
+          try {
+            const patchRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ stream_title: newFullTitle }),
+            });
+            if (patchRes.ok) sent++;
+          } catch {
+            // ignore
+          }
+        }
+        await kv.set(KICK_BROADCAST_LAST_LOCATION_KEY, now);
+        await kv.set(KICK_BROADCAST_LAST_LOCATION_MSG_KEY, formattedForTitle ?? '');
+      }
+    }
   }
 
   // Speed & altitude broadcasts: only when live, new top above min, and timeout passed
@@ -423,14 +396,14 @@ export async function GET(request: NextRequest) {
       lastSent: number | undefined,
       metric: 'steps' | 'distanceKm' | 'flightsClimbed' | 'activeCalories',
       emoji: string,
-      unit: string,
-      fmt: (n: number) => string
+      label: string,
+      fmtDisplay: (n: number) => string
     ) => {
       if (!toggle || current <= 0) return;
       const crossed = milestones.filter((m) => current >= m && (lastSent == null || m > lastSent));
       const highest = crossed.length > 0 ? Math.max(...crossed) : null;
       if (highest != null) {
-        const msg = `${emoji} Exceeded ${fmt(highest)} ${unit}! (${fmt(current)} ${unit} total)`;
+        const msg = `${emoji} ${label}: ${fmtDisplay(current)}`;
         try {
           await sendKickChatMessage(accessToken, msg);
           sent++;
@@ -449,8 +422,8 @@ export async function GET(request: NextRequest) {
       milestonesLast.steps,
       'steps',
       '👟',
-      'steps',
-      (n) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n)
+      'Step count',
+      (n) => n.toLocaleString('en-US')
     );
     await checkAndSend(
       wellnessDistanceOn,
@@ -459,8 +432,8 @@ export async function GET(request: NextRequest) {
       milestonesLast.distanceKm,
       'distanceKm',
       '🚶',
-      'km',
-      (n) => n % 1 === 0 ? String(n) : n.toFixed(1)
+      'Distance',
+      (n) => `${n.toFixed(1)} km`
     );
     await checkAndSend(
       wellnessFlightsOn,
@@ -469,7 +442,7 @@ export async function GET(request: NextRequest) {
       milestonesLast.flightsClimbed,
       'flightsClimbed',
       '🪜',
-      'flights',
+      'Flights climbed',
       String
     );
     await checkAndSend(
@@ -479,13 +452,13 @@ export async function GET(request: NextRequest) {
       milestonesLast.activeCalories,
       'activeCalories',
       '🔥',
-      'active calories',
-      String
+      'Active calories',
+      (n) => n.toLocaleString('en-US')
     );
   }
 
   if (!storedAlert?.chatBroadcastHeartrate) {
-    if (storedAlert?.chatBroadcastLocation) console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrBroadcast: false, locationBroadcast: true }));
+    console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrBroadcast: false }));
   } else {
     const hrStats = await getHeartrateStats();
     const bpm = hrStats.current?.bpm ?? 0;

@@ -85,8 +85,6 @@ export default function AdminPage() {
   });
   const [kickMinimumKicks, setKickMinimumKicks] = useState(0);
   const [kickChatBroadcastStreamTitle, setKickChatBroadcastStreamTitle] = useState(false);
-  const [kickChatBroadcastLocation, setKickChatBroadcastLocation] = useState(false);
-  const [kickChatBroadcastLocationIntervalMin, setKickChatBroadcastLocationIntervalMin] = useState(5);
   const [kickChatBroadcastWeather, setKickChatBroadcastWeather] = useState(false);
   const [kickChatBroadcastHeartrate, setKickChatBroadcastHeartrate] = useState(false);
   const [kickChatBroadcastHeartrateMinBpm, setKickChatBroadcastHeartrateMinBpm] = useState(100);
@@ -252,8 +250,6 @@ export default function AdminPage() {
         if (d.templateEnabled) setKickTemplateEnabled((prev) => ({ ...prev, ...d.templateEnabled }));
         if (d.alertSettings?.minimumKicks != null) setKickMinimumKicks(d.alertSettings.minimumKicks);
         if (d.alertSettings?.chatBroadcastStreamTitle !== undefined) setKickChatBroadcastStreamTitle(d.alertSettings.chatBroadcastStreamTitle);
-        if (d.alertSettings?.chatBroadcastLocation !== undefined) setKickChatBroadcastLocation(d.alertSettings.chatBroadcastLocation);
-        if (d.alertSettings?.chatBroadcastLocationIntervalMin != null) setKickChatBroadcastLocationIntervalMin(d.alertSettings.chatBroadcastLocationIntervalMin);
         if (d.alertSettings?.chatBroadcastWeather !== undefined) setKickChatBroadcastWeather(d.alertSettings.chatBroadcastWeather);
         if (d.alertSettings?.chatBroadcastHeartrate !== undefined) setKickChatBroadcastHeartrate(d.alertSettings.chatBroadcastHeartrate);
         if (d.alertSettings?.chatBroadcastHeartrateMinBpm != null) setKickChatBroadcastHeartrateMinBpm(d.alertSettings.chatBroadcastHeartrateMinBpm);
@@ -444,8 +440,6 @@ export default function AdminPage() {
     alertSettings?: Partial<{
       minimumKicks: number;
       chatBroadcastStreamTitle: boolean;
-      chatBroadcastLocation: boolean;
-      chatBroadcastLocationIntervalMin: number;
       chatBroadcastWeather: boolean;
       chatBroadcastHeartrate: boolean;
       chatBroadcastHeartrateMinBpm: number;
@@ -468,8 +462,6 @@ export default function AdminPage() {
     const alertSettings = overrides?.alertSettings ?? {
       minimumKicks: kickMinimumKicks,
       chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
-      chatBroadcastLocation: kickChatBroadcastLocation,
-      chatBroadcastLocationIntervalMin: kickChatBroadcastLocationIntervalMin,
       chatBroadcastWeather: kickChatBroadcastWeather,
       chatBroadcastHeartrate: kickChatBroadcastHeartrate,
       chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
@@ -502,13 +494,11 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastLocation, kickChatBroadcastLocationIntervalMin, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
     chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
-    chatBroadcastLocation: kickChatBroadcastLocation,
-    chatBroadcastLocationIntervalMin: kickChatBroadcastLocationIntervalMin,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
@@ -526,8 +516,6 @@ export default function AdminPage() {
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
     chatBroadcastStreamTitle: kickChatBroadcastStreamTitle,
-    chatBroadcastLocation: kickChatBroadcastLocation,
-    chatBroadcastLocationIntervalMin: kickChatBroadcastLocationIntervalMin,
     chatBroadcastHeartrate: kickChatBroadcastHeartrate,
     chatBroadcastHeartrateMinBpm: kickChatBroadcastHeartrateMinBpm,
     chatBroadcastHeartrateVeryHighBpm: kickChatBroadcastHeartrateVeryHighBpm,
@@ -1121,110 +1109,116 @@ export default function AdminPage() {
           {/* Stream goals — common for IRL */}
           <CollapsibleSection id="stream-goals" title="🎯 Stream goals">
             <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.showSubGoal ?? false}
-                    onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Sub goal — include in rotation</span>
-                </label>
-                {settings.showSubGoal && (
-                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
-                    <div className="admin-select-wrap">
-                      <label>Sub goal step (milestone interval)</label>
-                      <input type="number" className="text-input" value={subGoalTargetInput} onChange={(e) => handleSubGoalTargetChange(e.target.value)} min={1} />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Sub goal subtext (optional second line)</label>
-                      <input type="text" className="text-input" value={subGoalSubtextInput} onChange={(e) => handleSubGoalSubtextChange(e.target.value)} placeholder="e.g. 10 subs = 10 min extra stream" />
-                    </div>
-                    <label className="checkbox-label" style={{ marginTop: 8 }}>
-                      <input type="checkbox" checked={settings.showTopSubGifter !== false} onChange={(e) => handleSettingsChange({ showTopSubGifter: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Show top sub gifter on progress bar</span>
-                    </label>
-                  </div>
-                )}
-                <label className="checkbox-label" style={{ marginTop: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={settings.showKicksGoal ?? false}
-                    onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Kicks goal — include in rotation</span>
-                </label>
-                {settings.showKicksGoal && (
-                  <div style={{ marginLeft: '24px', marginTop: 8 }}>
-                    <div className="admin-select-wrap">
-                      <label>Kicks goal step (milestone interval)</label>
-                      <input type="number" className="text-input" value={kicksGoalTargetInput} onChange={(e) => handleKicksGoalTargetChange(e.target.value)} min={1} />
-                    </div>
-                    <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                      <label>Kicks goal subtext (optional second line)</label>
-                      <input type="text" className="text-input" value={kicksGoalSubtextInput} onChange={(e) => handleKicksGoalSubtextChange(e.target.value)} placeholder="e.g. Help me hit $50!" />
-                    </div>
-                    <label className="checkbox-label" style={{ marginTop: 8 }}>
-                      <input type="checkbox" checked={settings.showTopKicksGifter !== false} onChange={(e) => handleSettingsChange({ showTopKicksGifter: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">Show top kicks gifter on progress bar</span>
-                    </label>
-                  </div>
-                )}
-                {(settings.showSubGoal || settings.showKicksGoal) && (
-                  <div className="stream-goals-override" style={{ marginLeft: '24px', marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-                    <div className="stream-goals-override-fields">
-                      {settings.showSubGoal && (
-                        <div className="admin-select-wrap">
-                          <label>Current subs</label>
-                          <input key={`subs-${settings.streamGoals?.subs ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.subs ?? 0} id="stream-goals-subs-input" min={0} />
-                        </div>
-                      )}
-                      {settings.showKicksGoal && (
-                        <div className="admin-select-wrap">
-                          <label>Current kicks</label>
-                          <input key={`kicks-${settings.streamGoals?.kicks ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.kicks ?? 0} id="stream-goals-kicks-input" min={0} />
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={async () => {
-                          try {
-                            const body: { subs?: number; kicks?: number } = {};
-                            if (settings.showSubGoal) {
-                              const el = document.getElementById('stream-goals-subs-input') as HTMLInputElement;
-                              if (el) body.subs = Math.max(0, parseInt(el.value, 10) || 0);
-                            }
-                            if (settings.showKicksGoal) {
-                              const el = document.getElementById('stream-goals-kicks-input') as HTMLInputElement;
-                              if (el) body.kicks = Math.max(0, parseInt(el.value, 10) || 0);
-                            }
-                            if (Object.keys(body).length === 0) return;
-                            const r = await authenticatedFetch('/api/stream-goals', {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(body),
-                            });
-                            const data = await r.json();
-                            if (r.ok && data) {
-                              setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? 0 } }));
-                              setToast({ type: 'saved', message: 'Goals updated' });
-                            } else {
-                              setToast({ type: 'error', message: 'Update failed' });
-                            }
-                          } catch {
+              {/* Sub goal */}
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Subs</div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Goal step (milestone interval)</label>
+                  <input type="number" className="text-input" value={subGoalTargetInput} onChange={(e) => handleSubGoalTargetChange(e.target.value)} min={1} />
+                </div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Subtext (optional second line)</label>
+                  <input type="text" className="text-input" value={subGoalSubtextInput} onChange={(e) => handleSubGoalSubtextChange(e.target.value)} placeholder="e.g. 10 subs = 10 min extra stream" />
+                </div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Current count</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input key={`subs-${settings.streamGoals?.subs ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.subs ?? 0} id="stream-goals-subs-input" min={0} style={{ flex: 1 }} />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={async () => {
+                        try {
+                          const el = document.getElementById('stream-goals-subs-input') as HTMLInputElement;
+                          if (!el) return;
+                          const r = await authenticatedFetch('/api/stream-goals', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ subs: Math.max(0, parseInt(el.value, 10) || 0) }),
+                          });
+                          const data = await r.json();
+                          if (r.ok && data) {
+                            setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? prev.streamGoals?.kicks ?? 0 } }));
+                            setToast({ type: 'saved', message: 'Subs updated' });
+                          } else {
                             setToast({ type: 'error', message: 'Update failed' });
                           }
-                          setTimeout(() => setToast(null), 2000);
-                        }}
-                      >
-                        Update
-                      </button>
-                    </div>
+                        } catch {
+                          setToast({ type: 'error', message: 'Update failed' });
+                        }
+                        setTimeout(() => setToast(null), 2000);
+                      }}
+                    >
+                      Set
+                    </button>
                   </div>
-                )}
+                </div>
+                <div className="checkbox-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={settings.showSubGoal ?? false} onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show progress bar on overlay</span>
+                  </label>
+                  <label className="checkbox-label" style={{ marginTop: 4 }}>
+                    <input type="checkbox" checked={settings.showTopSubGifter !== false} onChange={(e) => handleSettingsChange({ showTopSubGifter: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show top sub gifter on progress bar</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Kicks goal */}
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Kicks</div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Goal step (milestone interval)</label>
+                  <input type="number" className="text-input" value={kicksGoalTargetInput} onChange={(e) => handleKicksGoalTargetChange(e.target.value)} min={1} />
+                </div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Subtext (optional second line)</label>
+                  <input type="text" className="text-input" value={kicksGoalSubtextInput} onChange={(e) => handleKicksGoalSubtextChange(e.target.value)} placeholder="e.g. Help me hit $50!" />
+                </div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Current count</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input key={`kicks-${settings.streamGoals?.kicks ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.kicks ?? 0} id="stream-goals-kicks-input" min={0} style={{ flex: 1 }} />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={async () => {
+                        try {
+                          const el = document.getElementById('stream-goals-kicks-input') as HTMLInputElement;
+                          if (!el) return;
+                          const r = await authenticatedFetch('/api/stream-goals', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ kicks: Math.max(0, parseInt(el.value, 10) || 0) }),
+                          });
+                          const data = await r.json();
+                          if (r.ok && data) {
+                            setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? prev.streamGoals?.subs ?? 0, kicks: data.kicks ?? 0 } }));
+                            setToast({ type: 'saved', message: 'Kicks updated' });
+                          } else {
+                            setToast({ type: 'error', message: 'Update failed' });
+                          }
+                        } catch {
+                          setToast({ type: 'error', message: 'Update failed' });
+                        }
+                        setTimeout(() => setToast(null), 2000);
+                      }}
+                    >
+                      Set
+                    </button>
+                  </div>
+                </div>
+                <div className="checkbox-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={settings.showKicksGoal ?? false} onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show progress bar on overlay</span>
+                  </label>
+                  <label className="checkbox-label" style={{ marginTop: 4 }}>
+                    <input type="checkbox" checked={settings.showTopKicksGifter !== false} onChange={(e) => handleSettingsChange({ showTopKicksGifter: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show top kicks gifter on progress bar</span>
+                  </label>
+                </div>
               </div>
             </div>
           </CollapsibleSection>
@@ -1244,6 +1238,7 @@ export default function AdminPage() {
                   style={{ width: '100%', minWidth: 200 }}
                   maxLength={200}
                   disabled={!kickStatus?.connected}
+                  dir="ltr"
                 />
               </div>
               <div>
@@ -1325,7 +1320,7 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ showSubCountInTitle: e.target.checked })}
                     className="checkbox-input"
                   />
-                  Show sub count in title (🎁{settings.streamGoals?.subs ?? 0})
+                  Show sub count in title (🎁 Subs: {settings.streamGoals?.subs ?? 0}/{settings.subGoalTarget ?? 5})
                 </label>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1617,18 +1612,6 @@ export default function AdminPage() {
           <CollapsibleSection id="chat-broadcasts" title="📢 Chat broadcasts">
             <div className="setting-group">
               <div className="broadcast-options-list">
-                <label className="checkbox-label-row broadcast-checkbox-item">
-                  <input type="checkbox" checked={kickChatBroadcastLocation} onChange={(e) => { setKickChatBroadcastLocation(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastLocation: e.target.checked } }); }} className="checkbox-input" />
-                  <span className="radio-icon" aria-hidden="true">📍</span>
-                  <span>Location — periodic location update</span>
-                </label>
-                {kickChatBroadcastLocation && (
-                  <div className="broadcast-option-detail">
-                    <label className="checkbox-label-row-sm">
-                      Every <input type="number" className="text-input number-input" value={kickChatBroadcastLocationIntervalMin} onChange={(e) => { setKickChatBroadcastLocationIntervalMin(Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5))); scheduleKickMessagesSave(); }} min={1} max={120} /> min
-                    </label>
-                  </div>
-                )}
                 <label className="checkbox-label-row broadcast-checkbox-item">
                   <input type="checkbox" checked={kickChatBroadcastStreamTitle} onChange={(e) => { setKickChatBroadcastStreamTitle(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastStreamTitle: e.target.checked } }); }} className="checkbox-input" />
                   <span className="radio-icon" aria-hidden="true">📺</span>
