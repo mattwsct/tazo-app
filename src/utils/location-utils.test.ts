@@ -52,9 +52,17 @@ describe('formatLocation', () => {
 describe('getLocationLevels', () => {
   const bali: LocationData = { city: 'Kuta', state: 'Bali', country: 'Indonesia', countryCode: 'ID' };
 
-  it('returns all levels for city mode (default)', () => {
+  it('returns city + country only for city mode (no state — mirrors stream title logic)', () => {
     const levels = getLocationLevels(bali);
     expect(levels).toContain('Kuta');
+    expect(levels.some(l => l.includes('Indonesia'))).toBe(true);
+    // State should NOT appear when city is found
+    expect(levels.every(l => !l.includes('Bali'))).toBe(true);
+  });
+
+  it('returns state + country for city mode when city is missing (fallback)', () => {
+    const noCity: LocationData = { state: 'Bali', country: 'Indonesia', countryCode: 'ID' };
+    const levels = getLocationLevels(noCity, 'city');
     expect(levels.some(l => l.includes('Bali'))).toBe(true);
     expect(levels.some(l => l.includes('Indonesia'))).toBe(true);
   });

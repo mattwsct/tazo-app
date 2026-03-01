@@ -37,6 +37,7 @@ import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsS
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals, trackSubGifter, trackKicksGifter } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
+import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -473,6 +474,7 @@ export async function POST(request: NextRequest) {
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
         }
       }
+      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
     }
   } else if (eventNorm === 'channel.subscription.renewal') {
     const subscriber = payload.subscriber;
@@ -496,6 +498,7 @@ export async function POST(request: NextRequest) {
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
         }
       }
+      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
     }
   } else if (eventNorm === 'channel.subscription.gifts') {
     const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
@@ -521,6 +524,7 @@ export async function POST(request: NextRequest) {
           if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
         }
       }
+      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
     }
   } else if (eventNorm === 'kicks.gifted') {
     const sender = payload.sender;

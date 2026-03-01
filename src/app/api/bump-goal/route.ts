@@ -11,6 +11,7 @@ import { getStreamGoals } from '@/utils/stream-goals-storage';
 import { getGoalCelebration, bumpGoalTarget, shouldBump } from '@/utils/stream-goals-celebration';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const newTarget = await bumpGoalTarget(type, target, increment, count);
+
+    // Update stream title to reflect new target (fire-and-forget)
+    if (type === 'subs') {
+      void updateKickTitleSubCount(count, newTarget).catch(() => {});
+    }
+
     return NextResponse.json({ bumped: true, newTarget });
   } catch (e) {
     console.warn('[bump-goal]', e);

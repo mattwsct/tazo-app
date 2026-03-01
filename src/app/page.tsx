@@ -408,7 +408,10 @@ export default function AdminPage() {
       settings.customLocation ?? '',
       kickStreamTitleIncludeLocation
     );
-    const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart);
+    const subInfo = settings.showSubCountInTitle
+      ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
+      : undefined;
+    const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo);
     try {
       const r = await authenticatedFetch('/api/kick-channel', {
         method: 'PATCH',
@@ -432,7 +435,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation, settings.showSubCountInTitle, settings.streamGoals?.subs]);
 
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
@@ -1260,9 +1263,15 @@ export default function AdminPage() {
                     marginBottom: '12px',
                   }}
                 >
-                  {kickStreamTitleIncludeLocation && kickStreamTitleLocation
-                    ? buildStreamTitle(kickStreamTitleCustom, kickStreamTitleLocation)
-                    : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>}
+                  {(() => {
+                    const subInfo = settings.showSubCountInTitle
+                      ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
+                      : undefined;
+                    const loc = kickStreamTitleIncludeLocation ? kickStreamTitleLocation : '';
+                    return loc || subInfo
+                      ? buildStreamTitle(kickStreamTitleCustom, loc, subInfo)
+                      : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>;
+                  })()}
                 </div>
                 <label className="checkbox-label-row" style={{ marginTop: '12px' }}>
                   <input
@@ -1278,7 +1287,10 @@ export default function AdminPage() {
                           settings.customLocation ?? '',
                           checked
                         );
-                        const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart);
+                        const subInfo = settings.showSubCountInTitle
+                          ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
+                          : undefined;
+                        const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo);
                         try {
                           const r = await authenticatedFetch('/api/kick-channel', {
                             method: 'PATCH',
@@ -1305,6 +1317,15 @@ export default function AdminPage() {
                     className="checkbox-input"
                   />
                   Include location in stream title
+                </label>
+                <label className="checkbox-label-row" style={{ marginTop: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={settings.showSubCountInTitle === true}
+                    onChange={(e) => handleSettingsChange({ showSubCountInTitle: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  Show sub count in title (🎁{settings.streamGoals?.subs ?? 0})
                 </label>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>

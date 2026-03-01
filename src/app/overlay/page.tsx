@@ -22,7 +22,7 @@ import type { LocationData } from '@/utils/location-utils';
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
 import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
-import { formatLocation, formatCountryName, getLocationForPersistence, getLocationLevels } from '@/utils/location-utils';
+import { formatLocation, formatCountryName, getLocationForPersistence } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
 import { 
@@ -89,10 +89,6 @@ const TopRightRotatingSlot = dynamic(() => import('@/components/TopRightRotating
   loading: () => null
 });
 
-const RotatingLocationText = dynamic(() => import('@/components/RotatingLocationText'), {
-  ssr: false,
-  loading: () => null
-});
 
 // Flag component - simple SVG only, hidden until loaded to prevent alt text flash
 const LocationFlag = ({ countryCode }: { countryCode: string }) => {
@@ -682,8 +678,11 @@ function OverlayPage() {
           lastLocationSourceTimestampRef.current = persistentUpdatedAt;
           lastRawLocation.current = data.rawLocation ?? lastRawLocation.current;
           setLocation(data.location);
+          // Apply timezone from stored location if available (browser-location path has no RTIRL to trigger weather fetch)
+          const storedTz = data.rawLocation?.timezone as string | undefined;
+          if (storedTz) updateTimezone(storedTz);
           if (process.env.NODE_ENV !== 'production') {
-            OverlayLogger.location('Using persistent (newer than RTIRL)', { updatedAt: persistentUpdatedAt });
+            OverlayLogger.location('Using persistent (newer than RTIRL)', { updatedAt: persistentUpdatedAt, timezone: storedTz ?? 'none' });
           }
         }
       } catch { /* ignore */ }
@@ -1330,28 +1329,6 @@ function OverlayPage() {
     return null;
   }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime + gpsTimestampForDisplay force recalc when staleness changes
 
-  const prevLocationLevelsRef = useRef<string[]>([]);
-  const locationLevels = useMemo(() => {
-    let next: string[];
-    if (settings.locationDisplay === 'hidden') {
-      next = [];
-    } else if (settings.locationDisplay === 'custom') {
-      const custom = settings.customLocation?.trim();
-      next = custom ? [custom] : [];
-    } else if (hasCompleteLocationData(lastRawLocation.current)) {
-      next = getLocationLevels(lastRawLocation.current, settings.locationDisplay as 'city' | 'state' | 'country');
-    } else if (location?.primary) {
-      next = [location.primary];
-    } else if (location?.secondary) {
-      next = [location.secondary];
-    } else {
-      next = [];
-    }
-    const prev = prevLocationLevelsRef.current;
-    if (prev.length === next.length && prev.every((v, i) => v === next[i])) return prev;
-    prevLocationLevelsRef.current = next;
-    return next;
-  }, [location, settings.locationDisplay, settings.customLocation, staleCheckTime, gpsTimestampForDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
   // Recalculates when sunriseSunset, timezone, or staleCheckTime changes
@@ -1544,14 +1521,25 @@ function OverlayPage() {
           {settings.locationDisplay !== 'hidden' && (
             <>
           <div className="overlay-box">
-            {/* Location: rotating text (city/state/country) + always-visible flag */}
-            {locationLevels.length > 0 && (
+            {/* Location: two-line display — line 1: city/state/custom, line 2: country + flag */}
+            {locationDisplay && (locationDisplay.primary || locationDisplay.secondary || locationDisplay.countryCode) && (
               <div className="location location-line">
-                <ErrorBoundary fallback={null}>
-                  <RotatingLocationText levels={locationLevels} />
-                </ErrorBoundary>
-                {locationDisplay?.countryCode && (
-                  <LocationFlag countryCode={locationDisplay.countryCode} />
+                {/* Line 1: city / state name, or custom text */}
+                {(settings.locationDisplay === 'custom' ? settings.customLocation?.trim() : locationDisplay.primary) && (
+                  <span className="location-main">
+                    {settings.locationDisplay === 'custom' ? settings.customLocation!.trim() : locationDisplay.primary}
+                  </span>
+                )}
+                {/* Line 2: country name + flag */}
+                {(locationDisplay.secondary || locationDisplay.countryCode) && (
+                  <div className="location-secondary-line">
+                    {locationDisplay.secondary && (
+                      <span className="location-country-text">{locationDisplay.secondary}</span>
+                    )}
+                    {locationDisplay.countryCode && (
+                      <LocationFlag countryCode={locationDisplay.countryCode} />
+                    )}
+                  </div>
                 )}
               </div>
             )}

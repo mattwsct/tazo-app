@@ -508,10 +508,11 @@ function getNextBroadestCategory(
   const countryDisplay = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : undefined;
   const tryCountry = () => countryDisplay && !hasOverlappingNames(primaryName, countryDisplay) ? countryDisplay : undefined;
 
-  // Fallback chain per category: city/county→[state,country], state→[country]
+  // In city mode the secondary line shows country directly (mirrors stream title: "City, Country").
+  // State only appears on line 2 when it IS the primary (i.e. city fell back to state).
   const chains: Record<LocationCategory, (keyof LocationData)[][]> = {
-    city: [stateFields],
-    county: [stateFields],
+    city: [],    // skip state — go straight to country on line 2
+    county: [],  // county is in the city category, same behaviour
     state: [],
     country: [],
   };
@@ -550,7 +551,11 @@ export function getLocationLevels(
   const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
 
   const city = displayMode === 'city' ? tryFields(cityFields) : null;
-  const state = displayMode !== 'country' ? tryFields(stateFields) : null;
+  // In city mode, only include state when city is not found (mirrors "City, Country" stream title logic).
+  // State is a fallback, not an intermediate step shown alongside city.
+  const state = displayMode === 'state' ? tryFields(stateFields)
+    : (displayMode === 'city' && !city) ? tryFields(stateFields)
+    : null;
   const countryInfo = getCountry(location);
   const country = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : null;
 

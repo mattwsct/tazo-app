@@ -60,12 +60,20 @@ export function parseStreamTitleToCustom(fullTitle: string): string {
   return fullTitle.trim();
 }
 
-/** Build full stream title: custom + space + location (flag/code is separator). */
-export function buildStreamTitle(custom: string, location: string): string {
+/** Build full stream title: custom + location + optional sub counter suffix (🎁 Subs: n/t). */
+export function buildStreamTitle(
+  custom: string,
+  location: string,
+  subInfo?: { current: number; target: number }
+): string {
   const customTrimmed = custom.trim();
-  if (!location) return customTrimmed;
-  if (!customTrimmed) return location;
-  return `${customTrimmed} ${location}`;
+  const subSuffix =
+    subInfo != null && subInfo.target > 0
+      ? ` 🎁 Subs: ${subInfo.current}/${subInfo.target}`
+      : '';
+  if (!location) return `${customTrimmed}${subSuffix}`;
+  if (!customTrimmed) return `${location}${subSuffix}`;
+  return `${customTrimmed} ${location}${subSuffix}`;
 }
 
 export function formatLocationForStreamTitle(

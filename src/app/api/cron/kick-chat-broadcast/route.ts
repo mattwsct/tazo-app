@@ -28,6 +28,7 @@ import { getCountryFlagEmoji } from '@/utils/chat-utils';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
+import { getStreamGoals } from '@/utils/stream-goals-storage';
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import {
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number }>(OVERLAY_SETTINGS_KEY),
+    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number; showSubCountInTitle?: boolean; subGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
@@ -261,7 +262,13 @@ export async function GET(request: NextRequest) {
         }
 
         const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
-        const newFullTitle = formattedForTitle ? buildStreamTitle(customTitle, formattedForTitle) : '';
+        let subInfoForTitle: { current: number; target: number } | undefined;
+        if (overlaySettings?.showSubCountInTitle) {
+          const goals = await getStreamGoals();
+          const subTarget = overlaySettings?.subGoalTarget ?? 5;
+          subInfoForTitle = { current: goals.subs, target: subTarget };
+        }
+        const newFullTitle = formattedForTitle ? buildStreamTitle(customTitle, formattedForTitle, subInfoForTitle) : '';
         const titleChanged = formattedForTitle && newFullTitle !== currentTitle;
         // Use formattedForTitle as dedup key so we don't re-send when location unchanged
         const locationAnnouncedChanged = formattedForTitle && formattedForTitle !== lastLocationMsg;

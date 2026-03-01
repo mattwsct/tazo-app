@@ -77,6 +77,8 @@ export interface OverlaySettings {
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
+  /** Show sub count in stream title (e.g. 🎁15). */
+  showSubCountInTitle?: boolean;
   /** Sub goal: show progress bar, target count. */
   showSubGoal?: boolean;
   subGoalTarget?: number;
@@ -165,6 +167,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   giftEnabled: true,
   convertEnabled: true,
   mathEnabled: true,
+  showSubCountInTitle: false,
   showSubGoal: false,
   subGoalTarget: 5,
   subGoalIncrement: 5,
@@ -230,6 +233,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   showSubGoal: 'boolean',
   subGoalTarget: 'number',
   subGoalIncrement: 'number',
+  showSubCountInTitle: 'boolean',
   subGoalSubtext: 'string',
   showTopSubGifter: 'boolean',
   showKicksGoal: 'boolean',

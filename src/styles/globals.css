@@ -700,9 +700,9 @@ html, body {
 /* === LOCATION DISPLAY STYLES === */
 .location-line {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--gap-md);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
   transition: opacity 0.3s ease-in-out;
 }
 
@@ -713,26 +713,19 @@ html, body {
   line-height: 1;
 }
 
-/* Rotating location text (city/state/country) */
-.location-rotating-wrapper {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.location-rotating-slots {
-  display: grid;
-  grid-template: 1fr / 1fr;
-  place-items: end;
-}
-
-.location-rotating-slots > * {
-  grid-area: 1 / 1;
+/* Line 2: country name + flag */
+.location-secondary-line {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  min-height: 1.15em;
+  gap: var(--gap-sm);
+}
+
+.location-country-text {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  letter-spacing: var(--letter-spacing-compact);
+  line-height: 1;
+  opacity: 0.85;
 }
 
 .location-flag {
