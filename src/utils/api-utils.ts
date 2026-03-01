@@ -349,6 +349,11 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
       // This is approximate - same offset can map to different timezones (e.g., -4 could be Eastern or Central with DST)
       // LocationIQ provides accurate IANA timezone names and should be used when available
       const timezoneMap: Record<number, string> = {
+        14: 'Pacific/Kiritimati',
+        13: 'Pacific/Tongatapu',
+        12: 'Pacific/Auckland',
+        11: 'Pacific/Noumea',
+        10: 'Australia/Brisbane',
         9: 'Asia/Tokyo',
         8: 'Asia/Shanghai',
         7: 'Asia/Bangkok',
@@ -373,8 +378,11 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
         [-12]: 'Pacific/Baker'
       };
       
-      // Use simple offset mapping as base
-      timezone = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || 'UTC';
+      // Use simple offset mapping as base.
+      // Fallback: Etc/GMT±X is a valid IANA timezone that reflects the current UTC offset accurately.
+      // Note: Etc/GMT uses inverted signs — Etc/GMT-10 = UTC+10, Etc/GMT+5 = UTC-5.
+      const etcGmt = offsetHours === 0 ? 'UTC' : `Etc/GMT${offsetHours > 0 ? '-' : '+'}${Math.abs(offsetHours)}`;
+      timezone = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || etcGmt;
       
       // For US locations, refine timezone based on coordinates (when LocationIQ doesn't provide timezone)
       // This handles cases where same offset maps to different US timezones
@@ -457,6 +465,8 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
 export function getTimezoneFromOwmOffset(offsetSeconds: number, lat?: number, lon?: number): string {
   const offsetHours = Math.round(offsetSeconds / 3600);
   const timezoneMap: Record<number, string> = {
+    14: 'Pacific/Kiritimati', 13: 'Pacific/Tongatapu', 12: 'Pacific/Auckland',
+    11: 'Pacific/Noumea', 10: 'Australia/Brisbane',
     9: 'Asia/Tokyo', 8: 'Asia/Shanghai', 7: 'Asia/Bangkok', 6: 'Asia/Dhaka', 5: 'Asia/Karachi',
     4: 'Asia/Dubai', 3: 'Europe/Moscow', 2: 'Europe/Athens', 1: 'Europe/Paris', 0: 'UTC',
     [-1]: 'Atlantic/Azores', [-2]: 'Atlantic/South_Georgia', [-3]: 'America/Sao_Paulo',
@@ -464,7 +474,8 @@ export function getTimezoneFromOwmOffset(offsetSeconds: number, lat?: number, lo
     [-8]: 'America/Los_Angeles', [-9]: 'Pacific/Gambier', [-10]: 'Pacific/Honolulu',
     [-11]: 'Pacific/Midway', [-12]: 'Pacific/Baker',
   };
-  let tz = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || 'UTC';
+  const etcGmt = offsetHours === 0 ? 'UTC' : `Etc/GMT${offsetHours > 0 ? '-' : '+'}${Math.abs(offsetHours)}`;
+  let tz = timezoneMap[offsetHours] || timezoneMap[Math.floor(offsetHours)] || etcGmt;
   if (lat != null && lon != null && lat >= 24 && lat <= 50 && lon >= -125 && lon <= -66) {
     if (offsetHours === -5 && lon >= -87) tz = 'America/New_York';
     else if (offsetHours === -4 && lon >= -87) tz = 'America/New_York';
