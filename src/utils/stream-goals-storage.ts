@@ -11,6 +11,8 @@ const STREAM_GOALS_SUBS_KEY = 'stream_goals_subs';
 const STREAM_GOALS_KICKS_KEY = 'stream_goals_kicks';
 const STREAM_TOP_SUB_GIFTERS_KEY = 'stream_top_sub_gifters';
 const STREAM_TOP_KICKS_GIFTERS_KEY = 'stream_top_kicks_gifters';
+// Written whenever goals change — SSE watches this to push updates to the overlay
+export const STREAM_GOALS_MODIFIED_KEY = 'stream_goals_modified';
 
 async function ensureSessionStarted(): Promise<void> {
   const started = await getStreamStartedAt();
@@ -46,6 +48,7 @@ export async function addStreamGoalSubs(count: number): Promise<void> {
     await ensureSessionStarted();
     const current = (await kv.get<number>(STREAM_GOALS_SUBS_KEY)) ?? 0;
     await kv.set(STREAM_GOALS_SUBS_KEY, current + count);
+    void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
   } catch (e) {
     console.warn('[StreamGoals] Failed to add subs:', e);
   }
@@ -58,6 +61,7 @@ export async function addStreamGoalKicks(amount: number): Promise<void> {
     await ensureSessionStarted();
     const current = (await kv.get<number>(STREAM_GOALS_KICKS_KEY)) ?? 0;
     await kv.set(STREAM_GOALS_KICKS_KEY, current + amount);
+    void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
   } catch (e) {
     console.warn('[StreamGoals] Failed to add kicks:', e);
   }
@@ -139,7 +143,10 @@ export async function setStreamGoals(updates: { subs?: number; kicks?: number })
     if (updates.kicks !== undefined) {
       promises.push(kv.set(STREAM_GOALS_KICKS_KEY, Math.max(0, Math.floor(updates.kicks))));
     }
-    if (promises.length > 0) await Promise.all(promises);
+    if (promises.length > 0) {
+      promises.push(kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()));
+      await Promise.all(promises);
+    }
   } catch (e) {
     console.warn('[StreamGoals] Failed to set:', e);
     throw e;

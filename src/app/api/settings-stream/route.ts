@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { kv } from '@vercel/kv';
 import { addConnection, removeConnection, getConnectionInfo, connections } from '@/lib/settings-broadcast';
 import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
+import { STREAM_GOALS_MODIFIED_KEY } from '@/utils/stream-goals-storage';
+import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
 export async function GET(request: NextRequest): Promise<Response> {
@@ -25,6 +27,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const stream = new ReadableStream({
     start(controller) {
       let lastModified = 0;
+      let lastGoalsModified = 0;
       const connectionId = `sse_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
       
       if (process.env.NODE_ENV === 'development') {
@@ -71,26 +74,54 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Function to check for settings and poll updates
       const checkForUpdates = async () => {
         try {
-          const [settings, settingsModified, pollState, pollModified] = await kv.mget([
+          const [settings, settingsModified, pollState, pollModified, goalsModified] = await kv.mget([
             'overlay_settings',
             'overlay_settings_modified',
             POLL_STATE_KEY,
             POLL_MODIFIED_KEY,
+            STREAM_GOALS_MODIFIED_KEY,
           ]);
           const settingsTs = (settingsModified as number) ?? 0;
           const pollTs = (pollModified as number) ?? 0;
+          const goalsTs = (goalsModified as number) ?? 0;
           const maxTs = Math.max(settingsTs, pollTs);
-          const shouldSend = lastModified === 0 || maxTs > lastModified;
-          if (shouldSend) {
-            lastModified = maxTs;
-            const settingsUpdate = {
-              ...(settings && typeof settings === 'object' ? settings : {}),
-              pollState: pollState ?? null,
-              type: 'settings_update',
-              timestamp: maxTs,
+
+          const settingsChanged = lastModified === 0 || maxTs > lastModified;
+          const goalsChanged = goalsTs > lastGoalsModified;
+
+          if (!settingsChanged && !goalsChanged) return;
+
+          const sendData: Record<string, unknown> = {
+            ...(settings && typeof settings === 'object' ? settings : {}),
+            pollState: pollState ?? null,
+            type: 'settings_update',
+            timestamp: Math.max(maxTs, goalsTs),
+          };
+
+          if (settingsChanged) lastModified = maxTs;
+
+          // When goals have changed, push live counts, celebration state, AND recent alerts
+          // so the overlay displays the alert instantly and starts the bump countdown.
+          if (goalsChanged) {
+            lastGoalsModified = goalsTs;
+            const [subs, kicks, celebration, overlayAlerts] = await Promise.all([
+              kv.get<number>('stream_goals_subs'),
+              kv.get<number>('stream_goals_kicks'),
+              kv.get<{ subsUntil?: number; kicksUntil?: number }>('stream_goal_celebration'),
+              getRecentAlerts(),
+            ]);
+            sendData.streamGoals = {
+              subs: Math.max(0, subs ?? 0),
+              kicks: Math.max(0, kicks ?? 0),
             };
-            sendSSE(JSON.stringify(settingsUpdate));
+            // Celebration state — overlay uses it to trigger auto-bump
+            sendData.subGoalCelebrationUntil = celebration?.subsUntil ?? null;
+            sendData.kicksGoalCelebrationUntil = celebration?.kicksUntil ?? null;
+            // Recent alerts — overlay uses them for the 8s full-width alert display
+            sendData.overlayAlerts = overlayAlerts;
           }
+
+          sendSSE(JSON.stringify(sendData));
         } catch (error) {
           console.error('Error checking settings:', error);
         }
@@ -104,8 +135,8 @@ export async function GET(request: NextRequest): Promise<Response> {
         checkForUpdates();
       }, 100);
       
-      // Check every 15s for settings changes (1 mget per check)
-      const checkInterval = setInterval(checkForUpdates, 15000);
+      // Check every 3s for settings/goal changes — detects sub/kick events quickly
+      const checkInterval = setInterval(checkForUpdates, 3000);
       
       // Heartbeat every 8s — must arrive before the 15s polling-fallback threshold
       const heartbeatInterval = setInterval(() => {
