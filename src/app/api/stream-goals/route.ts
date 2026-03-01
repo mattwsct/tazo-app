@@ -9,6 +9,7 @@ import { getStreamGoals, setStreamGoals } from '@/utils/stream-goals-storage';
 import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
+import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,17 +39,19 @@ export async function PATCH(request: NextRequest) {
     const goals = await getStreamGoals();
 
     const settings = await kv.get<Record<string, unknown>>('overlay_settings');
-    if (goals.subs > 0) {
-      const subTarget = (settings?.subGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget!;
-      if (goals.subs >= subTarget) {
-        await setGoalCelebrationIfNeeded('subs', goals.subs, subTarget);
-      }
+    const subTarget = (settings?.subGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget!;
+    const kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
+
+    if (goals.subs > 0 && goals.subs >= subTarget) {
+      await setGoalCelebrationIfNeeded('subs', goals.subs, subTarget);
     }
-    if (goals.kicks > 0) {
-      const kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
-      if (goals.kicks >= kicksTarget) {
-        await setGoalCelebrationIfNeeded('kicks', goals.kicks, kicksTarget);
-      }
+    if (goals.kicks > 0 && goals.kicks >= kicksTarget) {
+      await setGoalCelebrationIfNeeded('kicks', goals.kicks, kicksTarget);
+    }
+
+    // Update stream title if sub count is shown there
+    if (settings?.showSubCountInTitle) {
+      void updateKickTitleSubCount(goals.subs, subTarget).catch(() => {});
     }
 
     return NextResponse.json(goals);

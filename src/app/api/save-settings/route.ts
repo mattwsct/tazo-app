@@ -4,6 +4,8 @@ import { validateAndSanitizeSettings, detectMaliciousKeys } from '@/lib/settings
 import { verifyAuth, logKVUsage } from '@/lib/api-auth';
 import { broadcastSettings } from '@/lib/settings-broadcast';
 import { OverlayLogger } from '@/lib/logger';
+import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
+import { getStreamGoals } from '@/utils/stream-goals-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +56,18 @@ async function handlePOST(request: NextRequest) {
     const broadcastResult = await Promise.allSettled([
       broadcastSettings(settings)
     ]);
+
+    // If sub count is shown in title, refresh title with latest count + new target
+    const savedSettings = settings as unknown as Record<string, unknown>;
+    if (savedSettings.showSubCountInTitle) {
+      void (async () => {
+        try {
+          const goals = await getStreamGoals();
+          const subTarget = (savedSettings.subGoalTarget as number) ?? 5;
+          await updateKickTitleSubCount(goals.subs, subTarget);
+        } catch { /* non-critical */ }
+      })();
+    }
     
     const broadcastSuccess = broadcastResult[0].status === 'fulfilled' && 
                             broadcastResult[0].value?.success;
