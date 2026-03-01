@@ -26,7 +26,8 @@ export async function broadcastAlertsAndLeaderboard(): Promise<void> {
     });
     const gamblingEnabled = merged.gamblingEnabled !== false;
     const showLeaderboard = merged.showLeaderboard !== false && gamblingEnabled;
-    const needGoals = merged.showSubGoal || merged.showKicksGoal;
+    // Also fetch goals when showSubCountInTitle is on (needs count+target for stream title)
+    const needGoals = merged.showSubGoal || merged.showKicksGoal || merged.showSubCountInTitle;
     const leaderboardTopN = merged.gamblingLeaderboardTopN ?? merged.leaderboardTopN ?? 5;
     const [gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
       showLeaderboard ? getGamblingLeaderboardTop(leaderboardTopN) : [],

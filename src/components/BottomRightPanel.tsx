@@ -257,7 +257,8 @@ export default function BottomRightPanel({
   // =============================================
 
   useEffect(() => {
-    if (!showSubGoal && !showKicksGoal) return;
+    // Run bump logic whenever either goal progress bar is visible OR sub count is shown in title
+    if (!showSubGoal && !showKicksGoal && !settings.showSubCountInTitle) return;
 
     const subsUntil = settings.subGoalCelebrationUntil;
     const kicksUntil = settings.kicksGoalCelebrationUntil;
@@ -283,6 +284,7 @@ export default function BottomRightPanel({
   }, [
     showSubGoal,
     showKicksGoal,
+    settings.showSubCountInTitle,
     settings.subGoalCelebrationUntil,
     settings.kicksGoalCelebrationUntil,
     settings.subGoalTarget,
