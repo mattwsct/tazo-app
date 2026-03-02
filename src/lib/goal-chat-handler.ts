@@ -1,13 +1,15 @@
 /**
  * Goal chat commands — mods and broadcaster only.
  *
- * !subsgoal <target> [subtext]   — set/replace sub goal milestone + optional label
- * !kicksgoal <target> [subtext]  — set/replace kicks goal milestone + optional label
- * !clearsubsgoal                 — hide sub goal, reset target to saved increment
- * !clearkicksgoal                — hide kicks goal, reset target to saved increment
- * !cleargoals                    — hide both goals, reset both targets to saved increments
- * !subs <count>                  — manually override current subs count
- * !kicks <count>                 — manually override current kicks count
+ * !subsgoal <target> [subtext]      — set/replace sub goal milestone + optional label (fixed, holds at 100%)
+ * !subsgoalloop <target> <subtext>  — repeating sub goal: auto-iterates on each reach, keeps label
+ * !kicksgoal <target> [subtext]     — set/replace kicks goal milestone + optional label (fixed)
+ * !kicksgoalloop <target> <subtext> — repeating kicks goal: auto-iterates on each reach, keeps label
+ * !clearsubsgoal                    — hide sub goal, reset target to saved increment
+ * !clearkicksgoal                   — hide kicks goal, reset target to saved increment
+ * !cleargoals                       — hide both goals, reset both targets to saved increments
+ * !subs <count>                     — manually override current subs count
+ * !kicks <count>                    — manually override current kicks count
  */
 
 import { kv } from '@/lib/kv';
@@ -55,6 +57,8 @@ export async function handleGoalCommand(
     lower === '!cleargoals' ||
     lower === '!clearsubsgoal' ||
     lower === '!clearkicksgoal' ||
+    lower.startsWith('!subsgoalloop') ||
+    lower.startsWith('!kicksgoalloop') ||
     lower.startsWith('!subsgoal') ||
     lower.startsWith('!kicksgoal') ||
     lower === '!subs' || lower.startsWith('!subs ') ||
@@ -90,6 +94,7 @@ export async function handleGoalCommand(
       showSubGoal: false,
       subGoalTarget: subIncrement,
       subGoalSubtext: null,
+      subGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subIncrement, kicksTarget);
@@ -104,6 +109,7 @@ export async function handleGoalCommand(
       showKicksGoal: false,
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
+      kicksGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subTarget, kicksIncrement);
@@ -117,13 +123,39 @@ export async function handleGoalCommand(
       showSubGoal: false,
       subGoalTarget: subIncrement,
       subGoalSubtext: null,
+      subGoalLoop: false,
       showKicksGoal: false,
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
+      kicksGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subIncrement, kicksIncrement);
     return { handled: true, reply: '✅ All goals cleared' };
+  }
+
+  // !subsgoalloop <target> <subtext> — repeating goal: auto-iterates on reach, keeps label
+  if (lower.startsWith('!subsgoalloop')) {
+    const args = trimmed.slice('!subsgoalloop'.length).trim();
+    const parsed = parseGoalArgs(args);
+    if (!parsed || !parsed.subtext) {
+      return { handled: true, reply: 'Usage: !subsgoalloop <number> <label>  e.g. !subsgoalloop 5 Do pushups!' };
+    }
+    const goals = await getStreamGoals();
+    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.subs);
+    const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
+    await kv.set(OVERLAY_SETTINGS_KEY, {
+      ...settings,
+      showSubGoal: true,
+      subGoalTarget: activeTarget,
+      subGoalIncrement: parsed.target,
+      subGoalSubtext: parsed.subtext,
+      subGoalLoop: true,
+    });
+    notifyOverlay();
+    refreshTitle(activeTarget, kicksTarget);
+    const bumped = activeTarget !== parsed.target ? ` (starts at ${activeTarget} — already at ${goals.subs} subs)` : '';
+    return { handled: true, reply: `✅ Sub loop goal set: every ${parsed.target} subs — "${parsed.subtext}"${bumped}` };
   }
 
   // !subsgoal <target> [subtext]
@@ -145,6 +177,7 @@ export async function handleGoalCommand(
       subGoalTarget: activeTarget,
       subGoalIncrement: parsed.target,
       subGoalSubtext: parsed.subtext ?? null,
+      subGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(activeTarget, kicksTarget);
@@ -153,6 +186,30 @@ export async function handleGoalCommand(
       ? `✅ Sub goal set: ${parsed.target} subs — "${parsed.subtext}"`
       : `✅ Sub goal set: ${activeTarget} subs${bumped}`;
     return { handled: true, reply };
+  }
+
+  // !kicksgoalloop <target> <subtext> — repeating goal: auto-iterates on reach, keeps label
+  if (lower.startsWith('!kicksgoalloop')) {
+    const args = trimmed.slice('!kicksgoalloop'.length).trim();
+    const parsed = parseGoalArgs(args);
+    if (!parsed || !parsed.subtext) {
+      return { handled: true, reply: 'Usage: !kicksgoalloop <number> <label>  e.g. !kicksgoalloop 5000 Shot a drink!' };
+    }
+    const goals = await getStreamGoals();
+    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.kicks);
+    const subTarget = (settings.subGoalTarget as number) ?? subIncrement;
+    await kv.set(OVERLAY_SETTINGS_KEY, {
+      ...settings,
+      showKicksGoal: true,
+      kicksGoalTarget: activeTarget,
+      kicksGoalIncrement: parsed.target,
+      kicksGoalSubtext: parsed.subtext,
+      kicksGoalLoop: true,
+    });
+    notifyOverlay();
+    refreshTitle(subTarget, activeTarget);
+    const bumped = activeTarget !== parsed.target ? ` (starts at ${activeTarget} — already at ${goals.kicks} kicks)` : '';
+    return { handled: true, reply: `✅ Kicks loop goal set: every ${parsed.target} kicks — "${parsed.subtext}"${bumped}` };
   }
 
   // !kicksgoal <target> [subtext]
@@ -174,6 +231,7 @@ export async function handleGoalCommand(
       kicksGoalTarget: activeTarget,
       kicksGoalIncrement: parsed.target,
       kicksGoalSubtext: parsed.subtext ?? null,
+      kicksGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subTarget, activeTarget);

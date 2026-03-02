@@ -34,10 +34,12 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
       ...settings,
       showSubGoal: false,
       subGoalTarget: subIncrement,
+      subGoalSubtext: null,
+      subGoalLoop: false,
       kicksGoalTarget: kicksIncrement,
       showKicksGoal: false,
-      subGoalSubtext: null,
       kicksGoalSubtext: null,
+      kicksGoalLoop: false,
     });
     return { subTarget: subIncrement, kicksTarget: kicksIncrement };
   } catch (e) {

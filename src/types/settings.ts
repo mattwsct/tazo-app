@@ -84,6 +84,8 @@ export interface OverlaySettings {
   subGoalIncrement?: number;
   /** Optional second line for sub goal (e.g. "10 subs = 10 min extra!") */
   subGoalSubtext?: string;
+  /** When true, sub goal auto-iterates on reach even when subGoalSubtext is set (!subsgoalloop). */
+  subGoalLoop?: boolean;
   /** Kicks goal: show progress bar, target (in kicks). */
   showKicksGoal?: boolean;
   kicksGoalTarget?: number;
@@ -91,6 +93,8 @@ export interface OverlaySettings {
   kicksGoalIncrement?: number;
   /** Optional second line for kicks goal */
   kicksGoalSubtext?: string;
+  /** When true, kicks goal auto-iterates on reach even when kicksGoalSubtext is set (!kicksgoalloop). */
+  kicksGoalLoop?: boolean;
   /** IANA timezone for weekly/monthly leaderboard resets (e.g. "Asia/Bangkok"). */
   streamerTimezone?: string;
   /** Show individual earned leaderboard periods in overlay rotation. */
@@ -220,10 +224,12 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   subGoalTarget: 'number',
   subGoalIncrement: 'number',
   subGoalSubtext: 'string',
+  subGoalLoop: 'boolean',
   showKicksGoal: 'boolean',
   kicksGoalTarget: 'number',
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
+  kicksGoalLoop: 'boolean',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
   showMonthlyEarnedLb: 'boolean',

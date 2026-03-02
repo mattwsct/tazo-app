@@ -82,7 +82,7 @@ html, body {
   flex-direction: column;
   width: fit-content;
   gap: 4px;
-  padding: var(--gap-md) var(--gap-xl) var(--gap-md) var(--gap-xl);
+  padding: var(--gap-lg) var(--gap-xl) var(--gap-lg) var(--gap-xl);
   background: rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-md);
   border: 1px solid rgba(255, 255, 255, 0.06);
