@@ -11,7 +11,14 @@ const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const DEV_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in dev
 
 function getSecret(): string {
-  return process.env.ADMIN_PASSWORD || process.env.ADMIN_SECRET || 'unconfigured';
+  const secret = process.env.ADMIN_PASSWORD || process.env.ADMIN_SECRET;
+  if (!secret) {
+    throw new Error(
+      'ADMIN_PASSWORD environment variable is not set. ' +
+      'All admin sessions are insecure until this is configured.'
+    );
+  }
+  return secret;
 }
 
 /** Generate a signed session token: "<expiry_ms>.<hmac_hex>" */

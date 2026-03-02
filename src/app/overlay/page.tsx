@@ -53,7 +53,7 @@ import {
   calculateMovedMeters
 } from '@/utils/fetch-decision';
 import { isSpeedStale } from '@/utils/staleness-utils';
-import { fetchMinutelyForecast, type MinutelyPrecipForecast } from '@/utils/weather-chat';
+import { fetchMinutelyForecast, isNotableWeatherCondition, type MinutelyPrecipForecast } from '@/utils/weather-chat';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
 import BottomRightPanel from '@/components/BottomRightPanel';
@@ -1406,19 +1406,18 @@ function OverlayPage() {
   }, []);
 
   const weatherDisplay = useMemo(() => {
-    if (!weather) {
-    // No weather data - return null (no logging to reduce console spam)
-    return null;
-    }
-    
-    const icon = getWeatherIcon(weather.desc, true, isNightTime);
-    
-    const display = {
+    if (!weather) return null;
+
+    const notable = isNotableWeatherCondition(weather.desc);
+    const icon = notable ? getWeatherIcon(weather.desc, true, isNightTime) : null;
+
+    return {
       temperature: `${weather.temp}°C (${celsiusToFahrenheit(weather.temp)}°F)`,
       icon,
-      description: weather.desc
+      // Only show condition text when it's notable (rain, fog, storm, etc.)
+      // Clear skies and plain clouds are omitted — temperature already conveys the vibe
+      description: notable ? weather.desc : null,
     };
-    return display;
   }, [weather, getWeatherIcon, isNightTime]);
 
   // Precipitation countdown — ticks every 15s to update "RAIN ~N MIN" display
@@ -1437,9 +1436,11 @@ function OverlayPage() {
     const label = precipForecast.event === 'stopping'
       ? `CLEARING ~${minutesLeft} MIN`
       : `${precipForecast.precipType} ~${minutesLeft} MIN`;
-    const icon = precipForecast.event === 'stopping' ? '☀️' : '🌧️';
+    const icon = precipForecast.event === 'stopping'
+      ? (isNightTime ? '🌙' : '☀️')
+      : '🌧️';
     return { label, icon };
-  }, [precipForecast, precipTick]);
+  }, [precipForecast, precipTick, isNightTime]);
 
   // Animated speed value - counts through each integer (50, 51, 52...) - faster for responsiveness
   const displayedSpeed = useAnimatedValue(currentSpeed, {
@@ -1541,11 +1542,17 @@ function OverlayPage() {
               </div>
             )}
 
-            {/* Weather: always visible, two lines (temp + condition) + optional precip countdown */}
+            {/* Weather: temp always shown, single condition slot driven by priority:
+                forecast (rain starting/stopping) > current notable condition > nothing */}
             {settings.showWeather !== false && weatherDisplay && (
               <>
                 <div className="weather-temperature">{weatherDisplay.temperature}</div>
-                {(weatherDisplay.description || weatherDisplay.icon) && (
+                {precipCountdown ? (
+                  <div className="weather-condition-group">
+                    <span className="weather-description-text">{precipCountdown.label}</span>
+                    <span className="weather-icon-inline">{precipCountdown.icon}</span>
+                  </div>
+                ) : (weatherDisplay.description || weatherDisplay.icon) ? (
                   <div className="weather-condition-group">
                     {weatherDisplay.description && (
                       <span className="weather-description-text">{weatherDisplay.description}</span>
@@ -1554,13 +1561,7 @@ function OverlayPage() {
                       <span className="weather-icon-inline">{weatherDisplay.icon}</span>
                     )}
                   </div>
-                )}
-                {precipCountdown && (
-                  <div className="precip-forecast">
-                    <span className="precip-forecast-text">{precipCountdown.label}</span>
-                    <span className="precip-forecast-icon">{precipCountdown.icon}</span>
-                  </div>
-                )}
+                ) : null}
               </>
             )}
 

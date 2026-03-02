@@ -7,6 +7,7 @@ import {
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { handleChatPoll } from '@/lib/poll-webhook-handler';
+import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
 import { handleAddTazosCommand } from '@/lib/addchips-chat-handler';
 import { handleCategoryCommand } from '@/lib/category-chat-handler';
@@ -262,20 +263,8 @@ export async function POST(request: NextRequest) {
     // !raffle — broadcaster/mod only: manually start a raffle
     const trimmedLower = content.trim().toLowerCase();
     if (trimmedLower === '!raffle' || trimmedLower.startsWith('!raffle ')) {
-      const senderObj = payload.sender as Record<string, unknown> | undefined;
       const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
-      const isAuthorized = (() => {
-        if (!senderObj || typeof senderObj !== 'object') return false;
-        const identity = senderObj.identity as Record<string, unknown> | undefined;
-        const role = String(identity?.role ?? senderObj.role ?? '').toLowerCase();
-        const rolesArr = senderObj.roles as string[] | undefined;
-        const rolesLower = Array.isArray(rolesArr) ? rolesArr.map((r) => String(r).toLowerCase()) : [];
-        if (role === 'moderator' || role === 'owner' || role === 'broadcaster') return true;
-        if (rolesLower.includes('moderator') || rolesLower.includes('owner') || rolesLower.includes('broadcaster')) return true;
-        if (senderObj.is_moderator === true || senderObj.moderator === true || senderObj.isModerator === true) return true;
-        if (sender.toLowerCase() === (broadcasterSlug ?? '').toLowerCase()) return true;
-        return false;
-      })();
+      const isAuthorized = isModOrBroadcaster(payload.sender, sender, broadcasterSlug);
       if (isAuthorized) {
         const raffleReply = await startRaffle();
         const accessToken = await getValidAccessToken();

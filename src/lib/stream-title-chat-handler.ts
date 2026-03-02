@@ -3,6 +3,7 @@
  */
 
 import { kv } from '@/lib/kv';
+import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { KICK_API_BASE, KICK_BROADCASTER_SLUG_KEY, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken } from '@/lib/kick-api';
 import { getPersistentLocation, getCachedLocationData } from '@/utils/location-cache';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
@@ -18,25 +19,6 @@ interface OverlaySettingsPartial {
   subGoalTarget?: number;
 }
 
-/** Check if sender is broadcaster or mod (from Kick payload). */
-function isModOrBroadcaster(
-  sender: unknown,
-  senderUsername: string,
-  broadcasterSlug: string | null
-): boolean {
-  if (!sender || typeof sender !== 'object') return false;
-  const s = sender as Record<string, unknown>;
-  const identity = s.identity as Record<string, unknown> | undefined;
-  const role = String(identity?.role ?? s.role ?? '').toLowerCase();
-  const rolesArr = s.roles as string[] | undefined;
-  const rolesLower = Array.isArray(rolesArr) ? rolesArr.map((r) => String(r).toLowerCase()) : [];
-  if (role === 'moderator' || role === 'owner' || role === 'broadcaster') return true;
-  if (rolesLower.includes('moderator') || rolesLower.includes('owner') || rolesLower.includes('broadcaster')) return true;
-  if (s.is_moderator === true || s.moderator === true || s.isModerator === true) return true;
-  const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
-  if (senderUsername?.toLowerCase() === broadcasterLower) return true;
-  return false;
-}
 
 export interface HandleStreamTitleResult {
   handled: boolean;

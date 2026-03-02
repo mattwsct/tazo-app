@@ -4,6 +4,7 @@
  */
 
 import { kv } from '@/lib/kv';
+import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import {
   KICK_BROADCASTER_SLUG_KEY,
   getValidAccessToken,
@@ -21,24 +22,6 @@ const CATEGORY_COMMANDS: Record<string, string> = {
 const CATEGORY_ID_CACHE_KEY = 'kick_category_id_cache';
 const CACHE_TTL_SEC = 86400; // 24h
 
-function isModOrBroadcaster(
-  sender: unknown,
-  senderUsername: string,
-  broadcasterSlug: string | null
-): boolean {
-  if (!sender || typeof sender !== 'object') return false;
-  const s = sender as Record<string, unknown>;
-  const identity = s.identity as Record<string, unknown> | undefined;
-  const role = String(identity?.role ?? s.role ?? '').toLowerCase();
-  const rolesArr = s.roles as string[] | undefined;
-  const rolesLower = Array.isArray(rolesArr) ? rolesArr.map((r) => String(r).toLowerCase()) : [];
-  if (role === 'moderator' || role === 'owner' || role === 'broadcaster') return true;
-  if (rolesLower.includes('moderator') || rolesLower.includes('owner') || rolesLower.includes('broadcaster')) return true;
-  if (s.is_moderator === true || s.moderator === true || s.isModerator === true) return true;
-  const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
-  if (senderUsername?.toLowerCase() === broadcasterLower) return true;
-  return false;
-}
 
 async function getCachedCategoryId(accessToken: string, categoryName: string): Promise<number | null> {
   const cacheKey = `${CATEGORY_ID_CACHE_KEY}:${categoryName.toLowerCase()}`;
