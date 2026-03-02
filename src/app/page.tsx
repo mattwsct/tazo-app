@@ -1129,7 +1129,7 @@ export default function AdminPage() {
                 <div className="checkbox-group">
                   <label className="checkbox-label">
                     <input type="checkbox" checked={settings.showSubGoal ?? false} onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Show progress bar on overlay</span>
+                    <span className="checkbox-text">Show progress on overlay & title</span>
                   </label>
                 </div>
               </div>
@@ -1177,7 +1177,7 @@ export default function AdminPage() {
                 <div className="checkbox-group">
                   <label className="checkbox-label">
                     <input type="checkbox" checked={settings.showKicksGoal ?? false} onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Show progress bar on overlay</span>
+                    <span className="checkbox-text">Show progress on overlay & title</span>
                   </label>
                 </div>
               </div>

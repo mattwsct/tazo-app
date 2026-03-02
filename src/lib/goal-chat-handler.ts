@@ -121,7 +121,6 @@ export async function handleGoalCommand(
       ...settings,
       showSubGoal: true,
       subGoalTarget: parsed.target,
-      subGoalIncrement: parsed.target,
       subGoalSubtext: parsed.subtext ?? null,
     });
     refreshTitle(parsed.target, kicksTarget);
@@ -143,7 +142,6 @@ export async function handleGoalCommand(
       ...settings,
       showKicksGoal: true,
       kicksGoalTarget: parsed.target,
-      kicksGoalIncrement: parsed.target,
       kicksGoalSubtext: parsed.subtext ?? null,
     });
     refreshTitle(subTarget, parsed.target);

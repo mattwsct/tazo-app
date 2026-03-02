@@ -23,7 +23,10 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     const value = settings[key];
     
     if (value !== undefined) {
-      if (expectedType === 'boolean' && typeof value === 'boolean') {
+      if (value === null) {
+        // null is a valid "clear this field" value — pass it through as-is
+        (cleanSettings as Record<string, unknown>)[key] = null;
+      } else if (expectedType === 'boolean' && typeof value === 'boolean') {
         (cleanSettings as Record<string, unknown>)[key] = value;
       } else if (expectedType === 'string' && typeof value === 'string') {
         (cleanSettings as Record<string, unknown>)[key] = value;
@@ -61,7 +64,12 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
 
   if (rejectedKeys.length > 0) {
     // Check if these are just old chat bot settings that were removed
-    const deprecatedChatBotKeys = ['enableChatBot', 'chatBotMessageTemplates', 'chatBotToken', 'kickClientId', 'kickClientSecret'];
+    const deprecatedChatBotKeys = [
+      'enableChatBot', 'chatBotMessageTemplates', 'chatBotToken', 'kickClientId', 'kickClientSecret',
+      // Removed settings — still present in old KV data, safe to silently drop
+      'showSubCountInTitle', 'showTopSubGifter', 'showTopKicksGifter',
+      'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil',
+    ];
     const isDeprecatedSettings = rejectedKeys.every(key => deprecatedChatBotKeys.includes(key));
     
     if (isDeprecatedSettings) {
@@ -85,17 +93,16 @@ export function detectMaliciousKeys(settings: unknown): string[] {
   const maliciousKeys: string[] = [];
   const settingsObj = settings as Record<string, unknown>;
 
-  const runtimeOnlyKeys = [
-    'pollState',
-    'gamblingLeaderboardTop',
-    'earnedLeaderboardWeekly',
-    'earnedLeaderboardMonthly',
-    'earnedLeaderboardLifetime',
-    'overlayAlerts',
-    'streamGoals',
+  const ignoredKeys = [
+    // Runtime-only (never persisted)
+    'pollState', 'gamblingLeaderboardTop', 'earnedLeaderboardWeekly',
+    'earnedLeaderboardMonthly', 'earnedLeaderboardLifetime', 'overlayAlerts', 'streamGoals',
+    // Removed settings — stale KV data, not malicious
+    'showSubCountInTitle', 'showTopSubGifter', 'showTopKicksGifter',
+    'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil',
   ];
   for (const key of Object.keys(settingsObj)) {
-    if (!(key in SETTINGS_CONFIG) && !runtimeOnlyKeys.includes(key)) {
+    if (!(key in SETTINGS_CONFIG) && !ignoredKeys.includes(key)) {
       maliciousKeys.push(key);
     }
   }
