@@ -1076,7 +1076,7 @@ export default function AdminPage() {
                     {type === 'sub' && '🎉 Sub'}
                     {type === 'resub' && '💪 Resub'}
                     {type === 'giftSub' && '🎁 Gift'}
-                    {type === 'kicks' && '💰 Kicks'}
+                    {type === 'kicks' && '💚 Kicks'}
                   </button>
                 ))}
               </div>

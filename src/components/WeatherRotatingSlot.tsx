@@ -42,11 +42,6 @@ export default function WeatherRotatingSlot({ temperature, condition }: WeatherR
     }
   };
 
-  // Single slide — no rotation needed, render directly without cycling wrapper
-  if (slides.length <= 1) {
-    return <div className="weather-temperature">{temperature}</div>;
-  }
-
   return (
     <div className="top-right-cycling-wrapper">
       <div className="top-right-cycling-slots">

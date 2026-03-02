@@ -134,7 +134,10 @@ export async function handleGoalCommand(
       return { handled: true, reply: 'Usage: !subsgoal <number> [label text]  e.g. !subsgoal 20 Go to the zoo' };
     }
     const goals = await getStreamGoals();
-    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.subs);
+    // Only auto-bump to next multiple when there's no subtext — with subtext the goal is fixed
+    const activeTarget = parsed.subtext
+      ? parsed.target
+      : effectiveTarget(parsed.target, parsed.target, goals.subs);
     const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
     await kv.set(OVERLAY_SETTINGS_KEY, {
       ...settings,
@@ -147,7 +150,7 @@ export async function handleGoalCommand(
     refreshTitle(activeTarget, kicksTarget);
     const bumped = activeTarget !== parsed.target ? ` (bumped to ${activeTarget} — already at ${goals.subs} subs)` : '';
     const reply = parsed.subtext
-      ? `✅ Sub goal set: ${activeTarget} subs — "${parsed.subtext}"${bumped}`
+      ? `✅ Sub goal set: ${parsed.target} subs — "${parsed.subtext}"`
       : `✅ Sub goal set: ${activeTarget} subs${bumped}`;
     return { handled: true, reply };
   }
@@ -160,7 +163,10 @@ export async function handleGoalCommand(
       return { handled: true, reply: 'Usage: !kicksgoal <number> [label text]  e.g. !kicksgoal 5000 Shot a drink' };
     }
     const goals = await getStreamGoals();
-    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.kicks);
+    // Only auto-bump to next multiple when there's no subtext — with subtext the goal is fixed
+    const activeTarget = parsed.subtext
+      ? parsed.target
+      : effectiveTarget(parsed.target, parsed.target, goals.kicks);
     const subTarget = (settings.subGoalTarget as number) ?? subIncrement;
     await kv.set(OVERLAY_SETTINGS_KEY, {
       ...settings,
@@ -173,7 +179,7 @@ export async function handleGoalCommand(
     refreshTitle(subTarget, activeTarget);
     const bumped = activeTarget !== parsed.target ? ` (bumped to ${activeTarget} — already at ${goals.kicks} kicks)` : '';
     const reply = parsed.subtext
-      ? `✅ Kicks goal set: ${activeTarget} kicks — "${parsed.subtext}"${bumped}`
+      ? `✅ Kicks goal set: ${parsed.target} kicks — "${parsed.subtext}"`
       : `✅ Kicks goal set: ${activeTarget} kicks${bumped}`;
     return { handled: true, reply };
   }

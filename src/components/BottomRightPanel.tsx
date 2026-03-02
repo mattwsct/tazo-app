@@ -20,7 +20,7 @@ const ALERT_LABELS: Record<string, string> = {
   sub: '🎉 New sub',
   resub: '💪 Resub',
   giftSub: '🎁 Gift sub',
-  kicks: '💰 Kicks',
+  kicks: '💚 Kicks',
 };
 
 export default function BottomRightPanel({

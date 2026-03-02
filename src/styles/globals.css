@@ -419,7 +419,7 @@ html, body {
   flex-direction: column;
   align-items: flex-start;
   width: fit-content;
-  min-height: 1.5em;
+  min-height: 1.1em;
 }
 
 /* === TOP-RIGHT CYCLING (altitude, speed) === */
@@ -434,7 +434,8 @@ html, body {
 .top-right-cycling-slots {
   display: grid;
   grid-template: 1fr / 1fr;
-  place-items: end;
+  align-items: start;
+  justify-items: end;
   width: 100%;
 }
 
@@ -444,7 +445,7 @@ html, body {
   flex-direction: column;
   align-items: flex-end;
   width: fit-content;
-  min-height: 1.5em;
+  min-height: 1.1em;
 }
 
 @keyframes cycling-fade-out {

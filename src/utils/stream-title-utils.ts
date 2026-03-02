@@ -46,8 +46,8 @@ export function parseStreamTitleToCustom(fullTitle: string): string {
   if (!fullTitle?.trim()) return '';
   // Strip goal suffixes added by buildStreamTitle before separator-based parsing
   const withoutGoals = fullTitle
-    .replace(/\s+🎁 Subs:\s*\d+\/\d+(\s*\|\s*💰 Kicks:\s*\d+\/\d+)?/, '')
-    .replace(/\s+💰 Kicks:\s*\d+\/\d+/, '')
+    .replace(/\s+🎁 Subs:\s*\d+\/\d+(\s+💚 Kicks:\s*\d+\/\d+)?/, '')
+    .replace(/\s+💚 Kicks:\s*\d+\/\d+/, '')
     .trim();
   const separatorsToTry = [' · ', ' - '];
   for (const s of separatorsToTry) {
@@ -78,9 +78,9 @@ export function buildStreamTitle(
     goalParts.push(`🎁 Subs: ${subInfo.current}/${subInfo.target}`);
   }
   if (kicksInfo != null && kicksInfo.target > 0) {
-    goalParts.push(`💰 Kicks: ${kicksInfo.current}/${kicksInfo.target}`);
+    goalParts.push(`💚 Kicks: ${kicksInfo.current}/${kicksInfo.target}`);
   }
-  const goalSuffix = goalParts.length > 0 ? ` ${goalParts.join(' | ')}` : '';
+  const goalSuffix = goalParts.length > 0 ? ` ${goalParts.join(' ')}` : '';
   if (!location) return `${customTrimmed}${goalSuffix}`;
   if (!customTrimmed) return `${location}${goalSuffix}`;
   return `${customTrimmed} ${location}${goalSuffix}`;
