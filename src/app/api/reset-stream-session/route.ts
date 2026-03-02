@@ -12,6 +12,7 @@ import {
 } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
+import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     const wellness = await getWellnessData();
     const sessionStartAt = Date.now();
-    await Promise.all([
+    const [, , , , , , { subTarget }] = await Promise.all([
       resetStepsSession(wellness?.steps ?? 0),
       resetDistanceSession(wellness?.distanceKm ?? 0),
       resetFlightsSession(wellness?.flightsClimbed ?? 0),
@@ -43,6 +44,9 @@ export async function POST(request: NextRequest) {
       clearGoalCelebrationOnStreamStart(),
       setWellnessSessionStart(sessionStartAt),
     ]);
+
+    // Update the stream title to reflect the reset (0 subs, new initial target)
+    void updateKickTitleSubCount(0, subTarget).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

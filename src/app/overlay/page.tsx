@@ -845,12 +845,9 @@ function OverlayPage() {
                 }
 
                 // Send stats update (fire and forget)
-                const statsHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-                const statsSecret = process.env.NEXT_PUBLIC_STATS_UPDATE_SECRET;
-                if (statsSecret) statsHeaders['x-stats-secret'] = statsSecret;
                 fetch('/api/stats/update', {
                   method: 'POST',
-                  headers: statsHeaders,
+                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(statsPayload),
                 }).catch(() => {
                   // Silently fail - stats are optional

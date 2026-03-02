@@ -10,7 +10,7 @@ import { getEarnedLeaderboard } from '@/utils/tazo-vault-storage';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
-import { getGoalCelebration, setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
+import { getGoalCelebration } from '@/utils/stream-goals-celebration';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,21 +47,6 @@ async function handleGET() {
       : [[], [], []];
 
     const cel = celebration as { subsUntil?: number; kicksUntil?: number };
-
-    // Auto-trigger celebration if goal is already met but no celebration is pending.
-    // setGoalCelebrationIfNeeded is idempotent — only writes when no active window exists.
-    if (needGoals) {
-      const subTarget = merged.subGoalTarget ?? 5;
-      const kicksTarget = merged.kicksGoalTarget ?? 100;
-      if ((streamGoals as { subs: number }).subs >= subTarget) {
-        const started = await setGoalCelebrationIfNeeded('subs', (streamGoals as { subs: number }).subs, subTarget);
-        if (started) cel.subsUntil = Date.now() + 60_000;
-      }
-      if ((streamGoals as { kicks: number }).kicks >= kicksTarget) {
-        const started = await setGoalCelebrationIfNeeded('kicks', (streamGoals as { kicks: number }).kicks, kicksTarget);
-        if (started) cel.kicksUntil = Date.now() + 60_000;
-      }
-    }
 
     const combinedSettings = {
       ...merged,

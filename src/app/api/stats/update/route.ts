@@ -1,6 +1,6 @@
 // === 📊 STATS UPDATE API ===
 // Receives speed, altitude, and heartrate from the overlay.
-// Protected by NEXT_PUBLIC_STATS_UPDATE_SECRET (shared secret header) + hard range clamps.
+// Protected by hard physiological/physical range clamps + rate limiting.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { storeSpeed, storeAltitude, storeHeartrate } from '@/utils/stats-storage';
@@ -23,13 +23,6 @@ function clamp(value: number, min: number, max: number): number | null {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Shared secret check — NEXT_PUBLIC_STATS_UPDATE_SECRET must match x-stats-secret header.
-  const secret = request.headers.get('x-stats-secret');
-  const expected = process.env.NEXT_PUBLIC_STATS_UPDATE_SECRET;
-  if (expected && secret !== expected) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const { success } = await checkApiRateLimit(request, 'stats-update');
   if (!success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import { getStreamGoals, setStreamGoals } from '@/utils/stream-goals-storage';
-import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
+import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
@@ -39,14 +39,17 @@ export async function PATCH(request: NextRequest) {
     const goals = await getStreamGoals();
 
     const settings = await kv.get<Record<string, unknown>>('overlay_settings');
-    const subTarget = (settings?.subGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget!;
-    const kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
+    let subTarget = (settings?.subGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget!;
+    const subIncrement = (settings?.subGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalIncrement!;
+    let kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
+    const kicksIncrement = (settings?.kicksGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement!;
 
+    // Bump targets immediately if admin set goals past the current target
     if (goals.subs > 0 && goals.subs >= subTarget) {
-      await setGoalCelebrationIfNeeded('subs', goals.subs, subTarget);
+      subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, goals.subs);
     }
     if (goals.kicks > 0 && goals.kicks >= kicksTarget) {
-      await setGoalCelebrationIfNeeded('kicks', goals.kicks, kicksTarget);
+      kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, goals.kicks);
     }
 
     // Update stream title if sub count is shown there

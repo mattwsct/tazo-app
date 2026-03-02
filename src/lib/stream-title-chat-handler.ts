@@ -6,9 +6,17 @@ import { kv } from '@vercel/kv';
 import { KICK_API_BASE, KICK_BROADCASTER_SLUG_KEY, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken } from '@/lib/kick-api';
 import { getPersistentLocation, getCachedLocationData } from '@/utils/location-cache';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
+import { getStreamGoals } from '@/utils/stream-goals-storage';
 import type { LocationDisplayMode } from '@/types/settings';
 
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
+
+interface OverlaySettingsPartial {
+  locationDisplay?: string;
+  customLocation?: string;
+  showSubCountInTitle?: boolean;
+  subGoalTarget?: number;
+}
 
 /** Check if sender is broadcaster or mod (from Kick payload). */
 function isModOrBroadcaster(
@@ -60,11 +68,12 @@ export async function handleStreamTitleCommand(
   const customPart = match?.[1]?.trim() ?? '';
 
   // Use cached/persistent location only — avoid blocking on RTIRL/LocationIQ (which can hang and prevent title update)
-  const [overlaySettings, streamTitleSettings, persistent, cached] = await Promise.all([
-    kv.get<{ locationDisplay?: string; customLocation?: string }>(OVERLAY_SETTINGS_KEY),
+  const [overlaySettings, streamTitleSettings, persistent, cached, streamGoals] = await Promise.all([
+    kv.get<OverlaySettingsPartial>(OVERLAY_SETTINGS_KEY),
     kv.get<{ includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     getPersistentLocation(),
     getCachedLocationData(true),
+    getStreamGoals(),
   ]);
 
   const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
@@ -80,17 +89,22 @@ export async function handleStreamTitleCommand(
     includeLocationInTitle
   );
 
+  // Include sub count in title if enabled
+  const subInfo = overlaySettings?.showSubCountInTitle
+    ? { current: streamGoals.subs, target: overlaySettings.subGoalTarget ?? 5 }
+    : undefined;
+
   // No text provided: set title to location only, or error if location is disabled
   if (!customPart) {
-    if (!includeLocationInTitle) {
+    if (!includeLocationInTitle && !subInfo) {
       return { handled: true, reply: 'Usage: !title Your title here (location in title is disabled)' };
     }
-    if (!locationPart) {
+    if (!locationPart && !subInfo) {
       return { handled: true, reply: 'No location data available. Use !title Your title here' };
     }
   }
 
-  const fullTitle = customPart ? buildStreamTitle(customPart, locationPart) : locationPart!;
+  const fullTitle = buildStreamTitle(customPart, locationPart ?? '', subInfo);
 
   try {
     const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {

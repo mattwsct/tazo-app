@@ -35,8 +35,7 @@ import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart, setWellnessSessionStart } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals, trackSubGifter, trackKicksGifter } from '@/utils/stream-goals-storage';
-import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
-import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
+import { clearGoalCelebrationOnStreamStart, bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
@@ -166,8 +165,9 @@ export async function POST(request: NextRequest) {
         await resetWellnessLastImport();
         await resetWellnessMilestonesOnStreamStart();
         await setWellnessSessionStart(sessionStartAt);
-        await resetStreamGoalsOnStreamStart();
+        const { subTarget: initialSubTarget } = await resetStreamGoalsOnStreamStart();
         await clearGoalCelebrationOnStreamStart();
+        void updateKickTitleSubCount(0, initialSubTarget).catch(() => {});
         await resetEventTimestamps();
       } catch (e) {
         console.warn('Failed to reset wellness session on stream start:', e);
@@ -469,14 +469,18 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
-        if (celebrated) {
-          const token = await getValidAccessToken();
-          if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+      const increment = (settings?.subGoalIncrement as number) ?? 5;
+      const prevSubs = goals.subs - 1;
+      if (target > 0 && prevSubs < target && goals.subs >= target) {
+        const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
+        const token = await getValidAccessToken();
+        if (token) {
+          void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+          void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
         }
+      } else {
+        void updateKickTitleSubCount(goals.subs, target).catch(() => {});
       }
-      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
     }
   } else if (eventNorm === 'channel.subscription.renewal') {
     const subscriber = payload.subscriber;
@@ -493,14 +497,18 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
-        if (celebrated) {
-          const token = await getValidAccessToken();
-          if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+      const increment = (settings?.subGoalIncrement as number) ?? 5;
+      const prevSubs = goals.subs - 1;
+      if (target > 0 && prevSubs < target && goals.subs >= target) {
+        const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
+        const token = await getValidAccessToken();
+        if (token) {
+          void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+          void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
         }
+      } else {
+        void updateKickTitleSubCount(goals.subs, target).catch(() => {});
       }
-      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
     }
   } else if (eventNorm === 'channel.subscription.gifts') {
     const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
@@ -519,14 +527,18 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.subGoalTarget as number) ?? 5;
-      if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('subs', goals.subs, target);
-        if (celebrated) {
-          const token = await getValidAccessToken();
-          if (token) void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+      const increment = (settings?.subGoalIncrement as number) ?? 5;
+      const prevSubs = goals.subs - count;
+      if (target > 0 && prevSubs < target && goals.subs >= target) {
+        const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
+        const token = await getValidAccessToken();
+        if (token) {
+          void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+          void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
         }
+      } else {
+        void updateKickTitleSubCount(goals.subs, target).catch(() => {});
       }
-      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
     }
   } else if (eventNorm === 'kicks.gifted') {
     const sender = payload.sender;
@@ -546,12 +558,12 @@ export async function POST(request: NextRequest) {
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       const target = (settings?.kicksGoalTarget as number) ?? 100;
-      if (target > 0) {
-        const celebrated = await setGoalCelebrationIfNeeded('kicks', goals.kicks, target);
-        if (celebrated) {
-          const token = await getValidAccessToken();
-          if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});
-        }
+      const increment = (settings?.kicksGoalIncrement as number) ?? 100;
+      const prevKicks = goals.kicks - amount;
+      if (target > 0 && prevKicks < target && goals.kicks >= target) {
+        await bumpGoalTarget('kicks', target, increment, goals.kicks);
+        const token = await getValidAccessToken();
+        if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});
       }
     }
   }

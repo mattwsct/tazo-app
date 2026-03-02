@@ -21,23 +21,27 @@ async function ensureSessionStarted(): Promise<void> {
   }
 }
 
-/** Reset goals and targets when stream starts. */
-export async function resetStreamGoalsOnStreamStart(): Promise<void> {
+/** Reset goals and targets when stream starts. Targets reset to the configured increment (first milestone). */
+export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: number; kicksTarget: number }> {
   try {
+    const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
+    const subIncrement = Math.max(1, (settings.subGoalIncrement as number) || 5);
+    const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 100);
     await Promise.all([
       kv.set(STREAM_GOALS_SUBS_KEY, 0),
       kv.set(STREAM_GOALS_KICKS_KEY, 0),
       kv.del(STREAM_TOP_SUB_GIFTERS_KEY),
       kv.del(STREAM_TOP_KICKS_GIFTERS_KEY),
     ]);
-    const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
     await kv.set('overlay_settings', {
       ...settings,
-      subGoalTarget: 5,
-      kicksGoalTarget: 100,
+      subGoalTarget: subIncrement,
+      kicksGoalTarget: kicksIncrement,
     });
+    return { subTarget: subIncrement, kicksTarget: kicksIncrement };
   } catch (e) {
     console.warn('[StreamGoals] Failed to reset:', e);
+    return { subTarget: 5, kicksTarget: 100 };
   }
 }
 
