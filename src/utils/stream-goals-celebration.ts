@@ -62,14 +62,16 @@ export async function bumpGoalTarget(
   const snapTarget = (Math.floor(count / inc) + 1) * inc;
   const newTarget = Math.max(currentTarget + inc, snapTarget);
   try {
-    const state = await getGoalCelebration();
+    const [state, settings] = await Promise.all([
+      getGoalCelebration(),
+      kv.get<Record<string, unknown>>('overlay_settings').then((s) => s ?? {}),
+    ]);
     const untilKey = type === 'subs' ? 'subsUntil' : 'kicksUntil';
-    const updated = { ...state, [untilKey]: undefined };
-    await kv.set(GOAL_CELEBRATION_KEY, updated);
-
-    const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
     const targetKey = type === 'subs' ? 'subGoalTarget' : 'kicksGoalTarget';
-    await kv.set('overlay_settings', { ...settings, [targetKey]: newTarget });
+    await Promise.all([
+      kv.set(GOAL_CELEBRATION_KEY, { ...state, [untilKey]: undefined }),
+      kv.set('overlay_settings', { ...settings, [targetKey]: newTarget }),
+    ]);
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`[StreamGoals] Bumped ${type} target ${currentTarget} → ${newTarget}`);

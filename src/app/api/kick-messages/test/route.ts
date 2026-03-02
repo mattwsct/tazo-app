@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
+import { verifyRequestAuth } from '@/lib/api-auth';
 import { sendKickChatMessage, refreshKickTokens } from '@/lib/kick-api';
 import type { StoredKickTokens } from '@/lib/kick-api';
 import {
@@ -70,8 +71,7 @@ function buildResponseFns(): Record<keyof KickMessageTemplates, (p: unknown, t: 
 }
 
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

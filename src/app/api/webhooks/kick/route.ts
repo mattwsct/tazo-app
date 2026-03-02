@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
     verifiedMsg = `${eventType || '(none)'} ${JSON.stringify(summary)}`;
     eventSummary = { ...eventSummary, ...summary };
   }
-  console.log('[Kick webhook] Verified:', verifiedMsg);
+  if (process.env.NODE_ENV !== 'production') console.log('[Kick webhook] Verified:', verifiedMsg);
 
   const enableWebhookLogging = process.env.KICK_WEBHOOK_LOGGING === 'true';
   if (enableWebhookLogging) {
@@ -452,63 +452,44 @@ export async function POST(request: NextRequest) {
   // Push overlay alerts for follows, subs, gifts, kicks
   const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
   let didAlertOrLeaderboard = false;
+
+  /** Handle sub-goal milestone after adding `count` new subs. */
+  const handleSubGoalMilestone = async (count: number) => {
+    const [goals, settings] = await Promise.all([
+      getStreamGoals(),
+      kv.get<Record<string, unknown>>('overlay_settings'),
+    ]);
+    const target = (settings?.subGoalTarget as number) ?? 5;
+    const increment = (settings?.subGoalIncrement as number) ?? 5;
+    const prevSubs = goals.subs - count;
+    if (target > 0 && prevSubs < target && goals.subs >= target) {
+      const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
+      const token = await getValidAccessToken();
+      if (token) {
+        void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+        void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
+      }
+    } else {
+      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
+    }
+  };
   if (eventNorm === 'channel.followed') {
     const follower = getUsername(payload.follower);
     if (follower) didAlertOrLeaderboard = true;
   } else if (eventNorm === 'channel.subscription.new') {
     const subscriber = payload.subscriber;
     if (subscriber) {
-      const subUser = getUsername(subscriber);
-      await Promise.all([
-        addStreamGoalSubs(1),
-        pushSubAlert(subscriber),
-      ]);
+      await Promise.all([addStreamGoalSubs(1), pushSubAlert(subscriber)]);
       didAlertOrLeaderboard = true;
-      const [goals, settings] = await Promise.all([
-        getStreamGoals(),
-        kv.get<Record<string, unknown>>('overlay_settings'),
-      ]);
-      const target = (settings?.subGoalTarget as number) ?? 5;
-      const increment = (settings?.subGoalIncrement as number) ?? 5;
-      const prevSubs = goals.subs - 1;
-      if (target > 0 && prevSubs < target && goals.subs >= target) {
-        const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
-        const token = await getValidAccessToken();
-        if (token) {
-          void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
-          void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
-        }
-      } else {
-        void updateKickTitleSubCount(goals.subs, target).catch(() => {});
-      }
+      await handleSubGoalMilestone(1);
     }
   } else if (eventNorm === 'channel.subscription.renewal') {
     const subscriber = payload.subscriber;
     const duration = (payload.duration as number) ?? 0;
     if (subscriber) {
-      const resubUser = getUsername(subscriber);
-      await Promise.all([
-        addStreamGoalSubs(1),
-        pushResubAlert(subscriber, duration > 0 ? duration : undefined),
-      ]);
+      await Promise.all([addStreamGoalSubs(1), pushResubAlert(subscriber, duration > 0 ? duration : undefined)]);
       didAlertOrLeaderboard = true;
-      const [goals, settings] = await Promise.all([
-        getStreamGoals(),
-        kv.get<Record<string, unknown>>('overlay_settings'),
-      ]);
-      const target = (settings?.subGoalTarget as number) ?? 5;
-      const increment = (settings?.subGoalIncrement as number) ?? 5;
-      const prevSubs = goals.subs - 1;
-      if (target > 0 && prevSubs < target && goals.subs >= target) {
-        const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
-        const token = await getValidAccessToken();
-        if (token) {
-          void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
-          void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
-        }
-      } else {
-        void updateKickTitleSubCount(goals.subs, target).catch(() => {});
-      }
+      await handleSubGoalMilestone(1);
     }
   } else if (eventNorm === 'channel.subscription.gifts') {
     const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
@@ -522,23 +503,7 @@ export async function POST(request: NextRequest) {
         ...(gifterUser ? [trackSubGifter(gifterUser, count)] : []),
       ]);
       didAlertOrLeaderboard = true;
-      const [goals, settings] = await Promise.all([
-        getStreamGoals(),
-        kv.get<Record<string, unknown>>('overlay_settings'),
-      ]);
-      const target = (settings?.subGoalTarget as number) ?? 5;
-      const increment = (settings?.subGoalIncrement as number) ?? 5;
-      const prevSubs = goals.subs - count;
-      if (target > 0 && prevSubs < target && goals.subs >= target) {
-        const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
-        const token = await getValidAccessToken();
-        if (token) {
-          void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
-          void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
-        }
-      } else {
-        void updateKickTitleSubCount(goals.subs, target).catch(() => {});
-      }
+      await handleSubGoalMilestone(count);
     }
   } else if (eventNorm === 'kicks.gifted') {
     const sender = payload.sender;

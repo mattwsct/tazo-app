@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
+import { verifyRequestAuth } from '@/lib/api-auth';
 
 const KICK_TOKENS_KEY = 'kick_tokens';
 
@@ -10,8 +11,7 @@ export const dynamic = 'force-dynamic';
  * Clears stored Kick OAuth tokens. Requires admin auth.
  */
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

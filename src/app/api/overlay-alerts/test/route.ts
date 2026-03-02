@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pushTestAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
+import { verifyRequestAuth } from '@/lib/api-auth';
 import type { OverlayAlertType } from '@/utils/overlay-alerts-storage';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +9,9 @@ export const dynamic = 'force-dynamic';
 const VALID_TYPES: OverlayAlertType[] = ['sub', 'resub', 'giftSub', 'kicks'];
 
 export async function POST(request: NextRequest) {
+  if (!verifyRequestAuth(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body = await request.json().catch(() => ({}));
     const type = String(body.type ?? '').trim() as OverlayAlertType;

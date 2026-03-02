@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resetGamblingOnStreamStart } from '@/utils/gambling-storage';
+import { verifyRequestAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +11,7 @@ export const dynamic = 'force-dynamic';
  * Requires admin auth.
  */
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

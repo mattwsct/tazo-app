@@ -54,8 +54,7 @@ export async function getForecastResponse(): Promise<string> {
   const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
   if (!openweatherKey) return '🌤️ Forecast API not configured';
 
-  const persistentLocation = await getPersistentLocation();
-  const locationData = await getLocationData();
+  const [persistentLocation, locationData] = await Promise.all([getPersistentLocation(), getLocationData()]);
   const timezone = locationData?.timezone || persistentLocation?.location?.timezone || null;
   if (!timezone) return '🌤️ Timezone unavailable for forecast';
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { kv } from '@vercel/kv';
+import { verifyAuth } from '@/lib/api-auth';
 import { DEFAULT_KICK_MESSAGE_ENABLED, EVENT_TYPE_TO_TOGGLE, KICK_MESSAGE_ENABLED_KEY, isToggleDisabled } from '@/types/kick-messages';
 
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -12,9 +12,7 @@ const KICK_RECENT_EVENTS_KEY = 'kick_recent_events';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!(await verifyAuth())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

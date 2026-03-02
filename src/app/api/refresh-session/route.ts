@@ -1,44 +1,29 @@
 import { NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/api-auth';
+import { verifyAuth, generateSessionToken } from '@/lib/api-auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(): Promise<NextResponse> {
   try {
-    // Check if user is already authenticated
-    const isAuthenticated = await verifyAuth();
-    
-    if (!isAuthenticated) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Not authenticated' 
-      }, { status: 401 });
+    if (!(await verifyAuth())) {
+      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
-    
-    // Refresh the authentication cookie
-    const maxAge = process.env.NODE_ENV === 'development' 
-      ? 60 * 60 * 24 * 30 // 30 days for development
-      : 60 * 60 * 24 * 7; // 7 days for production
-      
-    const response = NextResponse.json({ 
-      success: true, 
-      message: 'Session refreshed successfully' 
-    });
-    
-    response.cookies.set('auth-token', 'authenticated', {
+
+    const token = generateSessionToken();
+    const isDev = process.env.NODE_ENV === 'development';
+    const maxAge = isDev ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 7;
+
+    const response = NextResponse.json({ success: true, message: 'Session refreshed' });
+    response.cookies.set('auth-token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/',
-      maxAge: maxAge,
+      maxAge,
     });
-    
-    console.log('🔄 Session refresh successful');
     return response;
-    
   } catch (error) {
     console.error('Session refresh error:', error);
-    return NextResponse.json({ 
-      success: false, 
-      error: 'Failed to refresh session' 
-    }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Failed to refresh session' }, { status: 500 });
   }
 }

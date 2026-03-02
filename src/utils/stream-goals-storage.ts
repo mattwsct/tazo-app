@@ -45,26 +45,24 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
   }
 }
 
-/** Increment subs count (new sub, resub, or gift subs). */
+/** Increment subs count (new sub, resub, or gift subs). Uses atomic INCRBY to prevent race conditions. */
 export async function addStreamGoalSubs(count: number): Promise<void> {
   if (count <= 0) return;
   try {
     await ensureSessionStarted();
-    const current = (await kv.get<number>(STREAM_GOALS_SUBS_KEY)) ?? 0;
-    await kv.set(STREAM_GOALS_SUBS_KEY, current + count);
+    await kv.incrby(STREAM_GOALS_SUBS_KEY, count);
     void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
   } catch (e) {
     console.warn('[StreamGoals] Failed to add subs:', e);
   }
 }
 
-/** Increment kicks (100 kicks = $1). Amount is in kicks (integer). */
+/** Increment kicks (100 kicks = $1). Amount is in kicks (integer). Uses atomic INCRBY. */
 export async function addStreamGoalKicks(amount: number): Promise<void> {
   if (amount <= 0) return;
   try {
     await ensureSessionStarted();
-    const current = (await kv.get<number>(STREAM_GOALS_KICKS_KEY)) ?? 0;
-    await kv.set(STREAM_GOALS_KICKS_KEY, current + amount);
+    await kv.incrby(STREAM_GOALS_KICKS_KEY, amount);
     void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
   } catch (e) {
     console.warn('[StreamGoals] Failed to add kicks:', e);

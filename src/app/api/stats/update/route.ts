@@ -8,18 +8,24 @@ import { checkApiRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-// Hard physiological/physical bounds — values outside these are rejected regardless of secret.
-// These exist as a second layer of defence: even if the secret leaks, absurd injected values
-// (e.g. 999999999 BPM) are still rejected.
 const BOUNDS = {
-  heartrate: { min: 0, max: 300 },   // bpm — max ever recorded ~350; 300 covers all real cases
-  speed: { min: 0, max: 500 },        // km/h — 500 covers aircraft; real IRL use tops out ~200
+  heartrate: { min: 0, max: 300 },    // bpm — max ever recorded ~350; 300 covers all real cases
+  speed: { min: 0, max: 500 },         // km/h — 500 covers aircraft; real IRL use tops out ~200
   altitude: { min: -1000, max: 9000 }, // metres — below Dead Sea to above Everest
+  // Timestamps: accept anything within ±60 s of server time to prevent time-series corruption
+  timestampSlack: 60_000,
 } as const;
 
 function clamp(value: number, min: number, max: number): number | null {
   if (value < min || value > max) return null;
   return value;
+}
+
+/** Clamp a client-supplied timestamp to [now - 60s, now + 5s]. */
+function clampTs(ts: number | undefined): number {
+  const now = Date.now();
+  if (ts === undefined || !Number.isFinite(ts)) return now;
+  return Math.min(now + 5_000, Math.max(now - BOUNDS.timestampSlack, ts));
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -41,7 +47,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } else if (typeof speed === 'object' && speed !== null && typeof speed.speed === 'number') {
         const safe = clamp((speed as { speed: number }).speed, BOUNDS.speed.min, BOUNDS.speed.max);
         if (safe !== null) {
-          const ts = (speed as { speed: number; timestamp?: number }).timestamp || Date.now();
+          const ts = clampTs((speed as { speed: number; timestamp?: number }).timestamp);
           promises.push(storeSpeed(safe, ts));
         }
       }
@@ -54,7 +60,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } else if (typeof heartrate === 'object' && heartrate !== null && typeof heartrate.bpm === 'number') {
         const safe = clamp((heartrate as { bpm: number }).bpm, BOUNDS.heartrate.min, BOUNDS.heartrate.max);
         if (safe !== null) {
-          const ts = (heartrate as { bpm: number; timestamp?: number }).timestamp || Date.now();
+          const ts = clampTs((heartrate as { bpm: number; timestamp?: number }).timestamp);
           promises.push(storeHeartrate(safe, ts));
         }
       }
@@ -67,7 +73,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } else if (typeof altitude === 'object' && altitude !== null && typeof altitude.altitude === 'number') {
         const safe = clamp((altitude as { altitude: number }).altitude, BOUNDS.altitude.min, BOUNDS.altitude.max);
         if (safe !== null) {
-          const ts = (altitude as { altitude: number; timestamp?: number }).timestamp || Date.now();
+          const ts = clampTs((altitude as { altitude: number; timestamp?: number }).timestamp);
           promises.push(storeAltitude(safe, ts));
         }
       }

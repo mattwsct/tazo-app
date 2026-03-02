@@ -3,19 +3,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { verifyAuth } from '@/lib/api-auth';
 import { getPollSettings, setPollSettings } from '@/lib/poll-store';
 import type { PollSettings } from '@/types/poll';
 
 export const dynamic = 'force-dynamic';
 
-async function requireAuth(): Promise<boolean> {
-  const cookieStore = await cookies();
-  return cookieStore.get('auth-token')?.value === 'authenticated';
-}
-
 export async function GET() {
-  if (!(await requireAuth())) {
+  if (!(await verifyAuth())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const settings = await getPollSettings();
@@ -23,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireAuth())) {
+  if (!(await verifyAuth())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {

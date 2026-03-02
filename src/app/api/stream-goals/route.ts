@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 import { getStreamGoals, setStreamGoals } from '@/utils/stream-goals-storage';
+import { verifyRequestAuth } from '@/lib/api-auth';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
@@ -24,8 +25,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

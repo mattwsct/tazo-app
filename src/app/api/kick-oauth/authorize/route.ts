@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
+import { verifyRequestAuth } from '@/lib/api-auth';
 import {
   KICK_OAUTH_BASE,
   KICK_SCOPES,
@@ -13,6 +14,9 @@ const PKCE_TTL = 600; // 10 minutes
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  if (!verifyRequestAuth(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const clientId = process.env.KICK_CLIENT_ID;
   if (!clientId) {
     return NextResponse.json({ error: 'Kick OAuth not configured' }, { status: 500 });

@@ -6,8 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { kv } from '@vercel/kv';
+import { verifyAuth, verifyRequestAuth } from '@/lib/api-auth';
 import { getHeartrateStats } from '@/utils/stats-storage';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { KICK_TOKENS_KEY } from '@/lib/kick-api';
@@ -26,9 +26,7 @@ function formatAgo(ms: number): string {
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!(await verifyAuth())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -105,9 +103,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

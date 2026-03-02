@@ -16,12 +16,12 @@ import {
   resetWellnessLastImport,
   resetWellnessMilestonesOnStreamStart,
 } from '@/utils/wellness-storage';
+import { verifyRequestAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

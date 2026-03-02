@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
+import { verifyRequestAuth } from '@/lib/api-auth';
 import {
   subscribeToKickEvents,
   refreshKickTokens,
@@ -17,8 +18,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   // Check admin auth
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

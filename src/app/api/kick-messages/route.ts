@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
+import { verifyRequestAuth } from '@/lib/api-auth';
 import {
   DEFAULT_KICK_MESSAGES,
   DEFAULT_KICK_MESSAGE_ENABLED,
@@ -103,8 +104,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

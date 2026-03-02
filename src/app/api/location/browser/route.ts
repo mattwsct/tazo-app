@@ -9,12 +9,12 @@ import { fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { getLocationForPersistence } from '@/utils/location-utils';
 import { updatePersistentLocation } from '@/utils/location-cache';
 import { checkApiRateLimit } from '@/lib/rate-limit';
+import { verifyRequestAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
-  const authToken = request.cookies.get('auth-token')?.value;
-  if (authToken !== 'authenticated') {
+  if (!verifyRequestAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { success } = await checkApiRateLimit(request, 'location-browser');
