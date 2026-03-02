@@ -23,6 +23,8 @@ export async function bumpGoalTarget(
   try {
     const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
     await kv.set('overlay_settings', { ...settings, [targetKey]: newTarget });
+    // Notify SSE immediately so the overlay updates without waiting for the next poll
+    void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
     if (process.env.NODE_ENV === 'development') {
       console.log(`[StreamGoals] Bumped ${type} target ${currentTarget} → ${newTarget} (count=${count})`);
     }
