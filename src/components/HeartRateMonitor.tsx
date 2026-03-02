@@ -24,10 +24,9 @@ const HEART_RATE_CONFIG = {
   ANIMATION_DELAY: 1000, // 1 second delay before updating animation speed
   MAX_RECONNECT_ATTEMPTS: 10,
   CONNECTION_DEBOUNCE: 30000, // 30 seconds - keep showing last BPM during brief socket drops before hiding
-  PERSIST_DISPLAY_MS: 5 * 60 * 1000, // 5 minutes - keep showing last BPM dimmed when no live/fallback data (avoids disappear/reappear)
+  PERSIST_DISPLAY_MS: 5 * 60 * 1000, // 5 minutes - keep showing last Pulsoid BPM dimmed after disconnect
   COLOR_DEBOUNCE: 5000, // 5 seconds - debounce color changes to prevent rapid flashing
   STATS_SEND_INTERVAL: 5000, // 5 seconds - throttle stats API updates
-  WELLNESS_FALLBACK_POLL: 60000, // 60 seconds - poll wellness when using Apple Health fallback
 } as const;
 
 // === 💗 HEART RATE MONITOR COMPONENT ===
@@ -45,7 +44,6 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   });
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
   const [debouncedBpm, setDebouncedBpm] = useState(0); // Debounced BPM for color calculation
-  const [wellnessFallback, setWellnessFallback] = useState<{ bpm: number; updatedAt: number } | null>(null);
   const [lastPersistedBpm, setLastPersistedBpm] = useState<{ bpm: number; at: number } | null>(null);
   
   // Use animated value hook for smooth BPM transitions - counts through each integer (70, 71, 72...)
@@ -372,51 +370,17 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     };
       }, [pulsoidToken, onConnected, updateConnectionState, sendHeartrateToStats]);
 
-  // Wellness fallback: when Pulsoid not connected, use Apple Health data from Health Auto Export
-  useEffect(() => {
-    if (heartRate.isConnected && heartRate.bpm > 0) {
-      setWellnessFallback(null); // Clear fallback when Pulsoid is live
-      return;
-    }
-    let mounted = true;
-    const fetchWellness = async () => {
-      try {
-        const res = await fetch('/api/wellness', { cache: 'no-store' });
-        if (!res.ok || !mounted) return;
-        const data = await res.json();
-        if (!mounted) return;
-        const bpm = data.heartRate ?? data.restingHeartRate;
-        if (typeof bpm === 'number' && bpm > 0) {
-          setWellnessFallback({ bpm: Math.round(bpm), updatedAt: data.updatedAt ?? Date.now() });
-        } else {
-          setWellnessFallback(null);
-        }
-      } catch {
-        if (mounted) setWellnessFallback(null);
-      }
-    };
-    fetchWellness();
-    const id = setInterval(fetchWellness, HEART_RATE_CONFIG.WELLNESS_FALLBACK_POLL);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, [heartRate.isConnected, heartRate.bpm]);
-
   const hasLiveData = heartRate.isConnected && heartRate.bpm > 0;
-  const hasFallbackData = !hasLiveData && wellnessFallback != null && wellnessFallback.bpm > 0;
-  const hasPersistedData = !hasLiveData && !hasFallbackData && lastPersistedBpm != null &&
+  const hasPersistedData = !hasLiveData && lastPersistedBpm != null &&
     Date.now() - lastPersistedBpm.at < HEART_RATE_CONFIG.PERSIST_DISPLAY_MS;
-  const showHeartRate = hasLiveData || hasFallbackData || hasPersistedData;
+  const showHeartRate = hasLiveData || hasPersistedData;
 
-  // Update persisted when we have live/fallback (so it's ready if we lose connection)
+  // Update persisted when Pulsoid is live so it's ready if we lose connection
   useEffect(() => {
     if (hasLiveData && heartRate.bpm > 0) {
       setLastPersistedBpm({ bpm: heartRate.bpm, at: Date.now() });
-    } else if (hasFallbackData && wellnessFallback!.bpm > 0) {
-      setLastPersistedBpm({ bpm: wellnessFallback!.bpm, at: Date.now() });
     }
-  }, [hasLiveData, hasFallbackData, heartRate.bpm, wellnessFallback]);
+  }, [hasLiveData, heartRate.bpm]);
 
   // Clear persisted when too old
   useEffect(() => {
@@ -432,12 +396,10 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
 
   if (!showHeartRate) return null;
 
-  // Get current heart rate (live from Pulsoid, fallback from Apple Health, or persisted)
+  // Get current heart rate (live from Pulsoid, or last known Pulsoid value dimmed)
   const currentBpm = hasLiveData
     ? Math.round(smoothHeartRate || heartRate.bpm)
-    : hasFallbackData
-      ? wellnessFallback!.bpm
-      : lastPersistedBpm!.bpm;
+    : lastPersistedBpm!.bpm;
   
   // Calculate color based on debounced BPM (only for numbers, not heart icon)
   // Use debouncedBpm if available, otherwise use currentBpm for initial display
@@ -458,7 +420,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     : undefined; // Use default CSS text-shadow for other colors
 
   const animationBpm = hasLiveData ? stableAnimationBpm : currentBpm;
-  const fallbackOpacity = hasFallbackData ? 0.75 : hasPersistedData ? 0.6 : 1;
+  const fallbackOpacity = hasPersistedData ? 0.6 : 1;
 
   return (
     <ErrorBoundary>
