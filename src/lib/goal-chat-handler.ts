@@ -1,15 +1,15 @@
 /**
  * Goal chat commands — mods and broadcaster only.
  *
- * !subsgoal <target> [subtext]      — set/replace sub goal milestone + optional label (fixed, holds at 100%)
- * !subsgoalloop <target> <subtext>  — repeating sub goal: auto-iterates on each reach, keeps label
- * !kicksgoal <target> [subtext]     — set/replace kicks goal milestone + optional label (fixed)
- * !kicksgoalloop <target> <subtext> — repeating kicks goal: auto-iterates on each reach, keeps label
- * !clearsubsgoal                    — hide sub goal, reset target to saved increment
- * !clearkicksgoal                   — hide kicks goal, reset target to saved increment
- * !cleargoals                       — hide both goals, reset both targets to saved increments
- * !subs <count>                     — manually override current subs count
- * !kicks <count>                    — manually override current kicks count
+ * !subsgoal <target>          — auto-iterating sub goal in multiples of <target>
+ * !subsgoal <target> <label>  — fixed sub goal at <target> with label (holds at 100% until cleared)
+ * !kicksgoal <target>          — auto-iterating kicks goal
+ * !kicksgoal <target> <label>  — fixed kicks goal with label
+ * !clearsubsgoal               — hide sub goal, reset to saved increment
+ * !clearkicksgoal              — hide kicks goal, reset to saved increment
+ * !cleargoals                  — hide both, reset both to saved increments
+ * !subs <count>                — manually override current subs count
+ * !kicks <count>               — manually override current kicks count
  */
 
 import { kv } from '@/lib/kv';
@@ -17,6 +17,7 @@ import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { setStreamGoals, getStreamGoals, STREAM_GOALS_MODIFIED_KEY } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
+import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
@@ -25,7 +26,7 @@ export interface HandleGoalCommandResult {
   reply?: string;
 }
 
-/** Parse "!subsgoal 20 Go to the zoo" → { target: 20, subtext: "Go to the zoo" } */
+/** Parse "!subsgoal 20 Go to the zoo" → { target: 20, subtext: "Go to the zoo" | undefined } */
 function parseGoalArgs(args: string): { target: number; subtext: string | undefined } | null {
   const parts = args.trim().split(/\s+/);
   const target = parseInt(parts[0], 10);
@@ -35,8 +36,8 @@ function parseGoalArgs(args: string): { target: number; subtext: string | undefi
 }
 
 /**
- * Compute the effective starting target: if currentCount already meets or exceeds
- * the requested target, bump up in multiples of increment until strictly above count.
+ * If currentCount already meets or exceeds the requested target, bump up in
+ * multiples of increment until strictly above count.
  * e.g. target=5, increment=5, count=12 → 15
  */
 function effectiveTarget(target: number, increment: number, currentCount: number): number {
@@ -57,8 +58,6 @@ export async function handleGoalCommand(
     lower === '!cleargoals' ||
     lower === '!clearsubsgoal' ||
     lower === '!clearkicksgoal' ||
-    lower.startsWith('!subsgoalloop') ||
-    lower.startsWith('!kicksgoalloop') ||
     lower.startsWith('!subsgoal') ||
     lower.startsWith('!kicksgoal') ||
     lower === '!subs' || lower.startsWith('!subs ') ||
@@ -72,13 +71,13 @@ export async function handleGoalCommand(
   }
 
   const settings = (await kv.get<Record<string, unknown>>(OVERLAY_SETTINGS_KEY)) ?? {};
-  const subIncrement  = Math.max(1, (settings.subGoalIncrement  as number) || 5);
+  const subIncrement   = Math.max(1, (settings.subGoalIncrement  as number) || 5);
   const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 100);
 
-  // Helper: touch overlay_settings_modified so the SSE stream pushes the update immediately
+  /** Touch overlay_settings_modified so the SSE stream pushes updates immediately. */
   const notifyOverlay = () => void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
 
-  // Helper: fire-and-forget title refresh
+  /** Fire-and-forget title refresh. */
   const refreshTitle = (subTarget: number, kicksTarget: number) => {
     void (async () => {
       const goals = await getStreamGoals();
@@ -86,7 +85,7 @@ export async function handleGoalCommand(
     })();
   };
 
-  // !clearsubsgoal — hide sub goal, reset target back to saved increment
+  // ── !clearsubsgoal ──────────────────────────────────────────────────────────
   if (lower === '!clearsubsgoal') {
     const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
     await kv.set(OVERLAY_SETTINGS_KEY, {
@@ -94,14 +93,13 @@ export async function handleGoalCommand(
       showSubGoal: false,
       subGoalTarget: subIncrement,
       subGoalSubtext: null,
-      subGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subIncrement, kicksTarget);
     return { handled: true, reply: '✅ Sub goal cleared' };
   }
 
-  // !clearkicksgoal — hide kicks goal, reset target back to saved increment
+  // ── !clearkicksgoal ─────────────────────────────────────────────────────────
   if (lower === '!clearkicksgoal') {
     const subTarget = (settings.subGoalTarget as number) ?? subIncrement;
     await kv.set(OVERLAY_SETTINGS_KEY, {
@@ -109,64 +107,38 @@ export async function handleGoalCommand(
       showKicksGoal: false,
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
-      kicksGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subTarget, kicksIncrement);
     return { handled: true, reply: '✅ Kicks goal cleared' };
   }
 
-  // !cleargoals — hide both, reset both targets back to saved increments
+  // ── !cleargoals ─────────────────────────────────────────────────────────────
   if (lower === '!cleargoals') {
     await kv.set(OVERLAY_SETTINGS_KEY, {
       ...settings,
       showSubGoal: false,
       subGoalTarget: subIncrement,
       subGoalSubtext: null,
-      subGoalLoop: false,
       showKicksGoal: false,
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
-      kicksGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subIncrement, kicksIncrement);
     return { handled: true, reply: '✅ All goals cleared' };
   }
 
-  // !subsgoalloop <target> <subtext> — repeating goal: auto-iterates on reach, keeps label
-  if (lower.startsWith('!subsgoalloop')) {
-    const args = trimmed.slice('!subsgoalloop'.length).trim();
-    const parsed = parseGoalArgs(args);
-    if (!parsed || !parsed.subtext) {
-      return { handled: true, reply: 'Usage: !subsgoalloop <number> <label>  e.g. !subsgoalloop 5 Do pushups!' };
-    }
-    const goals = await getStreamGoals();
-    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.subs);
-    const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
-    await kv.set(OVERLAY_SETTINGS_KEY, {
-      ...settings,
-      showSubGoal: true,
-      subGoalTarget: activeTarget,
-      subGoalIncrement: parsed.target,
-      subGoalSubtext: parsed.subtext,
-      subGoalLoop: true,
-    });
-    notifyOverlay();
-    refreshTitle(activeTarget, kicksTarget);
-    const bumped = activeTarget !== parsed.target ? ` (starts at ${activeTarget} — already at ${goals.subs} subs)` : '';
-    return { handled: true, reply: `✅ Sub loop goal set: every ${parsed.target} subs — "${parsed.subtext}"${bumped}` };
-  }
-
-  // !subsgoal <target> [subtext]
+  // ── !subsgoal ───────────────────────────────────────────────────────────────
   if (lower.startsWith('!subsgoal')) {
     const args = trimmed.slice('!subsgoal'.length).trim();
     const parsed = parseGoalArgs(args);
     if (!parsed) {
-      return { handled: true, reply: 'Usage: !subsgoal <number> [label text]  e.g. !subsgoal 20 Go to the zoo' };
+      return { handled: true, reply: 'Usage: !subsgoal <number> [label]  e.g. !subsgoal 20  or  !subsgoal 20 Buy a drink' };
     }
     const goals = await getStreamGoals();
-    // Only auto-bump to next multiple when there's no subtext — with subtext the goal is fixed
+    // With label: goal is fixed at the given target (bar holds at 100% until cleared).
+    // Without label: auto-iterate — bump past current count if already there.
     const activeTarget = parsed.subtext
       ? parsed.target
       : effectiveTarget(parsed.target, parsed.target, goals.subs);
@@ -177,7 +149,6 @@ export async function handleGoalCommand(
       subGoalTarget: activeTarget,
       subGoalIncrement: parsed.target,
       subGoalSubtext: parsed.subtext ?? null,
-      subGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(activeTarget, kicksTarget);
@@ -188,39 +159,14 @@ export async function handleGoalCommand(
     return { handled: true, reply };
   }
 
-  // !kicksgoalloop <target> <subtext> — repeating goal: auto-iterates on reach, keeps label
-  if (lower.startsWith('!kicksgoalloop')) {
-    const args = trimmed.slice('!kicksgoalloop'.length).trim();
-    const parsed = parseGoalArgs(args);
-    if (!parsed || !parsed.subtext) {
-      return { handled: true, reply: 'Usage: !kicksgoalloop <number> <label>  e.g. !kicksgoalloop 5000 Shot a drink!' };
-    }
-    const goals = await getStreamGoals();
-    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.kicks);
-    const subTarget = (settings.subGoalTarget as number) ?? subIncrement;
-    await kv.set(OVERLAY_SETTINGS_KEY, {
-      ...settings,
-      showKicksGoal: true,
-      kicksGoalTarget: activeTarget,
-      kicksGoalIncrement: parsed.target,
-      kicksGoalSubtext: parsed.subtext,
-      kicksGoalLoop: true,
-    });
-    notifyOverlay();
-    refreshTitle(subTarget, activeTarget);
-    const bumped = activeTarget !== parsed.target ? ` (starts at ${activeTarget} — already at ${goals.kicks} kicks)` : '';
-    return { handled: true, reply: `✅ Kicks loop goal set: every ${parsed.target} kicks — "${parsed.subtext}"${bumped}` };
-  }
-
-  // !kicksgoal <target> [subtext]
+  // ── !kicksgoal ──────────────────────────────────────────────────────────────
   if (lower.startsWith('!kicksgoal')) {
     const args = trimmed.slice('!kicksgoal'.length).trim();
     const parsed = parseGoalArgs(args);
     if (!parsed) {
-      return { handled: true, reply: 'Usage: !kicksgoal <number> [label text]  e.g. !kicksgoal 5000 Shot a drink' };
+      return { handled: true, reply: 'Usage: !kicksgoal <number> [label]  e.g. !kicksgoal 5000  or  !kicksgoal 5000 Buy a drink' };
     }
     const goals = await getStreamGoals();
-    // Only auto-bump to next multiple when there's no subtext — with subtext the goal is fixed
     const activeTarget = parsed.subtext
       ? parsed.target
       : effectiveTarget(parsed.target, parsed.target, goals.kicks);
@@ -231,7 +177,6 @@ export async function handleGoalCommand(
       kicksGoalTarget: activeTarget,
       kicksGoalIncrement: parsed.target,
       kicksGoalSubtext: parsed.subtext ?? null,
-      kicksGoalLoop: false,
     });
     notifyOverlay();
     refreshTitle(subTarget, activeTarget);
@@ -242,32 +187,48 @@ export async function handleGoalCommand(
     return { handled: true, reply };
   }
 
-  // !subs <count>
+  // ── !subs <count> ───────────────────────────────────────────────────────────
   if (lower === '!subs' || lower.startsWith('!subs ')) {
     const arg = trimmed.slice('!subs'.length).trim();
     const count = parseInt(arg, 10);
     if (!Number.isFinite(count) || count < 0) {
       return { handled: true, reply: 'Usage: !subs <number>  e.g. !subs 15' };
     }
+    const prevGoals = await getStreamGoals();
     await setStreamGoals({ subs: count });
     void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
-    const subTarget  = (settings.subGoalTarget  as number) ?? subIncrement;
+
+    let subTarget = (settings.subGoalTarget as number) ?? subIncrement;
     const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
+    const hasSubtext = !!(settings.subGoalSubtext as string | null | undefined);
+    // Auto-iterate if no label set and the new count crosses the goal threshold
+    if (subTarget > 0 && !hasSubtext && prevGoals.subs < subTarget && count >= subTarget) {
+      subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, count);
+    }
+    notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
     return { handled: true, reply: `✅ Subs count set to ${count}` };
   }
 
-  // !kicks <count>
+  // ── !kicks <count> ──────────────────────────────────────────────────────────
   if (lower === '!kicks' || lower.startsWith('!kicks ')) {
     const arg = trimmed.slice('!kicks'.length).trim();
     const count = parseInt(arg, 10);
     if (!Number.isFinite(count) || count < 0) {
       return { handled: true, reply: 'Usage: !kicks <number>  e.g. !kicks 1500' };
     }
+    const prevGoals = await getStreamGoals();
     await setStreamGoals({ kicks: count });
     void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
-    const subTarget  = (settings.subGoalTarget  as number) ?? subIncrement;
-    const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
+
+    const subTarget = (settings.subGoalTarget as number) ?? subIncrement;
+    let kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
+    const hasKicksSubtext = !!(settings.kicksGoalSubtext as string | null | undefined);
+    // Auto-iterate if no label set and the new count crosses the goal threshold
+    if (kicksTarget > 0 && !hasKicksSubtext && prevGoals.kicks < kicksTarget && count >= kicksTarget) {
+      kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, count);
+    }
+    notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
     return { handled: true, reply: `✅ Kicks count set to ${count}` };
   }

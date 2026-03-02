@@ -469,21 +469,13 @@ export async function POST(request: NextRequest) {
     const increment = (settings?.subGoalIncrement as number) ?? 5;
     const kicksTarget = (settings?.kicksGoalTarget as number) ?? 100;
     const hasSubtext = !!(settings?.subGoalSubtext as string | null | undefined);
-    const subGoalLoop = !!(settings?.subGoalLoop as boolean | undefined);
-    const subtext = (settings?.subGoalSubtext as string) || '';
     const prevSubs = goals.subs - count;
     if (target > 0 && prevSubs < target && goals.subs >= target) {
-      // Loop goals bump even with subtext; fixed subtext goals hold at 100%
-      const shouldBump = !hasSubtext || subGoalLoop;
-      const newTarget = shouldBump
-        ? await bumpGoalTarget('subs', target, increment, goals.subs)
-        : target;
+      // No label: auto-iterate to next multiple. With label: hold at 100% until cleared.
+      const newTarget = hasSubtext ? target : await bumpGoalTarget('subs', target, increment, goals.subs);
       const token = await getValidAccessToken();
       if (token) {
-        const msg = hasSubtext && subGoalLoop
-          ? `🎉 ${subtext}! 🎁 ${target} subs reached — next: ${newTarget}`
-          : `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`;
-        void sendKickChatMessage(token, msg).catch(() => {});
+        void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
         void updateKickTitleGoals(goals.subs, newTarget, goals.kicks, kicksTarget).catch(() => {});
       }
     } else {
@@ -538,22 +530,12 @@ export async function POST(request: NextRequest) {
       const target = (settings?.kicksGoalTarget as number) ?? 100;
       const increment = (settings?.kicksGoalIncrement as number) ?? 100;
       const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
-      const kicksGoalLoop = !!(settings?.kicksGoalLoop as boolean | undefined);
-      const kicksSubtext = (settings?.kicksGoalSubtext as string) || '';
       const prevKicks = goals.kicks - amount;
       if (target > 0 && prevKicks < target && goals.kicks >= target) {
-        // Loop goals bump even with subtext; fixed subtext goals hold at 100%
-        const shouldBump = !hasKicksSubtext || kicksGoalLoop;
-        const newTarget = shouldBump
-          ? await bumpGoalTarget('kicks', target, increment, goals.kicks)
-          : target;
+        // No label: auto-iterate to next multiple. With label: hold at 100% until cleared.
+        if (!hasKicksSubtext) await bumpGoalTarget('kicks', target, increment, goals.kicks);
         const token = await getValidAccessToken();
-        if (token) {
-          const msg = hasKicksSubtext && kicksGoalLoop
-            ? `🎉 ${kicksSubtext}! 💚 ${target} kicks reached — next: ${newTarget}`
-            : `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`;
-          void sendKickChatMessage(token, msg).catch(() => {});
-        }
+        if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});
       }
     }
   }

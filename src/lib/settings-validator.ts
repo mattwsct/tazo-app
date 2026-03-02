@@ -69,6 +69,7 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
       // Removed settings — still present in old KV data, safe to silently drop
       'showSubCountInTitle', 'showTopSubGifter', 'showTopKicksGifter',
       'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil',
+      'subGoalLoop', 'kicksGoalLoop',
     ];
     const isDeprecatedSettings = rejectedKeys.every(key => deprecatedChatBotKeys.includes(key));
     
@@ -100,6 +101,7 @@ export function detectMaliciousKeys(settings: unknown): string[] {
     // Removed settings — stale KV data, not malicious
     'showSubCountInTitle', 'showTopSubGifter', 'showTopKicksGifter',
     'subGoalCelebrationUntil', 'kicksGoalCelebrationUntil',
+    'subGoalLoop', 'kicksGoalLoop',
   ];
   for (const key of Object.keys(settingsObj)) {
     if (!(key in SETTINGS_CONFIG) && !ignoredKeys.includes(key)) {
