@@ -5,7 +5,7 @@
 
 import { createHash, randomBytes, createVerify, createPublicKey } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'http';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 
 // --- Constants ---
 

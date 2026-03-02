@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getStreamGoals, setStreamGoals } from '@/utils/stream-goals-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';

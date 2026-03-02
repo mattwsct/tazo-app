@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getLocationData } from '@/utils/location-cache';
 import { KM_TO_MI, M_TO_FT, CM_TO_IN, KG_TO_LBS, L_TO_GAL, ML_TO_FLOZ } from '@/utils/unit-conversions';
 

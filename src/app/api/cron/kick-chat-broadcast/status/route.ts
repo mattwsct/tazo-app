@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { verifyAuth, verifyRequestAuth } from '@/lib/api-auth';
 import { getHeartrateStats } from '@/utils/stats-storage';
 import { getPersistentLocation } from '@/utils/location-cache';

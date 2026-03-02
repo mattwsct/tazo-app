@@ -3,7 +3,7 @@
  * Broadcaster and mods only.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import {
   KICK_BROADCASTER_SLUG_KEY,
   getValidAccessToken,

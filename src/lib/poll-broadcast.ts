@@ -3,7 +3,7 @@
  * Gives overlays instant updates instead of waiting for the 15s polling interval.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { broadcastSettings } from '@/lib/settings-broadcast';
 import { POLL_STATE_KEY } from '@/types/poll';

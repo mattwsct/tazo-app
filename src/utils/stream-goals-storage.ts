@@ -3,7 +3,7 @@
  * Reset when livestream goes live. Used for sub/kicks goal progress bars on overlay.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 

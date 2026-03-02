@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import {
   KICK_OAUTH_BASE,

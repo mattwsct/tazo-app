@@ -2,7 +2,7 @@
 // Shared cache for RTIRL, location, weather, and timezone data
 // Used by both overlay (updates cache) and chat commands (reads cache)
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { fetchRTIRLData, type RTIRLData } from './rtirl-utils';
 import { fetchLocationFromLocationIQ, getTimezoneFromOwmOffset } from './api-utils';
 import { fetchCurrentWeather, fetchForecast, parseWeatherData, extractPrecipitationForecast, fetchAirPollution, fetchUVIndex } from './weather-chat';

@@ -8,7 +8,7 @@
  * Lifetime key: vault:lifetime                                        — no TTL
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 
 const DISPLAY_NAMES_KEY = 'leaderboard_display_names';

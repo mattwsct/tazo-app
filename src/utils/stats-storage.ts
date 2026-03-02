@@ -15,7 +15,7 @@
 // - Rapid changes: Captured immediately (no data loss during spikes)
 // - KV efficiency: Max ~1000 entries = ~40KB per metric (well under KV limits)
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const STALE_THRESHOLD_MS = 30 * 1000; // 30 seconds - matches overlay timeout

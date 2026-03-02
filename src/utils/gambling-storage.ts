@@ -4,7 +4,7 @@
  * New players start with 100 tazos.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 import { getPollState, setPollState } from '@/lib/poll-store';
 import { generateAutoPoll } from '@/utils/auto-poll-content';

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { validateEnvironment } from '@/lib/env-validator';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 
 export async function GET(): Promise<NextResponse> {
   try {

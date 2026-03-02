@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { addConnection, removeConnection, getConnectionInfo, connections } from '@/lib/settings-broadcast';
 import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
 import { STREAM_GOALS_MODIFIED_KEY } from '@/utils/stream-goals-storage';

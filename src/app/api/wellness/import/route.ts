@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession, updateActiveCaloriesSession, getWellnessData, getWellnessSessionStart } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 

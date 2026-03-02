@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPersistentLocation, updatePersistentRtirlOnly } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import type { OverlaySettings } from '@/types/settings';
 import { validateUpdateLocationPayload, MAX_PAYLOAD_BYTES_EXPORT } from '@/lib/location-payload-validator';
 import { checkApiRateLimit } from '@/lib/rate-limit';

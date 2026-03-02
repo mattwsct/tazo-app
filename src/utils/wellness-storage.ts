@@ -7,7 +7,7 @@
 // value directly. Only data points timestamped after session start are counted; pre-stream
 // activity from a large "catch-up" sync is excluded. Reset only when stream goes live.
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 
 const WELLNESS_KEY = 'wellness_data';
 const WELLNESS_STEPS_SESSION_KEY = 'wellness_steps_session';

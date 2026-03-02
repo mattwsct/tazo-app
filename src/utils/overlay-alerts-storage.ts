@@ -3,7 +3,7 @@
  * Stored in KV, consumed by overlay. Max 20 alerts, each shown ~8s.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 
 const OVERLAY_ALERTS_KEY = 'kick_overlay_alerts';
 const MAX_ALERTS = 20;

@@ -2,7 +2,7 @@
  * Shared chat command response helpers for Kick bot and Fossabot API.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
 import { getKickChannelStats } from '@/lib/kick-api';
 import { getLocationData, getPersistentLocation } from '@/utils/location-cache';

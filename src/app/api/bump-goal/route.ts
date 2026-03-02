@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 import { getGoalCelebration, bumpGoalTarget, shouldBump } from '@/utils/stream-goals-celebration';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';

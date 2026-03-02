@@ -2,7 +2,7 @@
  * !title chat command: broadcaster and mods can set stream title (with optional location append).
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { KICK_API_BASE, KICK_BROADCASTER_SLUG_KEY, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken } from '@/lib/kick-api';
 import { getPersistentLocation, getCachedLocationData } from '@/utils/location-cache';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';

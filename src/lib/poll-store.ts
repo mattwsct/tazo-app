@@ -2,7 +2,7 @@
  * Poll state in KV. Used by webhook and settings-stream.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import type { PollState, QueuedPoll, PollSettings } from '@/types/poll';
 import {
   POLL_STATE_KEY,

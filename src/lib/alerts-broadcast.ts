@@ -4,7 +4,7 @@
  * waiting for the 2s poll.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { broadcastSettings } from '@/lib/settings-broadcast';
 import { getGamblingLeaderboardTop } from '@/utils/gambling-storage';

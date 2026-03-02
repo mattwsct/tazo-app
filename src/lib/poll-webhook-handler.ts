@@ -2,7 +2,7 @@
  * Handles poll-related logic in the Kick webhook: !poll start, vote counting, poll end.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 import { addTazosForReward, startAutoPoll } from '@/utils/gambling-storage';

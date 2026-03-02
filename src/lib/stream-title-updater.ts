@@ -3,7 +3,7 @@
  * Called fire-and-forget from webhook (on sub events) and bump-goal (after increment).
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getValidAccessToken, KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY } from '@/lib/kick-api';
 import { buildStreamTitle, getStreamTitleLocationPart } from '@/utils/stream-title-utils';
 import { getPersistentLocation } from '@/utils/location-cache';

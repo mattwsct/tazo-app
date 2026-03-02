@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { verifyAuth } from '@/lib/api-auth';
 import { DEFAULT_KICK_MESSAGE_ENABLED, EVENT_TYPE_TO_TOGGLE, KICK_MESSAGE_ENABLED_KEY, isToggleDisabled } from '@/types/kick-messages';
 

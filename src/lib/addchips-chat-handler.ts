@@ -3,7 +3,7 @@
  * Usage: !addtazos user 50 or !addtazos 50 user
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { addTazosAsAdmin } from '@/utils/gambling-storage';
 

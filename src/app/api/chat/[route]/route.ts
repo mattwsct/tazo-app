@@ -14,7 +14,7 @@ import {
 } from '@/utils/weather-chat';
 import { getLocationData, getPersistentLocation } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { OverlaySettings } from '@/types/settings';
 import { getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';

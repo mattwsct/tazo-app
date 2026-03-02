@@ -3,7 +3,7 @@
  * short window, then bump the target by a set amount for the next goal.
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 
 const GOAL_CELEBRATION_KEY = 'stream_goal_celebration';
 const CELEBRATION_DURATION_MS = 0; // Immediate bump — no hold at 100%

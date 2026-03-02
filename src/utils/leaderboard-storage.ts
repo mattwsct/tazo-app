@@ -2,7 +2,7 @@
  * Leaderboard storage: display names and exclusion list (shared by chips/gambling leaderboard).
  */
 
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 
 const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
 

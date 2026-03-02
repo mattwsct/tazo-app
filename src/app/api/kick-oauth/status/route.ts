@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { getKickEventSubscriptions } from '@/lib/kick-api';
 
 const KICK_TOKENS_KEY = 'kick_tokens';
