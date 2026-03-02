@@ -33,11 +33,6 @@ const nextConfig: NextConfig = {
   // Compression
   compress: true,
   
-  // Output file tracing for better optimization (reduces deployment size)
-  outputFileTracingIncludes: {
-    '/api/**/*': ['./node_modules/@vercel/kv/**/*'],
-  },
-  
   // Security headers
   async headers() {
     return [
