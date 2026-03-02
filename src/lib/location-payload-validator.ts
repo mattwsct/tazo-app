@@ -1,31 +1,10 @@
-// Validation for update-location API payload
+// Validation for update-location API payload.
+// Security: only GPS coordinates are accepted from the client — never user-supplied city/country strings.
+// Geocoded location text is set exclusively by server-side processes (cron, admin browser endpoint).
 
-import type { LocationData } from '@/utils/location-utils';
-import type { PersistentLocationData } from '@/utils/location-cache';
 import type { RTIRLData } from '@/utils/rtirl-utils';
 
-const MAX_STRING_LEN = 100;
 const MAX_PAYLOAD_BYTES = 50_000; // 50KB
-
-function isValidString(s: unknown): s is string {
-  return typeof s === 'string' && s.length <= MAX_STRING_LEN;
-}
-
-function sanitizeLocation(obj: unknown): LocationData | null {
-  if (!obj || typeof obj !== 'object') return null;
-  const o = obj as Record<string, unknown>;
-  const location: LocationData = {};
-  const stringFields = [
-    'country', 'countryCode', 'city', 'state', 'town', 'municipality',
-    'suburb', 'neighbourhood', 'quarter', 'province', 'region', 'county',
-    'village', 'hamlet', 'district', 'ward', 'borough', 'timezone'
-  ];
-  for (const key of stringFields) {
-    const v = o[key];
-    if (isValidString(v)) (location as Record<string, string>)[key] = v;
-  }
-  return location;
-}
 
 function sanitizeRtirl(obj: unknown): RTIRLData | null {
   if (!obj || typeof obj !== 'object') return null;
@@ -39,19 +18,21 @@ function sanitizeRtirl(obj: unknown): RTIRLData | null {
 }
 
 /**
- * Validates and sanitizes update-location payload. Returns null if invalid.
+ * Validates and sanitizes the overlay location POST payload.
+ * Only accepts RTIRL GPS coordinates — location text fields are stripped and ignored.
+ * Returns null if the payload is missing or coordinates are invalid.
  */
-export function validateUpdateLocationPayload(body: unknown): PersistentLocationData | null {
+export function validateUpdateLocationPayload(body: unknown): { rtirl: RTIRLData; updatedAt: number } | null {
   if (!body || typeof body !== 'object') return null;
   const o = body as Record<string, unknown>;
-  const location = sanitizeLocation(o.location);
-  const rtirl = sanitizeRtirl(o.rtirl);
+
+  // Accept rtirl from the top level or directly (overlay sends { rtirl: {...}, ... })
+  const rtirlSource = o.rtirl ?? o;
+  const rtirl = sanitizeRtirl(rtirlSource);
+  if (!rtirl) return null;
+
   const updatedAt = typeof o.updatedAt === 'number' ? o.updatedAt : Date.now();
-  if (!location || !rtirl) return null;
-  if (!location.country && !location.countryCode && !location.city && !location.state) {
-    return null;
-  }
-  return { location, rtirl, updatedAt };
+  return { rtirl, updatedAt };
 }
 
 export const MAX_PAYLOAD_BYTES_EXPORT = MAX_PAYLOAD_BYTES;

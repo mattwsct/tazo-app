@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPersistentLocation, updatePersistentLocationIfNewer } from '@/utils/location-cache';
+import { getPersistentLocation, updatePersistentRtirlOnly } from '@/utils/location-cache';
 import { formatLocation } from '@/utils/location-utils';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { kv } from '@vercel/kv';
@@ -54,11 +54,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
     }
     const body = JSON.parse(rawBody) as unknown;
+    // Security: only GPS coordinates are accepted — location text is never taken from the client.
+    // City/country names are set exclusively by the server-side cron (reverse geocoding).
     const data = validateUpdateLocationPayload(body);
     if (!data) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
-    const updated = await updatePersistentLocationIfNewer(data);
+    const updated = await updatePersistentRtirlOnly(data.rtirl, data.updatedAt);
     return NextResponse.json({ ok: true, updated });
   } catch (error) {
     if (error instanceof SyntaxError) {

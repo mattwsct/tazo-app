@@ -8,6 +8,7 @@ import {
   resetActiveCaloriesSession,
   resetWellnessLastImport,
   resetWellnessMilestonesOnStreamStart,
+  setWellnessSessionStart,
 } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
     await onStreamStarted();
 
     const wellness = await getWellnessData();
+    const sessionStartAt = Date.now();
     await Promise.all([
       resetStepsSession(wellness?.steps ?? 0),
       resetDistanceSession(wellness?.distanceKm ?? 0),
@@ -39,6 +41,7 @@ export async function POST(request: NextRequest) {
       resetWellnessMilestonesOnStreamStart(),
       resetStreamGoalsOnStreamStart(),
       clearGoalCelebrationOnStreamStart(),
+      setWellnessSessionStart(sessionStartAt),
     ]);
 
     return NextResponse.json({ success: true });

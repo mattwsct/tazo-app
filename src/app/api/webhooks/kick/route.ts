@@ -33,7 +33,7 @@ import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
-import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart } from '@/utils/wellness-storage';
+import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart, setWellnessSessionStart } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals, trackSubGifter, trackKicksGifter } from '@/utils/stream-goals-storage';
 import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 import { setGoalCelebrationIfNeeded } from '@/utils/stream-goals-celebration';
@@ -158,12 +158,14 @@ export async function POST(request: NextRequest) {
     void (async () => {
       try {
         const wellness = await getWellnessData();
+        const sessionStartAt = Date.now();
         await resetStepsSession(wellness?.steps ?? 0);
         await resetDistanceSession(wellness?.distanceKm ?? 0);
         await resetFlightsSession(wellness?.flightsClimbed ?? 0);
         await resetActiveCaloriesSession(wellness?.activeCalories ?? 0);
         await resetWellnessLastImport();
         await resetWellnessMilestonesOnStreamStart();
+        await setWellnessSessionStart(sessionStartAt);
         await resetStreamGoalsOnStreamStart();
         await clearGoalCelebrationOnStreamStart();
         await resetEventTimestamps();

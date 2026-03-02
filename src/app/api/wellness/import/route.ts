@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { kv } from '@vercel/kv';
-import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession, updateActiveCaloriesSession, getWellnessData } from '@/utils/wellness-storage';
+import { updateWellnessData, updateStepsSession, updateDistanceSession, updateFlightsSession, updateActiveCaloriesSession, getWellnessData, getWellnessSessionStart } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 
 const IMPORT_DEDUP_TTL_SEC = 30; // seconds — reject identical payloads within this window
@@ -63,10 +63,14 @@ function distanceToKm(val: number, units: string | undefined): number {
   return val / 1000; // default: meters (Apple Health native unit)
 }
 
-function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessData> {
+function parseHealthAutoExport(body: Record<string, unknown>, onlyAfterMs?: number | null): {
+  updates: Partial<WellnessData>;
+  sessionDeltas: { steps?: number; distanceKm?: number; flightsClimbed?: number; activeCalories?: number };
+} {
   const data = body.data as { metrics?: HealthMetric[] } | undefined;
   const metrics = data?.metrics;
-  if (!Array.isArray(metrics)) return {};
+  const emptyResult = { updates: {} as Partial<WellnessData>, sessionDeltas: {} };
+  if (!Array.isArray(metrics)) return emptyResult;
 
   const byName = new Map<string, HealthMetric>();
   for (const m of metrics) {
@@ -74,9 +78,26 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   }
 
   const updates: Partial<WellnessData> = {};
+
+  // Sum all data points (no timestamp filter) — used for current wellness display values
   const sumQty = (m: HealthMetric | undefined): number => {
     if (!m?.data || !Array.isArray(m.data)) return 0;
     return m.data.reduce((s, d) => s + (typeof d.qty === 'number' ? d.qty : 0), 0);
+  };
+
+  // Sum only data points timestamped after session start — used for session accumulators
+  // If no session start is known, fall back to summing all (safe for first-ever import)
+  const sumQtySession = (m: HealthMetric | undefined): number => {
+    if (!m?.data || !Array.isArray(m.data)) return 0;
+    if (onlyAfterMs == null) return sumQty(m);
+    return m.data.reduce((s, d) => {
+      if (typeof d.qty !== 'number') return s;
+      if (typeof d.date === 'string') {
+        const ts = Date.parse(d.date);
+        if (!Number.isNaN(ts) && ts < onlyAfterMs) return s; // skip pre-session data point
+      }
+      return s + d.qty;
+    }, 0);
   };
   const lastAvg = (m: HealthMetric | undefined): number | undefined => {
     if (!m?.data?.length) return undefined;
@@ -89,11 +110,15 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
     return typeof last?.qty === 'number' ? last.qty : undefined;
   };
 
+  // Session deltas: same metrics but only counting data points after session start
+  const sessionDeltas: { steps?: number; distanceKm?: number; flightsClimbed?: number; activeCalories?: number } = {};
+
   // step_count: HKQuantityTypeIdentifier.stepCount — count (no unit conversion)
   const stepCount = byName.get('step_count');
   if (stepCount) {
     const total = Math.round(sumQty(stepCount));
     if (total >= 0) updates.steps = total;
+    sessionDeltas.steps = Math.round(sumQtySession(stepCount));
   }
 
   // active_energy / activeEnergyBurned: HKQuantityTypeIdentifier.activeEnergyBurned — kJ or kcal (user pref)
@@ -101,6 +126,7 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   if (activeEnergy) {
     const raw = sumQty(activeEnergy);
     updates.activeCalories = Math.max(0, Math.round(energyToKcal(raw, activeEnergy.units)));
+    sessionDeltas.activeCalories = Math.max(0, Math.round(energyToKcal(sumQtySession(activeEnergy), activeEnergy.units)));
   }
 
   // basal_energy_burned / resting_energy: HKQuantityTypeIdentifier.basalEnergyBurned — kJ or kcal
@@ -120,6 +146,7 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
     const raw = sumQty(walkingDist);
     const km = distanceToKm(raw, walkingDist.units);
     updates.distanceKm = Math.max(0, Math.round(km * 1000) / 1000);
+    sessionDeltas.distanceKm = Math.max(0, Math.round(distanceToKm(sumQtySession(walkingDist), walkingDist.units) * 1000) / 1000);
   }
 
   // flights_climbed: HKQuantityTypeIdentifier.flightsClimbed — count
@@ -127,6 +154,7 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   if (flights) {
     const total = Math.max(0, Math.round(sumQty(flights)));
     updates.flightsClimbed = total;
+    sessionDeltas.flightsClimbed = Math.max(0, Math.round(sumQtySession(flights)));
   }
 
   // height: HKQuantityTypeIdentifier.height — typically m or cm (Apple Health uses m)
@@ -191,7 +219,7 @@ function parseHealthAutoExport(body: Record<string, unknown>): Partial<WellnessD
   const restingBpm = lastAvg(restingHr) ?? lastQty(restingHr);
   if (restingBpm != null && restingBpm >= 0) updates.restingHeartRate = Math.round(restingBpm);
 
-  return updates;
+  return { updates, sessionDeltas };
 }
 
 export async function POST(request: NextRequest) {
@@ -204,15 +232,26 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const updates: Partial<WellnessData> = {};
+    // Session-filtered deltas — only data points timestamped after stream start
+    let sessionOverrides: { steps?: number; distanceKm?: number; flightsClimbed?: number; activeCalories?: number } | null = null;
+
+    // Fetch session start time once (used to filter pre-stream data from session counters)
+    const sessionStartAt = await getWellnessSessionStart();
 
     // Health Auto Export format: { data: { metrics: [...] } }
     if (body.data && typeof body.data === 'object' && (body.data as { metrics?: unknown }).metrics) {
       const data = body.data as { metrics?: Array<{ name?: string }> };
       const metricNames = (data.metrics ?? []).map(m => m?.name).filter(Boolean) as string[];
-      Object.assign(updates, parseHealthAutoExport(body));
+      const parsed = parseHealthAutoExport(body, sessionStartAt);
+      Object.assign(updates, parsed.updates);
+      sessionOverrides = parsed.sessionDeltas;
+      // Log if any session values were filtered
+      const filteredSteps = (parsed.updates.steps ?? 0) - (parsed.sessionDeltas.steps ?? parsed.updates.steps ?? 0);
+      const filteredDist = (parsed.updates.distanceKm ?? 0) - (parsed.sessionDeltas.distanceKm ?? parsed.updates.distanceKm ?? 0);
       console.log('[Wellness import] Health Auto Export:', {
         received: metricNames,
-        parsed: updates,
+        parsed: parsed.updates,
+        ...(filteredSteps > 0 || filteredDist > 0 ? { preStreamFiltered: { steps: filteredSteps, distanceKm: filteredDist } } : {}),
       });
     }
 
@@ -267,17 +306,23 @@ export async function POST(request: NextRequest) {
     console.log('[Wellness import] Saving:', updates);
     await updateWellnessData(updates);
 
-    if (updates.steps !== undefined) {
-      await updateStepsSession(updates.steps);
+    // Use session-filtered deltas for accumulators (excludes pre-stream data points)
+    const sessionSteps = sessionOverrides?.steps ?? updates.steps;
+    const sessionDist = sessionOverrides?.distanceKm ?? updates.distanceKm;
+    const sessionFlights = sessionOverrides?.flightsClimbed ?? updates.flightsClimbed;
+    const sessionCals = sessionOverrides?.activeCalories ?? updates.activeCalories;
+
+    if (sessionSteps !== undefined) {
+      await updateStepsSession(sessionSteps);
     }
-    if (updates.distanceKm !== undefined) {
-      await updateDistanceSession(updates.distanceKm);
+    if (sessionDist !== undefined) {
+      await updateDistanceSession(sessionDist);
     }
-    if (updates.flightsClimbed !== undefined) {
-      await updateFlightsSession(updates.flightsClimbed);
+    if (sessionFlights !== undefined) {
+      await updateFlightsSession(sessionFlights);
     }
-    if (updates.activeCalories !== undefined) {
-      await updateActiveCaloriesSession(updates.activeCalories);
+    if (sessionCals !== undefined) {
+      await updateActiveCaloriesSession(sessionCals);
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

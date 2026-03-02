@@ -22,7 +22,7 @@ import type { LocationData } from '@/utils/location-utils';
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
 import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
-import { formatLocation, formatCountryName, getLocationForPersistence } from '@/utils/location-utils';
+import { formatLocation, formatCountryName } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
 import { 
@@ -1066,51 +1066,39 @@ function OverlayPage() {
                         persistentFallbackTimerRef.current = null;
                       }
                       
-                      // Update persistent location storage (for chat commands) via API - KV vars are server-only
-                      // Store neighbourhood, city, state, country etc. so admin display mode (state/city/neighbourhood) works
+                      // Update persistent RTIRL coordinates (GPS only — no location text sent to server).
+                      // City/country names are set exclusively by the server-side cron via reverse geocoding.
                       const payloadTimestamp = extractGpsTimestamp(payload);
                       const rtirlUpdatedAt = payloadTimestamp || Date.now();
                       lastLocationSourceTimestampRef.current = rtirlUpdatedAt;
-                      const locationToStore = getLocationForPersistence(loc);
-                      const persistentPayload = locationToStore ? {
-                        location: locationToStore,
+                      const coordsPayload = {
                         rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: rtirlUpdatedAt },
-                        updatedAt: rtirlUpdatedAt, // Use GPS timestamp so we don't overwrite newer browser-set data
-                      } : null;
-                      if (persistentPayload) {
-                        const doUpdate = (retryCount = 0) => {
-                          fetch('/api/location', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(persistentPayload),
+                        updatedAt: rtirlUpdatedAt,
+                      };
+                      const doUpdate = (retryCount = 0) => {
+                        fetch('/api/location', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(coordsPayload),
+                        })
+                          .then(res => {
+                            if (res.ok && process.env.NODE_ENV !== 'production') {
+                              OverlayLogger.location('GPS coordinates saved', { lat: lat!, lon: lon! });
+                            } else if (!res.ok && retryCount < 1) {
+                              OverlayLogger.warn('GPS coordinates save failed, retrying', { status: res.status });
+                              setTimeout(() => doUpdate(retryCount + 1), 2000);
+                            } else if (!res.ok) {
+                              OverlayLogger.warn('GPS coordinates save failed', { status: res.status });
+                            }
                           })
-                            .then(res => {
-                              if (res.ok && process.env.NODE_ENV !== 'production' && persistentPayload) {
-                                const loc = persistentPayload.location;
-                                OverlayLogger.location('Persistent location saved for chat commands', {
-                                  stored: {
-                                    neighbourhood: loc.neighbourhood || '–',
-                                    city: loc.city || '–',
-                                    state: loc.state || '–',
-                                    country: loc.country || '–'
-                                  }
-                                });
-                              } else if (!res.ok && retryCount < 1) {
-                                OverlayLogger.warn('Persistent location save failed, retrying', { status: res.status });
-                                setTimeout(() => doUpdate(retryCount + 1), 2000);
-                              } else if (!res.ok) {
-                                OverlayLogger.warn('Persistent location save failed', { status: res.status });
-                              }
-                            })
-                            .catch(err => {
-                              if (retryCount < 1) {
-                                OverlayLogger.warn('Persistent location save error, retrying', { error: err });
-                                setTimeout(() => doUpdate(retryCount + 1), 2000);
-                              }
-                            });
-                        };
-                        doUpdate();
-                      }
+                          .catch(err => {
+                            if (retryCount < 1) {
+                              OverlayLogger.warn('GPS coordinates save error, retrying', { error: err });
+                              setTimeout(() => doUpdate(retryCount + 1), 2000);
+                            }
+                          });
+                      };
+                      doUpdate();
                       
                       // Only update if we have something meaningful to display
                         // Check for non-empty strings (not just truthy, since empty string is falsy)
@@ -1169,12 +1157,10 @@ function OverlayPage() {
                           secondary: undefined,
                           countryCode: countryCode
                         });
-                        // Persist country-only for chat commands when admin sets country display mode
-                        const countryOnlyLocation = getLocationForPersistence({ country: rawCountryName, countryCode, timezone: loc!.timezone });
-                        if (countryOnlyLocation) {
+                        // Persist GPS coordinates only — no location text sent to server.
+                        {
                           const payloadTimestamp = extractGpsTimestamp(payload);
-                          const countryPayload = {
-                            location: countryOnlyLocation,
+                          const coordsOnly = {
                             rtirl: { lat: lat!, lon: lon!, raw: payload, updatedAt: payloadTimestamp || Date.now() },
                             updatedAt: Date.now(),
                           };
@@ -1182,7 +1168,7 @@ function OverlayPage() {
                             fetch('/api/location', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(countryPayload),
+                              body: JSON.stringify(coordsOnly),
                             })
                               .then(res => {
                                 if (!res.ok && retryCount < 1) setTimeout(() => doCountryUpdate(retryCount + 1), 2000);

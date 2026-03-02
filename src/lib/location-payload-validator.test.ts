@@ -2,39 +2,41 @@ import { describe, expect, it } from 'vitest';
 import { validateUpdateLocationPayload } from '@/lib/location-payload-validator';
 
 describe('validateUpdateLocationPayload', () => {
-  it('accepts valid payload with location and rtirl', () => {
+  it('accepts valid payload with rtirl coords', () => {
     const body = {
-      location: { city: 'Tokyo', country: 'Japan', countryCode: 'jp' },
       rtirl: { lat: 35.69, lon: 139.69, updatedAt: Date.now() },
       updatedAt: Date.now(),
     };
     const result = validateUpdateLocationPayload(body);
     expect(result).not.toBeNull();
-    expect(result!.location.city).toBe('Tokyo');
     expect(result!.rtirl.lat).toBe(35.69);
+    expect(result!.rtirl.lon).toBe(139.69);
   });
-  it('rejects payload without location', () => {
-    const body = { rtirl: { lat: 0, lon: 0, updatedAt: Date.now() }, updatedAt: Date.now() };
-    expect(validateUpdateLocationPayload(body)).toBeNull();
-  });
-  it('rejects payload without rtirl', () => {
-    const body = { location: { country: 'Japan' }, updatedAt: Date.now() };
-    expect(validateUpdateLocationPayload(body)).toBeNull();
-  });
-  it('rejects location without any useful fields', () => {
+  it('ignores and strips any location text fields (injection prevention)', () => {
     const body = {
-      location: {},
-      rtirl: { lat: 0, lon: 0, updatedAt: Date.now() },
+      location: { city: 'HACKED', country: 'HACKED', countryCode: 'XX' },
+      rtirl: { lat: 35.69, lon: 139.69, updatedAt: Date.now() },
       updatedAt: Date.now(),
     };
+    const result = validateUpdateLocationPayload(body);
+    expect(result).not.toBeNull();
+    // Result must not contain location text — only rtirl + updatedAt
+    expect((result as Record<string, unknown>).location).toBeUndefined();
+  });
+  it('rejects payload without rtirl', () => {
+    const body = { updatedAt: Date.now() };
     expect(validateUpdateLocationPayload(body)).toBeNull();
   });
-  it('sanitizes invalid lat/lon', () => {
+  it('rejects invalid lat/lon', () => {
     const body = {
-      location: { country: 'Japan', countryCode: 'jp' },
       rtirl: { lat: 999, lon: 999, updatedAt: Date.now() },
       updatedAt: Date.now(),
     };
     expect(validateUpdateLocationPayload(body)).toBeNull();
+  });
+  it('rejects non-object body', () => {
+    expect(validateUpdateLocationPayload(null)).toBeNull();
+    expect(validateUpdateLocationPayload('string')).toBeNull();
+    expect(validateUpdateLocationPayload(42)).toBeNull();
   });
 });

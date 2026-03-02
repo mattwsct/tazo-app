@@ -4,8 +4,8 @@
 //
 // Steps session: Tracks steps accumulated since stream start.
 // Health Auto Export "Since last sync" mode sends incremental deltas each push — we add each
-// value directly. No cumulative/daily-reset logic; midnight is handled by the app if it sends
-// all new data since last sync. Reset only when stream goes live.
+// value directly. Only data points timestamped after session start are counted; pre-stream
+// activity from a large "catch-up" sync is excluded. Reset only when stream goes live.
 
 import { kv } from '@vercel/kv';
 
@@ -15,6 +15,7 @@ const WELLNESS_DISTANCE_SESSION_KEY = 'wellness_distance_session';
 const WELLNESS_FLIGHTS_SESSION_KEY = 'wellness_flights_session';
 const WELLNESS_ACTIVE_CALORIES_SESSION_KEY = 'wellness_active_calories_session';
 const WELLNESS_LAST_IMPORT_KEY = 'wellness_last_import';
+const WELLNESS_SESSION_START_KEY = 'wellness_session_start_at';
 
 /** Tracks last imported value+time per metric to deduplicate rapid/duplicate pushes. */
 interface WellnessLastImport {
@@ -91,6 +92,24 @@ export async function resetWellnessLastImport(): Promise<void> {
     }
   } catch (error) {
     console.error('Failed to reset wellness last import:', error);
+  }
+}
+
+/** Store the ms timestamp when the stream session started. Used to filter out pre-stream data points. */
+export async function setWellnessSessionStart(at: number): Promise<void> {
+  try {
+    await kv.set(WELLNESS_SESSION_START_KEY, at);
+  } catch (error) {
+    console.error('Failed to set wellness session start:', error);
+  }
+}
+
+/** Returns the ms timestamp when the stream session started, or null if not set. */
+export async function getWellnessSessionStart(): Promise<number | null> {
+  try {
+    return await kv.get<number>(WELLNESS_SESSION_START_KEY);
+  } catch {
+    return null;
   }
 }
 

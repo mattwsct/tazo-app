@@ -13,6 +13,10 @@ import { checkApiRateLimit } from '@/lib/rate-limit';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  const authToken = request.cookies.get('auth-token')?.value;
+  if (authToken !== 'authenticated') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { success } = await checkApiRateLimit(request, 'location-browser');
   if (!success) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });

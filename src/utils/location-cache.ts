@@ -192,10 +192,11 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
 }
 
 /**
- * Persistent location storage (no TTL - always available)
+ * Persistent location storage (no TTL - always available).
+ * `location` is optional: the overlay POST only stores GPS coords; geocoded text comes from the cron.
  */
 export interface PersistentLocationData {
-  location: LocationData;
+  location?: LocationData;
   rtirl: RTIRLData;
   updatedAt: number; // Timestamp when last updated
 }
@@ -219,6 +220,24 @@ export async function updatePersistentLocationIfNewer(data: PersistentLocationDa
     return false; // Stored is newer (e.g. browser set recently)
   }
   await updatePersistentLocation(data);
+  return true;
+}
+
+/**
+ * Update only the RTIRL coordinates in persistent storage, preserving the existing geocoded location text.
+ * Used by the public overlay POST endpoint — accepts GPS coords only, never user-supplied city names.
+ * @returns true if updated, false if skipped (stored was newer)
+ */
+export async function updatePersistentRtirlOnly(rtirl: RTIRLData, updatedAt: number): Promise<boolean> {
+  const stored = await getPersistentLocation();
+  if (stored && stored.updatedAt > updatedAt) {
+    return false; // Stored is newer
+  }
+  await kv.set(PERSISTENT_LOCATION_KEY, {
+    ...(stored ?? {}),
+    rtirl,
+    updatedAt,
+  });
   return true;
 }
 
