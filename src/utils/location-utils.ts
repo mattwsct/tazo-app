@@ -205,11 +205,9 @@ function getLocationByPrecision(
   // Each category contains specific fields from LocationIQ API, ordered by priority
   
   // CITY: Settlements and urban areas (ordered from most appropriate to least appropriate)
-  // Fields: city (most appropriate) → municipality → town → county → village → hamlet (least appropriate)
-  // NOTE: Suburb is NOT included - it's a neighbourhood field, not a city field
-  // NOTE: County is included here as it often represents metropolitan areas (e.g., Gold Coast)
-  // NOTE: County comes before village/hamlet as metropolitan areas are more city-like than small settlements
-  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
+  // suburb/neighbourhood is checked first — it's more specific than the broad city/municipality name.
+  // e.g. "Surfers Paradise" (suburb) is preferred over "Gold Coast City" (city).
+  const cityFields: (keyof LocationData)[] = ['suburb', 'neighbourhood', 'city', 'municipality', 'town', 'county', 'village', 'hamlet'];
   
   // STATE: Large administrative divisions (includes states, provinces, prefectures, regions)
   // Fields: state, province, region
@@ -326,12 +324,13 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 // === 📏 UTILITY FUNCTIONS ===
 
 /**
- * Gets the best city name by selecting the first available city field
- * Note: Excludes suburb as suburbs are neighborhoods, not cities
+ * Gets the best city name by selecting the first available city field.
+ * suburb/neighbourhood is checked first as it's more specific (e.g. "Surfers Paradise" over "Gold Coast City").
  */
 export function getBestCityName(location: LocationData): string {
-  // Simple priority order for city names (excludes suburb - that's a neighborhood)
-  return location.city || 
+  return location.suburb ||
+         location.neighbourhood ||
+         location.city || 
          location.municipality || 
          location.town || 
          location.village ||
@@ -547,7 +546,7 @@ export function getLocationLevels(
     return null;
   };
 
-  const cityFields: (keyof LocationData)[] = ['city', 'municipality', 'town', 'county', 'village', 'hamlet'];
+  const cityFields: (keyof LocationData)[] = ['suburb', 'neighbourhood', 'city', 'municipality', 'town', 'county', 'village', 'hamlet'];
   const stateFields: (keyof LocationData)[] = ['state', 'province', 'region'];
 
   const city = displayMode === 'city' ? tryFields(cityFields) : null;

@@ -86,6 +86,8 @@ export function formatLocationForStreamTitle(
   const country = rawLocation.country || getCountryNameFromCode(countryCode);
   const rawState = rawLocation.state || rawLocation.province || rawLocation.region;
   const rawCity =
+    rawLocation.suburb ||
+    rawLocation.neighbourhood ||
     rawLocation.city ||
     rawLocation.municipality ||
     rawLocation.town ||
