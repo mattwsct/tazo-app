@@ -59,7 +59,7 @@ async function handlePOST(request: NextRequest) {
 
     // If sub count is shown in title, refresh title with latest count + new target
     const savedSettings = settings as unknown as Record<string, unknown>;
-    if (savedSettings.showSubCountInTitle) {
+    if (savedSettings.showSubGoal) {
       void (async () => {
         try {
           const goals = await getStreamGoals();

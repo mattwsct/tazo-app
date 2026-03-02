@@ -10,7 +10,6 @@ import { getEarnedLeaderboard } from '@/utils/tazo-vault-storage';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
-import { getGoalCelebration } from '@/utils/stream-goals-celebration';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,15 +25,13 @@ async function handleGET() {
 
     const gamblingEnabled = merged.gamblingEnabled !== false;
     const showLeaderboard = merged.showLeaderboard !== false && gamblingEnabled;
-    // Also fetch goals when showSubCountInTitle is on (needs count+target for stream title)
-    const needGoals = merged.showSubGoal || merged.showKicksGoal || merged.showSubCountInTitle;
+    const needGoals = merged.showSubGoal || merged.showKicksGoal;
     const leaderboardTopN = merged.gamblingLeaderboardTopN ?? merged.leaderboardTopN ?? 5;
 
-    const [gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration, excludedUsers] = await Promise.all([
+    const [gamblingLeaderboardTop, overlayAlerts, streamGoals, excludedUsers] = await Promise.all([
       showLeaderboard ? getGamblingLeaderboardTop(leaderboardTopN) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
-      needGoals ? getGoalCelebration() : {},
       showLeaderboard ? getLeaderboardExclusions() : Promise.resolve(new Set<string>()),
     ]);
 
@@ -46,8 +43,6 @@ async function handleGET() {
         ])
       : [[], [], []];
 
-    const cel = celebration as { subsUntil?: number; kicksUntil?: number };
-
     const combinedSettings = {
       ...merged,
       gamblingLeaderboardTop,
@@ -56,8 +51,6 @@ async function handleGET() {
       earnedLeaderboardLifetime: earnedLifetime,
       overlayAlerts,
       streamGoals,
-      subGoalCelebrationUntil: cel.subsUntil,
-      kicksGoalCelebrationUntil: cel.kicksUntil,
     };
 
     // Log at most once per 30s in dev to avoid log spam (get-settings is polled frequently)

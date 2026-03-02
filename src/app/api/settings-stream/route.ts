@@ -100,23 +100,18 @@ export async function GET(request: NextRequest): Promise<Response> {
 
           if (settingsChanged) lastModified = maxTs;
 
-          // When goals have changed, push live counts, celebration state, AND recent alerts
-          // so the overlay displays the alert instantly and starts the bump countdown.
+          // When goals have changed, push live counts and recent alerts instantly.
           if (goalsChanged) {
             lastGoalsModified = goalsTs;
-            const [subs, kicks, celebration, overlayAlerts] = await Promise.all([
+            const [subs, kicks, overlayAlerts] = await Promise.all([
               kv.get<number>('stream_goals_subs'),
               kv.get<number>('stream_goals_kicks'),
-              kv.get<{ subsUntil?: number; kicksUntil?: number }>('stream_goal_celebration'),
               getRecentAlerts(),
             ]);
             sendData.streamGoals = {
               subs: Math.max(0, subs ?? 0),
               kicks: Math.max(0, kicks ?? 0),
             };
-            // Celebration state — overlay uses it to trigger auto-bump
-            sendData.subGoalCelebrationUntil = celebration?.subsUntil ?? null;
-            sendData.kicksGoalCelebrationUntil = celebration?.kicksUntil ?? null;
             // Recent alerts — overlay uses them for the 8s full-width alert display
             sendData.overlayAlerts = overlayAlerts;
           }

@@ -12,7 +12,6 @@ import {
   setWellnessSessionStart,
 } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
-import { clearGoalCelebrationOnStreamStart } from '@/utils/stream-goals-celebration';
 import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +40,6 @@ export async function POST(request: NextRequest) {
       resetWellnessLastImport(),
       resetWellnessMilestonesOnStreamStart(),
       resetStreamGoalsOnStreamStart(),
-      clearGoalCelebrationOnStreamStart(),
       setWellnessSessionStart(sessionStartAt),
     ]);
 

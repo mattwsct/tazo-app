@@ -10,7 +10,6 @@ import { broadcastSettings } from '@/lib/settings-broadcast';
 import { getGamblingLeaderboardTop } from '@/utils/gambling-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
-import { getGoalCelebration } from '@/utils/stream-goals-celebration';
 import { POLL_STATE_KEY } from '@/types/poll';
 import type { PollState } from '@/types/poll';
 
@@ -26,22 +25,18 @@ export async function broadcastAlertsAndLeaderboard(): Promise<void> {
     });
     const gamblingEnabled = merged.gamblingEnabled !== false;
     const showLeaderboard = merged.showLeaderboard !== false && gamblingEnabled;
-    // Also fetch goals when showSubCountInTitle is on (needs count+target for stream title)
-    const needGoals = merged.showSubGoal || merged.showKicksGoal || merged.showSubCountInTitle;
+    const needGoals = merged.showSubGoal || merged.showKicksGoal;
     const leaderboardTopN = merged.gamblingLeaderboardTopN ?? merged.leaderboardTopN ?? 5;
-    const [gamblingLeaderboardTop, overlayAlerts, streamGoals, celebration] = await Promise.all([
+    const [gamblingLeaderboardTop, overlayAlerts, streamGoals] = await Promise.all([
       showLeaderboard ? getGamblingLeaderboardTop(leaderboardTopN) : [],
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
-      getGoalCelebration(),
     ]);
     const combined = {
       ...merged,
       gamblingLeaderboardTop,
       overlayAlerts,
       streamGoals,
-      subGoalCelebrationUntil: celebration.subsUntil,
-      kicksGoalCelebrationUntil: celebration.kicksUntil,
     };
     await broadcastSettings(combined);
   } catch (err) {

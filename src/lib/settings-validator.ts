@@ -52,8 +52,6 @@ export function validateAndSanitizeSettings(input: unknown): OverlaySettings {
     'earnedLeaderboardLifetime',
     'overlayAlerts',
     'streamGoals',
-    'subGoalCelebrationUntil',
-    'kicksGoalCelebrationUntil',
   ];
   for (const key of Object.keys(settings)) {
     if (!(key in SETTINGS_CONFIG) && !allowedNonSchema.includes(key)) {
@@ -95,8 +93,6 @@ export function detectMaliciousKeys(settings: unknown): string[] {
     'earnedLeaderboardLifetime',
     'overlayAlerts',
     'streamGoals',
-    'subGoalCelebrationUntil',
-    'kicksGoalCelebrationUntil',
   ];
   for (const key of Object.keys(settingsObj)) {
     if (!(key in SETTINGS_CONFIG) && !runtimeOnlyKeys.includes(key)) {

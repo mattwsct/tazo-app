@@ -91,8 +91,6 @@ export default function BottomRightPanel({
   const lastSeenAlertIdsRef = useRef<Set<string>>(new Set());
   const subsAlertClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const kicksAlertClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bumpedSubsUntilRef = useRef<number | null>(null);
-  const bumpedKicksUntilRef = useRef<number | null>(null);
 
   const [subsAlert, setSubsAlert] = useState<OverlayAlert | null>(null);
   const [kicksAlert, setKicksAlert] = useState<OverlayAlert | null>(null);
@@ -252,49 +250,6 @@ export default function BottomRightPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lbTarget]);
 
-  // =============================================
-  // Celebration bumping (goal reached → bump target)
-  // =============================================
-
-  useEffect(() => {
-    // Run bump logic whenever a goal is visible, sub count is in title, OR a celebration is pending
-    const hasPendingCelebration = !!settings.subGoalCelebrationUntil || !!settings.kicksGoalCelebrationUntil;
-    if (!showSubGoal && !showKicksGoal && !settings.showSubCountInTitle && !hasPendingCelebration) return;
-
-    const subsUntil = settings.subGoalCelebrationUntil;
-    const kicksUntil = settings.kicksGoalCelebrationUntil;
-    const subTarget = settings.subGoalTarget ?? 5;
-    const kicksTarget = settings.kicksGoalTarget ?? 100;
-
-    const maybeBump = async (type: 'subs' | 'kicks', until: number | undefined, count: number, target: number, bumpedRef: React.MutableRefObject<number | null>) => {
-      if (until == null || Date.now() < until || count < target || bumpedRef.current === until) return;
-      bumpedRef.current = until;
-      try {
-        const res = await fetch('/api/bump-goal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, count }),
-        });
-        const data = res.ok ? await res.json() : null;
-        if (data?.bumped && refreshSettings) await refreshSettings();
-      } catch { /* ignore */ }
-    };
-
-    maybeBump('subs', subsUntil, streamGoals.subs, subTarget, bumpedSubsUntilRef);
-    maybeBump('kicks', kicksUntil, streamGoals.kicks, kicksTarget, bumpedKicksUntilRef);
-  }, [
-    showSubGoal,
-    showKicksGoal,
-    settings.showSubCountInTitle,
-    settings.subGoalCelebrationUntil,
-    settings.kicksGoalCelebrationUntil,
-    settings.subGoalTarget,
-    settings.kicksGoalTarget,
-    streamGoals.subs,
-    streamGoals.kicks,
-    now,
-    refreshSettings,
-  ]);
 
   useEffect(() => {
     return () => {
@@ -370,10 +325,9 @@ export default function BottomRightPanel({
         target={settings.subGoalTarget ?? 10}
         formatValue={(n) => String(Math.round(n))}
         fillStyle="linear-gradient(90deg, rgba(139, 92, 246, 0.75) 0%, rgba(168, 85, 247, 0.9) 100%)"
-        subtext={settings.subGoalSubtext || (settings.showTopSubGifter !== false && streamGoals.topSubGifter ? `Top: ${(streamGoals.topSubGifter.username || '').replace(/^@/, '')} (${streamGoals.topSubGifter.amount})` : undefined)}
+        subtext={settings.subGoalSubtext}
         activeAlert={subsAlert}
         alertLabel={subsAlert ? ALERT_LABELS[subsAlert.type] ?? subsAlert.type : undefined}
-        celebrationUntil={settings.subGoalCelebrationUntil}
         now={now}
       />
     </div>
@@ -387,10 +341,9 @@ export default function BottomRightPanel({
         target={settings.kicksGoalTarget ?? 1000}
         formatValue={(n) => String(Math.round(n))}
         fillStyle="linear-gradient(90deg, rgba(16, 185, 129, 0.75) 0%, rgba(52, 211, 153, 0.95) 100%)"
-        subtext={settings.kicksGoalSubtext || (settings.showTopKicksGifter !== false && streamGoals.topKicksGifter ? `Top: ${(streamGoals.topKicksGifter.username || '').replace(/^@/, '')} (${streamGoals.topKicksGifter.amount})` : undefined)}
+        subtext={settings.kicksGoalSubtext}
         activeAlert={kicksAlert}
         alertLabel={kicksAlert ? ALERT_LABELS[kicksAlert.type] ?? kicksAlert.type : undefined}
-        celebrationUntil={settings.kicksGoalCelebrationUntil}
         now={now}
       />
     </div>

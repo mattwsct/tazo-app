@@ -75,8 +75,6 @@ export function useOverlaySettings(): [
               earnedLeaderboardLifetime: merged.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
               overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: merged.streamGoals ?? prev.streamGoals,
-              subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
-              kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
             }));
             lastSettingsHash.current = createSettingsHash(merged);
             settingsLoadedRef.current = true;
@@ -137,8 +135,6 @@ export function useOverlaySettings(): [
         earnedLeaderboardLifetime: data.earnedLeaderboardLifetime as OverlaySettings['earnedLeaderboardLifetime'] | undefined,
         overlayAlerts: data.overlayAlerts as OverlaySettings['overlayAlerts'] | undefined,
         streamGoals: data.streamGoals as OverlaySettings['streamGoals'] | undefined,
-        subGoalCelebrationUntil: 'subGoalCelebrationUntil' in data ? data.subGoalCelebrationUntil as number | undefined : undefined,
-        kicksGoalCelebrationUntil: 'kicksGoalCelebrationUntil' in data ? data.kicksGoalCelebrationUntil as number | undefined : undefined,
       };
       setSettings((prev) => {
         const base: OverlaySettings = replace ? merged : { ...prev, ...merged };
@@ -150,8 +146,6 @@ export function useOverlaySettings(): [
           earnedLeaderboardLifetime: patch.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
           overlayAlerts: patch.overlayAlerts ?? prev.overlayAlerts,
           streamGoals: patch.streamGoals ?? prev.streamGoals,
-          subGoalCelebrationUntil: ('subGoalCelebrationUntil' in data) ? patch.subGoalCelebrationUntil : prev.subGoalCelebrationUntil,
-          kicksGoalCelebrationUntil: ('kicksGoalCelebrationUntil' in data) ? patch.kicksGoalCelebrationUntil : prev.kicksGoalCelebrationUntil,
         };
       });
     };

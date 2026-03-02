@@ -9,6 +9,7 @@ import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-com
 import { handleChatPoll } from '@/lib/poll-webhook-handler';
 import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
+import { handleGoalCommand } from '@/lib/goal-chat-handler';
 import { handleAddTazosCommand } from '@/lib/addchips-chat-handler';
 import { handleCategoryCommand } from '@/lib/category-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
@@ -35,8 +36,8 @@ import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart, setWellnessSessionStart } from '@/utils/wellness-storage';
-import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals, trackSubGifter, trackKicksGifter } from '@/utils/stream-goals-storage';
-import { clearGoalCelebrationOnStreamStart, bumpGoalTarget } from '@/utils/stream-goals-celebration';
+import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
+import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
@@ -167,7 +168,6 @@ export async function POST(request: NextRequest) {
         await resetWellnessMilestonesOnStreamStart();
         await setWellnessSessionStart(sessionStartAt);
         const { subTarget: initialSubTarget } = await resetStreamGoalsOnStreamStart();
-        await clearGoalCelebrationOnStreamStart();
         void updateKickTitleSubCount(0, initialSubTarget).catch(() => {});
         await resetEventTimestamps();
       } catch (e) {
@@ -176,9 +176,10 @@ export async function POST(request: NextRequest) {
     })();
   }
 
-  // Stream end: clear live flag
+  // Stream end: clear live flag and reset goals to defaults
   if (eventNorm === 'livestream.status.updated' && payload.is_live === false) {
     void setStreamLive(false);
+    void resetStreamGoalsOnStreamStart();
   }
 
   // Chat: poll handling first (if enabled), then !ping. Award view-time chips when gambling enabled.
@@ -254,6 +255,22 @@ export async function POST(request: NextRequest) {
             await sendKickChatMessage(accessToken, addtazosResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
           } catch (err) {
             console.error('[Kick webhook] !addtazos reply failed:', err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    const goalResult = await handleGoalCommand(content, sender, payload);
+    if (goalResult.handled) {
+      if (goalResult.reply) {
+        const accessToken = await getValidAccessToken();
+        if (accessToken) {
+          const messageId = (payload.id ?? payload.message_id) as string | undefined;
+          try {
+            await sendKickChatMessage(accessToken, goalResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
+          } catch (err) {
+            console.error('[Kick webhook] goal command reply failed:', err instanceof Error ? err.message : String(err));
           }
         }
       }
@@ -485,11 +502,9 @@ export async function POST(request: NextRequest) {
     const giftees = (payload.giftees as unknown[]) ?? [];
     const count = giftees.length > 0 ? giftees.length : 1;
     if (gifter) {
-      const gifterUser = getUsername(gifter);
       await Promise.all([
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
-        ...(gifterUser ? [trackSubGifter(gifterUser, count)] : []),
       ]);
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(count);
@@ -500,11 +515,9 @@ export async function POST(request: NextRequest) {
     const amount = Number(gift?.amount ?? 0);
     const giftName = gift?.name as string | undefined;
     if (sender && amount > 0) {
-      const kickUser = getUsername(sender);
       await Promise.all([
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),
-        ...(kickUser ? [trackKicksGifter(kickUser, amount)] : []),
       ]);
       didAlertOrLeaderboard = true;
       const [goals, settings] = await Promise.all([

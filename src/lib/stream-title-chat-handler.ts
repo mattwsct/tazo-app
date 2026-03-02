@@ -15,7 +15,7 @@ const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 interface OverlaySettingsPartial {
   locationDisplay?: string;
   customLocation?: string;
-  showSubCountInTitle?: boolean;
+  showSubGoal?: boolean;
   subGoalTarget?: number;
 }
 
@@ -72,7 +72,7 @@ export async function handleStreamTitleCommand(
   );
 
   // Include sub count in title if enabled
-  const subInfo = overlaySettings?.showSubCountInTitle
+  const subInfo = overlaySettings?.showSubGoal
     ? { current: streamGoals.subs, target: overlaySettings.subGoalTarget ?? 5 }
     : undefined;
 

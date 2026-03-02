@@ -1,6 +1,6 @@
 /**
  * Auto-update the Kick stream title with current sub count/target.
- * Called fire-and-forget from webhook (on sub events) and bump-goal (after increment).
+ * Called fire-and-forget from webhook (on sub events and goal bumps).
  */
 
 import { kv } from '@/lib/kv';
@@ -19,12 +19,12 @@ interface StreamTitleSettings {
 interface OverlaySettingsPartial {
   locationDisplay?: string;
   customLocation?: string;
-  showSubCountInTitle?: boolean;
+  showSubGoal?: boolean;
 }
 
 /**
  * Rebuild and PATCH the Kick stream title with the latest sub count/target.
- * No-op if showSubCountInTitle is off or token is unavailable.
+ * No-op if showSubGoal is off or token is unavailable.
  */
 export async function updateKickTitleSubCount(
   subCurrent: number,
@@ -38,7 +38,7 @@ export async function updateKickTitleSubCount(
       getPersistentLocation(),
     ]);
 
-    if (!token || !overlaySettings?.showSubCountInTitle) return;
+    if (!token || !overlaySettings?.showSubGoal) return;
 
     const includeLocation = streamTitleSettings?.includeLocationInTitle !== false;
     const displayMode = (overlaySettings.locationDisplay as LocationDisplayMode) ?? 'city';

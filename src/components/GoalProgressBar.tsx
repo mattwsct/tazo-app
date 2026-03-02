@@ -19,8 +19,6 @@ interface GoalProgressBarProps {
   activeAlert?: GoalAlert | null;
   /** Label for the alert (e.g. "🎉 New sub") */
   alertLabel?: string;
-  /** When goal reached, show 100% until this time (ms). Gifters see full bar briefly. */
-  celebrationUntil?: number;
   /** Current time (ms) — passed from parent to avoid Date.now() in render. */
   now?: number;
 }
@@ -34,12 +32,10 @@ export default function GoalProgressBar({
   subtext,
   activeAlert,
   alertLabel,
-  celebrationUntil,
   now,
 }: GoalProgressBarProps) {
   const targetSafe = Math.max(1, target);
-  const isCelebrating = celebrationUntil != null && now != null && now < celebrationUntil && current >= targetSafe;
-  const pct = isCelebrating ? 100 : Math.min(100, Math.round((current / targetSafe) * 100));
+  const pct = Math.min(100, Math.round((current / targetSafe) * 100));
   const mainText = `${label}: ${formatValue(current)} / ${formatValue(target)}`;
   const showAlert = activeAlert && alertLabel;
 
@@ -48,7 +44,7 @@ export default function GoalProgressBar({
       <div
         className="goal-progress-fill"
         style={{
-          width: (showAlert || isCelebrating) ? '100%' : `${pct}%`,
+          width: showAlert ? '100%' : `${pct}%`,
           background: fillStyle,
         }}
       />

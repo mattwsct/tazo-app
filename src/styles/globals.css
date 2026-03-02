@@ -161,7 +161,7 @@ html, body {
   bottom: 10px;
   right: 10px;
   text-align: right;
-  max-width: 450px;
+  max-width: 580px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -468,13 +468,13 @@ html, body {
 .goal-progress-bar {
   position: relative;
   width: 100%;
-  min-width: 280px;
-  max-width: 480px;
+  min-width: 360px;
+  max-width: 560px;
   background: rgba(0, 0, 0, 0.55);
   border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.35));
   backdrop-filter: blur(8px);
 }
 
@@ -492,7 +492,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--gap-sm) var(--gap-2xl);
+  padding: var(--gap-lg) var(--gap-3xl);
   z-index: 1;
   min-width: 0;
 }
@@ -508,21 +508,21 @@ html, body {
 }
 
 .goal-progress-value {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-lg);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   color: rgba(255, 255, 255, 0.98);
 }
 
 .goal-progress-subtext {
   display: block;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.8);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -538,7 +538,7 @@ html, body {
 }
 
 .goal-progress-alert-label {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-lg);
   font-weight: 800;
 }
 

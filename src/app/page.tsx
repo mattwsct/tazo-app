@@ -60,12 +60,8 @@ export default function AdminPage() {
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
-  const [subGoalSubtextInput, setSubGoalSubtextInput] = useState<string>('');
-  const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState<string>('');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const subGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const kicksGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
@@ -404,7 +400,7 @@ export default function AdminPage() {
       settings.customLocation ?? '',
       kickStreamTitleIncludeLocation
     );
-    const subInfo = settings.showSubCountInTitle
+    const subInfo = settings.showSubGoal
       ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
       : undefined;
     const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo);
@@ -431,7 +427,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation, settings.showSubCountInTitle, settings.streamGoals?.subs]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation, settings.showSubGoal, settings.streamGoals?.subs]);
 
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
@@ -671,9 +667,7 @@ export default function AdminPage() {
   useEffect(() => {
     setSubGoalTargetInput(String(settings.subGoalIncrement ?? settings.subGoalTarget ?? 10));
     setKicksGoalTargetInput(String(settings.kicksGoalIncrement ?? settings.kicksGoalTarget ?? 1000));
-    setSubGoalSubtextInput(settings.subGoalSubtext ?? '');
-    setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
-  }, [settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalTarget, settings.kicksGoalTarget, settings.subGoalSubtext, settings.kicksGoalSubtext]);
+  }, [settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalTarget, settings.kicksGoalTarget]);
 
   // Debounced handlers for number inputs (1s delay before saving)
   const handleSubGoalTargetChange = useCallback((value: string) => {
@@ -702,30 +696,10 @@ export default function AdminPage() {
     }, 1000);
   }, [handleSettingsChange, settings.streamGoals]);
 
-  const handleSubGoalSubtextChange = useCallback((value: string) => {
-    setSubGoalSubtextInput(value);
-    if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
-    subGoalSubtextTimeoutRef.current = setTimeout(() => {
-      subGoalSubtextTimeoutRef.current = null;
-      handleSettingsChange({ subGoalSubtext: value.trim() || undefined });
-    }, 1000);
-  }, [handleSettingsChange]);
-
-  const handleKicksGoalSubtextChange = useCallback((value: string) => {
-    setKicksGoalSubtextInput(value);
-    if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
-    kicksGoalSubtextTimeoutRef.current = setTimeout(() => {
-      kicksGoalSubtextTimeoutRef.current = null;
-      handleSettingsChange({ kicksGoalSubtext: value.trim() || undefined });
-    }, 1000);
-  }, [handleSettingsChange]);
-
   useEffect(() => {
     return () => {
       if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
       if (kicksGoalTargetTimeoutRef.current) clearTimeout(kicksGoalTargetTimeoutRef.current);
-      if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
-      if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
     };
   }, []);
 
@@ -1117,10 +1091,6 @@ export default function AdminPage() {
                   <input type="number" className="text-input" value={subGoalTargetInput} onChange={(e) => handleSubGoalTargetChange(e.target.value)} min={1} />
                 </div>
                 <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
-                  <label>Subtext (optional second line)</label>
-                  <input type="text" className="text-input" value={subGoalSubtextInput} onChange={(e) => handleSubGoalSubtextChange(e.target.value)} placeholder="e.g. 10 subs = 10 min extra stream" />
-                </div>
-                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
                   <label>Current count</label>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input key={`subs-${settings.streamGoals?.subs ?? 0}`} type="number" className="text-input admin-number-input" defaultValue={settings.streamGoals?.subs ?? 0} id="stream-goals-subs-input" min={0} style={{ flex: 1 }} />
@@ -1158,10 +1128,6 @@ export default function AdminPage() {
                     <input type="checkbox" checked={settings.showSubGoal ?? false} onChange={(e) => handleSettingsChange({ showSubGoal: e.target.checked })} className="checkbox-input" />
                     <span className="checkbox-text">Show progress bar on overlay</span>
                   </label>
-                  <label className="checkbox-label" style={{ marginTop: 4 }}>
-                    <input type="checkbox" checked={settings.showTopSubGifter !== false} onChange={(e) => handleSettingsChange({ showTopSubGifter: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Show top sub gifter on progress bar</span>
-                  </label>
                 </div>
               </div>
 
@@ -1171,10 +1137,6 @@ export default function AdminPage() {
                 <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
                   <label>Goal step (milestone interval)</label>
                   <input type="number" className="text-input" value={kicksGoalTargetInput} onChange={(e) => handleKicksGoalTargetChange(e.target.value)} min={1} />
-                </div>
-                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
-                  <label>Subtext (optional second line)</label>
-                  <input type="text" className="text-input" value={kicksGoalSubtextInput} onChange={(e) => handleKicksGoalSubtextChange(e.target.value)} placeholder="e.g. Help me hit $50!" />
                 </div>
                 <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
                   <label>Current count</label>
@@ -1213,10 +1175,6 @@ export default function AdminPage() {
                   <label className="checkbox-label">
                     <input type="checkbox" checked={settings.showKicksGoal ?? false} onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })} className="checkbox-input" />
                     <span className="checkbox-text">Show progress bar on overlay</span>
-                  </label>
-                  <label className="checkbox-label" style={{ marginTop: 4 }}>
-                    <input type="checkbox" checked={settings.showTopKicksGifter !== false} onChange={(e) => handleSettingsChange({ showTopKicksGifter: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Show top kicks gifter on progress bar</span>
                   </label>
                 </div>
               </div>
@@ -1259,7 +1217,7 @@ export default function AdminPage() {
                   }}
                 >
                   {(() => {
-                    const subInfo = settings.showSubCountInTitle
+                    const subInfo = settings.showSubGoal
                       ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
                       : undefined;
                     const loc = kickStreamTitleIncludeLocation ? kickStreamTitleLocation : '';
@@ -1282,7 +1240,7 @@ export default function AdminPage() {
                           settings.customLocation ?? '',
                           checked
                         );
-                        const subInfo = settings.showSubCountInTitle
+                        const subInfo = settings.showSubGoal
                           ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
                           : undefined;
                         const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo);
@@ -1312,15 +1270,6 @@ export default function AdminPage() {
                     className="checkbox-input"
                   />
                   Include location in stream title
-                </label>
-                <label className="checkbox-label-row" style={{ marginTop: '8px' }}>
-                  <input
-                    type="checkbox"
-                    checked={settings.showSubCountInTitle === true}
-                    onChange={(e) => handleSettingsChange({ showSubCountInTitle: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  Show sub count in title (🎁 Subs: {settings.streamGoals?.subs ?? 0}/{settings.subGoalTarget ?? 5})
                 </label>
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>

@@ -5,12 +5,9 @@
 
 import { kv } from '@/lib/kv';
 import { getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
-import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 
 const STREAM_GOALS_SUBS_KEY = 'stream_goals_subs';
 const STREAM_GOALS_KICKS_KEY = 'stream_goals_kicks';
-const STREAM_TOP_SUB_GIFTERS_KEY = 'stream_top_sub_gifters';
-const STREAM_TOP_KICKS_GIFTERS_KEY = 'stream_top_kicks_gifters';
 // Written whenever goals change — SSE watches this to push updates to the overlay
 export const STREAM_GOALS_MODIFIED_KEY = 'stream_goals_modified';
 
@@ -21,7 +18,9 @@ async function ensureSessionStarted(): Promise<void> {
   }
 }
 
-/** Reset goals and targets when stream starts. Targets reset to the configured increment (first milestone). */
+/** Reset goals and targets when stream starts/ends.
+ *  Targets reset to the configured increment (first milestone).
+ *  Subtexts (set via !subsgoal / !kicksgoal) are cleared. */
 export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: number; kicksTarget: number }> {
   try {
     const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
@@ -30,13 +29,15 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
     await Promise.all([
       kv.set(STREAM_GOALS_SUBS_KEY, 0),
       kv.set(STREAM_GOALS_KICKS_KEY, 0),
-      kv.del(STREAM_TOP_SUB_GIFTERS_KEY),
-      kv.del(STREAM_TOP_KICKS_GIFTERS_KEY),
     ]);
     await kv.set('overlay_settings', {
       ...settings,
+      showSubGoal: false,
       subGoalTarget: subIncrement,
       kicksGoalTarget: kicksIncrement,
+      showKicksGoal: false,
+      subGoalSubtext: null,
+      kicksGoalSubtext: null,
     });
     return { subTarget: subIncrement, kicksTarget: kicksIncrement };
   } catch (e) {
@@ -69,66 +70,16 @@ export async function addStreamGoalKicks(amount: number): Promise<void> {
   }
 }
 
-/** Track a sub gifter's contribution this stream. */
-export async function trackSubGifter(username: string, count: number): Promise<void> {
-  if (!username || count <= 0) return;
+/** Get subs and kicks since stream start. */
+export async function getStreamGoals(): Promise<{ subs: number; kicks: number }> {
   try {
-    const data = (await kv.get<Record<string, number>>(STREAM_TOP_SUB_GIFTERS_KEY)) ?? {};
-    data[username] = (data[username] ?? 0) + count;
-    await kv.set(STREAM_TOP_SUB_GIFTERS_KEY, data);
-  } catch (e) {
-    console.warn('[StreamGoals] Failed to track sub gifter:', e);
-  }
-}
-
-/** Track a kicks gifter's contribution this stream. */
-export async function trackKicksGifter(username: string, amount: number): Promise<void> {
-  if (!username || amount <= 0) return;
-  try {
-    const data = (await kv.get<Record<string, number>>(STREAM_TOP_KICKS_GIFTERS_KEY)) ?? {};
-    data[username] = (data[username] ?? 0) + amount;
-    await kv.set(STREAM_TOP_KICKS_GIFTERS_KEY, data);
-  } catch (e) {
-    console.warn('[StreamGoals] Failed to track kicks gifter:', e);
-  }
-}
-
-function topFromRecord(
-  data: Record<string, number> | null,
-  excluded: Set<string>
-): { username: string; amount: number } | undefined {
-  if (!data) return undefined;
-  let best: { username: string; amount: number } | undefined;
-  const entries = Object.entries(data)
-    .filter(([u]) => !excluded.has((u || '').trim().toLowerCase()))
-    .sort(([, a], [, b]) => b - a);
-  if (entries.length > 0) {
-    const [username, amount] = entries[0];
-    best = { username, amount };
-  }
-  return best;
-}
-
-/** Get subs, kicks, and top gifters since stream start. */
-export async function getStreamGoals(): Promise<{
-  subs: number;
-  kicks: number;
-  topSubGifter?: { username: string; amount: number };
-  topKicksGifter?: { username: string; amount: number };
-}> {
-  try {
-    const [subs, kicks, subGifters, kicksGifters, excluded] = await Promise.all([
+    const [subs, kicks] = await Promise.all([
       kv.get<number>(STREAM_GOALS_SUBS_KEY),
       kv.get<number>(STREAM_GOALS_KICKS_KEY),
-      kv.get<Record<string, number>>(STREAM_TOP_SUB_GIFTERS_KEY),
-      kv.get<Record<string, number>>(STREAM_TOP_KICKS_GIFTERS_KEY),
-      getLeaderboardExclusions(),
     ]);
     return {
       subs: Math.max(0, subs ?? 0),
       kicks: Math.max(0, kicks ?? 0),
-      topSubGifter: topFromRecord(subGifters, excluded),
-      topKicksGifter: topFromRecord(kicksGifters, excluded),
     };
   } catch {
     return { subs: 0, kicks: 0 };

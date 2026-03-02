@@ -53,7 +53,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update stream title if sub count is shown there
-    if (settings?.showSubCountInTitle) {
+    if (settings?.showSubGoal) {
       void updateKickTitleSubCount(goals.subs, subTarget).catch(() => {});
     }
 
