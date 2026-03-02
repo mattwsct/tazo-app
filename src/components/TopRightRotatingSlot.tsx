@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
-const CYCLE_DURATION_MS = 8000;
+const CYCLE_DURATION_MS = 10_000;
 
 type SlotType = 'altitude' | 'speed';
 

@@ -25,7 +25,7 @@ interface OverlaySettingsPartial {
 
 /**
  * Rebuild and PATCH the Kick stream title with the latest goal counts.
- * No-op if neither goal is shown or token is unavailable.
+ * No-op if token is unavailable. Always rebuilds title — removing goals when both are hidden.
  */
 export async function updateKickTitleGoals(
   subCurrent: number,
@@ -41,11 +41,11 @@ export async function updateKickTitleGoals(
       getPersistentLocation(),
     ]);
 
-    if (!token || (!overlaySettings?.showSubGoal && !overlaySettings?.showKicksGoal)) return;
+    if (!token) return;
 
     const includeLocation = streamTitleSettings?.includeLocationInTitle !== false;
-    const displayMode = (overlaySettings.locationDisplay as LocationDisplayMode) ?? 'city';
-    const customLoc = overlaySettings.customLocation ?? '';
+    const displayMode = ((overlaySettings?.locationDisplay ?? 'city') as LocationDisplayMode);
+    const customLoc = overlaySettings?.customLocation ?? '';
     const locationPart = getStreamTitleLocationPart(
       persistent?.location ?? null,
       displayMode,
@@ -53,10 +53,10 @@ export async function updateKickTitleGoals(
       includeLocation
     );
     const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
-    const subInfo = overlaySettings.showSubGoal && subTarget > 0
+    const subInfo = overlaySettings?.showSubGoal && subTarget > 0
       ? { current: subCurrent, target: subTarget }
       : undefined;
-    const kicksInfo = overlaySettings.showKicksGoal && kicksTarget > 0
+    const kicksInfo = overlaySettings?.showKicksGoal && kicksTarget > 0
       ? { current: kicksCurrent, target: kicksTarget }
       : undefined;
     const newTitle = buildStreamTitle(customTitle, locationPart, subInfo, kicksInfo);

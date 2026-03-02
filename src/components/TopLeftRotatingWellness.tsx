@@ -7,7 +7,7 @@ import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 const POLL_INTERVAL_MS = 60000;
-const CYCLE_DURATION_MS = 16000;
+const CYCLE_DURATION_MS = 10_000;
 
 type SlotType = 'date' | 'steps' | 'distance' | 'activeCalories' | 'flights';
 

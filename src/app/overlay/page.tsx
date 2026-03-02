@@ -57,6 +57,7 @@ import { fetchMinutelyForecast, isNotableWeatherCondition, type MinutelyPrecipFo
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
 import BottomRightPanel from '@/components/BottomRightPanel';
+import WeatherRotatingSlot from '@/components/WeatherRotatingSlot';
 
 // Extract constants for cleaner code
 const {
@@ -1542,27 +1543,19 @@ function OverlayPage() {
               </div>
             )}
 
-            {/* Weather: temp always shown, single condition slot driven by priority:
-                forecast (rain starting/stopping) > current notable condition > nothing */}
+            {/* Weather: rotates between temperature and condition (forecast priority > notable > nothing).
+                Synced to the 10s wall-clock tick shared with goals and other overlay rotations. */}
             {settings.showWeather !== false && weatherDisplay && (
-              <>
-                <div className="weather-temperature">{weatherDisplay.temperature}</div>
-                {precipCountdown ? (
-                  <div className="weather-condition-group">
-                    <span className="weather-description-text">{precipCountdown.label}</span>
-                    <span className="weather-icon-inline">{precipCountdown.icon}</span>
-                  </div>
-                ) : (weatherDisplay.description || weatherDisplay.icon) ? (
-                  <div className="weather-condition-group">
-                    {weatherDisplay.description && (
-                      <span className="weather-description-text">{weatherDisplay.description}</span>
-                    )}
-                    {weatherDisplay.icon && (
-                      <span className="weather-icon-inline">{weatherDisplay.icon}</span>
-                    )}
-                  </div>
-                ) : null}
-              </>
+              <WeatherRotatingSlot
+                temperature={weatherDisplay.temperature}
+                condition={
+                  precipCountdown
+                    ? { label: precipCountdown.label, icon: precipCountdown.icon }
+                    : weatherDisplay.description
+                      ? { label: weatherDisplay.description, icon: weatherDisplay.icon ?? '' }
+                      : null
+                }
+              />
             )}
 
             {/* Altitude/speed: static if only one, rotating if both present */}

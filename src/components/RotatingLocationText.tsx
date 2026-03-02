@@ -2,7 +2,7 @@
 
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
-const CYCLE_DURATION_MS = 8000;
+const CYCLE_DURATION_MS = 10_000;
 
 interface RotatingLocationTextProps {
   levels: string[];
