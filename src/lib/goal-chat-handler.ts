@@ -32,6 +32,17 @@ function parseGoalArgs(args: string): { target: number; subtext: string | undefi
   return { target, subtext };
 }
 
+/**
+ * Compute the effective starting target: if currentCount already meets or exceeds
+ * the requested target, bump up in multiples of increment until strictly above count.
+ * e.g. target=5, increment=5, count=12 → 15
+ */
+function effectiveTarget(target: number, increment: number, currentCount: number): number {
+  if (currentCount < target) return target;
+  const inc = Math.max(1, increment);
+  return (Math.floor(currentCount / inc) + 1) * inc;
+}
+
 export async function handleGoalCommand(
   content: string,
   sender: string,
@@ -60,6 +71,9 @@ export async function handleGoalCommand(
   const subIncrement  = Math.max(1, (settings.subGoalIncrement  as number) || 5);
   const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 100);
 
+  // Helper: touch overlay_settings_modified so the SSE stream pushes the update immediately
+  const notifyOverlay = () => void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
+
   // Helper: fire-and-forget title refresh
   const refreshTitle = (subTarget: number, kicksTarget: number) => {
     void (async () => {
@@ -77,6 +91,7 @@ export async function handleGoalCommand(
       subGoalTarget: subIncrement,
       subGoalSubtext: null,
     });
+    notifyOverlay();
     refreshTitle(subIncrement, kicksTarget);
     return { handled: true, reply: '✅ Sub goal cleared' };
   }
@@ -90,6 +105,7 @@ export async function handleGoalCommand(
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
     });
+    notifyOverlay();
     refreshTitle(subTarget, kicksIncrement);
     return { handled: true, reply: '✅ Kicks goal cleared' };
   }
@@ -105,6 +121,7 @@ export async function handleGoalCommand(
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
     });
+    notifyOverlay();
     refreshTitle(subIncrement, kicksIncrement);
     return { handled: true, reply: '✅ All goals cleared' };
   }
@@ -116,17 +133,22 @@ export async function handleGoalCommand(
     if (!parsed) {
       return { handled: true, reply: 'Usage: !subsgoal <number> [label text]  e.g. !subsgoal 20 Go to the zoo' };
     }
+    const goals = await getStreamGoals();
+    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.subs);
     const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
     await kv.set(OVERLAY_SETTINGS_KEY, {
       ...settings,
       showSubGoal: true,
-      subGoalTarget: parsed.target,
+      subGoalTarget: activeTarget,
+      subGoalIncrement: parsed.target,
       subGoalSubtext: parsed.subtext ?? null,
     });
-    refreshTitle(parsed.target, kicksTarget);
+    notifyOverlay();
+    refreshTitle(activeTarget, kicksTarget);
+    const bumped = activeTarget !== parsed.target ? ` (bumped to ${activeTarget} — already at ${goals.subs} subs)` : '';
     const reply = parsed.subtext
-      ? `✅ Sub goal set: ${parsed.target} subs — "${parsed.subtext}"`
-      : `✅ Sub goal set: ${parsed.target} subs`;
+      ? `✅ Sub goal set: ${activeTarget} subs — "${parsed.subtext}"${bumped}`
+      : `✅ Sub goal set: ${activeTarget} subs${bumped}`;
     return { handled: true, reply };
   }
 
@@ -137,17 +159,22 @@ export async function handleGoalCommand(
     if (!parsed) {
       return { handled: true, reply: 'Usage: !kicksgoal <number> [label text]  e.g. !kicksgoal 5000 Shot a drink' };
     }
+    const goals = await getStreamGoals();
+    const activeTarget = effectiveTarget(parsed.target, parsed.target, goals.kicks);
     const subTarget = (settings.subGoalTarget as number) ?? subIncrement;
     await kv.set(OVERLAY_SETTINGS_KEY, {
       ...settings,
       showKicksGoal: true,
-      kicksGoalTarget: parsed.target,
+      kicksGoalTarget: activeTarget,
+      kicksGoalIncrement: parsed.target,
       kicksGoalSubtext: parsed.subtext ?? null,
     });
-    refreshTitle(subTarget, parsed.target);
+    notifyOverlay();
+    refreshTitle(subTarget, activeTarget);
+    const bumped = activeTarget !== parsed.target ? ` (bumped to ${activeTarget} — already at ${goals.kicks} kicks)` : '';
     const reply = parsed.subtext
-      ? `✅ Kicks goal set: ${parsed.target} kicks — "${parsed.subtext}"`
-      : `✅ Kicks goal set: ${parsed.target} kicks`;
+      ? `✅ Kicks goal set: ${activeTarget} kicks — "${parsed.subtext}"${bumped}`
+      : `✅ Kicks goal set: ${activeTarget} kicks${bumped}`;
     return { handled: true, reply };
   }
 
