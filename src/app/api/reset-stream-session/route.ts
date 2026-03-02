@@ -12,7 +12,7 @@ import {
   setWellnessSessionStart,
 } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
-import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
+import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     // Update the stream title to reflect the reset (0 subs, new initial target)
-    void updateKickTitleSubCount(0, subTarget).catch(() => {});
+    void updateKickTitleGoals(0, subTarget).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (err) {

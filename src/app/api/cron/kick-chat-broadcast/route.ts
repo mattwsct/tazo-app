@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number; showSubGoal?: boolean; subGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
+    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number; showSubGoal?: boolean; subGoalTarget?: number; showKicksGoal?: boolean; kicksGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
@@ -253,12 +253,19 @@ export async function GET(request: NextRequest) {
 
       const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
       let subInfoForTitle: { current: number; target: number } | undefined;
-      if (overlaySettings?.showSubGoal) {
+      let kicksInfoForTitle: { current: number; target: number } | undefined;
+      if (overlaySettings?.showSubGoal || overlaySettings?.showKicksGoal) {
         const goals = await getStreamGoals();
-        const subTarget = overlaySettings?.subGoalTarget ?? 5;
-        subInfoForTitle = { current: goals.subs, target: subTarget };
+        if (overlaySettings?.showSubGoal) {
+          const subTarget = overlaySettings?.subGoalTarget ?? 5;
+          subInfoForTitle = { current: goals.subs, target: subTarget };
+        }
+        if (overlaySettings?.showKicksGoal) {
+          const kicksTarget = overlaySettings?.kicksGoalTarget ?? 100;
+          kicksInfoForTitle = { current: goals.kicks, target: kicksTarget };
+        }
       }
-      const newFullTitle = formattedForTitle ? buildStreamTitle(customTitle, formattedForTitle, subInfoForTitle) : '';
+      const newFullTitle = formattedForTitle ? buildStreamTitle(customTitle, formattedForTitle, subInfoForTitle, kicksInfoForTitle) : '';
       const titleChanged = formattedForTitle && newFullTitle !== currentTitle;
       // Dedup key tracks last location string to avoid redundant patches
       const locationChanged = formattedForTitle && formattedForTitle !== lastLocationMsg;

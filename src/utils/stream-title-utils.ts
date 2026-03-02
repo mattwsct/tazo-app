@@ -44,36 +44,46 @@ export function getLocationForStreamTitle(
 /** Extract custom title from full Kick stream title (removes location part — flag prefix). */
 export function parseStreamTitleToCustom(fullTitle: string): string {
   if (!fullTitle?.trim()) return '';
-  const separatorsToTry = [' · ', ' - ', ' | '];
+  // Strip goal suffixes added by buildStreamTitle before separator-based parsing
+  const withoutGoals = fullTitle
+    .replace(/\s+🎁 Subs:\s*\d+\/\d+(\s*\|\s*💰 Kicks:\s*\d+\/\d+)?/, '')
+    .replace(/\s+💰 Kicks:\s*\d+\/\d+/, '')
+    .trim();
+  const separatorsToTry = [' · ', ' - '];
   for (const s of separatorsToTry) {
-    const idx = fullTitle.indexOf(s);
+    const idx = withoutGoals.indexOf(s);
     if (idx > 0) {
-      const candidate = fullTitle.slice(0, idx).trim();
-      const rest = fullTitle.slice(idx + s.length).trim();
+      const candidate = withoutGoals.slice(0, idx).trim();
+      const rest = withoutGoals.slice(idx + s.length).trim();
       if (rest && candidate) return candidate;
     }
   }
-  const flagMatch = fullTitle.match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);
+  const flagMatch = withoutGoals.match(/[\u{1F1E6}-\u{1F1FF}]{2}/u);
   if (flagMatch?.index != null && flagMatch.index > 0) {
-    return fullTitle.slice(0, flagMatch.index).trim();
+    return withoutGoals.slice(0, flagMatch.index).trim();
   }
-  return fullTitle.trim();
+  return withoutGoals;
 }
 
-/** Build full stream title: custom + location + optional sub counter suffix (🎁 Subs: n/t). */
+/** Build full stream title: custom + location + optional goals suffix (🎁 Subs: n/t | 💰 Kicks: n/t). */
 export function buildStreamTitle(
   custom: string,
   location: string,
-  subInfo?: { current: number; target: number }
+  subInfo?: { current: number; target: number },
+  kicksInfo?: { current: number; target: number }
 ): string {
   const customTrimmed = custom.trim();
-  const subSuffix =
-    subInfo != null && subInfo.target > 0
-      ? ` 🎁 Subs: ${subInfo.current}/${subInfo.target}`
-      : '';
-  if (!location) return `${customTrimmed}${subSuffix}`;
-  if (!customTrimmed) return `${location}${subSuffix}`;
-  return `${customTrimmed} ${location}${subSuffix}`;
+  const goalParts: string[] = [];
+  if (subInfo != null && subInfo.target > 0) {
+    goalParts.push(`🎁 Subs: ${subInfo.current}/${subInfo.target}`);
+  }
+  if (kicksInfo != null && kicksInfo.target > 0) {
+    goalParts.push(`💰 Kicks: ${kicksInfo.current}/${kicksInfo.target}`);
+  }
+  const goalSuffix = goalParts.length > 0 ? ` ${goalParts.join(' | ')}` : '';
+  if (!location) return `${customTrimmed}${goalSuffix}`;
+  if (!customTrimmed) return `${location}${goalSuffix}`;
+  return `${customTrimmed} ${location}${goalSuffix}`;
 }
 
 export function formatLocationForStreamTitle(

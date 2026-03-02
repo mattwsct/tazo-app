@@ -36,11 +36,12 @@ export default function GoalProgressBar({
 }: GoalProgressBarProps) {
   const targetSafe = Math.max(1, target);
   const pct = Math.min(100, Math.round((current / targetSafe) * 100));
+  const isFull = current >= targetSafe;
   const mainText = `${label}: ${formatValue(current)} / ${formatValue(target)}`;
   const showAlert = activeAlert && alertLabel;
 
   return (
-    <div className={`goal-progress-bar ${showAlert ? 'goal-progress-bar-alert' : ''}`}>
+    <div className={`goal-progress-bar${showAlert ? ' goal-progress-bar-alert' : ''}${isFull && !showAlert ? ' goal-progress-bar--full' : ''}`}>
       <div
         className="goal-progress-fill"
         style={{

@@ -166,7 +166,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showWeeklyEarnedLb: true,
   showMonthlyEarnedLb: true,
   showLifetimeEarnedLb: true,
-  leaderboardRotationSec: 15,
+  leaderboardRotationSec: 10,
 };
 
 // Valid settings schema for validation

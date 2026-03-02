@@ -20,15 +20,18 @@ interface OverlaySettingsPartial {
   locationDisplay?: string;
   customLocation?: string;
   showSubGoal?: boolean;
+  showKicksGoal?: boolean;
 }
 
 /**
- * Rebuild and PATCH the Kick stream title with the latest sub count/target.
- * No-op if showSubGoal is off or token is unavailable.
+ * Rebuild and PATCH the Kick stream title with the latest goal counts.
+ * No-op if neither goal is shown or token is unavailable.
  */
-export async function updateKickTitleSubCount(
+export async function updateKickTitleGoals(
   subCurrent: number,
-  subTarget: number
+  subTarget: number,
+  kicksCurrent = 0,
+  kicksTarget = 0
 ): Promise<void> {
   try {
     const [token, streamTitleSettings, overlaySettings, persistent] = await Promise.all([
@@ -38,7 +41,7 @@ export async function updateKickTitleSubCount(
       getPersistentLocation(),
     ]);
 
-    if (!token || !overlaySettings?.showSubGoal) return;
+    if (!token || (!overlaySettings?.showSubGoal && !overlaySettings?.showKicksGoal)) return;
 
     const includeLocation = streamTitleSettings?.includeLocationInTitle !== false;
     const displayMode = (overlaySettings.locationDisplay as LocationDisplayMode) ?? 'city';
@@ -50,7 +53,13 @@ export async function updateKickTitleSubCount(
       includeLocation
     );
     const customTitle = (streamTitleSettings?.customTitle ?? '').trim();
-    const newTitle = buildStreamTitle(customTitle, locationPart, { current: subCurrent, target: subTarget });
+    const subInfo = overlaySettings.showSubGoal && subTarget > 0
+      ? { current: subCurrent, target: subTarget }
+      : undefined;
+    const kicksInfo = overlaySettings.showKicksGoal && kicksTarget > 0
+      ? { current: kicksCurrent, target: kicksTarget }
+      : undefined;
+    const newTitle = buildStreamTitle(customTitle, locationPart, subInfo, kicksInfo);
 
     await fetch(`${KICK_API_BASE}/public/v1/channels`, {
       method: 'PATCH',

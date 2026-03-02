@@ -38,7 +38,7 @@ import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart, setWellnessSessionStart } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
-import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
+import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
         await resetWellnessMilestonesOnStreamStart();
         await setWellnessSessionStart(sessionStartAt);
         const { subTarget: initialSubTarget } = await resetStreamGoalsOnStreamStart();
-        void updateKickTitleSubCount(0, initialSubTarget).catch(() => {});
+        void updateKickTitleGoals(0, initialSubTarget).catch(() => {});
         await resetEventTimestamps();
       } catch (e) {
         console.warn('Failed to reset wellness session on stream start:', e);
@@ -467,16 +467,19 @@ export async function POST(request: NextRequest) {
     ]);
     const target = (settings?.subGoalTarget as number) ?? 5;
     const increment = (settings?.subGoalIncrement as number) ?? 5;
+    const kicksTarget = (settings?.kicksGoalTarget as number) ?? 100;
+    const hasSubtext = !!(settings?.subGoalSubtext as string | null | undefined);
     const prevSubs = goals.subs - count;
     if (target > 0 && prevSubs < target && goals.subs >= target) {
-      const newTarget = await bumpGoalTarget('subs', target, increment, goals.subs);
+      // When a subtext/milestone label is set, hold the bar at 100% — mods manually advance
+      const newTarget = hasSubtext ? target : await bumpGoalTarget('subs', target, increment, goals.subs);
       const token = await getValidAccessToken();
       if (token) {
         void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
-        void updateKickTitleSubCount(goals.subs, newTarget).catch(() => {});
+        void updateKickTitleGoals(goals.subs, newTarget, goals.kicks, kicksTarget).catch(() => {});
       }
     } else {
-      void updateKickTitleSubCount(goals.subs, target).catch(() => {});
+      void updateKickTitleGoals(goals.subs, target, goals.kicks, kicksTarget).catch(() => {});
     }
   };
   if (eventNorm === 'channel.followed') {
@@ -526,9 +529,11 @@ export async function POST(request: NextRequest) {
       ]);
       const target = (settings?.kicksGoalTarget as number) ?? 100;
       const increment = (settings?.kicksGoalIncrement as number) ?? 100;
+      const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
       const prevKicks = goals.kicks - amount;
       if (target > 0 && prevKicks < target && goals.kicks >= target) {
-        await bumpGoalTarget('kicks', target, increment, goals.kicks);
+        // When a subtext/milestone label is set, hold the bar at 100% — mods manually advance
+        if (!hasKicksSubtext) await bumpGoalTarget('kicks', target, increment, goals.kicks);
         const token = await getValidAccessToken();
         if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});
       }

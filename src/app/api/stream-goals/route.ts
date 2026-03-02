@@ -10,7 +10,7 @@ import { verifyRequestAuth } from '@/lib/api-auth';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
-import { updateKickTitleSubCount } from '@/lib/stream-title-updater';
+import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,9 +52,9 @@ export async function PATCH(request: NextRequest) {
       kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, goals.kicks);
     }
 
-    // Update stream title if sub count is shown there
-    if (settings?.showSubGoal) {
-      void updateKickTitleSubCount(goals.subs, subTarget).catch(() => {});
+    // Update stream title if either goal is shown there
+    if (settings?.showSubGoal || settings?.showKicksGoal) {
+      void updateKickTitleGoals(goals.subs, subTarget, goals.kicks, kicksTarget).catch(() => {});
     }
 
     return NextResponse.json(goals);

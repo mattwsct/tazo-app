@@ -470,10 +470,10 @@ html, body {
   width: 100%;
   min-width: 360px;
   max-width: 560px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.35));
   backdrop-filter: blur(8px);
 }
@@ -484,7 +484,61 @@ html, body {
   top: 0;
   bottom: 0;
   border-radius: var(--radius-md);
-  transition: width 0.5s ease-out;
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+
+/*
+ * Sweep shimmer — clipped to fill bounds, but fixed px size/speed so it looks
+ * the same width regardless of how full the bar is.
+ * Bar max-width is 560px → shimmer is 280px, total travel is 560+280 = 840px.
+ */
+.goal-progress-bar:not(.goal-progress-bar--full):not(.goal-progress-bar-alert) .goal-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 120px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+  animation: goal-fill-sweep 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes goal-fill-sweep {
+  0%   { transform: translateX(-120px); }
+  65%  { transform: translateX(680px); }
+  100% { transform: translateX(680px); }
+}
+
+/* Full bar — pulsating glow when goal is reached */
+.goal-progress-bar--full {
+  animation: goal-bar-full-pulse 2s ease-in-out infinite;
+}
+
+.goal-progress-bar--full .goal-progress-fill {
+  animation: goal-fill-pulse 2s ease-in-out infinite;
+}
+
+@keyframes goal-bar-full-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0px 0px rgba(255, 255, 255, 0);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+}
+
+@keyframes goal-fill-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
 }
 
 .goal-progress-text {
@@ -492,7 +546,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--gap-lg) var(--gap-3xl);
+  padding: var(--gap-xl) var(--gap-3xl);
   z-index: 1;
   min-width: 0;
 }
@@ -502,7 +556,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 2px;
+  gap: 5px;
   min-width: 0;
   max-width: 100%;
 }
@@ -522,13 +576,13 @@ html, body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
-  color: rgba(255, 255, 255, 0.8);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: normal;
   max-width: 100%;
-  line-height: 1.25;
+  line-height: 1.3;
   text-align: center;
 }
 

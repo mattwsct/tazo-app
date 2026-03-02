@@ -17,6 +17,8 @@ interface OverlaySettingsPartial {
   customLocation?: string;
   showSubGoal?: boolean;
   subGoalTarget?: number;
+  showKicksGoal?: boolean;
+  kicksGoalTarget?: number;
 }
 
 
@@ -71,22 +73,24 @@ export async function handleStreamTitleCommand(
     includeLocationInTitle
   );
 
-  // Include sub count in title if enabled
   const subInfo = overlaySettings?.showSubGoal
     ? { current: streamGoals.subs, target: overlaySettings.subGoalTarget ?? 5 }
+    : undefined;
+  const kicksInfo = overlaySettings?.showKicksGoal
+    ? { current: streamGoals.kicks, target: overlaySettings.kicksGoalTarget ?? 100 }
     : undefined;
 
   // No text provided: set title to location only, or error if location is disabled
   if (!customPart) {
-    if (!includeLocationInTitle && !subInfo) {
+    if (!includeLocationInTitle && !subInfo && !kicksInfo) {
       return { handled: true, reply: 'Usage: !title Your title here (location in title is disabled)' };
     }
-    if (!locationPart && !subInfo) {
+    if (!locationPart && !subInfo && !kicksInfo) {
       return { handled: true, reply: 'No location data available. Use !title Your title here' };
     }
   }
 
-  const fullTitle = buildStreamTitle(customPart, locationPart ?? '', subInfo);
+  const fullTitle = buildStreamTitle(customPart, locationPart ?? '', subInfo, kicksInfo);
 
   try {
     const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {

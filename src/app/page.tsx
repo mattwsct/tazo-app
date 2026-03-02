@@ -403,7 +403,10 @@ export default function AdminPage() {
     const subInfo = settings.showSubGoal
       ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
       : undefined;
-    const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo);
+    const kicksInfo = settings.showKicksGoal
+      ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 100 }
+      : undefined;
+    const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo, kicksInfo);
     try {
       const r = await authenticatedFetch('/api/kick-channel', {
         method: 'PATCH',
@@ -427,7 +430,7 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation, settings.showSubGoal, settings.streamGoals?.subs]);
+  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation, settings.showSubGoal, settings.showKicksGoal, settings.streamGoals?.subs, settings.streamGoals?.kicks]);
 
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
@@ -1220,9 +1223,12 @@ export default function AdminPage() {
                     const subInfo = settings.showSubGoal
                       ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
                       : undefined;
+                    const kicksInfo = settings.showKicksGoal
+                      ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 100 }
+                      : undefined;
                     const loc = kickStreamTitleIncludeLocation ? kickStreamTitleLocation : '';
-                    return loc || subInfo
-                      ? buildStreamTitle(kickStreamTitleCustom, loc, subInfo)
+                    return loc || subInfo || kicksInfo
+                      ? buildStreamTitle(kickStreamTitleCustom, loc, subInfo, kicksInfo)
                       : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>;
                   })()}
                 </div>
@@ -1243,7 +1249,10 @@ export default function AdminPage() {
                         const subInfo = settings.showSubGoal
                           ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
                           : undefined;
-                        const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo);
+                        const kicksInfo = settings.showKicksGoal
+                          ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 100 }
+                          : undefined;
+                        const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo, kicksInfo);
                         try {
                           const r = await authenticatedFetch('/api/kick-channel', {
                             method: 'PATCH',

@@ -5,7 +5,9 @@ import type { OverlaySettings } from '@/types/settings';
 import GoalProgressBar from './GoalProgressBar';
 
 const ALERT_DISPLAY_MS = 8000;
-const GOALS_CYCLE_DURATION_MS = 32000; // 4x base rotation (8s)
+// All rotations snap to multiples of this tick so transitions are wall-clock aligned
+const ROTATION_TICK_MS = 10000;
+const GOALS_CYCLE_DURATION_MS = ROTATION_TICK_MS;
 const CROSSFADE_DURATION_MS = 500;
 
 type GoalSlide = 'subs' | 'kicks';
@@ -55,7 +57,11 @@ export default function BottomRightPanel({
   const showWeeklyEarnedLb = showLeaderboard && settings.showWeeklyEarnedLb !== false && gamblingEnabled;
   const showMonthlyEarnedLb = showLeaderboard && settings.showMonthlyEarnedLb !== false && gamblingEnabled;
   const showLifetimeEarnedLb = showLeaderboard && settings.showLifetimeEarnedLb !== false && gamblingEnabled;
-  const lbCycleMs = Math.max(5, settings.leaderboardRotationSec ?? 15) * 1000;
+  // Snap to nearest multiple of ROTATION_TICK_MS so lb and goal transitions coincide
+  const lbCycleMs = Math.max(
+    ROTATION_TICK_MS,
+    Math.round((Math.max(5, settings.leaderboardRotationSec ?? 10) * 1000) / ROTATION_TICK_MS) * ROTATION_TICK_MS
+  );
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
 
