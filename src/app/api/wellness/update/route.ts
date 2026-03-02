@@ -79,11 +79,11 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.heartRate !== undefined) {
       const v = parseNumber(body.heartRate);
-      if (v !== undefined) updates.heartRate = Math.max(0, Math.floor(v));
+      if (v !== undefined) updates.heartRate = Math.min(300, Math.max(0, Math.floor(v)));
     }
     if (body.restingHeartRate !== undefined) {
       const v = parseNumber(body.restingHeartRate);
-      if (v !== undefined) updates.restingHeartRate = Math.max(0, Math.floor(v));
+      if (v !== undefined) updates.restingHeartRate = Math.min(300, Math.max(0, Math.floor(v)));
     }
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });

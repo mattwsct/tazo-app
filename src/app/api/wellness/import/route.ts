@@ -210,14 +210,14 @@ function parseHealthAutoExport(body: Record<string, unknown>, onlyAfterMs?: numb
     if (rounded > 0) updates.leanBodyMassKg = rounded;
   }
 
-  // heart_rate: HKQuantityTypeIdentifier.heartRate — count/time (bpm)
+  // heart_rate: HKQuantityTypeIdentifier.heartRate — count/time (bpm). Clamped to 0–300.
   const hr = byName.get('heart_rate');
   const bpm = lastAvg(hr);
-  if (bpm != null && bpm >= 0) updates.heartRate = Math.round(bpm);
+  if (bpm != null && bpm >= 0 && bpm <= 300) updates.heartRate = Math.round(bpm);
 
   const restingHr = byName.get('resting_heart_rate');
   const restingBpm = lastAvg(restingHr) ?? lastQty(restingHr);
-  if (restingBpm != null && restingBpm >= 0) updates.restingHeartRate = Math.round(restingBpm);
+  if (restingBpm != null && restingBpm >= 0 && restingBpm <= 300) updates.restingHeartRate = Math.round(restingBpm);
 
   return { updates, sessionDeltas };
 }
@@ -273,8 +273,8 @@ export async function POST(request: NextRequest) {
     if (bodyFatVal != null && bodyFatVal > 0) updates.bodyFatPercent = bodyFatVal;
     const leanVal = body.leanBodyMassKg !== undefined ? Math.max(0, parseNumber(body.leanBodyMassKg) ?? 0) : undefined;
     if (leanVal != null && leanVal > 0) updates.leanBodyMassKg = leanVal;
-    if (body.heartRate !== undefined) updates.heartRate = Math.max(0, Math.floor(parseNumber(body.heartRate) ?? 0));
-    if (body.restingHeartRate !== undefined) updates.restingHeartRate = Math.max(0, Math.floor(parseNumber(body.restingHeartRate) ?? 0));
+    if (body.heartRate !== undefined) updates.heartRate = Math.min(300, Math.max(0, Math.floor(parseNumber(body.heartRate) ?? 0)));
+    if (body.restingHeartRate !== undefined) updates.restingHeartRate = Math.min(300, Math.max(0, Math.floor(parseNumber(body.restingHeartRate) ?? 0)));
     if (Object.keys(updates).length === 0) {
       console.warn('[Wellness import] No valid fields.', { topLevelKeys: Object.keys(body) });
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
