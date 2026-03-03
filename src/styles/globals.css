@@ -403,15 +403,16 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  /* Lock to tallest slot height (steps at font-size-md) so heart rate never shifts */
-  min-height: var(--font-size-md);
   width: 100%;
 }
 
 .top-left-cycling-slots {
   display: grid;
   grid-template: 1fr / 1fr;
-  place-items: start;
+  /* Fixed height = tallest slot (steps at font-size-md); content centered vertically
+     so the smaller date text doesn't leave a gap at the bottom */
+  height: var(--font-size-md);
+  place-items: center start;
   width: 100%;
 }
 
