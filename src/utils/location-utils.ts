@@ -131,6 +131,56 @@ export function stripTrailingNumbers(name: string): string {
 }
 
 /**
+ * Names where " City" or " Municipality" is a genuine part of the proper noun, not an
+ * administrative suffix. These are preserved as-is by stripAdminSuffix.
+ */
+const ADMIN_SUFFIX_WHITELIST = new Set([
+  'mexico city', 'kansas city', 'oklahoma city', 'salt lake city',
+  'ho chi minh city', 'new york city', 'jersey city', 'iowa city',
+  'jefferson city', 'junction city', 'rapid city', 'traverse city',
+  'carson city', 'dodge city', 'bay city', 'sun city', 'park city',
+  'league city', 'garden city', 'universal city', 'culver city',
+  'foster city', 'daly city', 'temple city', 'quezon city',
+  'davao city', 'cebu city', 'pasay city', 'makati city',
+  'paranaque city', 'panama city',
+]);
+
+/**
+ * Strips bureaucratic administrative suffixes that nobody uses in speech.
+ * e.g. "Gold Coast City" → "Gold Coast", "Someplace Municipality" → "Someplace"
+ * Proper nouns where the suffix is part of the name are preserved via whitelist.
+ */
+function stripAdminSuffix(name: string): string {
+  if (!name) return name;
+  if (ADMIN_SUFFIX_WHITELIST.has(name.toLowerCase())) return name;
+  return name
+    .replace(/ City$/i, '')
+    .replace(/ Municipality$/i, '')
+    .trim() || name;
+}
+
+/**
+ * Generic suburb/neighbourhood names that give no useful location information.
+ * When a suburb or neighbourhood field contains one of these, we skip it and
+ * fall back to the city field instead.
+ */
+const GENERIC_NEIGHBOURHOOD_NAMES = new Set([
+  'downtown', 'midtown', 'uptown', 'central', 'cbd',
+  'old town', 'old city', 'city centre', 'city center',
+  'waterfront', 'riverside', 'lakeside', 'harbour', 'harbor',
+  'beachfront', 'bayside', 'hillside', 'hillcrest',
+  'northside', 'southside', 'eastside', 'westside',
+]);
+
+/**
+ * Returns true if a suburb/neighbourhood name is too generic to be worth displaying
+ * over the actual city name (e.g. "Downtown", "CBD", "Waterfront").
+ */
+function isGenericNeighbourhood(name: string): boolean {
+  return GENERIC_NEIGHBOURHOOD_NAMES.has(name.toLowerCase().trim());
+}
+
+/**
  * Validates location names for display (length, script, not just a number).
  */
 function isValidLocationName(name: string): boolean {
@@ -141,12 +191,12 @@ function isValidLocationName(name: string): boolean {
 }
 
 /**
- * Cleans a raw location name for display: strip numbers → validate → normalize.
+ * Cleans a raw location name for display: strip numbers → strip admin suffixes → validate → normalize.
  * Use this whenever we pick a name from location data for overlay/chat.
  */
 function cleanForDisplay(value: string | undefined): string | null {
   if (!value) return null;
-  const cleaned = stripTrailingNumbers(value);
+  const cleaned = stripAdminSuffix(stripTrailingNumbers(value));
   if (!cleaned || !isValidLocationName(cleaned)) return null;
   return normalizeToEnglish(cleaned);
 }
@@ -193,10 +243,13 @@ function getLocationByPrecision(
 ): { name: string; category: LocationCategory } {
   // Try to find a valid name at the current precision level
   // Normalize names to English when possible
-  const tryFields = (fields: (keyof LocationData)[]): string | null => {
+  const tryFields = (
+    fields: (keyof LocationData)[],
+    filter?: (name: string, field: keyof LocationData) => boolean,
+  ): string | null => {
     for (const field of fields) {
       const name = cleanForDisplay(location[field] as string | undefined);
-      if (name) return name;
+      if (name && (!filter || filter(name, field))) return name;
     }
     return null;
   };
@@ -206,8 +259,12 @@ function getLocationByPrecision(
   
   // CITY: Settlements and urban areas (ordered from most appropriate to least appropriate)
   // suburb/neighbourhood is checked first — it's more specific than the broad city/municipality name.
-  // e.g. "Surfers Paradise" (suburb) is preferred over "Gold Coast City" (city).
+  // e.g. "Surfers Paradise" (suburb) is preferred over "Gold Coast" (city).
+  // Generic names like "Downtown" or "CBD" in suburb/neighbourhood are skipped.
+  const suburbanFields = new Set<keyof LocationData>(['suburb', 'neighbourhood']);
   const cityFields: (keyof LocationData)[] = ['suburb', 'neighbourhood', 'city', 'municipality', 'town', 'county', 'village', 'hamlet'];
+  const skipGenericSuburb = (name: string, field: keyof LocationData) =>
+    !suburbanFields.has(field) || !isGenericNeighbourhood(name);
   
   // STATE: Large administrative divisions (includes states, provinces, prefectures, regions)
   // Fields: state, province, region
@@ -223,7 +280,8 @@ function getLocationByPrecision(
   const chain = fallbackChains[precision] || [];
   
   for (let i = 0; i < chain.length; i++) {
-    const name = tryFields(chain[i]);
+    const filter = chain[i] === cityFields ? skipGenericSuburb : undefined;
+    const name = tryFields(chain[i], filter);
     if (name) {
       const category: LocationCategory = chain[i] === cityFields ? 'city' : 'state';
       return { name, category };
@@ -325,17 +383,28 @@ export function formatCountryName(countryName: string, countryCode = ''): string
 
 /**
  * Gets the best city name by selecting the first available city field.
- * suburb/neighbourhood is checked first as it's more specific (e.g. "Surfers Paradise" over "Gold Coast City").
+ * suburb/neighbourhood is checked first as it's more specific (e.g. "Surfers Paradise" over "Gold Coast").
+ * Generic suburb names (e.g. "Downtown", "CBD") and admin suffixes (e.g. " City") are silently cleaned.
  */
 export function getBestCityName(location: LocationData): string {
-  return location.suburb ||
-         location.neighbourhood ||
-         location.city || 
-         location.municipality || 
-         location.town || 
-         location.village ||
-         location.hamlet ||
-         '';
+  const clean = (raw: string | undefined) => {
+    if (!raw) return null;
+    return stripAdminSuffix(stripTrailingNumbers(raw)).trim() || null;
+  };
+
+  // Suburb/neighbourhood first — but skip generic names
+  for (const raw of [location.suburb, location.neighbourhood]) {
+    const name = clean(raw);
+    if (name && !isGenericNeighbourhood(name)) return name;
+  }
+
+  // Fall through to broader city fields
+  for (const raw of [location.city, location.municipality, location.town, location.village, location.hamlet]) {
+    const name = clean(raw);
+    if (name) return name;
+  }
+
+  return '';
 }
 
 // === 🎨 MAIN LOCATION FORMATTING ===

@@ -109,9 +109,9 @@ html, body {
   margin-top: -2px;
 }
 
-/* Tighter gap between rotating date/steps and heart rate */
+/* Extra gap between rotating date/steps and heart rate */
 .top-left .top-left-cycling-wrapper + .heart-rate-wrapper {
-  margin-top: -2px;
+  margin-top: 2px;
 }
 
 .time-line,
@@ -403,6 +403,8 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  /* Lock to tallest slot height (steps at font-size-md) so heart rate never shifts */
+  min-height: var(--font-size-md);
   width: 100%;
 }
 
@@ -734,10 +736,11 @@ html, body {
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
+  line-height: 1;
 }
 
 .step-counter-icon {
-  font-size: var(--font-size-sm);
+  font-size: 1em;
   line-height: 1;
 }
 

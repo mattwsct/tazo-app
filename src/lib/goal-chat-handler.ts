@@ -8,8 +8,8 @@
  * !clearsubsgoal               — hide sub goal, reset to saved increment
  * !clearkicksgoal              — hide kicks goal, reset to saved increment
  * !cleargoals                  — hide both, reset both to saved increments
- * !subs <count>                — manually override current subs count
- * !kicks <count>               — manually override current kicks count
+ * !subscount <count>           — manually override current subs count
+ * !kickscount <count>          — manually override current kicks count
  */
 
 import { kv } from '@/lib/kv';
@@ -60,8 +60,8 @@ export async function handleGoalCommand(
     lower === '!clearkicksgoal' ||
     lower.startsWith('!subsgoal') ||
     lower.startsWith('!kicksgoal') ||
-    lower === '!subs' || lower.startsWith('!subs ') ||
-    lower === '!kicks' || lower.startsWith('!kicks ');
+    lower === '!subscount' || lower.startsWith('!subscount ') ||
+    lower === '!kickscount' || lower.startsWith('!kickscount ');
 
   if (!isGoalCmd) return { handled: false };
 
@@ -187,12 +187,12 @@ export async function handleGoalCommand(
     return { handled: true, reply };
   }
 
-  // ── !subs <count> ───────────────────────────────────────────────────────────
-  if (lower === '!subs' || lower.startsWith('!subs ')) {
-    const arg = trimmed.slice('!subs'.length).trim();
+  // ── !subscount <count> ──────────────────────────────────────────────────────
+  if (lower === '!subscount' || lower.startsWith('!subscount ')) {
+    const arg = trimmed.slice('!subscount'.length).trim();
     const count = parseInt(arg, 10);
     if (!Number.isFinite(count) || count < 0) {
-      return { handled: true, reply: 'Usage: !subs <number>  e.g. !subs 15' };
+      return { handled: true, reply: 'Usage: !subscount <number>  e.g. !subscount 15' };
     }
     const prevGoals = await getStreamGoals();
     await setStreamGoals({ subs: count });
@@ -207,15 +207,15 @@ export async function handleGoalCommand(
     }
     notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
-    return { handled: true, reply: `✅ Subs count set to ${count}` };
+    return { handled: true, reply: `✅ Sub count set to ${count}` };
   }
 
-  // ── !kicks <count> ──────────────────────────────────────────────────────────
-  if (lower === '!kicks' || lower.startsWith('!kicks ')) {
-    const arg = trimmed.slice('!kicks'.length).trim();
+  // ── !kickscount <count> ─────────────────────────────────────────────────────
+  if (lower === '!kickscount' || lower.startsWith('!kickscount ')) {
+    const arg = trimmed.slice('!kickscount'.length).trim();
     const count = parseInt(arg, 10);
     if (!Number.isFinite(count) || count < 0) {
-      return { handled: true, reply: 'Usage: !kicks <number>  e.g. !kicks 1500' };
+      return { handled: true, reply: 'Usage: !kickscount <number>  e.g. !kickscount 1500' };
     }
     const prevGoals = await getStreamGoals();
     await setStreamGoals({ kicks: count });
@@ -230,7 +230,7 @@ export async function handleGoalCommand(
     }
     notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
-    return { handled: true, reply: `✅ Kicks count set to ${count}` };
+    return { handled: true, reply: `✅ Kicks count set to ${count}` }; 
   }
 
   return { handled: false };
