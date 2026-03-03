@@ -49,20 +49,20 @@ export function useCrossfadeRotation<T>(slides: T[], cycleDurationMs: number): C
       });
     };
 
-    // Align ticks to wall clock so all rotations with the same (or multiple)
-    // cycle duration change at the same moment regardless of mount time.
-    const now = Date.now();
-    const msUntilNextTick = cycleDurationMs - (now % cycleDurationMs);
-
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    const initialTimeout = setTimeout(() => {
-      tick();
-      intervalId = setInterval(tick, cycleDurationMs);
-    }, msUntilNextTick);
+    // Re-align to wall clock on every tick (not just the first) so components
+    // never drift out of phase with each other regardless of when they mounted.
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      const msUntilNext = cycleDurationMs - (Date.now() % cycleDurationMs);
+      timeoutId = setTimeout(() => {
+        tick();
+        schedule();
+      }, msUntilNext);
+    };
+    schedule();
 
     return () => {
-      clearTimeout(initialTimeout);
-      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [slideCount, cycleDurationMs]);
 

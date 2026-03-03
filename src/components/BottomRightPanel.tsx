@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlaySettings } from '@/types/settings';
 import GoalProgressBar from './GoalProgressBar';
 
-const ALERT_DISPLAY_MS = 8000;
+const ALERT_DISPLAY_MS = 10000;
 // All rotations snap to multiples of this tick so transitions are wall-clock aligned
 const ROTATION_TICK_MS = 10000;
 const GOALS_CYCLE_DURATION_MS = ROTATION_TICK_MS;
@@ -169,7 +169,7 @@ export default function BottomRightPanel({
     }
   }, [overlayAlerts, showOverlayAlerts, hasSubTarget, hasKicksTarget, showGoalsRotation]);
 
-  // Goals cycling (wall clock aligned)
+  // Goals cycling (wall clock aligned, re-aligned on every tick to prevent drift)
   useEffect(() => {
     if (!showGoalsRotation || goalSlides.length <= 1) return;
     const tick = () => {
@@ -181,13 +181,16 @@ export default function BottomRightPanel({
         return current[(idx + 1) % current.length];
       });
     };
-    const msUntilNext = GOALS_CYCLE_DURATION_MS - (Date.now() % GOALS_CYCLE_DURATION_MS);
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    const initialTimeout = setTimeout(() => {
-      tick();
-      intervalId = setInterval(tick, GOALS_CYCLE_DURATION_MS);
-    }, msUntilNext);
-    return () => { clearTimeout(initialTimeout); if (intervalId) clearInterval(intervalId); };
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      const msUntilNext = GOALS_CYCLE_DURATION_MS - (Date.now() % GOALS_CYCLE_DURATION_MS);
+      timeoutId = setTimeout(() => {
+        tick();
+        schedule();
+      }, msUntilNext);
+    };
+    schedule();
+    return () => { if (timeoutId) clearTimeout(timeoutId); };
   }, [showGoalsRotation, goalSlides.length, goalSlidesKey]);
 
   // =============================================
