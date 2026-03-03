@@ -35,7 +35,6 @@ import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
-import { getWellnessData, resetStepsSession, resetDistanceSession, resetFlightsSession, resetActiveCaloriesSession, resetWellnessLastImport, resetWellnessMilestonesOnStreamStart, setWellnessSessionStart } from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
@@ -158,20 +157,11 @@ export async function POST(request: NextRequest) {
     })();
     void (async () => {
       try {
-        const wellness = await getWellnessData();
-        const sessionStartAt = Date.now();
-        await resetStepsSession(wellness?.steps ?? 0);
-        await resetDistanceSession(wellness?.distanceKm ?? 0);
-        await resetFlightsSession(wellness?.flightsClimbed ?? 0);
-        await resetActiveCaloriesSession(wellness?.activeCalories ?? 0);
-        await resetWellnessLastImport();
-        await resetWellnessMilestonesOnStreamStart();
-        await setWellnessSessionStart(sessionStartAt);
         const { subTarget: initialSubTarget } = await resetStreamGoalsOnStreamStart();
         void updateKickTitleGoals(0, initialSubTarget).catch(() => {});
         await resetEventTimestamps();
       } catch (e) {
-        console.warn('Failed to reset wellness session on stream start:', e);
+        console.warn('Failed to reset stream session on stream start:', e);
       }
     })();
   }
@@ -469,14 +459,21 @@ export async function POST(request: NextRequest) {
     const increment = (settings?.subGoalIncrement as number) ?? 5;
     const kicksTarget = (settings?.kicksGoalTarget as number) ?? 100;
     const hasSubtext = !!(settings?.subGoalSubtext as string | null | undefined);
+    const showSubGoal = !!(settings?.showSubGoal);
     const prevSubs = goals.subs - count;
-    if (target > 0 && prevSubs < target && goals.subs >= target) {
+    if (showSubGoal && target > 0 && prevSubs < target && goals.subs >= target) {
       // No label: auto-iterate to next multiple. With label: hold at 100% until cleared.
       const newTarget = hasSubtext ? target : await bumpGoalTarget('subs', target, increment, goals.subs);
       const token = await getValidAccessToken();
       if (token) {
-        void sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`).catch(() => {});
+        try {
+          await sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`);
+        } catch (err) {
+          console.error('[Webhook] Sub milestone chat failed:', err instanceof Error ? err.message : String(err));
+        }
         void updateKickTitleGoals(goals.subs, newTarget, goals.kicks, kicksTarget).catch(() => {});
+      } else {
+        console.warn('[Webhook] Sub milestone: no access token, chat message skipped');
       }
     } else {
       void updateKickTitleGoals(goals.subs, target, goals.kicks, kicksTarget).catch(() => {});
@@ -531,11 +528,20 @@ export async function POST(request: NextRequest) {
       const increment = (settings?.kicksGoalIncrement as number) ?? 100;
       const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
       const prevKicks = goals.kicks - amount;
-      if (target > 0 && prevKicks < target && goals.kicks >= target) {
+      const showKicksGoal = !!(settings?.showKicksGoal);
+      if (showKicksGoal && target > 0 && prevKicks < target && goals.kicks >= target) {
         // No label: auto-iterate to next multiple. With label: hold at 100% until cleared.
         if (!hasKicksSubtext) await bumpGoalTarget('kicks', target, increment, goals.kicks);
         const token = await getValidAccessToken();
-        if (token) void sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`).catch(() => {});
+        if (token) {
+          try {
+            await sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`);
+          } catch (err) {
+            console.error('[Webhook] Kicks milestone chat failed:', err instanceof Error ? err.message : String(err));
+          }
+        } else {
+          console.warn('[Webhook] Kicks milestone: no access token, chat message skipped');
+        }
       }
     }
   }

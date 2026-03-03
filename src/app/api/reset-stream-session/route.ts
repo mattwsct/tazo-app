@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { onStreamStarted } from '@/utils/stats-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
-import {
-  getWellnessData,
-  resetStepsSession,
-  resetDistanceSession,
-  resetFlightsSession,
-  resetActiveCaloriesSession,
-  resetWellnessLastImport,
-  resetWellnessMilestonesOnStreamStart,
-  setWellnessSessionStart,
-} from '@/utils/wellness-storage';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 
@@ -18,8 +8,8 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/reset-stream-session
- * Manually resets stream session: leaderboard, steps, distance, flights, active calories,
- * wellness milestones, and stream_started_at. For use when auto-reset on stream start fails.
+ * Manually resets stream session: leaderboard and stream goals.
+ * Wellness data (steps/distance/calories) resets naturally at midnight via Health Auto Export.
  * Requires admin auth.
  */
 export async function POST(request: NextRequest) {
@@ -28,22 +18,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await onStreamStarted();
-
-    const wellness = await getWellnessData();
-    const sessionStartAt = Date.now();
-    const [, , , , , , { subTarget }] = await Promise.all([
-      resetStepsSession(wellness?.steps ?? 0),
-      resetDistanceSession(wellness?.distanceKm ?? 0),
-      resetFlightsSession(wellness?.flightsClimbed ?? 0),
-      resetActiveCaloriesSession(wellness?.activeCalories ?? 0),
-      resetWellnessLastImport(),
-      resetWellnessMilestonesOnStreamStart(),
+    const [, { subTarget }] = await Promise.all([
+      onStreamStarted(),
       resetStreamGoalsOnStreamStart(),
-      setWellnessSessionStart(sessionStartAt),
     ]);
 
-    // Update the stream title to reflect the reset (0 subs, new initial target)
     void updateKickTitleGoals(0, subTarget).catch(() => {});
 
     return NextResponse.json({ success: true });

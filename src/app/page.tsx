@@ -93,7 +93,6 @@ export default function AdminPage() {
   const [kickChatBroadcastAltitudeTimeoutMin, setKickChatBroadcastAltitudeTimeoutMin] = useState(5);
   const [kickChatBroadcastWellnessSteps, setKickChatBroadcastWellnessSteps] = useState(true);
   const [kickChatBroadcastWellnessDistance, setKickChatBroadcastWellnessDistance] = useState(true);
-  const [kickChatBroadcastWellnessFlights, setKickChatBroadcastWellnessFlights] = useState(false);
   const [kickChatBroadcastWellnessActiveCalories, setKickChatBroadcastWellnessActiveCalories] = useState(false);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleIncludeLocation, setKickStreamTitleIncludeLocation] = useState(true);
@@ -258,7 +257,6 @@ export default function AdminPage() {
         if (d.alertSettings?.chatBroadcastAltitudeTimeoutMin != null) setKickChatBroadcastAltitudeTimeoutMin(d.alertSettings.chatBroadcastAltitudeTimeoutMin);
         if (d.alertSettings?.chatBroadcastWellnessSteps !== undefined) setKickChatBroadcastWellnessSteps(d.alertSettings.chatBroadcastWellnessSteps);
         if (d.alertSettings?.chatBroadcastWellnessDistance !== undefined) setKickChatBroadcastWellnessDistance(d.alertSettings.chatBroadcastWellnessDistance);
-        if (d.alertSettings?.chatBroadcastWellnessFlights !== undefined) setKickChatBroadcastWellnessFlights(d.alertSettings.chatBroadcastWellnessFlights);
         if (d.alertSettings?.chatBroadcastWellnessActiveCalories !== undefined) setKickChatBroadcastWellnessActiveCalories(d.alertSettings.chatBroadcastWellnessActiveCalories);
       })
       .catch(() => {});
@@ -451,7 +449,6 @@ export default function AdminPage() {
       chatBroadcastAltitudeTimeoutMin: number;
       chatBroadcastWellnessSteps: boolean;
       chatBroadcastWellnessDistance: boolean;
-      chatBroadcastWellnessFlights: boolean;
       chatBroadcastWellnessActiveCalories: boolean;
     }>;
   }) => {
@@ -473,7 +470,6 @@ export default function AdminPage() {
       chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
       chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
       chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
-      chatBroadcastWellnessFlights: kickChatBroadcastWellnessFlights,
       chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
     };
     setToast({ type: 'saving', message: 'Saving...' });
@@ -493,7 +489,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessFlights, kickChatBroadcastWellnessActiveCalories]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessActiveCalories]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
@@ -1020,10 +1016,6 @@ export default function AdminPage() {
                 <label className="checkbox-label">
                   <input type="checkbox" checked={settings.showActiveCalories ?? true} onChange={(e) => handleSettingsChange({ showActiveCalories: e.target.checked })} className="checkbox-input" />
                   <span className="checkbox-text">Active calories</span>
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.showFlights ?? true} onChange={(e) => handleSettingsChange({ showFlights: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Flights climbed</span>
                 </label>
               </div>
               <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-right (location)</h5>
@@ -1644,11 +1636,6 @@ export default function AdminPage() {
                         </div>
                       </div>
                     )}
-                    <label className="checkbox-label-row broadcast-checkbox-item">
-                      <input type="checkbox" checked={kickChatBroadcastWellnessFlights} onChange={(e) => { setKickChatBroadcastWellnessFlights(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessFlights: e.target.checked } }); }} className="checkbox-input" />
-                      <span className="radio-icon">🪜</span>
-                      <span>Flights climbed — at 5, 10, 25, 50…</span>
-                    </label>
                     <label className="checkbox-label-row broadcast-checkbox-item">
                       <input type="checkbox" checked={kickChatBroadcastWellnessActiveCalories} onChange={(e) => { setKickChatBroadcastWellnessActiveCalories(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessActiveCalories: e.target.checked } }); }} className="checkbox-input" />
                       <span className="radio-icon">🔥</span>

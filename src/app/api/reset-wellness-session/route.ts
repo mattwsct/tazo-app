@@ -1,21 +1,13 @@
 /**
  * POST /api/reset-wellness-session
- * Resets only wellness session: steps, distance, flights, active calories accumulated,
- * last-import dedup state, and wellness milestones.
- * Does not reset leaderboard or stream_started_at.
+ * Clears the wellness milestone tracking so daily cron chat messages restart from zero.
+ * Does not clear actual wellness data (steps/distance/calories) — those come from Health Auto Export
+ * and reset naturally at midnight.
  * Requires admin auth.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getWellnessData,
-  resetStepsSession,
-  resetDistanceSession,
-  resetFlightsSession,
-  resetActiveCaloriesSession,
-  resetWellnessLastImport,
-  resetWellnessMilestonesOnStreamStart,
-} from '@/utils/wellness-storage';
+import { setWellnessMilestoneLastSent } from '@/utils/wellness-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
@@ -26,16 +18,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const wellness = await getWellnessData();
     await Promise.all([
-      resetStepsSession(wellness?.steps ?? 0),
-      resetDistanceSession(wellness?.distanceKm ?? 0),
-      resetFlightsSession(wellness?.flightsClimbed ?? 0),
-      resetActiveCaloriesSession(wellness?.activeCalories ?? 0),
-      resetWellnessLastImport(),
-      resetWellnessMilestonesOnStreamStart(),
+      setWellnessMilestoneLastSent('steps', 0),
+      setWellnessMilestoneLastSent('distanceKm', 0),
+      setWellnessMilestoneLastSent('activeCalories', 0),
     ]);
-
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Reset failed';

@@ -7,7 +7,6 @@ import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
   getWellnessCaloriesResponse,
-  getWellnessFlightsResponse,
   getWellnessHeightResponse,
   getWellnessWeightResponse,
   getWellnessSummaryResponse,
@@ -304,7 +303,6 @@ export async function handleKickChatCommand(
     return `🃏 No active hand. !deal <amount> to play. (${standBal} tazos)`;
   }
   if (cmd === 'calories') return getWellnessCaloriesResponse();
-  if (cmd === 'flights') return getWellnessFlightsResponse();
   if (cmd === 'height') return getWellnessHeightResponse();
   if (cmd === 'length') return '📏 18 cm × 14 cm (7.1" × 5.5")';
   if (cmd === 'weight') return getWellnessWeightResponse();

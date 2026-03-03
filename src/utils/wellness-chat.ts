@@ -1,16 +1,9 @@
 /**
  * Wellness chat command responses (shared by Kick and Fossabot /api/chat)
+ * All metrics reflect today's totals from Health Auto Export (resets naturally at midnight).
  */
 
-import {
-  getWellnessData,
-  getStepsSinceStreamStart,
-  getDistanceSinceStreamStart,
-  getFlightsSinceStreamStart,
-  getActiveCaloriesSinceStreamStart,
-  getMetricUpdatedAt,
-  getLastSessionMetricUpdateAt,
-} from '@/utils/wellness-storage';
+import { getWellnessData, getMetricUpdatedAt } from '@/utils/wellness-storage';
 import { kmToMiles } from '@/utils/unit-conversions';
 
 function formatDataAge(updatedAt: number): string {
@@ -39,55 +32,27 @@ function formatDistance(km: number): string {
 }
 
 export async function getWellnessStepsResponse(): Promise<string> {
-  const [steps, wellness, sessionAt] = await Promise.all([
-    getStepsSinceStreamStart(),
-    getWellnessData(),
-    getLastSessionMetricUpdateAt('steps'),
-  ]);
-  if (steps <= 0) return '👟 No step data this stream yet.';
-  const age = formatDataAge(sessionAt || getMetricUpdatedAt(wellness, 'steps'));
-  return `👟 ${steps.toLocaleString()} steps this stream${age}`;
+  const wellness = await getWellnessData();
+  const steps = wellness?.steps ?? 0;
+  if (steps <= 0) return '👟 No step data yet today.';
+  const age = formatDataAge(getMetricUpdatedAt(wellness, 'steps'));
+  return `👟 ${steps.toLocaleString()} steps today${age}`;
 }
 
 export async function getWellnessDistanceResponse(): Promise<string> {
-  const [km, wellness, sessionAt] = await Promise.all([
-    getDistanceSinceStreamStart(),
-    getWellnessData(),
-    getLastSessionMetricUpdateAt('distanceKm'),
-  ]);
-  if (km <= 0) return '🚶 No walking/running distance this stream yet.';
-  const age = formatDataAge(sessionAt || getMetricUpdatedAt(wellness, 'distanceKm'));
-  return `🚶 ${formatDistance(km)} walked/run this stream${age}`;
+  const wellness = await getWellnessData();
+  const km = wellness?.distanceKm ?? 0;
+  if (km <= 0) return '🚶 No distance data yet today.';
+  const age = formatDataAge(getMetricUpdatedAt(wellness, 'distanceKm'));
+  return `🚶 ${formatDistance(km)} walked/run today${age}`;
 }
 
 export async function getWellnessCaloriesResponse(): Promise<string> {
-  const [wellness, activeSince, sessionAt] = await Promise.all([
-    getWellnessData(),
-    getActiveCaloriesSinceStreamStart(),
-    getLastSessionMetricUpdateAt('activeCalories'),
-  ]);
-  const resting = wellness?.restingCalories ?? 0;
-  const total = wellness?.totalCalories;
-  if (activeSince <= 0 && resting <= 0) return '🔥 No calorie data this stream yet.';
-  const parts: string[] = [];
-  if (activeSince > 0) parts.push(`${activeSince} active cal (stream)`);
-  if (resting > 0) parts.push(`${resting} resting cal (today)`);
-  if ((total ?? 0) > 0 && parts.length === 0) parts.push(`${total} total cal`);
-  const age = formatDataAge(
-    sessionAt || getMetricUpdatedAt(wellness, ['activeCalories', 'restingCalories', 'totalCalories'])
-  );
-  return `🔥 ${parts.join(' · ')}${age}`;
-}
-
-export async function getWellnessFlightsResponse(): Promise<string> {
-  const [flights, wellness, sessionAt] = await Promise.all([
-    getFlightsSinceStreamStart(),
-    getWellnessData(),
-    getLastSessionMetricUpdateAt('flightsClimbed'),
-  ]);
-  if (flights <= 0) return '🪜 No flights climbed this stream yet.';
-  const age = formatDataAge(sessionAt || getMetricUpdatedAt(wellness, 'flightsClimbed'));
-  return `🪜 ${flights} flight${flights === 1 ? '' : 's'} climbed this stream${age}`;
+  const wellness = await getWellnessData();
+  const active = wellness?.activeCalories ?? 0;
+  if (active <= 0) return '🔥 No calorie data yet today.';
+  const age = formatDataAge(getMetricUpdatedAt(wellness, 'activeCalories'));
+  return `🔥 ${active.toLocaleString()} active cal today${age}`;
 }
 
 export function formatDuration(seconds: number): string {
@@ -125,27 +90,14 @@ export async function getWellnessWeightResponse(): Promise<string> {
 }
 
 export async function getWellnessSummaryResponse(): Promise<string> {
-  const [wellness, steps, distance, flights, activeSince, stepsAt, distanceAt, flightsAt, caloriesAt] =
-    await Promise.all([
-      getWellnessData(),
-      getStepsSinceStreamStart(),
-      getDistanceSinceStreamStart(),
-      getFlightsSinceStreamStart(),
-      getActiveCaloriesSinceStreamStart(),
-      getLastSessionMetricUpdateAt('steps'),
-      getLastSessionMetricUpdateAt('distanceKm'),
-      getLastSessionMetricUpdateAt('flightsClimbed'),
-      getLastSessionMetricUpdateAt('activeCalories'),
-    ]);
-
+  const wellness = await getWellnessData();
   const parts: string[] = [];
+  const steps = wellness?.steps ?? 0;
+  const distance = wellness?.distanceKm ?? 0;
+  const active = wellness?.activeCalories ?? 0;
   if (steps > 0) parts.push(`👟 ${steps.toLocaleString()} steps`);
   if (distance > 0) parts.push(`🚶 ${formatDistance(distance)}`);
-  if (flights > 0) parts.push(`🪜 ${flights} flight${flights === 1 ? '' : 's'}`);
-  if (activeSince > 0) parts.push(`🔥 ${activeSince} active cal`);
-  if ((wellness?.heartRate ?? 0) > 0 || (wellness?.restingHeartRate ?? 0) > 0) {
-    parts.push(`💓 ${wellness!.heartRate ?? wellness!.restingHeartRate} bpm`);
-  }
+  if (active > 0) parts.push(`🔥 ${active.toLocaleString()} active cal`);
   const hasBody = (wellness?.heightCm ?? 0) > 0 || (wellness?.weightKg ?? 0) > 0 || (wellness?.bodyMassIndex ?? 0) > 0;
   if (hasBody) {
     const body: string[] = [];
@@ -154,12 +106,7 @@ export async function getWellnessSummaryResponse(): Promise<string> {
     if (wellness!.bodyMassIndex) body.push(`BMI ${wellness!.bodyMassIndex}`);
     parts.push(`⚖️ ${body.join(' · ')}`);
   }
-
-  if (parts.length === 0) return '📊 No wellness data yet.';
-  const sessionMax = Math.max(stepsAt, distanceAt, flightsAt, caloriesAt);
-  const wellnessMax = getMetricUpdatedAt(wellness, [
-    'steps', 'distanceKm', 'flightsClimbed', 'activeCalories', 'heartRate', 'restingHeartRate',
-  ]);
-  const age = formatDataAge(sessionMax || wellnessMax);
+  if (parts.length === 0) return '📊 No wellness data yet today.';
+  const age = formatDataAge(getMetricUpdatedAt(wellness, ['steps', 'distanceKm', 'activeCalories']));
   return `📊 ${parts.join(' · ')}${age}`;
 }

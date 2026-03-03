@@ -9,21 +9,19 @@ import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 const POLL_INTERVAL_MS = 60000;
 const CYCLE_DURATION_MS = 10_000;
 
-type SlotType = 'date' | 'steps' | 'distance' | 'activeCalories' | 'flights';
+type SlotType = 'date' | 'steps' | 'distance' | 'activeCalories';
 
 interface TopLeftRotatingWellnessProps {
   date: string | null;
   timezoneValid: boolean;
-  settings: Pick<OverlaySettings, 'showSteps' | 'showDistance' | 'showActiveCalories' | 'showFlights'>;
+  settings: Pick<OverlaySettings, 'showSteps' | 'showDistance' | 'showActiveCalories'>;
 }
 
 interface WellnessData {
-  stepsSinceStreamStart?: number;
-  distanceSinceStreamStart?: number;
-  activeCaloriesSinceStreamStart?: number;
-  flightsSinceStreamStart?: number;
+  steps?: number;
+  distanceKm?: number;
+  activeCalories?: number;
   updatedAt?: number;
-  lastSessionUpdateAt?: number;
 }
 
 export default function TopLeftRotatingWellness({ date, timezoneValid, settings }: TopLeftRotatingWellnessProps) {
@@ -39,12 +37,10 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
         const data = await res.json();
         if (mounted) {
           setWellness({
-            stepsSinceStreamStart: typeof data.stepsSinceStreamStart === 'number' ? data.stepsSinceStreamStart : undefined,
-            distanceSinceStreamStart: typeof data.distanceSinceStreamStart === 'number' ? data.distanceSinceStreamStart : undefined,
-            activeCaloriesSinceStreamStart: typeof data.activeCaloriesSinceStreamStart === 'number' ? data.activeCaloriesSinceStreamStart : undefined,
-            flightsSinceStreamStart: typeof data.flightsSinceStreamStart === 'number' ? data.flightsSinceStreamStart : undefined,
+            steps: typeof data.steps === 'number' ? data.steps : undefined,
+            distanceKm: typeof data.distanceKm === 'number' ? data.distanceKm : undefined,
+            activeCalories: typeof data.activeCalories === 'number' ? data.activeCalories : undefined,
             updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
-            lastSessionUpdateAt: typeof data.lastSessionUpdateAt === 'number' ? data.lastSessionUpdateAt : undefined,
           });
           setNow(Date.now());
         }
@@ -61,39 +57,32 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     };
   }, []);
 
-  const stepsFresh = useMemo(() => {
-    const latest = Math.max(wellness?.updatedAt ?? 0, wellness?.lastSessionUpdateAt ?? 0);
-    if (!latest) return false;
-    return now - latest <= TIMERS.WELLNESS_STALE_MS;
-  }, [now, wellness?.updatedAt, wellness?.lastSessionUpdateAt]);
+  const dataFresh = useMemo(() => {
+    if (!wellness?.updatedAt) return false;
+    return now - wellness.updatedAt <= TIMERS.WELLNESS_STALE_MS;
+  }, [now, wellness?.updatedAt]);
 
   const slides = useMemo<SlotType[]>(() => {
     const s: SlotType[] = [];
     if (timezoneValid && date) s.push('date');
-    if (settings.showSteps !== false && stepsFresh && wellness?.stepsSinceStreamStart != null && wellness.stepsSinceStreamStart > 0) s.push('steps');
-    if (settings.showDistance !== false && stepsFresh && wellness?.distanceSinceStreamStart != null && wellness.distanceSinceStreamStart >= 0.1) s.push('distance');
-    if (settings.showActiveCalories !== false && stepsFresh && wellness?.activeCaloriesSinceStreamStart != null && wellness.activeCaloriesSinceStreamStart > 0) s.push('activeCalories');
-    if (settings.showFlights !== false && stepsFresh && wellness?.flightsSinceStreamStart != null && wellness.flightsSinceStreamStart >= 1) s.push('flights');
+    if (settings.showSteps !== false && dataFresh && (wellness?.steps ?? 0) > 0) s.push('steps');
+    if (settings.showDistance !== false && dataFresh && (wellness?.distanceKm ?? 0) >= 0.1) s.push('distance');
+    if (settings.showActiveCalories !== false && dataFresh && (wellness?.activeCalories ?? 0) > 0) s.push('activeCalories');
     return s;
-  }, [timezoneValid, date, settings.showSteps, settings.showDistance, settings.showActiveCalories, settings.showFlights, stepsFresh, wellness]);
+  }, [timezoneValid, date, settings.showSteps, settings.showDistance, settings.showActiveCalories, dataFresh, wellness]);
 
   const animatedSteps = useAnimatedValue(
-    wellness?.stepsSinceStreamStart ?? null,
+    wellness?.steps ?? null,
     { precision: 0, durationMultiplier: 5, maxDuration: 1500, immediateThreshold: 1, allowNull: true }
   );
 
   const animatedDistanceKm = useAnimatedValue(
-    wellness?.distanceSinceStreamStart ?? null,
+    wellness?.distanceKm ?? null,
     { precision: 1, durationMultiplier: 3000, maxDuration: 1000, immediateThreshold: 0.05, allowNull: true }
   );
 
   const animatedActiveCalories = useAnimatedValue(
-    wellness?.activeCaloriesSinceStreamStart ?? null,
-    { precision: 0, durationMultiplier: 5, maxDuration: 1500, immediateThreshold: 1, allowNull: true }
-  );
-
-  const animatedFlights = useAnimatedValue(
-    wellness?.flightsSinceStreamStart ?? null,
+    wellness?.activeCalories ?? null,
     { precision: 0, durationMultiplier: 5, maxDuration: 1500, immediateThreshold: 1, allowNull: true }
   );
 
@@ -135,15 +124,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
             <div className="step-counter-row">
               <span className="step-counter-icon">🔥</span>
               <span className="step-counter-value">{(animatedActiveCalories ?? 0).toLocaleString()} cal</span>
-            </div>
-          </div>
-        );
-      case 'flights':
-        return (
-          <div className="step-counter-wrapper">
-            <div className="step-counter-row">
-              <span className="step-counter-icon">🪜</span>
-              <span className="step-counter-value">{(animatedFlights ?? 0).toLocaleString()} flights</span>
             </div>
           </div>
         );

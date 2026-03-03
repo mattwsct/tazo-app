@@ -5,12 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/api-auth';
-import {
-  updateWellnessData,
-  updateStepsSession,
-  updateDistanceSession,
-  updateFlightsSession,
-} from '@/utils/wellness-storage';
+import { updateWellnessData } from '@/utils/wellness-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,10 +85,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     await updateWellnessData(updates, { fromManualEntry: true });
-    // Only session metrics need session updates; weight/BMI are stored directly
-    if (updates.steps !== undefined) await updateStepsSession(updates.steps as number);
-    if (updates.distanceKm !== undefined) await updateDistanceSession(updates.distanceKm as number);
-    if (updates.flightsClimbed !== undefined) await updateFlightsSession(updates.flightsClimbed as number);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

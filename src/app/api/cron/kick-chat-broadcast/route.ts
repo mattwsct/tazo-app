@@ -13,10 +13,7 @@ import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive } from '@/utils/stats-storage';
 import {
-  getStepsSinceStreamStart,
-  getDistanceSinceStreamStart,
-  getFlightsSinceStreamStart,
-  getActiveCaloriesSinceStreamStart,
+  getWellnessData,
   getWellnessMilestonesLastSent,
   setWellnessMilestoneLastSent,
 } from '@/utils/wellness-storage';
@@ -48,7 +45,7 @@ const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 // Milestones for 48h+ streams — steps/distance can exceed limits
 const WELLNESS_MILESTONES = {
   steps: [
-    1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000,
+    1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10_000,
     11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000,
     22000, 24000, 26000, 28000, 30000, 35000, 40000, 50000, 75000, 100000,
   ],
@@ -57,7 +54,6 @@ const WELLNESS_MILESTONES = {
     11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     22, 24, 26, 28, 30, 35, 40, 50, 75, 100,
   ],
-  flightsClimbed: [5, 10, 25, 50, 75, 100, 150],
   activeCalories: [100, 250, 500, 1000, 1500, 2000, 3000, 5000],
 } as const;
 
@@ -383,17 +379,16 @@ export async function GET(request: NextRequest) {
   // Steps/distance default ON (opt-out via !== false); flights/calories default OFF (opt-in via === true)
   const wellnessStepsOn = storedAlert?.chatBroadcastWellnessSteps !== false;
   const wellnessDistanceOn = storedAlert?.chatBroadcastWellnessDistance !== false;
-  const wellnessFlightsOn = storedAlert?.chatBroadcastWellnessFlights === true;
   const wellnessCaloriesOn = storedAlert?.chatBroadcastWellnessActiveCalories === true;
-  const hasWellnessToggles = wellnessStepsOn || wellnessDistanceOn || wellnessFlightsOn || wellnessCaloriesOn;
+  const hasWellnessToggles = wellnessStepsOn || wellnessDistanceOn || wellnessCaloriesOn;
   if (hasWellnessToggles && isLive) {
-    const [stepsSince, distanceSince, flightsSince, activeCalSince, milestonesLast] = await Promise.all([
-      getStepsSinceStreamStart(),
-      getDistanceSinceStreamStart(),
-      getFlightsSinceStreamStart(),
-      getActiveCaloriesSinceStreamStart(),
+    const [wellnessData, milestonesLast] = await Promise.all([
+      getWellnessData(),
       getWellnessMilestonesLastSent(),
     ]);
+    const stepsSince = wellnessData?.steps ?? 0;
+    const distanceSince = wellnessData?.distanceKm ?? 0;
+    const activeCalSince = wellnessData?.activeCalories ?? 0;
     console.log('[Cron HR] WELLNESS_CHECK', JSON.stringify({ wellnessStepsOn, wellnessDistanceOn, stepsSince, distanceSince, milestonesLast }));
 
     const checkAndSend = async (
@@ -401,12 +396,18 @@ export async function GET(request: NextRequest) {
       current: number,
       milestones: readonly number[],
       lastSent: number | undefined,
-      metric: 'steps' | 'distanceKm' | 'flightsClimbed' | 'activeCalories',
+      metric: 'steps' | 'distanceKm' | 'activeCalories',
       emoji: string,
       label: string,
       fmtDisplay: (n: number) => string
     ) => {
       if (!toggle || current <= 0) return;
+      // Midnight reset detection: if today's value dropped below our last-sent milestone,
+      // the day rolled over — reset so we can announce milestones fresh for today.
+      if (lastSent != null && lastSent > 0 && current < lastSent) {
+        await setWellnessMilestoneLastSent(metric, 0);
+        lastSent = undefined;
+      }
       const crossed = milestones.filter((m) => current >= m && (lastSent == null || m > lastSent));
       const highest = crossed.length > 0 ? Math.max(...crossed) : null;
       if (highest != null) {
@@ -441,16 +442,6 @@ export async function GET(request: NextRequest) {
       '🚶',
       'Distance',
       (n) => `${n.toFixed(1)} km`
-    );
-    await checkAndSend(
-      wellnessFlightsOn,
-      flightsSince,
-      WELLNESS_MILESTONES.flightsClimbed,
-      milestonesLast.flightsClimbed,
-      'flightsClimbed',
-      '🪜',
-      'Flights climbed',
-      String
     );
     await checkAndSend(
       wellnessCaloriesOn,

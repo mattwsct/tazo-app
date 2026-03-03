@@ -22,7 +22,6 @@ export interface OverlaySettings {
   showSteps: boolean;
   showDistance?: boolean;
   showActiveCalories?: boolean;
-  showFlights?: boolean;
   showSpeed?: boolean;
   showAltitude?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
@@ -124,7 +123,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showSteps: true,
   showDistance: true,
   showActiveCalories: true,
-  showFlights: true,
   showSpeed: true,
   showAltitude: true,
   showLeaderboard: true,
@@ -184,7 +182,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   showSteps: 'boolean',
   showDistance: 'boolean',
   showActiveCalories: 'boolean',
-  showFlights: 'boolean',
   showSpeed: 'boolean',
   showAltitude: 'boolean',
   showLeaderboard: 'boolean',
