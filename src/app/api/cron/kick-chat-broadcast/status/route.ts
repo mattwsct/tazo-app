@@ -8,10 +8,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import { verifyAuth, verifyRequestAuth } from '@/lib/api-auth';
-import { getHeartrateStats } from '@/utils/stats-storage';
+import { getHeartrateStats, isStreamLive } from '@/utils/stats-storage';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { KICK_TOKENS_KEY } from '@/lib/kick-api';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
+import { getWellnessMilestonesLastSent, getWellnessData } from '@/utils/wellness-storage';
 
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
@@ -30,13 +31,16 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [storedAlert, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens] = await Promise.all([
+  const [storedAlert, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens, streamLive, wellnessMilestones, wellnessData] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     getHeartrateStats(),
     kv.get<string>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
     kv.get<number>(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get(KICK_TOKENS_KEY).then((t) => !!t),
+    isStreamLive(),
+    getWellnessMilestonesLastSent(),
+    getWellnessData(),
   ]);
 
   const chatBroadcastHeartrate = storedAlert?.chatBroadcastHeartrate === true;
@@ -54,6 +58,8 @@ export async function GET() {
   let hrMessageReason = '';
   if (!chatBroadcastHeartrate) {
     hrMessageReason = 'Heart rate broadcast is disabled';
+  } else if (!streamLive) {
+    hrMessageReason = 'Stream is not live — HR state will not advance until live';
   } else if (!hrStats.hasData) {
     hrMessageReason = 'No heart rate data — is the overlay open with Pulsoid connected?';
   } else if (currentBpm < minBpm) {
@@ -75,6 +81,10 @@ export async function GET() {
   const hrLastSentAgo = hrLastSent ? formatAgo(Date.now() - hrLastSent) : null;
 
   return NextResponse.json({
+    stream: {
+      isLive: streamLive,
+      note: streamLive ? 'Stream is live — all notifications enabled' : 'Stream not detected as live — HR and milestone notifications are blocked',
+    },
     heartRate: {
       currentBpm,
       age: hrAge,
@@ -87,6 +97,15 @@ export async function GET() {
       lastSentAt: hrLastSentAt,
       lastSentAgo: hrLastSentAgo,
     },
+    wellnessMilestones: {
+      lastSent: wellnessMilestones,
+      today: {
+        steps: wellnessData?.steps ?? 0,
+        distanceKm: wellnessData?.distanceKm ?? 0,
+        activeCalories: wellnessData?.activeCalories ?? 0,
+      },
+      note: streamLive ? 'Milestones fire when live and today\'s value crosses the next threshold' : 'Milestones blocked — stream not live',
+    },
     location: {
       broadcastEnabled: chatBroadcastLocation,
       hasData: hasLocation,
@@ -96,7 +115,7 @@ export async function GET() {
       hasTokens: hasKickTokens,
     },
     cron: {
-      runsEvery: '2 minutes (Vercel)',
+      runsEvery: '1 minute',
       note: 'Cron only runs on deployed app. Local dev does not trigger it.',
     },
   });

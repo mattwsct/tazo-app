@@ -465,21 +465,24 @@ export async function GET(request: NextRequest) {
     }
 
     if (bpm < minBpm) {
+      // HR dropped below threshold — always reset state so next crossing triggers a new message
       currentHrState = 'below';
       if (hrState !== 'below') console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrStateChange: '->below', bpm, minBpm }));
+    } else if (!isLive) {
+      // Not live — do not advance state. If HR is high while offline, treat it as unseen so the
+      // first cron run after going live will correctly fire a message.
+      console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'not_live', bpm }));
     } else if (veryHighBpm > minBpm && bpm >= veryHighBpm) {
       if (currentHrState !== 'very_high') {
         currentHrState = 'very_high';
-        if (isLive) {
-          const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
-          try {
-            await sendKickChatMessage(accessToken, msg);
-            sent++;
-            await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-            console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, msgPreview: msg.slice(0, 50) }));
-          } catch (err) {
-            console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', error: err instanceof Error ? err.message : String(err) }));
-          }
+        const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
+        try {
+          await sendKickChatMessage(accessToken, msg);
+          sent++;
+          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, msgPreview: msg.slice(0, 50) }));
+        } catch (err) {
+          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', error: err instanceof Error ? err.message : String(err) }));
         }
       } else {
         console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'already_sent_very_high', state: currentHrState }));
@@ -487,16 +490,14 @@ export async function GET(request: NextRequest) {
     } else if (bpm >= minBpm) {
       if (currentHrState === 'below') {
         currentHrState = 'high';
-        if (isLive) {
-          const msg = `❤️ High heart rate: ${bpm} BPM`;
-          try {
-            await sendKickChatMessage(accessToken, msg);
-            sent++;
-            await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-            console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, msgPreview: msg.slice(0, 50) }));
-          } catch (err) {
-            console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', error: err instanceof Error ? err.message : String(err) }));
-          }
+        const msg = `❤️ High heart rate: ${bpm} BPM`;
+        try {
+          await sendKickChatMessage(accessToken, msg);
+          sent++;
+          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
+          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, msgPreview: msg.slice(0, 50) }));
+        } catch (err) {
+          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', error: err instanceof Error ? err.message : String(err) }));
         }
       } else if (currentHrState === 'very_high' && bpm < veryHighBpm) {
         currentHrState = 'high';
@@ -506,6 +507,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Only save state change when below (always) or when live (sent a message)
     if (currentHrState !== (hrState as HeartrateBroadcastState)) {
       await kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, currentHrState);
     }
