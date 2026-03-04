@@ -51,7 +51,7 @@ export const DEFAULT_KICK_ALERT_SETTINGS: Required<KickAlertSettings> = {
   minimumKicks: 0,
   chatBroadcastStreamTitle: false,
   chatBroadcastLocation: false,
-  chatBroadcastLocationIntervalMin: 5,
+  chatBroadcastLocationIntervalMin: 1,
   chatBroadcastWeather: false,
   chatBroadcastHeartrate: false,
   chatBroadcastHeartrateMinBpm: 100,

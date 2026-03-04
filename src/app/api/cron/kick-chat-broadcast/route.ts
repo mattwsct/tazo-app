@@ -235,22 +235,35 @@ export async function GET(request: NextRequest) {
 
   // ===== BROADCASTS (non-critical, can tolerate being skipped) =====
 
+  // Pre-fetch fresh geocoded location data once for both stream title and weather sections.
+  // When GPS has moved >300m since last geocode (cache was invalidated), this triggers fresh
+  // geocoding via LocationIQ + RTIRL, keeping the stream title in sync with the overlay.
+  let sharedLocationData: Awaited<ReturnType<typeof getLocationData>> = null;
+  if (isLive) {
+    try {
+      sharedLocationData = await getLocationData(false);
+    } catch { /* non-critical */ }
+  }
+
   // Unified location: silently update stream title only — no chat announcements for auto-updates
   const autoUpdateLocation = streamTitleSettings?.autoUpdateLocation !== false;
-  const intervalMin = (storedAlert?.chatBroadcastLocationIntervalMin as number) ?? 5;
+  const intervalMin = (storedAlert?.chatBroadcastLocationIntervalMin as number) ?? 1;
   const intervalMs = intervalMin * 60 * 1000;
 
   if (autoUpdateLocation && isLive) {
-    const persistent = await getPersistentLocation();
+    // Use freshly geocoded location if available, fall back to persistent storage
+    const freshLocationData = sharedLocationData?.location?.rawLocationData;
+    const persistent = freshLocationData ? null : await getPersistentLocation();
+    const locationForTitle = freshLocationData ?? persistent?.location;
     const lastAt = typeof lastLocationAt === 'number' ? lastLocationAt : 0;
     const intervalOk = now - lastAt >= intervalMs;
 
-    if (persistent?.location && intervalOk) {
+    if (locationForTitle && intervalOk) {
       const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
       const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
       const customLoc = (overlaySettings?.customLocation as string) ?? '';
       const formattedForTitle = getStreamTitleLocationPart(
-        persistent.location,
+        locationForTitle,
         displayMode,
         customLoc,
         includeLocationInTitle
@@ -352,7 +365,7 @@ export async function GET(request: NextRequest) {
   // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
   const chatBroadcastWeather = storedAlert?.chatBroadcastWeather === true;
   if (chatBroadcastWeather && isLive) {
-    const locationData = await getLocationData(false);
+    const locationData = sharedLocationData ?? await getLocationData(false);
     if (locationData?.weather) {
       const { condition, desc, tempC, uvIndex, aqi } = locationData.weather;
       const condKey = `${condition}|${desc}|uv:${uvIndex ?? 'n'}|aqi:${aqi ?? 'n'}`;

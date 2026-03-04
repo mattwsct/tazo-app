@@ -176,11 +176,15 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
     await kv.set(LOCATION_CACHE_LAST_FETCH_KEY, Date.now());
 
     // Also update persistent storage (no TTL - always available for chat commands)
+    // Store geocodedLat/geocodedLon so updatePersistentRtirlOnly can detect when GPS
+    // has moved significantly and invalidate the cache proactively.
     if (location && location.rawLocationData) {
       await updatePersistentLocation({
         location: location.rawLocationData,
         rtirl: rtirlData,
         updatedAt: Date.now(),
+        geocodedLat: rtirlData.lat ?? undefined,
+        geocodedLon: rtirlData.lon ?? undefined,
       });
     }
 
@@ -194,11 +198,15 @@ export async function fetchAndCacheLocationData(): Promise<CachedLocationData | 
 /**
  * Persistent location storage (no TTL - always available).
  * `location` is optional: the overlay POST only stores GPS coords; geocoded text comes from the cron.
+ * `geocodedLat/geocodedLon` tracks the GPS position used for the last geocoding run —
+ * compared against `rtirl` to detect movement and trigger cache invalidation.
  */
 export interface PersistentLocationData {
   location?: LocationData;
   rtirl: RTIRLData;
   updatedAt: number; // Timestamp when last updated
+  geocodedLat?: number; // Lat at time of last geocoding
+  geocodedLon?: number; // Lon at time of last geocoding
 }
 
 /**
@@ -226,6 +234,10 @@ export async function updatePersistentLocationIfNewer(data: PersistentLocationDa
 /**
  * Update only the RTIRL coordinates in persistent storage, preserving the existing geocoded location text.
  * Used by the public overlay POST endpoint — accepts GPS coords only, never user-supplied city names.
+ *
+ * When GPS has moved >300m from the last geocoded position, the location data cache is invalidated
+ * so the next cron run re-geocodes immediately (instead of waiting for the 5-min TTL).
+ *
  * @returns true if updated, false if skipped (stored was newer)
  */
 export async function updatePersistentRtirlOnly(rtirl: RTIRLData, updatedAt: number): Promise<boolean> {
@@ -233,6 +245,20 @@ export async function updatePersistentRtirlOnly(rtirl: RTIRLData, updatedAt: num
   if (stored && stored.updatedAt > updatedAt) {
     return false; // Stored is newer
   }
+
+  // If GPS has moved >300m from the last geocoded position, invalidate the location cache.
+  // ~0.003 degrees latitude ≈ 333m; longitude precision varies by latitude but is a safe approximation.
+  const prevLat = stored?.geocodedLat;
+  const prevLon = stored?.geocodedLon;
+  if (prevLat != null && prevLon != null && rtirl.lat != null && rtirl.lon != null) {
+    const movedLat = Math.abs(rtirl.lat - prevLat) > 0.003;
+    const movedLon = Math.abs(rtirl.lon - prevLon) > 0.003;
+    if (movedLat || movedLon) {
+      // Delete the timed cache so the next getLocationData(false) call triggers fresh geocoding
+      await kv.del(CACHE_KEY);
+    }
+  }
+
   await kv.set(PERSISTENT_LOCATION_KEY, {
     ...(stored ?? {}),
     rtirl,
