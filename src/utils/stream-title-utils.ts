@@ -7,7 +7,7 @@
  */
 
 import type { LocationData } from './location-utils';
-import { formatCountryName, stripTrailingNumbers } from './location-utils';
+import { formatCountryName, getBestCityName, stripAdminSuffix, stripTrailingNumbers } from './location-utils';
 import { getCountryFlagEmoji, getCountryNameFromCode } from './chat-utils';
 import { hasOverlappingNames } from './string-utils';
 import type { LocationDisplayMode } from '@/types/settings';
@@ -94,19 +94,16 @@ export function formatLocationForStreamTitle(
 
   const countryCode = (rawLocation.countryCode || '').toUpperCase();
   const country = rawLocation.country || getCountryNameFromCode(countryCode);
-  const rawState = rawLocation.state || rawLocation.province || rawLocation.region;
-  const rawCity =
-    rawLocation.suburb ||
-    rawLocation.neighbourhood ||
-    rawLocation.city ||
-    rawLocation.municipality ||
-    rawLocation.town ||
-    rawLocation.county ||
-    rawLocation.village ||
-    rawLocation.hamlet;
 
-  const state = rawState ? stripTrailingNumbers(rawState) : undefined;
-  const city = rawCity ? stripTrailingNumbers(rawCity) : undefined;
+  // Use the same cleaning pipeline as the overlay:
+  // getBestCityName handles field priority, stripAdminSuffix, and generic suburb filtering
+  const city = getBestCityName(rawLocation) || undefined;
+
+  // For state: strip trailing numbers and admin suffixes (e.g. "Queensland City" → "Queensland")
+  const rawState = rawLocation.state || rawLocation.province || rawLocation.region;
+  const state = rawState
+    ? (stripAdminSuffix(stripTrailingNumbers(rawState)).trim() || undefined)
+    : undefined;
 
   const flag = getCountryFlagEmoji(countryCode);
   const countryName = formatCountryName(country, countryCode);

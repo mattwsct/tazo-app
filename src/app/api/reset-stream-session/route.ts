@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { onStreamStarted } from '@/utils/stats-storage';
+import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     const [, { subTarget }] = await Promise.all([
       onStreamStarted(),
       resetStreamGoalsOnStreamStart(),
+      setStreamLive(true),
     ]);
 
     void updateKickTitleGoals(0, subTarget).catch(() => {});

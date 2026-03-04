@@ -150,7 +150,7 @@ const ADMIN_SUFFIX_WHITELIST = new Set([
  * e.g. "Gold Coast City" → "Gold Coast", "Someplace Municipality" → "Someplace"
  * Proper nouns where the suffix is part of the name are preserved via whitelist.
  */
-function stripAdminSuffix(name: string): string {
+export function stripAdminSuffix(name: string): string {
   if (!name) return name;
   if (ADMIN_SUFFIX_WHITELIST.has(name.toLowerCase())) return name;
   return name

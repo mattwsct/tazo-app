@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
-import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive } from '@/utils/stats-storage';
+import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, setStreamLive } from '@/utils/stats-storage';
 import {
   getWellnessData,
   getWellnessMilestonesLastSent,
@@ -106,12 +106,10 @@ export async function GET(request: NextRequest) {
   let sent = 0;
   const debug: Record<string, unknown> = diagnostic ? { tokenPresent: true } : {} as Record<string, unknown>;
 
-  // Live status from KV (set by webhook, reliable)
-  const isLive = kvIsLive;
-  if (diagnostic) debug.isLive = isLive;
-
-  // Fetch current stream title (needed for location-in-title updates)
+  // Fetch current stream title AND live status from Kick API
+  // API is the source of truth; KV may be stale if webhook missed a stream start/end event.
   let currentTitle = '';
+  let apiIsLive: boolean | null = null;
   try {
     const channelRes = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -120,9 +118,20 @@ export async function GET(request: NextRequest) {
       const channelData = await channelRes.json();
       const ch = (channelData.data ?? [])[0];
       currentTitle = (ch?.stream_title ?? '').trim();
+      if (typeof ch?.is_live === 'boolean') apiIsLive = ch.is_live;
     }
   } catch { /* ignore */ }
-  console.log('[Cron HR] LIVE_CHECK', JSON.stringify({ isLive, currentTitle: currentTitle.slice(0, 50) }));
+
+  // Prefer API truth; fall back to KV if API didn't return is_live
+  const isLive = apiIsLive !== null ? apiIsLive : kvIsLive;
+
+  // Heal stale KV so isStreamLive() stays accurate for other consumers
+  if (apiIsLive !== null && apiIsLive !== kvIsLive) {
+    void setStreamLive(apiIsLive);
+  }
+
+  if (diagnostic) debug.isLive = isLive;
+  console.log('[Cron HR] LIVE_CHECK', JSON.stringify({ isLive, apiIsLive, kvIsLive, currentTitle: currentTitle.slice(0, 50) }));
 
   // ===== EVENT RESOLUTION & AUTO-START (run first — time-critical, TTL-bound) =====
 

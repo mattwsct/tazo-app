@@ -356,6 +356,13 @@ export default function AdminPage() {
     fetchLocationData();
   }, [fetchLocationData]);
 
+  // Poll location every 30s so the admin preview stays in sync with the overlay
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const interval = setInterval(fetchLocationData, 30_000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, fetchLocationData]);
+
   useEffect(() => {
     const loc = getLocationForStreamTitle(kickStreamTitleRawLocation, settings.locationDisplay, settings.customLocation ?? '');
     setKickStreamTitleLocation(loc);
