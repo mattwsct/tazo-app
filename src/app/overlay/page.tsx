@@ -243,7 +243,8 @@ function OverlayPage() {
   const speedReadingsRef = useRef<{ speed: number; ts: number }[]>([]);
   
   // Minimap speed-based visibility tracking
-  const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 5 km/h
+  const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 10 km/h
+  const sustainedSpeedVisibleRef = useRef(false); // When speed-based: true only after sustained >= 10 km/h (minimap and speed display use this)
   
   // Speed and altitude staleness tracking
   // Track GPS timestamps (from payload), not reception times, so staleness works when stationary
@@ -264,13 +265,15 @@ function OverlayPage() {
 
   
   // Simplified minimap visibility logic:
-  // - Show: Speed ≥ 10 km/h for N consecutive RTIRL updates spanning ≥ 20s (filters GPS spikes)
+  // - Show: Speed >= 10 km/h for N consecutive RTIRL updates spanning ≥ 10s (filters GPS spikes)
   // - Hide: Speed < 10 km/h for more than 1 minute OR no GPS updates in 1 minute
+  // When speed-based, minimap and speed display use the same condition so they appear together.
   const updateMinimapVisibility = useCallback(() => {
     // Hidden location mode → never show minimap (one setting controls both)
     if (settings.locationDisplay === 'hidden') {
       speedReadingsRef.current = [];
       lowSpeedStartTimeRef.current = null;
+      sustainedSpeedVisibleRef.current = false;
       if (minimapVisible) {
         setMinimapVisible(false);
         setMinimapOpacity(0);
@@ -294,6 +297,7 @@ function OverlayPage() {
           setMinimapVisible(false);
           setMinimapOpacity(0);
         }
+        sustainedSpeedVisibleRef.current = false;
         // Clear speed readings and low speed timer when GPS is stale
         speedReadingsRef.current = [];
         lowSpeedStartTimeRef.current = null;
@@ -305,18 +309,19 @@ function OverlayPage() {
       // This prevents brief GPS spikes (1-3s) from triggering the minimap
       const readings = speedReadingsRef.current;
       const allAboveThreshold = readings.length >= MINIMAP_SPEED_MIN_READINGS &&
-        readings.every(r => r.speed > WALKING_PACE_THRESHOLD);
+        readings.every(r => r.speed >= WALKING_PACE_THRESHOLD);
       const durationMs = readings.length >= 2
         ? readings[readings.length - 1].ts - readings[0].ts
         : 0;
       const hasSustainedHighSpeed = allAboveThreshold && durationMs >= MINIMAP_SPEED_MIN_DURATION_MS;
 
-      if (speed > WALKING_PACE_THRESHOLD) {
-        // Speed ≥ 10 km/h - show minimap only after sustained readings
+      if (speed >= WALKING_PACE_THRESHOLD) {
+        // Speed >= 10 km/h — show minimap (and speed display) only after sustained readings
         if (hasSustainedHighSpeed) {
           // Reset low speed timer since we're moving
           lowSpeedStartTimeRef.current = null;
-          
+          sustainedSpeedVisibleRef.current = true;
+
           if (!minimapVisible) {
             setMinimapVisible(true);
             setMinimapOpacity(1.0);
@@ -325,7 +330,8 @@ function OverlayPage() {
           }
         }
       } else {
-        // Speed < 5 km/h - start timer, hide after 1 minute
+        // Speed < 10 km/h — start timer, hide after 1 minute
+        sustainedSpeedVisibleRef.current = false;
         if (minimapVisible) {
           // Start tracking when speed dropped below threshold
           if (lowSpeedStartTimeRef.current === null) {
@@ -359,6 +365,7 @@ function OverlayPage() {
     } else {
       // Manual hide mode (showMinimap is false and minimapSpeedBased is false)
       // Hide immediately when manually turned off (no fade delay)
+      sustainedSpeedVisibleRef.current = false;
       speedReadingsRef.current = [];
       lowSpeedStartTimeRef.current = null;
       if (minimapVisible) {
@@ -427,6 +434,7 @@ function OverlayPage() {
     try {
       // Clear speed readings and timers when switching modes or disabling minimap
       if (!settings.minimapSpeedBased) {
+        sustainedSpeedVisibleRef.current = false;
         speedReadingsRef.current = [];
         lowSpeedStartTimeRef.current = null;
       }
@@ -857,7 +865,7 @@ function OverlayPage() {
               
               // Track speed readings with timestamps for minimap visibility
               if (settingsRef.current.minimapSpeedBased) {
-                if (roundedSpeed > WALKING_PACE_THRESHOLD) {
+                if (roundedSpeed >= WALKING_PACE_THRESHOLD) {
                   // Keep only the last N readings above threshold; drop all readings if speed drops
                   speedReadingsRef.current.push({ speed: roundedSpeed, ts: now });
                   if (speedReadingsRef.current.length > MINIMAP_SPEED_MIN_READINGS) {
@@ -866,6 +874,7 @@ function OverlayPage() {
                   lowSpeedStartTimeRef.current = null;
                 } else {
                   // Speed dropped — clear readings so we require a fresh sustained run
+                  sustainedSpeedVisibleRef.current = false;
                   speedReadingsRef.current = [];
                 }
               }
@@ -1468,15 +1477,17 @@ function OverlayPage() {
   }, [currentAltitude, displayedAltitude, altitudeUpdateTimestamp, altitudeShowUntil]);
 
   // Speed display logic - auto shows when speed >= 10 km/h and fresh, hides when stale or below threshold
+  // When speed-based minimap is on, speed display is locked to minimap (same sustained-speed condition)
   const speedDisplay = useMemo(() => {
     const speedIsStale = isSpeedStale(lastSpeedGpsTimestamp.current);
     const meetsSpeedThreshold = currentSpeed >= 10;
     if (!shouldShowDisplayMode('auto', speedIsStale, meetsSpeedThreshold)) return null;
+    if (settings.minimapSpeedBased && !sustainedSpeedVisibleRef.current) return null;
     const speedKmh = displayedSpeed;
     const speedMph = kmhToMph(speedKmh);
     return { value: speedKmh, formatted: `${Math.round(speedKmh)} km/h (${Math.round(speedMph)} mph)` };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- speedUpdateTimestamp + speedStaleCheckTime force re-run (latter for when no RTIRL updates)
-  }, [currentSpeed, displayedSpeed, speedUpdateTimestamp, speedStaleCheckTime]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- speedUpdateTimestamp + speedStaleCheckTime force re-run (latter when no RTIRL); minimapVisible so speed display follows minimap in speed-based mode
+  }, [currentSpeed, displayedSpeed, speedUpdateTimestamp, speedStaleCheckTime, settings.minimapSpeedBased, minimapVisible]);
 
   return (
     <ErrorBoundary autoReload={false}>
