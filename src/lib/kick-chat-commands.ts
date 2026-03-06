@@ -2,7 +2,7 @@
  * Kick chat command handlers: !ping, !heartrate / !hr, wellness commands, blackjack
  */
 
-import { getHeartrateStats, getStreamStartedAt } from '@/utils/stats-storage';
+import { getHeartrateStats, getStreamStartedAt, getStreamEndedAt } from '@/utils/stats-storage';
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
@@ -135,6 +135,9 @@ function evaluateMath(expr: string): number | null {
 export const KICK_CHAT_COMMANDS = [
   'ping',
   'uptime',
+  'up',
+  'downtime',
+  'down',
   'followers',
   'leaderboard',
   'heartrate',
@@ -188,7 +191,8 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   const cmd = parts[0]?.toLowerCase();
   const arg = parts[1];
   if (cmd === 'ping') return { cmd: 'ping' };
-  if (cmd === 'uptime') return { cmd: 'uptime' };
+  if (cmd === 'uptime' || cmd === 'up') return { cmd: 'uptime' };
+  if (cmd === 'downtime' || cmd === 'down') return { cmd: 'downtime' };
   if (cmd === 'followers') return { cmd: 'followers' };
   if (cmd === 'leaderboard' || cmd === 'lb' || cmd === 'top') return { cmd: 'leaderboard', arg: parts.slice(1).join(' ') };
   if (cmd === 'heartrate' || cmd === 'hr') return { cmd: 'heartrate' };
@@ -248,9 +252,10 @@ export async function handleKickChatCommand(
 
   if (cmd === 'ping') return '🏓 Pong!';
   if (cmd === 'uptime') {
-    const startedAt = await getStreamStartedAt();
+    const [startedAt, endedAt] = await Promise.all([getStreamStartedAt(), getStreamEndedAt()]);
     if (!startedAt) return '⏱️ No stream session. Uptime resets when you go live.';
-    const ms = Date.now() - startedAt;
+    const endTs = endedAt ?? Date.now();
+    const ms = endTs - startedAt;
     const sec = Math.floor(ms / 1000);
     const m = Math.floor(sec / 60);
     const h = Math.floor(m / 60);
@@ -259,7 +264,32 @@ export async function handleKickChatCommand(
     if (d > 0) parts.push(`${d}d`);
     if (h % 24 > 0) parts.push(`${h % 24}h`);
     parts.push(`${m % 60}m`);
+    if (endedAt != null) {
+      const sinceEnd = Date.now() - endedAt;
+      const sm = Math.floor(sinceEnd / 60000);
+      const sh = Math.floor(sm / 60);
+      const sd = Math.floor(sh / 24);
+      const sinceParts: string[] = [];
+      if (sd > 0) sinceParts.push(`${sd}d`);
+      if (sh % 24 > 0) sinceParts.push(`${sh % 24}h`);
+      sinceParts.push(`${sm % 60}m`);
+      return `⏱️ Live for ${parts.join(' ')} · Stream ended ${sinceParts.join(' ')} ago`;
+    }
     return `⏱️ Live for ${parts.join(' ')}`;
+  }
+  if (cmd === 'downtime') {
+    const endedAt = await getStreamEndedAt();
+    if (!endedAt) return '⏱️ Stream has not ended yet. Use !uptime for live duration.';
+    const sinceEnd = Date.now() - endedAt;
+    const sec = Math.floor(sinceEnd / 1000);
+    const m = Math.floor(sec / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    const parts: string[] = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h % 24 > 0) parts.push(`${h % 24}h`);
+    parts.push(`${m % 60}m`);
+    return `⏱️ Time since stream ended: ${parts.join(' ')}`;
   }
   if (cmd === 'leaderboard') {
     const gamblingOn = await isGamblingEnabled();

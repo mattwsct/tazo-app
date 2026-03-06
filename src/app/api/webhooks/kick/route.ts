@@ -24,7 +24,7 @@ import {
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
-import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
+import { onStreamStarted, setStreamLive, setStreamEndedAt } from '@/utils/stats-storage';
 import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
@@ -37,7 +37,7 @@ import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
-import { updateKickTitleGoals } from '@/lib/stream-title-updater';
+import { updateKickTitleGoals, resetStreamTitleToLocationOnly } from '@/lib/stream-title-updater';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
@@ -153,6 +153,10 @@ export async function POST(request: NextRequest) {
     void setStreamLive(true);
     void onStreamStarted();
     void (async () => {
+      const { clearWellnessSnapshotAtStreamEnd } = await import('@/utils/wellness-storage');
+      await clearWellnessSnapshotAtStreamEnd();
+    })();
+    void (async () => {
       if (await isGamblingEnabled()) void resetGamblingOnStreamStart();
     })();
     void (async () => {
@@ -166,10 +170,21 @@ export async function POST(request: NextRequest) {
     })();
   }
 
-  // Stream end: clear live flag and reset goals to defaults
+  // Stream end: clear live flag, set stream_ended_at, reset title to location only, reset goals
   if (eventNorm === 'livestream.status.updated' && payload.is_live === false) {
+    const now = Date.now();
     void setStreamLive(false);
+    void setStreamEndedAt(now);
+    void resetStreamTitleToLocationOnly();
     void resetStreamGoalsOnStreamStart();
+    void (async () => {
+      try {
+        const { setWellnessSnapshotAtStreamEnd } = await import('@/utils/wellness-storage');
+        await setWellnessSnapshotAtStreamEnd();
+      } catch (e) {
+        console.warn('Failed to set wellness snapshot at stream end:', e);
+      }
+    })();
   }
 
   // Chat: poll handling first (if enabled), then !ping. Award view-time chips when gambling enabled.

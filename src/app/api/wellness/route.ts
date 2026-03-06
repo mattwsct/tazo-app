@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
   try {
-    const data = await getWellnessData();
+    const data = await getWellnessDataForDisplay();
     return NextResponse.json(data || { updatedAt: 0 });
   } catch {
     return NextResponse.json({ error: 'Failed to load wellness data' }, { status: 500 });

@@ -3,7 +3,7 @@
  * All metrics reflect today's totals from Health Auto Export (resets naturally at midnight).
  */
 
-import { getWellnessData, getMetricUpdatedAt } from '@/utils/wellness-storage';
+import { getWellnessData, getWellnessDataForDisplay, getMetricUpdatedAt } from '@/utils/wellness-storage';
 import { kmToMiles } from '@/utils/unit-conversions';
 
 function formatDataAge(updatedAt: number): string {
@@ -32,7 +32,7 @@ function formatDistance(km: number): string {
 }
 
 export async function getWellnessStepsResponse(): Promise<string> {
-  const wellness = await getWellnessData();
+  const wellness = await getWellnessDataForDisplay();
   const steps = wellness?.steps ?? 0;
   if (steps <= 0) return '👟 No step data yet today.';
   const age = formatDataAge(getMetricUpdatedAt(wellness, 'steps'));
@@ -40,7 +40,7 @@ export async function getWellnessStepsResponse(): Promise<string> {
 }
 
 export async function getWellnessDistanceResponse(): Promise<string> {
-  const wellness = await getWellnessData();
+  const wellness = await getWellnessDataForDisplay();
   const km = wellness?.distanceKm ?? 0;
   if (km <= 0) return '🚶 No distance data yet today.';
   const age = formatDataAge(getMetricUpdatedAt(wellness, 'distanceKm'));
@@ -48,7 +48,7 @@ export async function getWellnessDistanceResponse(): Promise<string> {
 }
 
 export async function getWellnessCaloriesResponse(): Promise<string> {
-  const wellness = await getWellnessData();
+  const wellness = await getWellnessDataForDisplay();
   const active = wellness?.activeCalories ?? 0;
   if (active <= 0) return '🔥 No calorie data yet today.';
   const age = formatDataAge(getMetricUpdatedAt(wellness, 'activeCalories'));
@@ -90,7 +90,7 @@ export async function getWellnessWeightResponse(): Promise<string> {
 }
 
 export async function getWellnessSummaryResponse(): Promise<string> {
-  const wellness = await getWellnessData();
+  const wellness = await getWellnessDataForDisplay();
   const parts: string[] = [];
   const steps = wellness?.steps ?? 0;
   const distance = wellness?.distanceKm ?? 0;

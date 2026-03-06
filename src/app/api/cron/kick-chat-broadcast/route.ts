@@ -13,10 +13,10 @@ import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, setStreamLive } from '@/utils/stats-storage';
 import {
-  getWellnessData,
-  getWellnessMilestonesLastSent,
-  setWellnessMilestoneLastSent,
-} from '@/utils/wellness-storage';
+    getWellnessDataForDisplay,
+    getWellnessMilestonesLastSent,
+    setWellnessMilestoneLastSent,
+  } from '@/utils/wellness-storage';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
@@ -405,7 +405,7 @@ export async function GET(request: NextRequest) {
   const hasWellnessToggles = wellnessStepsOn || wellnessDistanceOn || wellnessCaloriesOn;
   if (hasWellnessToggles && isLive) {
     const [wellnessData, milestonesLast] = await Promise.all([
-      getWellnessData(),
+      getWellnessDataForDisplay(),
       getWellnessMilestonesLastSent(),
     ]);
     const stepsSince = wellnessData?.steps ?? 0;

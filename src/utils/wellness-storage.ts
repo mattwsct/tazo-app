@@ -6,6 +6,16 @@
 import { kv } from '@/lib/kv';
 
 const WELLNESS_KEY = 'wellness_data';
+const WELLNESS_SNAPSHOT_AT_STREAM_END_KEY = 'wellness_snapshot_at_stream_end';
+
+/** Snapshot of session metrics at stream end so they don't update when offline */
+export interface WellnessSnapshotAtStreamEnd {
+  steps?: number;
+  distanceKm?: number;
+  flightsClimbed?: number;
+  activeCalories?: number;
+  updatedAt: number;
+}
 
 /** Per-metric timestamps (ms) — when each field was last updated. Falls back to updatedAt if missing. */
 export type WellnessMetricKey = 'steps' | 'distanceKm' | 'flightsClimbed' | 'activeCalories' | 'restingCalories' | 'totalCalories' | 'heightCm' | 'weightKg' | 'bodyMassIndex' | 'bodyFatPercent' | 'leanBodyMassKg' | 'heartRate' | 'restingHeartRate';
@@ -31,9 +41,54 @@ export interface WellnessData {
 
 export async function getWellnessData(): Promise<WellnessData | null> {
   try {
-    return await kv.get<WellnessData>(WELLNESS_KEY);
+    const data = await kv.get<WellnessData>(WELLNESS_KEY);
+    return data;
   } catch {
     return null;
+  }
+}
+
+/** Get wellness data for display: when stream has ended, session metrics (steps, distance, flights, activeCal) are frozen from snapshot. */
+export async function getWellnessDataForDisplay(): Promise<WellnessData | null> {
+  const { isStreamLive } = await import('@/utils/stats-storage');
+  const live = await isStreamLive();
+  const data = await getWellnessData();
+  if (live || !data) return data;
+  const snapshot = await kv.get<WellnessSnapshotAtStreamEnd>(WELLNESS_SNAPSHOT_AT_STREAM_END_KEY);
+  if (!snapshot) return data;
+  return {
+    ...data,
+    steps: snapshot.steps ?? data.steps,
+    distanceKm: snapshot.distanceKm ?? data.distanceKm,
+    flightsClimbed: snapshot.flightsClimbed ?? data.flightsClimbed,
+    activeCalories: snapshot.activeCalories ?? data.activeCalories,
+    updatedAt: data.updatedAt,
+  };
+}
+
+/** Set snapshot of session metrics at stream end. Call when stream ends. */
+export async function setWellnessSnapshotAtStreamEnd(): Promise<void> {
+  try {
+    const data = await getWellnessData();
+    const now = Date.now();
+    await kv.set(WELLNESS_SNAPSHOT_AT_STREAM_END_KEY, {
+      steps: data?.steps,
+      distanceKm: data?.distanceKm,
+      flightsClimbed: data?.flightsClimbed,
+      activeCalories: data?.activeCalories,
+      updatedAt: now,
+    } as WellnessSnapshotAtStreamEnd);
+  } catch (error) {
+    console.error('Failed to set wellness snapshot at stream end:', error);
+  }
+}
+
+/** Clear snapshot (call when stream starts). */
+export async function clearWellnessSnapshotAtStreamEnd(): Promise<void> {
+  try {
+    await kv.set(WELLNESS_SNAPSHOT_AT_STREAM_END_KEY, null);
+  } catch {
+    // ignore
   }
 }
 

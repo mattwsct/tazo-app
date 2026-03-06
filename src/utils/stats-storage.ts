@@ -56,17 +56,21 @@ const SPEED_KEY = 'speed_history';
 const ALTITUDE_KEY = 'altitude_history';
 const LOCATION_KEY = 'location_history';
 export const STREAM_STARTED_AT_KEY = 'stream_started_at';
+const STREAM_ENDED_AT_KEY = 'stream_ended_at';
 const STREAM_IS_LIVE_KEY = 'stream_is_live';
 
 /**
- * Filters entries to only those since stream started
+ * Filters entries to only those since stream started and not after stream ended
  */
-function filterSinceStreamStart<T extends { timestamp: number }>(
+function filterSessionEntries<T extends { timestamp: number }>(
   entries: T[],
-  streamStartedAt: number | null
+  streamStartedAt: number | null,
+  streamEndedAt: number | null
 ): T[] {
   if (streamStartedAt == null) return [];
-  return entries.filter(entry => entry.timestamp >= streamStartedAt);
+  return entries.filter(
+    entry => entry.timestamp >= streamStartedAt && (streamEndedAt == null || entry.timestamp <= streamEndedAt)
+  );
 }
 
 /**
@@ -79,12 +83,13 @@ function cleanOldEntries<T extends { timestamp: number }>(entries: T[]): T[] {
 }
 
 /**
- * Called when stream goes live. Sets stream_started_at for session-based stats.
+ * Called when stream goes live. Sets stream_started_at for session-based stats; clears stream_ended_at.
  */
 export async function onStreamStarted(): Promise<void> {
   try {
     const now = Date.now();
     await kv.set(STREAM_STARTED_AT_KEY, now);
+    await kv.set(STREAM_ENDED_AT_KEY, null);
     if (process.env.NODE_ENV === 'development') {
       console.log('[Stats] Stream started, session reset at', new Date(now).toISOString());
     }
@@ -105,6 +110,18 @@ export async function getStreamStartedAt(): Promise<number | null> {
   }
 }
 
+/**
+ * Gets stream_ended_at timestamp (ms) or null if stream has not ended
+ */
+export async function getStreamEndedAt(): Promise<number | null> {
+  try {
+    const val = await kv.get<number | null>(STREAM_ENDED_AT_KEY);
+    return typeof val === 'number' ? val : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function setStreamLive(live: boolean): Promise<void> {
   await kv.set(STREAM_IS_LIVE_KEY, live);
 }
@@ -112,6 +129,18 @@ export async function setStreamLive(live: boolean): Promise<void> {
 export async function isStreamLive(): Promise<boolean> {
   const val = await kv.get<boolean>(STREAM_IS_LIVE_KEY);
   return val === true;
+}
+
+/** Called when stream ends. Sets stream_ended_at so uptime and session stats stop updating. */
+export async function setStreamEndedAt(timestamp: number): Promise<void> {
+  try {
+    await kv.set(STREAM_ENDED_AT_KEY, timestamp);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Stats] Stream ended at', new Date(timestamp).toISOString());
+    }
+  } catch (error) {
+    console.warn('Failed to set stream ended:', error);
+  }
 }
 
 /**
@@ -134,6 +163,7 @@ function formatAge(ms: number): string {
  */
 export async function storeHeartrate(bpm: number, timestamp?: number): Promise<void> {
   try {
+    if (!(await isStreamLive())) return;
     const ts = timestamp || Date.now();
     const history = await kv.get<HeartrateEntry[]>(HEARTRATE_KEY) || [];
     
@@ -206,12 +236,13 @@ export async function getHeartrateStats(): Promise<{
   hasData: boolean;
 }> {
   try {
-    const [history, streamStartedAt] = await Promise.all([
+    const [history, streamStartedAt, streamEndedAt] = await Promise.all([
       kv.get<HeartrateEntry[]>(HEARTRATE_KEY),
       getStreamStartedAt(),
+      getStreamEndedAt(),
     ]);
     const entries = history || [];
-    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
+    const sessionEntries = filterSessionEntries(entries, streamStartedAt, streamEndedAt);
 
     if (process.env.NODE_ENV === 'development' && sessionEntries.length > 0) {
       console.log('[Heartrate Stats] Session entries:', sessionEntries.length, 'since stream start');
@@ -285,6 +316,7 @@ export async function getHeartrateStats(): Promise<{
  */
 export async function storeSpeed(speed: number, timestamp?: number): Promise<void> {
   try {
+    if (!(await isStreamLive())) return;
     const ts = timestamp || Date.now();
     const history = await kv.get<SpeedEntry[]>(SPEED_KEY) || [];
     
@@ -321,12 +353,13 @@ export async function getSpeedStats(): Promise<{
   hasData: boolean;
 }> {
   try {
-    const [history, streamStartedAt] = await Promise.all([
+    const [history, streamStartedAt, streamEndedAt] = await Promise.all([
       kv.get<SpeedEntry[]>(SPEED_KEY),
       getStreamStartedAt(),
+      getStreamEndedAt(),
     ]);
     const entries = history || [];
-    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
+    const sessionEntries = filterSessionEntries(entries, streamStartedAt, streamEndedAt);
 
     if (sessionEntries.length === 0) {
       return {
@@ -377,6 +410,7 @@ export async function getSpeedStats(): Promise<{
  */
 export async function storeAltitude(altitude: number, timestamp?: number): Promise<void> {
   try {
+    if (!(await isStreamLive())) return;
     const ts = timestamp || Date.now();
     const history = await kv.get<AltitudeEntry[]>(ALTITUDE_KEY) || [];
     
@@ -414,12 +448,13 @@ export async function getAltitudeStats(): Promise<{
   hasData: boolean;
 }> {
   try {
-    const [history, streamStartedAt] = await Promise.all([
+    const [history, streamStartedAt, streamEndedAt] = await Promise.all([
       kv.get<AltitudeEntry[]>(ALTITUDE_KEY),
       getStreamStartedAt(),
+      getStreamEndedAt(),
     ]);
     const entries = history || [];
-    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
+    const sessionEntries = filterSessionEntries(entries, streamStartedAt, streamEndedAt);
 
     if (sessionEntries.length === 0) {
       return {
@@ -481,6 +516,7 @@ export async function getAltitudeStats(): Promise<{
  */
 export async function storeLocation(lat: number, lon: number, timestamp?: number): Promise<void> {
   try {
+    if (!(await isStreamLive())) return;
     const ts = timestamp || Date.now();
     const history = await kv.get<LocationEntry[]>(LOCATION_KEY) || [];
     
@@ -523,12 +559,13 @@ export async function storeLocation(lat: number, lon: number, timestamp?: number
  */
 export async function getDistanceTraveled(): Promise<number | null> {
   try {
-    const [history, streamStartedAt] = await Promise.all([
+    const [history, streamStartedAt, streamEndedAt] = await Promise.all([
       kv.get<LocationEntry[]>(LOCATION_KEY),
       getStreamStartedAt(),
+      getStreamEndedAt(),
     ]);
     const entries = history || [];
-    const sessionEntries = filterSinceStreamStart(entries, streamStartedAt);
+    const sessionEntries = filterSessionEntries(entries, streamStartedAt, streamEndedAt);
 
     if (sessionEntries.length < 2) {
       return null;
