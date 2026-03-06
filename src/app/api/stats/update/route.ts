@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { storeSpeed, storeAltitude, storeHeartrate } from '@/utils/stats-storage';
 import { checkApiRateLimit } from '@/lib/rate-limit';
+import { checkStatsBroadcastsAndSendChat } from '@/lib/stats-broadcast-chat';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,15 +40,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { speed, altitude, heartrate } = body;
 
     const promises: Promise<void>[] = [];
+    let latestSpeedKmh: number | undefined;
+    let latestAltitudeM: number | undefined;
+    let latestHeartrateBpm: number | undefined;
 
     if (speed !== undefined) {
       if (typeof speed === 'number' && speed >= 0) {
         const safe = clamp(speed, BOUNDS.speed.min, BOUNDS.speed.max);
-        if (safe !== null) promises.push(storeSpeed(safe));
+        if (safe !== null) {
+          latestSpeedKmh = safe;
+          promises.push(storeSpeed(safe));
+        }
       } else if (typeof speed === 'object' && speed !== null && typeof speed.speed === 'number') {
         const safe = clamp((speed as { speed: number }).speed, BOUNDS.speed.min, BOUNDS.speed.max);
         if (safe !== null) {
           const ts = clampTs((speed as { speed: number; timestamp?: number }).timestamp);
+          latestSpeedKmh = safe;
           promises.push(storeSpeed(safe, ts));
         }
       }
@@ -56,11 +64,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (heartrate !== undefined) {
       if (typeof heartrate === 'number' && heartrate >= 0) {
         const safe = clamp(heartrate, BOUNDS.heartrate.min, BOUNDS.heartrate.max);
-        if (safe !== null) promises.push(storeHeartrate(safe));
+        if (safe !== null) {
+          latestHeartrateBpm = safe;
+          promises.push(storeHeartrate(safe));
+        }
       } else if (typeof heartrate === 'object' && heartrate !== null && typeof heartrate.bpm === 'number') {
         const safe = clamp((heartrate as { bpm: number }).bpm, BOUNDS.heartrate.min, BOUNDS.heartrate.max);
         if (safe !== null) {
           const ts = clampTs((heartrate as { bpm: number; timestamp?: number }).timestamp);
+          latestHeartrateBpm = safe;
           promises.push(storeHeartrate(safe, ts));
         }
       }
@@ -69,17 +81,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (altitude !== undefined) {
       if (typeof altitude === 'number') {
         const safe = clamp(altitude, BOUNDS.altitude.min, BOUNDS.altitude.max);
-        if (safe !== null) promises.push(storeAltitude(safe));
+        if (safe !== null) {
+          latestAltitudeM = safe;
+          promises.push(storeAltitude(safe));
+        }
       } else if (typeof altitude === 'object' && altitude !== null && typeof altitude.altitude === 'number') {
         const safe = clamp((altitude as { altitude: number }).altitude, BOUNDS.altitude.min, BOUNDS.altitude.max);
         if (safe !== null) {
           const ts = clampTs((altitude as { altitude: number; timestamp?: number }).timestamp);
+          latestAltitudeM = safe;
           promises.push(storeAltitude(safe, ts));
         }
       }
     }
 
     await Promise.all(promises);
+    // Fire-and-forget: if stream is live, send chat broadcasts immediately (cooldowns/state apply).
+    void checkStatsBroadcastsAndSendChat({
+      source: 'stats_update',
+      current: {
+        speedKmh: latestSpeedKmh,
+        altitudeM: latestAltitudeM,
+        heartrateBpm: latestHeartrateBpm,
+      },
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to update stats:', error);

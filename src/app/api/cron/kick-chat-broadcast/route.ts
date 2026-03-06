@@ -11,11 +11,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
-import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, setStreamLive, getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
+import { isStreamLive, setStreamLive, getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
 import {
     resetWellnessDailyMetricsAtMidnight,
   } from '@/utils/wellness-storage';
 import { checkWellnessMilestonesAndSendChat } from '@/lib/wellness-milestone-chat';
+import { checkStatsBroadcastsAndSendChat } from '@/lib/stats-broadcast-chat';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
@@ -33,18 +34,10 @@ import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
-const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
-const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
-const KICK_BROADCAST_SPEED_LAST_SENT_KEY = 'kick_chat_broadcast_speed_last_sent';
-const KICK_BROADCAST_SPEED_LAST_TOP_KEY = 'kick_chat_broadcast_speed_last_top';
-const KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY = 'kick_chat_broadcast_altitude_last_sent';
-const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_top';
 const KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY = 'kick_chat_broadcast_weather_last_condition';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
 // Milestones for 48h+ streams — steps/distance can exceed limits (logic in wellness-milestone-chat)
-
-type HeartrateBroadcastState = 'below' | 'high' | 'very_high';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -70,17 +63,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [storedAlertRaw, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition, kvIsLive, persistentForMidnight] = await Promise.all([
+  const [storedAlertRaw, lastLocationAt, lastLocationMsg, overlaySettings, streamTitleSettings, weatherLastCondition, kvIsLive, persistentForMidnight] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
-    kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
     kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number; showSubGoal?: boolean; subGoalTarget?: number; showKicksGoal?: boolean; kicksGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
-    kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY),
-    kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
-    kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY),
-    kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
     kv.get<string>(KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY),
     isStreamLive(),
     getPersistentLocation(),
@@ -97,10 +85,6 @@ export async function GET(request: NextRequest) {
   }
 
   const now = Date.now();
-  const minBpm = (storedAlert?.chatBroadcastHeartrateMinBpm as number) ?? 100;
-  let veryHighBpm = (storedAlert?.chatBroadcastHeartrateVeryHighBpm as number) ?? 120;
-  if (veryHighBpm <= minBpm) veryHighBpm = minBpm + 1; // Disable very-high tier if not above high
-  let currentHrState: HeartrateBroadcastState = (hrState === 'below' || hrState === 'high' || hrState === 'very_high') ? hrState : 'below';
 
   let sent = 0;
   const debug: Record<string, unknown> = diagnostic ? { tokenPresent: true } : {} as Record<string, unknown>;
@@ -319,57 +303,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Speed & altitude broadcasts: only when live, new top above min, and timeout passed
-  const chatBroadcastSpeed = storedAlert?.chatBroadcastSpeed === true;
-  const chatBroadcastAltitude = storedAlert?.chatBroadcastAltitude === true;
-
-  if (chatBroadcastSpeed && isLive) {
-    const minKmh = (storedAlert?.chatBroadcastSpeedMinKmh as number) ?? 20;
-    const speedTimeoutMin = (storedAlert?.chatBroadcastSpeedTimeoutMin as number) ?? 5;
-    const speedTimeoutMs = speedTimeoutMin * 60 * 1000;
-    const speedStats = await getSpeedStats();
-    const topSpeed = speedStats.max?.speed ?? 0;
-    const lastSent = typeof speedLastSent === 'number' ? speedLastSent : 0;
-    const lastTop = typeof speedLastTop === 'number' ? speedLastTop : 0;
-    const timeoutOk = now - lastSent >= speedTimeoutMs;
-    const isNewTop = topSpeed > lastTop && topSpeed >= minKmh;
-    if (timeoutOk && isNewTop && speedStats.hasData) {
-      const msg = `🚀 New top speed: ${Math.round(topSpeed)} km/h!`;
-      try {
-        await sendKickChatMessage(accessToken, msg);
-        sent++;
-        await kv.set(KICK_BROADCAST_SPEED_LAST_SENT_KEY, now);
-        await kv.set(KICK_BROADCAST_SPEED_LAST_TOP_KEY, topSpeed);
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'speed', topSpeed, msgPreview: msg.slice(0, 50) }));
-      } catch (err) {
-        console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'speed', error: err instanceof Error ? err.message : String(err) }));
-      }
-    }
-  }
-
-  if (chatBroadcastAltitude && isLive) {
-    const minM = (storedAlert?.chatBroadcastAltitudeMinM as number) ?? 50;
-    const altitudeTimeoutMin = (storedAlert?.chatBroadcastAltitudeTimeoutMin as number) ?? 5;
-    const altitudeTimeoutMs = altitudeTimeoutMin * 60 * 1000;
-    const altitudeStats = await getAltitudeStats();
-    const topAltitude = altitudeStats.highest?.altitude ?? 0;
-    const lastSent = typeof altitudeLastSent === 'number' ? altitudeLastSent : 0;
-    const lastTop = typeof altitudeLastTop === 'number' ? altitudeLastTop : 0;
-    const timeoutOk = now - lastSent >= altitudeTimeoutMs;
-    const isNewTop = topAltitude > lastTop && topAltitude >= minM;
-    if (timeoutOk && isNewTop && altitudeStats.hasData) {
-      const msg = `⛰️ New top altitude: ${Math.round(topAltitude)} m!`;
-      try {
-        await sendKickChatMessage(accessToken, msg);
-        sent++;
-        await kv.set(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY, now);
-        await kv.set(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY, topAltitude);
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'altitude', topAltitude, msgPreview: msg.slice(0, 50) }));
-      } catch (err) {
-        console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'altitude', error: err instanceof Error ? err.message : String(err) }));
-      }
-    }
-  }
+  // HR/speed/altitude broadcasts (shared with stats ingestion for immediate sends)
+  sent += await checkStatsBroadcastsAndSendChat({ source: 'cron' });
 
   // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
   const chatBroadcastWeather = storedAlert?.chatBroadcastWeather === true;
@@ -411,64 +346,6 @@ export async function GET(request: NextRequest) {
   if (wellnessSent > 0) {
     sent += wellnessSent;
     console.log('[Cron HR] WELLNESS_MILESTONES', JSON.stringify({ sent: wellnessSent }));
-  }
-
-  if (!storedAlert?.chatBroadcastHeartrate) {
-    console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrBroadcast: false }));
-  } else {
-    const hrStats = await getHeartrateStats();
-    const bpm = hrStats.current?.bpm ?? 0;
-    if (!hrStats.hasData || bpm === 0) {
-      console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrData: false, hasData: hrStats.hasData, bpm }));
-    }
-
-    if (bpm < minBpm) {
-      // HR dropped below threshold — always reset state so next crossing triggers a new message
-      currentHrState = 'below';
-      if (hrState !== 'below') console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrStateChange: '->below', bpm, minBpm }));
-    } else if (!isLive) {
-      // Not live — do not advance state. If HR is high while offline, treat it as unseen so the
-      // first cron run after going live will correctly fire a message.
-      console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'not_live', bpm }));
-    } else if (veryHighBpm > minBpm && bpm >= veryHighBpm) {
-      if (currentHrState !== 'very_high') {
-        currentHrState = 'very_high';
-        const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
-        try {
-          await sendKickChatMessage(accessToken, msg);
-          sent++;
-          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, msgPreview: msg.slice(0, 50) }));
-        } catch (err) {
-          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', error: err instanceof Error ? err.message : String(err) }));
-        }
-      } else {
-        console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'already_sent_very_high', state: currentHrState }));
-      }
-    } else if (bpm >= minBpm) {
-      if (currentHrState === 'below') {
-        currentHrState = 'high';
-        const msg = `❤️ High heart rate: ${bpm} BPM`;
-        try {
-          await sendKickChatMessage(accessToken, msg);
-          sent++;
-          await kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now);
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, msgPreview: msg.slice(0, 50) }));
-        } catch (err) {
-          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', error: err instanceof Error ? err.message : String(err) }));
-        }
-      } else if (currentHrState === 'very_high' && bpm < veryHighBpm) {
-        currentHrState = 'high';
-        console.log('[Cron HR] CRON_DEBUG', JSON.stringify({ hrStateChange: 'very_high->high', bpm }));
-      } else {
-        console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'already_sent_high', state: currentHrState, bpm }));
-      }
-    }
-
-    // Only save state change when below (always) or when live (sent a message)
-    if (currentHrState !== (hrState as HeartrateBroadcastState)) {
-      await kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, currentHrState);
-    }
   }
 
   console.log('[Cron HR] CRON_END', JSON.stringify({ sent, runAt }));

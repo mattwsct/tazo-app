@@ -1,0 +1,249 @@
+/**
+ * Shared stats broadcast chat logic (HR, speed, altitude).
+ *
+ * Motivation:
+ * - Reduce duplication between cron and realtime ingestion.
+ * - Make "why didn't it send?" easier to reason about.
+ *
+ * Sources:
+ * - Cron runs every 1 minute (fallback).
+ * - `/api/stats/update` can trigger this immediately (primary).
+ */
+
+import { kv } from '@/lib/kv';
+import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { getAltitudeStats, getHeartrateStats, getSpeedStats, isStreamLive } from '@/utils/stats-storage';
+import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
+import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
+
+const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
+const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
+const KICK_BROADCAST_SPEED_LAST_SENT_KEY = 'kick_chat_broadcast_speed_last_sent';
+const KICK_BROADCAST_SPEED_LAST_TOP_KEY = 'kick_chat_broadcast_speed_last_top';
+const KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY = 'kick_chat_broadcast_altitude_last_sent';
+const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_top';
+
+type HeartrateBroadcastState = 'below' | 'high' | 'very_high';
+
+export type StatsBroadcastSource = 'cron' | 'stats_update';
+
+export type StatsBroadcastCurrent = {
+  speedKmh?: number;
+  altitudeM?: number;
+  heartrateBpm?: number;
+};
+
+function asNumberOrZero(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+export async function checkStatsBroadcastsAndSendChat(args?: {
+  source?: StatsBroadcastSource;
+  current?: StatsBroadcastCurrent;
+}): Promise<number> {
+  const source: StatsBroadcastSource = args?.source ?? 'cron';
+  const current = args?.current ?? {};
+
+  const [token, live] = await Promise.all([getValidAccessToken(), isStreamLive()]);
+  if (!token) {
+    console.log('[Stats Broadcast] Skip: no Kick token', JSON.stringify({ source }));
+    return 0;
+  }
+  if (!live) {
+    console.log('[Stats Broadcast] Skip: stream not live', JSON.stringify({ source }));
+    return 0;
+  }
+
+  const storedAlertRaw = await kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY);
+  const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlertRaw } as Record<string, unknown>;
+
+  const chatBroadcastHeartrate = storedAlert?.chatBroadcastHeartrate === true;
+  const chatBroadcastSpeed = storedAlert?.chatBroadcastSpeed === true;
+  const chatBroadcastAltitude = storedAlert?.chatBroadcastAltitude === true;
+
+  if (!chatBroadcastHeartrate && !chatBroadcastSpeed && !chatBroadcastAltitude) return 0;
+
+  const now = Date.now();
+  let sent = 0;
+
+  // Read state in parallel (only if needed).
+  const [hrStateRaw, hrLastSent, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop] = await Promise.all([
+    chatBroadcastHeartrate ? kv.get<HeartrateBroadcastState>(KICK_BROADCAST_HEARTRATE_STATE_KEY) : Promise.resolve(undefined),
+    chatBroadcastHeartrate ? kv.get<number>(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY) : Promise.resolve(undefined),
+    chatBroadcastSpeed ? kv.get<number>(KICK_BROADCAST_SPEED_LAST_SENT_KEY) : Promise.resolve(undefined),
+    chatBroadcastSpeed ? kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY) : Promise.resolve(undefined),
+    chatBroadcastAltitude ? kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY) : Promise.resolve(undefined),
+    chatBroadcastAltitude ? kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY) : Promise.resolve(undefined),
+  ]);
+
+  // ----- Heart rate (threshold crossing; no spam until drops below min then exceeds again) -----
+  if (chatBroadcastHeartrate) {
+    const minBpm = (storedAlert?.chatBroadcastHeartrateMinBpm as number) ?? 100;
+    let veryHighBpm = (storedAlert?.chatBroadcastHeartrateVeryHighBpm as number) ?? 120;
+    if (veryHighBpm <= minBpm) veryHighBpm = minBpm + 1;
+
+    let state: HeartrateBroadcastState =
+      hrStateRaw === 'below' || hrStateRaw === 'high' || hrStateRaw === 'very_high' ? hrStateRaw : 'below';
+
+    let bpm = asNumberOrZero(current.heartrateBpm);
+    let hasData = bpm > 0;
+    if (!hasData && source === 'cron') {
+      const hrStats = await getHeartrateStats();
+      bpm = hrStats.current?.bpm ?? 0;
+      hasData = hrStats.hasData && bpm > 0;
+    }
+
+    if (bpm < minBpm) {
+      if (state !== 'below') {
+        state = 'below';
+        await kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, state);
+      }
+    } else if (!hasData) {
+      // no-op
+    } else if (bpm >= veryHighBpm) {
+      if (state !== 'very_high') {
+        const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
+        try {
+          await sendKickChatMessage(token, msg);
+          sent++;
+          state = 'very_high';
+          await Promise.all([
+            kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now),
+            kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, state),
+          ]);
+          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, source }));
+        } catch (err) {
+          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', source, error: err instanceof Error ? err.message : String(err) }));
+        }
+      }
+    } else {
+      if (state === 'below') {
+        const msg = `❤️ High heart rate: ${bpm} BPM`;
+        try {
+          await sendKickChatMessage(token, msg);
+          sent++;
+          state = 'high';
+          await Promise.all([
+            kv.set(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY, now),
+            kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, state),
+          ]);
+          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, source }));
+        } catch (err) {
+          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', source, error: err instanceof Error ? err.message : String(err) }));
+        }
+      } else if (state === 'very_high' && bpm < veryHighBpm) {
+        state = 'high';
+        await kv.set(KICK_BROADCAST_HEARTRATE_STATE_KEY, state);
+      }
+    }
+
+    // hrLastSent is currently only used for diagnostics; we keep writing it for debugging parity.
+    void hrLastSent;
+  }
+
+  // ----- Speed -----
+  if (chatBroadcastSpeed) {
+    const minKmh = (storedAlert?.chatBroadcastSpeedMinKmh as number) ?? 20;
+    const timeoutMin = (storedAlert?.chatBroadcastSpeedTimeoutMin as number) ?? 5;
+    const timeoutMs = timeoutMin * 60 * 1000;
+
+    const lastSentAt = asNumberOrZero(speedLastSent);
+    const lastAnnouncedTop = asNumberOrZero(speedLastTop);
+    const timeoutOk = now - lastSentAt >= timeoutMs;
+
+    let currentKmh = asNumberOrZero(current.speedKmh);
+    let topKmh = currentKmh;
+    let hasData = currentKmh > 0;
+    if (!hasData && source === 'cron') {
+      const stats = await getSpeedStats();
+      currentKmh = stats.current?.speed ?? 0;
+      topKmh = stats.max?.speed ?? 0;
+      hasData = stats.hasData;
+    }
+
+    if (hasData) {
+      const isNewTop = topKmh > lastAnnouncedTop && topKmh >= minKmh;
+      const isOverMin = currentKmh >= minKmh;
+
+      // New-top message (hype) — keep existing behavior, but still respects timeout to avoid spam.
+      if (timeoutOk && isNewTop) {
+        const msg = `🚀 New top speed: ${Math.round(topKmh)} km/h!`;
+        try {
+          await sendKickChatMessage(token, msg);
+          sent++;
+          await Promise.all([
+            kv.set(KICK_BROADCAST_SPEED_LAST_SENT_KEY, now),
+            kv.set(KICK_BROADCAST_SPEED_LAST_TOP_KEY, topKmh),
+          ]);
+          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'speed_top', topKmh, source }));
+        } catch (err) {
+          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'speed_top', source, error: err instanceof Error ? err.message : String(err) }));
+        }
+      } else if (timeoutOk && isOverMin) {
+        // Simplified "over min" behavior — sends periodic updates even without a new top.
+        const msg = `🚀 Speed: ${Math.round(currentKmh)} km/h`;
+        try {
+          await sendKickChatMessage(token, msg);
+          sent++;
+          await kv.set(KICK_BROADCAST_SPEED_LAST_SENT_KEY, now);
+          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'speed', speedKmh: currentKmh, source }));
+        } catch (err) {
+          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'speed', source, error: err instanceof Error ? err.message : String(err) }));
+        }
+      }
+    }
+  }
+
+  // ----- Altitude -----
+  if (chatBroadcastAltitude) {
+    const minM = (storedAlert?.chatBroadcastAltitudeMinM as number) ?? 50;
+    const timeoutMin = (storedAlert?.chatBroadcastAltitudeTimeoutMin as number) ?? 5;
+    const timeoutMs = timeoutMin * 60 * 1000;
+
+    const lastSentAt = asNumberOrZero(altitudeLastSent);
+    const lastAnnouncedTop = asNumberOrZero(altitudeLastTop);
+    const timeoutOk = now - lastSentAt >= timeoutMs;
+
+    let currentM = asNumberOrZero(current.altitudeM);
+    let topM = currentM;
+    let hasData = currentM !== 0;
+    if (!hasData && source === 'cron') {
+      const stats = await getAltitudeStats();
+      currentM = stats.current?.altitude ?? 0;
+      topM = stats.highest?.altitude ?? 0;
+      hasData = stats.hasData;
+    }
+
+    if (hasData) {
+      const isNewTop = topM > lastAnnouncedTop && topM >= minM;
+      const isOverMin = currentM >= minM;
+      if (timeoutOk && isNewTop) {
+        const msg = `⛰️ New top altitude: ${Math.round(topM)} m!`;
+        try {
+          await sendKickChatMessage(token, msg);
+          sent++;
+          await Promise.all([
+            kv.set(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY, now),
+            kv.set(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY, topM),
+          ]);
+          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'altitude_top', topM, source }));
+        } catch (err) {
+          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'altitude_top', source, error: err instanceof Error ? err.message : String(err) }));
+        }
+      } else if (timeoutOk && isOverMin) {
+        const msg = `⛰️ Altitude: ${Math.round(currentM)} m`;
+        try {
+          await sendKickChatMessage(token, msg);
+          sent++;
+          await kv.set(KICK_BROADCAST_ALTITUDE_LAST_SENT_KEY, now);
+          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'altitude', altitudeM: currentM, source }));
+        } catch (err) {
+          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'altitude', source, error: err instanceof Error ? err.message : String(err) }));
+        }
+      }
+    }
+  }
+
+  return sent;
+}
+
