@@ -13,6 +13,7 @@ import { getPersistentLocation } from '@/utils/location-cache';
 import { KICK_TOKENS_KEY } from '@/lib/kick-api';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 import { getWellnessMilestonesLastSent, getWellnessData } from '@/utils/wellness-storage';
+import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
 
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
@@ -33,7 +34,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [storedAlert, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens, streamLive, wellnessMilestones, wellnessData, speedStats, altitudeStats, speedLastTop, altitudeLastTop, streamStartedAt] = await Promise.all([
+  const [storedAlertRaw, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens, streamLive, wellnessMilestones, wellnessData, speedStats, altitudeStats, speedLastTop, altitudeLastTop, streamStartedAt] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     getHeartrateStats(),
     kv.get<string>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
@@ -49,6 +50,8 @@ export async function GET() {
     kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
     getStreamStartedAt(),
   ]);
+
+  const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...(storedAlertRaw ?? {}) } as Record<string, unknown>;
 
   const chatBroadcastHeartrate = storedAlert?.chatBroadcastHeartrate === true;
   const chatBroadcastLocation = storedAlert?.chatBroadcastLocation === true;

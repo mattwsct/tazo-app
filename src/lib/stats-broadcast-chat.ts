@@ -44,16 +44,6 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
   const source: StatsBroadcastSource = args?.source ?? 'cron';
   const current = args?.current ?? {};
 
-  const [token, live] = await Promise.all([getValidAccessToken(), isStreamLive()]);
-  if (!token) {
-    console.log('[Stats Broadcast] Skip: no Kick token', JSON.stringify({ source }));
-    return 0;
-  }
-  if (!live) {
-    console.log('[Stats Broadcast] Skip: stream not live', JSON.stringify({ source }));
-    return 0;
-  }
-
   const storedAlertRaw = await kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY);
   const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlertRaw } as Record<string, unknown>;
 
@@ -62,6 +52,12 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
   const chatBroadcastAltitude = storedAlert?.chatBroadcastAltitude === true;
 
   if (!chatBroadcastHeartrate && !chatBroadcastSpeed && !chatBroadcastAltitude) return 0;
+
+  // Live/token gate is only for *sending*. We still allow HR state reset (below threshold)
+  // even if not live so the next live crossing triggers correctly.
+  const [token, live] = await Promise.all([getValidAccessToken(), isStreamLive()]);
+  if (!live) console.log('[Stats Broadcast] Skip: stream not live', JSON.stringify({ source }));
+  if (!token) console.log('[Stats Broadcast] Skip: no Kick token', JSON.stringify({ source }));
 
   const now = Date.now();
   let sent = 0;
@@ -93,6 +89,7 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
       hasData = hrStats.hasData && bpm > 0;
     }
 
+    // State reset should happen regardless of live/token so future crossings can fire.
     if (bpm < minBpm) {
       if (state !== 'below') {
         state = 'below';
@@ -100,6 +97,8 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
       }
     } else if (!hasData) {
       // no-op
+    } else if (!live || !token) {
+      // Stream not live or token missing — do not send, but leave state unchanged.
     } else if (bpm >= veryHighBpm) {
       if (state !== 'very_high') {
         const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
@@ -143,6 +142,7 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
 
   // ----- Speed -----
   if (chatBroadcastSpeed) {
+    if (!live || !token) return sent;
     const minKmh = (storedAlert?.chatBroadcastSpeedMinKmh as number) ?? 20;
     const timeoutMin = (storedAlert?.chatBroadcastSpeedTimeoutMin as number) ?? 5;
     const timeoutMs = timeoutMin * 60 * 1000;
@@ -196,6 +196,7 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
 
   // ----- Altitude -----
   if (chatBroadcastAltitude) {
+    if (!live || !token) return sent;
     const minM = (storedAlert?.chatBroadcastAltitudeMinM as number) ?? 50;
     const timeoutMin = (storedAlert?.chatBroadcastAltitudeTimeoutMin as number) ?? 5;
     const timeoutMs = timeoutMin * 60 * 1000;
