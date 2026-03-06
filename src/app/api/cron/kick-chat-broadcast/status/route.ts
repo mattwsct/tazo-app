@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import { verifyAuth, verifyRequestAuth } from '@/lib/api-auth';
-import { getHeartrateStats, isStreamLive } from '@/utils/stats-storage';
+import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, getStreamStartedAt } from '@/utils/stats-storage';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { KICK_TOKENS_KEY } from '@/lib/kick-api';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
@@ -17,6 +17,8 @@ import { getWellnessMilestonesLastSent, getWellnessData } from '@/utils/wellness
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
 const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
+const KICK_BROADCAST_SPEED_LAST_TOP_KEY = 'kick_chat_broadcast_speed_last_top';
+const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_top';
 
 function formatAgo(ms: number): string {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
@@ -31,7 +33,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [storedAlert, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens, streamLive, wellnessMilestones, wellnessData] = await Promise.all([
+  const [storedAlert, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens, streamLive, wellnessMilestones, wellnessData, speedStats, altitudeStats, speedLastTop, altitudeLastTop, streamStartedAt] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     getHeartrateStats(),
     kv.get<string>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
@@ -41,10 +43,18 @@ export async function GET() {
     isStreamLive(),
     getWellnessMilestonesLastSent(),
     getWellnessData(),
+    getSpeedStats(),
+    getAltitudeStats(),
+    kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
+    kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
+    getStreamStartedAt(),
   ]);
 
   const chatBroadcastHeartrate = storedAlert?.chatBroadcastHeartrate === true;
   const chatBroadcastLocation = storedAlert?.chatBroadcastLocation === true;
+  const chatBroadcastSpeed = storedAlert?.chatBroadcastSpeed === true;
+  const chatBroadcastAltitude = storedAlert?.chatBroadcastAltitude === true;
+  const chatBroadcastWeather = storedAlert?.chatBroadcastWeather === true;
   const minBpm = (storedAlert?.chatBroadcastHeartrateMinBpm as number) ?? 100;
   let veryHighBpm = (storedAlert?.chatBroadcastHeartrateVeryHighBpm as number) ?? 120;
   if (veryHighBpm <= minBpm) veryHighBpm = minBpm + 1;
@@ -76,6 +86,13 @@ export async function GET() {
 
   const persistent = await getPersistentLocation();
   const hasLocation = !!persistent?.location;
+
+  const minKmh = (storedAlert?.chatBroadcastSpeedMinKmh as number) ?? 20;
+  const minM = (storedAlert?.chatBroadcastAltitudeMinM as number) ?? 50;
+  const topSpeed = speedStats?.max?.speed ?? 0;
+  const topAltitude = altitudeStats?.highest?.altitude ?? 0;
+  const lastSpeedTop = typeof speedLastTop === 'number' ? speedLastTop : 0;
+  const lastAltitudeTop = typeof altitudeLastTop === 'number' ? altitudeLastTop : 0;
 
   const hrLastSentAt = hrLastSent ? new Date(hrLastSent).toISOString() : null;
   const hrLastSentAgo = hrLastSent ? formatAgo(Date.now() - hrLastSent) : null;
@@ -111,6 +128,46 @@ export async function GET() {
       hasData: hasLocation,
       lastSentAt: lastLocationSent ? new Date(lastLocationSent).toISOString() : null,
     },
+    speed: {
+      broadcastEnabled: chatBroadcastSpeed,
+      hasData: speedStats?.hasData ?? false,
+      topKmh: topSpeed,
+      lastAnnouncedTop: lastSpeedTop,
+      minKmh,
+      note: !chatBroadcastSpeed
+        ? 'Speed broadcast is disabled — enable in Kick Alerts to get "New top speed" messages'
+        : !streamLive
+          ? 'Stream not live — speed messages only when live'
+          : !(speedStats?.hasData)
+            ? 'No speed data — is the overlay sending speed?'
+            : topSpeed > lastSpeedTop && topSpeed >= minKmh
+              ? 'Would send "New top speed" on next cron run (new top above min)'
+              : `No new top (current max ${topSpeed} km/h, last announced ${lastSpeedTop}, min ${minKmh})`,
+    },
+    altitude: {
+      broadcastEnabled: chatBroadcastAltitude,
+      hasData: altitudeStats?.hasData ?? false,
+      topM: topAltitude,
+      lastAnnouncedTop: lastAltitudeTop,
+      minM,
+      note: !chatBroadcastAltitude
+        ? 'Altitude broadcast is disabled — enable in Kick Alerts to get "New top altitude" messages'
+        : !streamLive
+          ? 'Stream not live — altitude messages only when live'
+          : !(altitudeStats?.hasData)
+            ? 'No altitude data — is the overlay sending altitude?'
+            : topAltitude > lastAltitudeTop && topAltitude >= minM
+              ? 'Would send "New top altitude" on next cron run (new top above min)'
+              : `No new top (current max ${topAltitude} m, last announced ${lastAltitudeTop}, min ${minM})`,
+    },
+    weather: {
+      broadcastEnabled: chatBroadcastWeather,
+      note: !chatBroadcastWeather
+        ? 'Weather broadcast is disabled — enable in Kick Alerts for weather updates in chat'
+        : !streamLive
+          ? 'Stream not live — weather messages only when live'
+          : 'Sends when condition becomes notable (rain, snow, storm, fog, high UV, poor AQI).',
+    },
     kick: {
       hasTokens: hasKickTokens,
     },
@@ -118,6 +175,21 @@ export async function GET() {
       runsEvery: '1 minute',
       note: 'Cron only runs on deployed app. Local dev does not trigger it.',
     },
+    streamSession: {
+      startedAt: streamStartedAt != null ? new Date(streamStartedAt).toISOString() : null,
+      note: streamStartedAt == null
+        ? 'No session — HR/speed/altitude use session data. Cron will set session when it sees stream is live (or ensure Kick webhook fires on go-live).'
+        : 'Session active — stats filter by this start time.',
+    },
+    otherReasonsNoMessages: [
+      'Cron not running (check Vercel cron + CRON_SECRET) or no valid Kick token.',
+      'Stream not detected as live (Kick webhook or cron channel API).',
+      'HR/speed/altitude: need overlay sending data while stream is live; session must be started (cron now heals if API says live).',
+      'HR: message only on threshold crossing; after sending, HR must drop below min BPM then exceed again to re-trigger.',
+      'Speed/altitude: only when there’s a new top above minimum and cooldown (e.g. 5 min) has passed.',
+      'Weather: only when condition becomes notable (rain, snow, storm, fog, high UV, poor AQI).',
+      'Kick API can reject sends (rate limit, auth, or API error) — check logs for CHAT_FAIL.',
+    ],
   });
 }
 

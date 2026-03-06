@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
-import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, setStreamLive } from '@/utils/stats-storage';
+import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, setStreamLive, getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
 import {
     resetWellnessDailyMetricsAtMidnight,
   } from '@/utils/wellness-storage';
@@ -127,6 +127,16 @@ export async function GET(request: NextRequest) {
   // Heal stale KV so isStreamLive() stays accurate for other consumers
   if (apiIsLive !== null && apiIsLive !== kvIsLive) {
     void setStreamLive(apiIsLive);
+  }
+
+  // If API says we're live but stream_started_at was never set (e.g. webhook missed go-live),
+  // set it now so HR/speed/altitude session stats have a session and can show data.
+  if (isLive) {
+    const startedAt = await getStreamStartedAt();
+    if (startedAt == null) {
+      await onStreamStarted();
+      console.log('[Cron HR] HEAL_STREAM_SESSION', JSON.stringify({ reason: 'api_live_but_no_stream_started_at' }));
+    }
   }
 
   if (diagnostic) debug.isLive = isLive;
