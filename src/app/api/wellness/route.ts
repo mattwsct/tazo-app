@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getWellnessData } from '@/utils/wellness-storage';
+import { getWellnessDataForDisplay } from '@/utils/wellness-storage';
 import { checkApiRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
