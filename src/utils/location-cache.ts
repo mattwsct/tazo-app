@@ -49,7 +49,9 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes - weather/location can change
 const CACHE_KEY = 'location_data_cache';
 const PERSISTENT_LOCATION_KEY = 'last_known_location'; // Persistent storage (no TTL)
 const LOCATION_CACHE_LAST_FETCH_KEY = 'location_cache_last_fetch'; // Cooldown to avoid burst API usage
+const LAST_OVERLAY_GEOCODE_AT_KEY = 'last_overlay_geocode_at'; // Throttle overlay-triggered geocode (20s)
 const MIN_FETCH_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes minimum between fetches (OpenWeatherMap: 60/min, we do ~4 calls per fetch)
+const OVERLAY_GEOCODE_THROTTLE_MS = 20 * 1000; // 20s between overlay-triggered geocodes
 
 /**
  * Get cached location data if fresh, otherwise return null.
@@ -290,4 +292,93 @@ export async function getLocationData(forceFresh = false): Promise<CachedLocatio
   }
 
   return await fetchAndCacheLocationData();
+}
+
+/**
+ * Geocode using coords from persistent storage (overlay just sent them), update persistent location
+ * and cache so admin/GET location and stream title see the new location immediately.
+ * Throttled to once per OVERLAY_GEOCODE_THROTTLE_MS to avoid API burst.
+ * Call fire-and-forget from POST /api/location after updatePersistentRtirlOnly.
+ * After this returns, caller should call pushStreamTitleFromLocation() to update Kick title.
+ */
+export async function geocodeFromPersistentAndUpdateCache(): Promise<boolean> {
+  try {
+    const persistent = await getPersistentLocation();
+    const lat = persistent?.rtirl?.lat;
+    const lon = persistent?.rtirl?.lon;
+    if (lat == null || lon == null || typeof lat !== 'number' || typeof lon !== 'number') return false;
+
+    const now = Date.now();
+    const lastAt = await kv.get<number>(LAST_OVERLAY_GEOCODE_AT_KEY);
+    if (typeof lastAt === 'number' && now - lastAt < OVERLAY_GEOCODE_THROTTLE_MS) return false;
+    await kv.set(LAST_OVERLAY_GEOCODE_AT_KEY, now);
+
+    const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
+    const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
+
+    const [locationResult, currentWeather] = await Promise.allSettled([
+      locationiqKey ? fetchLocationFromLocationIQ(lat, lon, locationiqKey) : Promise.resolve({ location: null, was404: false }),
+      openweatherKey ? fetchCurrentWeather(lat, lon, openweatherKey) : Promise.resolve(null),
+    ]);
+
+    let location: CachedLocationData['location'] = null;
+    let rawLocationData: LocationData | null = null;
+    if (locationResult.status === 'fulfilled' && locationResult.value.location) {
+      const locData = locationResult.value.location;
+      rawLocationData = locData;
+      const cityLocation = getCityLocationForChat(locData);
+      location = {
+        name: cityLocation || '',
+        countryCode: locData.countryCode || null,
+        country: locData.country || null,
+        city: locData.city || locData.municipality || locData.town || null,
+        state: locData.state || locData.province || locData.region || null,
+        county: locData.county || null,
+        rawLocationData: locData,
+      };
+    }
+
+    let weather: CachedLocationData['weather'] = null;
+    let timezone: string | null = null;
+    let sunriseSunset: CachedLocationData['sunriseSunset'] = null;
+    const ow = currentWeather.status === 'fulfilled' ? currentWeather.value : null;
+    if (ow) {
+      const parsed = parseWeatherData(ow);
+      if (parsed) weather = parsed;
+      if (ow.sys?.sunrise && ow.sys?.sunset) {
+        sunriseSunset = { sunrise: ow.sys.sunrise, sunset: ow.sys.sunset };
+      }
+      if (typeof ow.timezone === 'number') {
+        timezone = getTimezoneFromOwmOffset(ow.timezone, lat, lon);
+      }
+    }
+
+    const rtirlData: RTIRLData = persistent!.rtirl;
+    const cachedData: CachedLocationData = {
+      rtirl: rtirlData,
+      location,
+      weather,
+      timezone,
+      sunriseSunset,
+      forecast: null,
+      cachedAt: now,
+    };
+    await updateLocationCache(cachedData);
+
+    if (rawLocationData) {
+      await updatePersistentLocation({
+        ...(persistent ?? { rtirl: rtirlData, updatedAt: now }),
+        location: rawLocationData,
+        rtirl: rtirlData,
+        updatedAt: now,
+        geocodedLat: lat,
+        geocodedLon: lon,
+      });
+    }
+
+    return true;
+  } catch (error) {
+    console.warn('Geocode from persistent failed:', error);
+    return false;
+  }
 }

@@ -3,7 +3,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getPersistentLocation, updatePersistentRtirlOnly } from '@/utils/location-cache';
+import { getPersistentLocation, updatePersistentRtirlOnly, geocodeFromPersistentAndUpdateCache } from '@/utils/location-cache';
+import { pushStreamTitleFromLocation } from '@/lib/stream-title-updater';
 import { formatLocation } from '@/utils/location-utils';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { kv } from '@/lib/kv';
@@ -61,6 +62,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
     const updated = await updatePersistentRtirlOnly(data.rtirl, data.updatedAt);
+    // Fire-and-forget: geocode from new coords, update persistent location + cache, then push stream title
+    // so admin and Kick title update immediately when overlay moves (no need to wait for cron).
+    void (async () => {
+      try {
+        const didGeocode = await geocodeFromPersistentAndUpdateCache();
+        if (didGeocode) await pushStreamTitleFromLocation();
+      } catch (e) {
+        console.warn('[Location] Geocode/title update failed:', e);
+      }
+    })();
     return NextResponse.json({ ok: true, updated });
   } catch (error) {
     if (error instanceof SyntaxError) {

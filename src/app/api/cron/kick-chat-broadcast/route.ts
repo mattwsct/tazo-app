@@ -13,11 +13,9 @@ import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, setStreamLive } from '@/utils/stats-storage';
 import {
-    getWellnessDataForDisplay,
-    getWellnessMilestonesLastSent,
-    setWellnessMilestoneLastSent,
     resetWellnessDailyMetricsAtMidnight,
   } from '@/utils/wellness-storage';
+import { checkWellnessMilestonesAndSendChat } from '@/lib/wellness-milestone-chat';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
@@ -32,6 +30,7 @@ import {
 } from '@/utils/gambling-storage';
 import { getPollSettings } from '@/lib/poll-store';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
+import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
 const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
@@ -43,20 +42,7 @@ const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_
 const KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY = 'kick_chat_broadcast_weather_last_condition';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
-// Milestones for 48h+ streams — steps/distance can exceed limits
-const WELLNESS_MILESTONES = {
-  steps: [
-    1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10_000,
-    11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000,
-    22000, 24000, 26000, 28000, 30000, 35000, 40000, 50000, 75000, 100000,
-  ],
-  distanceKm: [
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-    22, 24, 26, 28, 30, 35, 40, 50, 75, 100,
-  ],
-  activeCalories: [100, 250, 500, 1000, 1500, 2000, 3000, 5000],
-} as const;
+// Milestones for 48h+ streams — steps/distance can exceed limits (logic in wellness-milestone-chat)
 
 type HeartrateBroadcastState = 'below' | 'high' | 'very_high';
 
@@ -84,7 +70,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition, kvIsLive, persistentForMidnight] = await Promise.all([
+  const [storedAlertRaw, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition, kvIsLive, persistentForMidnight] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
@@ -99,6 +85,8 @@ export async function GET(request: NextRequest) {
     isStreamLive(),
     getPersistentLocation(),
   ]);
+
+  const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlertRaw } as Record<string, unknown>;
 
   // At midnight local time (timezone from overlay/RTIRL location only), reset steps/distance/calories/flights for the new day
   try {
@@ -408,84 +396,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Wellness milestones: steps, distance, flights, active calories
-  // Steps/distance default ON (opt-out via !== false); flights/calories default OFF (opt-in via === true)
-  const wellnessStepsOn = storedAlert?.chatBroadcastWellnessSteps !== false;
-  const wellnessDistanceOn = storedAlert?.chatBroadcastWellnessDistance !== false;
-  const wellnessCaloriesOn = storedAlert?.chatBroadcastWellnessActiveCalories === true;
-  const hasWellnessToggles = wellnessStepsOn || wellnessDistanceOn || wellnessCaloriesOn;
-  if (hasWellnessToggles && isLive) {
-    const [wellnessData, milestonesLast] = await Promise.all([
-      getWellnessDataForDisplay(),
-      getWellnessMilestonesLastSent(),
-    ]);
-    const stepsSince = wellnessData?.steps ?? 0;
-    const distanceSince = wellnessData?.distanceKm ?? 0;
-    const activeCalSince = wellnessData?.activeCalories ?? 0;
-    console.log('[Cron HR] WELLNESS_CHECK', JSON.stringify({ wellnessStepsOn, wellnessDistanceOn, stepsSince, distanceSince, milestonesLast }));
-
-    const checkAndSend = async (
-      toggle: boolean | undefined,
-      current: number,
-      milestones: readonly number[],
-      lastSent: number | undefined,
-      metric: 'steps' | 'distanceKm' | 'activeCalories',
-      emoji: string,
-      label: string,
-      fmtDisplay: (n: number) => string
-    ) => {
-      if (!toggle || current <= 0) return;
-      // Midnight reset detection: if today's value dropped below our last-sent milestone,
-      // the day rolled over — reset so we can announce milestones fresh for today.
-      if (lastSent != null && lastSent > 0 && current < lastSent) {
-        await setWellnessMilestoneLastSent(metric, 0);
-        lastSent = undefined;
-      }
-      const crossed = milestones.filter((m) => current >= m && (lastSent == null || m > lastSent));
-      const highest = crossed.length > 0 ? Math.max(...crossed) : null;
-      if (highest != null) {
-        const msg = `${emoji} ${label}: ${fmtDisplay(current)}`;
-        try {
-          await sendKickChatMessage(accessToken, msg);
-          sent++;
-          await setWellnessMilestoneLastSent(metric, highest);
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: `wellness_${metric}`, value: highest, msgPreview: msg.slice(0, 50) }));
-        } catch (err) {
-          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: `wellness_${metric}`, error: err instanceof Error ? err.message : String(err) }));
-        }
-      }
-    };
-
-    await checkAndSend(
-      wellnessStepsOn,
-      stepsSince,
-      WELLNESS_MILESTONES.steps,
-      milestonesLast.steps,
-      'steps',
-      '👟',
-      'Step count',
-      (n) => n.toLocaleString('en-US')
-    );
-    await checkAndSend(
-      wellnessDistanceOn,
-      distanceSince,
-      WELLNESS_MILESTONES.distanceKm,
-      milestonesLast.distanceKm,
-      'distanceKm',
-      '🚶',
-      'Distance',
-      (n) => `${n.toFixed(1)} km`
-    );
-    await checkAndSend(
-      wellnessCaloriesOn,
-      activeCalSince,
-      WELLNESS_MILESTONES.activeCalories,
-      milestonesLast.activeCalories,
-      'activeCalories',
-      '🔥',
-      'Active calories',
-      (n) => n.toLocaleString('en-US')
-    );
+  // Wellness milestones: steps, distance, flights, active calories (shared with import route for immediate send)
+  const wellnessSent = await checkWellnessMilestonesAndSendChat();
+  if (wellnessSent > 0) {
+    sent += wellnessSent;
+    console.log('[Cron HR] WELLNESS_MILESTONES', JSON.stringify({ sent: wellnessSent }));
   }
 
   if (!storedAlert?.chatBroadcastHeartrate) {
