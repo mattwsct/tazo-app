@@ -766,6 +766,20 @@ When enabled, broadcaster or mods can start a poll with `!poll Question? Option1
 - **Diagnostic request**: Hit the cron with `?diagnostic=1` and your `CRON_SECRET`: `GET /api/cron/kick-chat-broadcast?diagnostic=1` with `Authorization: Bearer <CRON_SECRET>`. Response includes `debug.tokenPresent`, `debug.isLive`, `debug.tazoDropsEnabled`, `debug.activeEvent`, `debug.shouldDrop`, `debug.raffleShouldStart`, `debug.bossShouldStart`.
 - **Vercel Hobby**: Cron may timeout at 10s. Consider Vercel Pro for longer limits.
 
+**Chat broadcasts (HR, speed, altitude, weather, wellness) not sending:**
+- **Where to look**: Vercel Dashboard → **Logs** → filter by the cron (e.g. path contains `kick-chat-broadcast`) or search logs for `[Cron HR]`.
+- **Useful log lines** (search in Vercel):
+  - `[Cron HR] CRON_SKIP` — cron bailed early; payload usually has `reason: 'no_token'` (no Kick token) or check for other reasons.
+  - `[Cron HR] LIVE_CHECK` — shows `isLive`, `apiIsLive`, `kvIsLive`. If `isLive: false`, no HR/speed/altitude/weather/wellness messages are sent.
+  - `[Cron HR] HEAL_STREAM_SESSION` — cron set `stream_started_at` because API said live but session was missing (e.g. webhook missed go-live). Next run can use session data.
+  - `[Cron HR] CRON_DEBUG` — HR block: `hrBroadcast: false` = toggle off; `hrData: false` = no heart rate data; `already_sent_high` / `already_sent_very_high` = won’t send again until HR drops below min then exceeds.
+  - `[Cron HR] CHAT_SENT` — a message was sent; payload has `type` (e.g. `heartrate_high`, `speed`, `altitude`, `weather`).
+  - `[Cron HR] CHAT_FAIL` — send to Kick failed; payload has `type` and `error`. Check for rate limit or auth errors.
+  - `[Cron HR] CRON_END` — end of run; `sent` is how many messages were sent this run.
+- **Wellness milestones** (steps/distance/calories): In logs search `[Wellness Milestones]` — `Skip: no Kick token` or `Skip: stream not live` when the helper doesn’t send. After import you may see `[Wellness] Milestone chat sent=N after import`.
+- **Overlay**: HR/speed/altitude come from the overlay calling `POST /api/stats/update`. The app does not log each successful receive in production. If overlay has a console (e.g. browser devtools), check for failed requests or 429 (rate limit). Stats are only stored when the stream is considered live (`isStreamLive()`), so if “stream not live” in cron, overlay data may not be stored until after go-live.
+- **Best single check**: Call **GET /api/cron/kick-chat-broadcast/status** (with admin auth). Response has `stream.isLive`, `heartRate.reason`, `speed.note`, `altitude.note`, `weather.note`, `streamSession.startedAt`, and `otherReasonsNoMessages` — tells you exactly why each type is or isn’t sending.
+
 - **Mod says "no permission" but has mod badge**: Role detection runs on every message from the Kick webhook payload. We check `identity.role`, `roles[]`, `badges[]`, `is_moderator`, `isModerator`, etc. Ensure **Mods can start polls** is enabled in poll settings. If still failing, check Vercel logs for `[poll] webhook: rejected (no permission)` — it now logs `roles`, `rawSender` so you can see what Kick sends and add support if needed.
 - **Poll didn't get queued after another was rejected**: Each message is a separate webhook; rejecting one poll does not block the next. Common causes: (1) **Permission** — if the sender lacks permission (Everyone/Mods/VIPs/OGs/Subs), the bot now replies "You don't have permission to start polls." Previously it was silent. (2) **Deleted message** — if the message was deleted before Kick delivered the webhook, it never arrives. (3) **Debugging** — in Vercel logs, look for `[poll] webhook: rejected (content filter)` or `rejected (no permission)` to see why a poll was skipped.
 - **Leaderboard didn't reset on stream start**: Reset triggers when Kick sends `livestream.status.updated` with `is_live: true` to your webhook URL. Ensure Kick Developer Console → Webhook URL is `https://your-domain/api/webhooks/kick`. In dev, check logs for `[Leaderboard] Reset on stream start at`. If unsure, use **Reset session** in Connection section before going live to force a clean slate.

@@ -40,7 +40,14 @@ export async function checkWellnessMilestonesAndSendChat(): Promise<number> {
     getValidAccessToken(),
     isStreamLive(),
   ]);
-  if (!token || !live) return 0;
+  if (!token) {
+    console.log('[Wellness Milestones] Skip: no Kick token');
+    return 0;
+  }
+  if (!live) {
+    console.log('[Wellness Milestones] Skip: stream not live');
+    return 0;
+  }
 
   const storedAlertRaw = await kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY);
   const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlertRaw } as Record<string, unknown>;
