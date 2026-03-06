@@ -16,6 +16,7 @@ import {
     getWellnessDataForDisplay,
     getWellnessMilestonesLastSent,
     setWellnessMilestoneLastSent,
+    resetWellnessDailyMetricsAtMidnight,
   } from '@/utils/wellness-storage';
 import { getLocationData } from '@/utils/location-cache';
 import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest) {
   const runAt = new Date().toISOString();
   console.log('[Cron HR] CRON_START', JSON.stringify({ runAt }));
   const accessToken = await getValidAccessToken();
+
   if (!accessToken) {
     console.log('[Cron HR] CRON_SKIP', JSON.stringify({ reason: 'no_token', runAt }));
     return NextResponse.json(
@@ -82,7 +84,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition, kvIsLive] = await Promise.all([
+  const [storedAlert, lastLocationAt, lastLocationMsg, hrState, overlaySettings, streamTitleSettings, speedLastSent, speedLastTop, altitudeLastSent, altitudeLastTop, weatherLastCondition, kvIsLive, persistentForMidnight] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
@@ -95,7 +97,16 @@ export async function GET(request: NextRequest) {
     kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
     kv.get<string>(KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY),
     isStreamLive(),
+    getPersistentLocation(),
   ]);
+
+  // At midnight local time (timezone from overlay/RTIRL location only), reset steps/distance/calories/flights for the new day
+  try {
+    const tz = persistentForMidnight?.location?.timezone;
+    if (tz) await resetWellnessDailyMetricsAtMidnight(tz);
+  } catch (e) {
+    console.warn('[Cron HR] Midnight wellness reset check failed:', e);
+  }
 
   const now = Date.now();
   const minBpm = (storedAlert?.chatBroadcastHeartrateMinBpm as number) ?? 100;

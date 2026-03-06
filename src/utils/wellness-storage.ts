@@ -7,6 +7,7 @@ import { kv } from '@/lib/kv';
 
 const WELLNESS_KEY = 'wellness_data';
 const WELLNESS_SNAPSHOT_AT_STREAM_END_KEY = 'wellness_snapshot_at_stream_end';
+const WELLNESS_LAST_MIDNIGHT_RESET_DATE_KEY = 'wellness_last_midnight_reset_date';
 
 /** Snapshot of session metrics at stream end so they don't update when offline */
 export interface WellnessSnapshotAtStreamEnd {
@@ -89,6 +90,49 @@ export async function clearWellnessSnapshotAtStreamEnd(): Promise<void> {
     await kv.set(WELLNESS_SNAPSHOT_AT_STREAM_END_KEY, null);
   } catch {
     // ignore
+  }
+}
+
+/**
+ * If it is now a new calendar day in the given timezone, reset steps, distanceKm, activeCalories,
+ * and flightsClimbed to 0 for cleanliness (next Health Auto Export will show new day's data).
+ * Uses IANA timezone (e.g. "America/New_York", "UTC"). Call from a cron that runs at least once per minute.
+ * @returns true if a reset was performed
+ */
+export async function resetWellnessDailyMetricsAtMidnight(timezone: string): Promise<boolean> {
+  if (!timezone?.trim()) return false;
+  try {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-CA', { timeZone: timezone });
+    const lastReset = await kv.get<string>(WELLNESS_LAST_MIDNIGHT_RESET_DATE_KEY);
+    if (lastReset === dateStr) return false;
+
+    const existing = await kv.get<WellnessData>(WELLNESS_KEY);
+    const ts = Date.now();
+    const metricUpdatedAt = { ...(existing?.metricUpdatedAt ?? {}) };
+    metricUpdatedAt.steps = ts;
+    metricUpdatedAt.distanceKm = ts;
+    metricUpdatedAt.activeCalories = ts;
+    metricUpdatedAt.flightsClimbed = ts;
+
+    const merged: WellnessData = {
+      ...(existing || {}),
+      steps: 0,
+      distanceKm: 0,
+      activeCalories: 0,
+      flightsClimbed: 0,
+      updatedAt: ts,
+      metricUpdatedAt,
+    };
+    await kv.set(WELLNESS_KEY, merged);
+    await kv.set(WELLNESS_LAST_MIDNIGHT_RESET_DATE_KEY, dateStr);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Wellness] Midnight reset in', timezone, 'date', dateStr);
+    }
+    return true;
+  } catch (error) {
+    console.warn('Failed to reset wellness at midnight:', error);
+    return false;
   }
 }
 
