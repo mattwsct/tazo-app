@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { storeSpeed, storeAltitude, storeHeartrate } from '@/utils/stats-storage';
 import { checkApiRateLimit } from '@/lib/rate-limit';
-import { checkStatsBroadcastsAndSendChat } from '@/lib/stats-broadcast-chat';
+import { maybeBroadcastStats } from '@/lib/chat-broadcast-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,14 +97,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     await Promise.all(promises);
     // Fire-and-forget: if stream is live, send chat broadcasts immediately (cooldowns/state apply).
-    void checkStatsBroadcastsAndSendChat({
-      source: 'stats_update',
-      current: {
+    void maybeBroadcastStats(
+      {
         speedKmh: latestSpeedKmh,
         altitudeM: latestAltitudeM,
         heartrateBpm: latestHeartrateBpm,
       },
-    });
+      'stats_update',
+    );
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to update stats:', error);

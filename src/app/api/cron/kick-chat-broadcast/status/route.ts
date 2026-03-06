@@ -6,20 +6,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@/lib/kv';
 import { verifyAuth, verifyRequestAuth } from '@/lib/api-auth';
 import { getHeartrateStats, getSpeedStats, getAltitudeStats, isStreamLive, getStreamStartedAt } from '@/utils/stats-storage';
 import { getPersistentLocation } from '@/utils/location-cache';
 import { KICK_TOKENS_KEY } from '@/lib/kick-api';
-import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 import { getWellnessMilestonesLastSent, getWellnessData } from '@/utils/wellness-storage';
-import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
+import { kv } from '@/lib/kv';
+import { getBroadcastState } from '@/lib/kick-broadcast-state';
+import { loadKickAlertSettings } from '@/lib/kick-alert-settings';
 
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
-const KICK_BROADCAST_HEARTRATE_STATE_KEY = 'kick_chat_broadcast_heartrate_state';
-const KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY = 'kick_chat_broadcast_heartrate_last_sent';
-const KICK_BROADCAST_SPEED_LAST_TOP_KEY = 'kick_chat_broadcast_speed_last_top';
-const KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY = 'kick_chat_broadcast_altitude_last_top';
 
 function formatAgo(ms: number): string {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
@@ -34,11 +30,9 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const [storedAlertRaw, hrStats, hrState, hrLastSent, lastLocationSent, hasKickTokens, streamLive, wellnessMilestones, wellnessData, speedStats, altitudeStats, speedLastTop, altitudeLastTop, streamStartedAt] = await Promise.all([
-    kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
+  const [storedAlert, hrStats, lastLocationSent, hasKickTokens, streamLive, wellnessMilestones, wellnessData, speedStats, altitudeStats, broadcastState, streamStartedAt] = await Promise.all([
+    loadKickAlertSettings(),
     getHeartrateStats(),
-    kv.get<string>(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-    kv.get<number>(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get(KICK_TOKENS_KEY).then((t) => !!t),
     isStreamLive(),
@@ -46,12 +40,9 @@ export async function GET() {
     getWellnessData(),
     getSpeedStats(),
     getAltitudeStats(),
-    kv.get<number>(KICK_BROADCAST_SPEED_LAST_TOP_KEY),
-    kv.get<number>(KICK_BROADCAST_ALTITUDE_LAST_TOP_KEY),
+    getBroadcastState(),
     getStreamStartedAt(),
   ]);
-
-  const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...(storedAlertRaw ?? {}) } as Record<string, unknown>;
 
   const chatBroadcastHeartrate = storedAlert?.chatBroadcastHeartrate === true;
   const chatBroadcastLocation = storedAlert?.chatBroadcastLocation === true;
@@ -64,7 +55,12 @@ export async function GET() {
 
   const currentBpm = hrStats.current?.bpm ?? 0;
   const hrAge = hrStats.current?.age ?? 'no data';
-  const currentHrState = (hrState === 'below' || hrState === 'high' || hrState === 'very_high') ? hrState : 'below';
+  const currentHrState =
+    broadcastState.heartrate?.state === 'below' ||
+    broadcastState.heartrate?.state === 'high' ||
+    broadcastState.heartrate?.state === 'very_high'
+      ? broadcastState.heartrate.state
+      : 'below';
 
   // Would the next cron run send a heart rate message?
   let wouldSendHrMessage = false;
@@ -94,11 +90,12 @@ export async function GET() {
   const minM = (storedAlert?.chatBroadcastAltitudeMinM as number) ?? 50;
   const topSpeed = speedStats?.max?.speed ?? 0;
   const topAltitude = altitudeStats?.highest?.altitude ?? 0;
-  const lastSpeedTop = typeof speedLastTop === 'number' ? speedLastTop : 0;
-  const lastAltitudeTop = typeof altitudeLastTop === 'number' ? altitudeLastTop : 0;
+  const lastSpeedTop = broadcastState.speed?.lastAnnouncedTop ?? 0;
+  const lastAltitudeTop = broadcastState.altitude?.lastAnnouncedTop ?? 0;
 
-  const hrLastSentAt = hrLastSent ? new Date(hrLastSent).toISOString() : null;
-  const hrLastSentAgo = hrLastSent ? formatAgo(Date.now() - hrLastSent) : null;
+  const hrLastRaw = broadcastState.heartrate?.lastSentAt;
+  const hrLastSentAt = typeof hrLastRaw === 'number' ? new Date(hrLastRaw).toISOString() : null;
+  const hrLastSentAgo = typeof hrLastRaw === 'number' ? formatAgo(Date.now() - hrLastRaw) : null;
 
   return NextResponse.json({
     stream: {
@@ -138,14 +135,14 @@ export async function GET() {
       lastAnnouncedTop: lastSpeedTop,
       minKmh,
       note: !chatBroadcastSpeed
-        ? 'Speed broadcast is disabled — enable in Kick Alerts to get "New top speed" messages'
+        ? 'Speed broadcast is disabled — enable in Kick Alerts to get speed messages'
         : !streamLive
           ? 'Stream not live — speed messages only when live'
           : !(speedStats?.hasData)
             ? 'No speed data — is the overlay sending speed?'
-            : topSpeed > lastSpeedTop && topSpeed >= minKmh
-              ? 'Would send "New top speed" on next cron run (new top above min)'
-              : `No new top (current max ${topSpeed} km/h, last announced ${lastSpeedTop}, min ${minKmh})`,
+            : topSpeed >= minKmh
+              ? 'Would send speed update on next cron run if cooldown passed'
+              : `Below minimum (current max ${topSpeed} km/h, min ${minKmh})`,
     },
     altitude: {
       broadcastEnabled: chatBroadcastAltitude,
@@ -154,14 +151,14 @@ export async function GET() {
       lastAnnouncedTop: lastAltitudeTop,
       minM,
       note: !chatBroadcastAltitude
-        ? 'Altitude broadcast is disabled — enable in Kick Alerts to get "New top altitude" messages'
+        ? 'Altitude broadcast is disabled — enable in Kick Alerts to get altitude messages'
         : !streamLive
           ? 'Stream not live — altitude messages only when live'
           : !(altitudeStats?.hasData)
             ? 'No altitude data — is the overlay sending altitude?'
-            : topAltitude > lastAltitudeTop && topAltitude >= minM
-              ? 'Would send "New top altitude" on next cron run (new top above min)'
-              : `No new top (current max ${topAltitude} m, last announced ${lastAltitudeTop}, min ${minM})`,
+            : topAltitude >= minM
+              ? 'Would send altitude update on next cron run if cooldown passed'
+              : `Below minimum (current max ${topAltitude} m, min ${minM})`,
     },
     weather: {
       broadcastEnabled: chatBroadcastWeather,
@@ -203,11 +200,8 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   if (body.resetHrState === true) {
-    await Promise.all([
-      kv.del(KICK_BROADCAST_HEARTRATE_STATE_KEY),
-      kv.del(KICK_BROADCAST_HEARTRATE_LAST_SENT_KEY),
-    ]);
-    return NextResponse.json({ success: true, message: 'HR broadcast state reset. Next threshold crossing will send a message.' });
+    await kv.del('kick_broadcast_state');
+    return NextResponse.json({ success: true, message: 'Broadcast state reset. Next threshold crossings will send messages.' });
   }
 
   return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

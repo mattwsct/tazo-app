@@ -11,14 +11,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
-import { isStreamLive, setStreamLive, getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
+import { isStreamLive, getStreamStartedAt, onStreamStarted, healStreamStateFromKickAPI } from '@/utils/stats-storage';
 import {
     resetWellnessDailyMetricsAtMidnight,
   } from '@/utils/wellness-storage';
 import { checkWellnessMilestonesAndSendChat } from '@/lib/wellness-milestone-chat';
 import { checkStatsBroadcastsAndSendChat } from '@/lib/stats-broadcast-chat';
 import { getLocationData } from '@/utils/location-cache';
-import { isNotableWeatherCondition, getWeatherEmoji, formatTemperature, isNightTime, isHighUV, isPoorAirQuality } from '@/utils/weather-chat';
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 
@@ -32,9 +31,9 @@ import {
 import { getPollSettings } from '@/lib/poll-store';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
+import { maybeBroadcastWeather, maybeBroadcastWellness, maybeBroadcastStats, sendSystemMessage } from '@/lib/chat-broadcast-service';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
-const KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY = 'kick_chat_broadcast_weather_last_condition';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
 // Milestones for 48h+ streams — steps/distance can exceed limits (logic in wellness-milestone-chat)
@@ -63,13 +62,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [storedAlertRaw, lastLocationAt, lastLocationMsg, overlaySettings, streamTitleSettings, weatherLastCondition, kvIsLive, persistentForMidnight] = await Promise.all([
+  const [storedAlertRaw, lastLocationAt, lastLocationMsg, overlaySettings, streamTitleSettings, kvIsLive, persistentForMidnight] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number; showSubGoal?: boolean; subGoalTarget?: number; showKicksGoal?: boolean; kicksGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
-    kv.get<string>(KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY),
     isStreamLive(),
     getPersistentLocation(),
   ]);
@@ -110,7 +108,7 @@ export async function GET(request: NextRequest) {
 
   // Heal stale KV so isStreamLive() stays accurate for other consumers
   if (apiIsLive !== null && apiIsLive !== kvIsLive) {
-    void setStreamLive(apiIsLive);
+    void healStreamStateFromKickAPI(apiIsLive);
   }
 
   // If API says we're live but stream_started_at was never set (e.g. webhook missed go-live),
@@ -132,7 +130,7 @@ export async function GET(request: NextRequest) {
   try {
     const heistResult = await checkAndResolveExpiredHeist();
     if (heistResult) {
-      await sendKickChatMessage(accessToken, heistResult);
+      await sendSystemMessage('heist_resolve', heistResult);
       sent++;
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heist_resolve', msgPreview: heistResult.slice(0, 80) }));
     }
@@ -144,13 +142,13 @@ export async function GET(request: NextRequest) {
   try {
     const raffleResult = await resolveRaffle();
     if (raffleResult) {
-      await sendKickChatMessage(accessToken, raffleResult);
+      await sendSystemMessage('raffle_resolve', raffleResult);
       sent++;
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
     } else {
       const reminder = await getRaffleReminder();
       if (reminder && isLive) {
-        await sendKickChatMessage(accessToken, reminder);
+        await sendSystemMessage('raffle_resolve', reminder);
         sent++;
       }
     }
@@ -162,7 +160,7 @@ export async function GET(request: NextRequest) {
   try {
     const dropResult = await resolveExpiredTazoDrop();
     if (dropResult) {
-      await sendKickChatMessage(accessToken, dropResult);
+      await sendSystemMessage('tazo_drop_resolve', dropResult);
       sent++;
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_resolve', msgPreview: dropResult.slice(0, 80) }));
     }
@@ -174,13 +172,13 @@ export async function GET(request: NextRequest) {
   try {
     const bossResult = await resolveExpiredBoss();
     if (bossResult) {
-      await sendKickChatMessage(accessToken, bossResult);
+      await sendSystemMessage('boss_resolve', bossResult);
       sent++;
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_resolve', msgPreview: bossResult.slice(0, 80) }));
     }
     const bossReminder = await getBossReminder();
     if (bossReminder && isLive) {
-      await sendKickChatMessage(accessToken, bossReminder);
+      await sendSystemMessage('boss_reminder', bossReminder);
       sent++;
       console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_reminder', msgPreview: bossReminder.slice(0, 80) }));
     }
@@ -194,10 +192,10 @@ export async function GET(request: NextRequest) {
     if (diagnostic) Object.assign(debug, { autoGameShouldStart: shouldStart });
     if (shouldStart) {
       const pollSettings = await getPollSettings();
-      const announcement = await pickAndStartAutoGame({ ...(overlaySettings ?? {}), pollDurationSeconds: pollSettings.durationSeconds });
+        const announcement = await pickAndStartAutoGame({ ...(overlaySettings ?? {}), pollDurationSeconds: pollSettings.durationSeconds });
       if (announcement) {
         try {
-          await sendKickChatMessage(accessToken, announcement);
+          await sendSystemMessage('auto_game_start', announcement);
           sent++;
           console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'auto_game_start', msgPreview: announcement.slice(0, 80) }));
         } catch (sendErr) {
@@ -217,7 +215,7 @@ export async function GET(request: NextRequest) {
     try {
       const topChatterResult = await resolveTopChatter();
       if (topChatterResult) {
-        await sendKickChatMessage(accessToken, topChatterResult);
+        await sendSystemMessage('top_chatter', topChatterResult);
         sent++;
         console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'top_chatter', msgPreview: topChatterResult.slice(0, 80) }));
       }
@@ -304,45 +302,13 @@ export async function GET(request: NextRequest) {
   }
 
   // HR/speed/altitude broadcasts (shared with stats ingestion for immediate sends)
-  sent += await checkStatsBroadcastsAndSendChat({ source: 'cron' });
+  sent += await maybeBroadcastStats({}, 'cron');
 
   // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
-  const chatBroadcastWeather = storedAlert?.chatBroadcastWeather === true;
-  if (chatBroadcastWeather && isLive) {
-    const locationData = sharedLocationData ?? await getLocationData(false);
-    if (locationData?.weather) {
-      const { condition, desc, tempC, uvIndex, aqi } = locationData.weather;
-      const condKey = `${condition}|${desc}|uv:${uvIndex ?? 'n'}|aqi:${aqi ?? 'n'}`;
-      const lastCond = typeof weatherLastCondition === 'string' ? weatherLastCondition : null;
-      const weatherNotable = isNotableWeatherCondition(desc);
-      const uvNotable = isHighUV(uvIndex);
-      const aqiNotable = isPoorAirQuality(aqi);
-      const isNotable = weatherNotable || uvNotable || aqiNotable;
-      const isNewNotableChange = isNotable && condKey !== lastCond;
-      if (isNewNotableChange) {
-        const parts: string[] = [];
-        if (weatherNotable) {
-          const emoji = getWeatherEmoji(condition, isNightTime());
-          parts.push(`${emoji} ${desc}`);
-        }
-        if (uvNotable) parts.push(`high UV (${uvIndex})`);
-        if (aqiNotable) parts.push(`poor air quality (AQI ${aqi})`);
-        const mainPart = parts.length > 0 ? parts.join(', ') : 'conditions';
-        const msg = `🌤️ Weather update: ${mainPart}, ${formatTemperature(tempC)}`;
-        try {
-          await sendKickChatMessage(accessToken, msg);
-          sent++;
-          await kv.set(KICK_BROADCAST_WEATHER_LAST_CONDITION_KEY, condKey);
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'weather', cond: desc, uv: uvIndex, aqi, msgPreview: msg.slice(0, 60) }));
-        } catch (err) {
-          console.error('[Cron HR] CHAT_FAIL', JSON.stringify({ type: 'weather', error: err instanceof Error ? err.message : String(err) }));
-        }
-      }
-    }
-  }
+  sent += await maybeBroadcastWeather();
 
   // Wellness milestones: steps, distance, flights, active calories (shared with import route for immediate send)
-  const wellnessSent = await checkWellnessMilestonesAndSendChat();
+  const wellnessSent = await maybeBroadcastWellness();
   if (wellnessSent > 0) {
     sent += wellnessSent;
     console.log('[Cron HR] WELLNESS_MILESTONES', JSON.stringify({ sent: wellnessSent }));

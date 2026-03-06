@@ -58,6 +58,8 @@ const LOCATION_KEY = 'location_history';
 export const STREAM_STARTED_AT_KEY = 'stream_started_at';
 const STREAM_ENDED_AT_KEY = 'stream_ended_at';
 const STREAM_IS_LIVE_KEY = 'stream_is_live';
+const STREAM_LAST_WEBHOOK_AT_KEY = 'stream_last_webhook_at';
+const STREAM_LAST_CRON_CHECK_AT_KEY = 'stream_last_cron_check_at';
 
 /**
  * Filters entries to only those since stream started and not after stream ended
@@ -140,6 +142,77 @@ export async function setStreamEndedAt(timestamp: number): Promise<void> {
     }
   } catch (error) {
     console.warn('Failed to set stream ended:', error);
+  }
+}
+
+export interface StreamState {
+  isLive: boolean;
+  startedAt: number | null;
+  endedAt: number | null;
+  lastWebhookAt: number | null;
+  lastCronCheckAt: number | null;
+}
+
+/**
+ * Returns a consolidated view of stream live/session state.
+ * Used by diagnostics and higher-level services instead of reading KV directly.
+ */
+export async function getStreamState(): Promise<StreamState> {
+  const [live, startedAt, endedAt, lastWebhookAt, lastCronCheckAt] = await Promise.all([
+    isStreamLive(),
+    getStreamStartedAt(),
+    getStreamEndedAt(),
+    kv.get<number | null>(STREAM_LAST_WEBHOOK_AT_KEY),
+    kv.get<number | null>(STREAM_LAST_CRON_CHECK_AT_KEY),
+  ]);
+  return {
+    isLive: live,
+    startedAt,
+    endedAt,
+    lastWebhookAt: typeof lastWebhookAt === 'number' ? lastWebhookAt : null,
+    lastCronCheckAt: typeof lastCronCheckAt === 'number' ? lastCronCheckAt : null,
+  };
+}
+
+/**
+ * Called when Kick webhook reports livestream.status.updated.
+ * Centralizes stream_is_live + session start/end, and tracks last webhook time.
+ */
+export async function markStreamLiveFromWebhook(isLive: boolean, timestamp: number): Promise<void> {
+  try {
+    if (isLive) {
+      await Promise.all([
+        setStreamLive(true),
+        onStreamStarted(),
+      ]);
+    } else {
+      await Promise.all([
+        setStreamLive(false),
+        setStreamEndedAt(timestamp),
+      ]);
+    }
+    await kv.set(STREAM_LAST_WEBHOOK_AT_KEY, timestamp);
+  } catch (error) {
+    console.warn('Failed to update stream state from webhook:', error);
+  }
+}
+
+/**
+ * Called from cron after checking the Kick channel API.
+ * Heals STREAM_IS_LIVE_KEY when API truth disagrees with KV (e.g. missed webhooks)
+ * and records the last time cron verified live status.
+ */
+export async function healStreamStateFromKickAPI(apiIsLive: boolean | null): Promise<void> {
+  try {
+    const now = Date.now();
+    await kv.set(STREAM_LAST_CRON_CHECK_AT_KEY, now);
+    if (apiIsLive === null) return;
+    const kvLive = await isStreamLive();
+    if (apiIsLive !== kvLive) {
+      await setStreamLive(apiIsLive);
+    }
+  } catch (error) {
+    console.warn('Failed to heal stream state from Kick API:', error);
   }
 }
 

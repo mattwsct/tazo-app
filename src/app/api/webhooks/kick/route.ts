@@ -24,7 +24,7 @@ import {
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
-import { onStreamStarted, setStreamLive, setStreamEndedAt } from '@/utils/stats-storage';
+import { markStreamLiveFromWebhook } from '@/utils/stats-storage';
 import {
   addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
   trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
@@ -150,8 +150,8 @@ export async function POST(request: NextRequest) {
 
   // Stream start: reset stats session, steps counter, and leaderboard when going live
   if (eventNorm === 'livestream.status.updated' && payload.is_live === true) {
-    void setStreamLive(true);
-    void onStreamStarted();
+    const now = Date.now();
+    void markStreamLiveFromWebhook(true, now);
     void (async () => {
       const { clearWellnessSnapshotAtStreamEnd } = await import('@/utils/wellness-storage');
       await clearWellnessSnapshotAtStreamEnd();
@@ -173,8 +173,7 @@ export async function POST(request: NextRequest) {
   // Stream end: clear live flag, set stream_ended_at, reset title to location only, reset goals
   if (eventNorm === 'livestream.status.updated' && payload.is_live === false) {
     const now = Date.now();
-    void setStreamLive(false);
-    void setStreamEndedAt(now);
+    void markStreamLiveFromWebhook(false, now);
     void resetStreamTitleToLocationOnly();
     void resetStreamGoalsOnStreamStart();
     void (async () => {

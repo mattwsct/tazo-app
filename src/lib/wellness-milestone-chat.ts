@@ -3,7 +3,6 @@
  * Used by the cron (every minute) and by the wellness import route (immediately when new data arrives).
  */
 
-import { kv } from '@/lib/kv';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { isStreamLive } from '@/utils/stats-storage';
 import {
@@ -11,8 +10,7 @@ import {
   getWellnessMilestonesLastSent,
   setWellnessMilestoneLastSent,
 } from '@/utils/wellness-storage';
-import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
-import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
+import { loadKickAlertSettings } from '@/lib/kick-alert-settings';
 
 export const WELLNESS_MILESTONES = {
   steps: [
@@ -49,8 +47,7 @@ export async function checkWellnessMilestonesAndSendChat(): Promise<number> {
     return 0;
   }
 
-  const storedAlertRaw = await kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY);
-  const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlertRaw } as Record<string, unknown>;
+  const storedAlert = await loadKickAlertSettings();
 
   const wellnessStepsOn = storedAlert?.chatBroadcastWellnessSteps !== false;
   const wellnessDistanceOn = storedAlert?.chatBroadcastWellnessDistance !== false;
