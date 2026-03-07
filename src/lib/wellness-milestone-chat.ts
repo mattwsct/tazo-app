@@ -23,10 +23,9 @@ export const WELLNESS_MILESTONES = {
     11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     22, 24, 26, 28, 30, 35, 40, 50, 75, 100,
   ],
-  activeCalories: [100, 250, 500, 1000, 1500, 2000, 3000, 5000],
 } as const;
 
-type MetricKey = 'steps' | 'distanceKm' | 'activeCalories';
+type MetricKey = 'steps' | 'distanceKm';
 
 /**
  * Check current wellness values against milestones and send Kick chat messages for newly crossed milestones.
@@ -51,8 +50,7 @@ export async function checkWellnessMilestonesAndSendChat(): Promise<number> {
 
   const wellnessStepsOn = storedAlert?.chatBroadcastWellnessSteps !== false;
   const wellnessDistanceOn = storedAlert?.chatBroadcastWellnessDistance !== false;
-  const wellnessCaloriesOn = storedAlert?.chatBroadcastWellnessActiveCalories === true;
-  if (!wellnessStepsOn && !wellnessDistanceOn && !wellnessCaloriesOn) return 0;
+  if (!wellnessStepsOn && !wellnessDistanceOn) return 0;
 
   const [wellnessData, milestonesLast] = await Promise.all([
     getWellnessDataForDisplay(),
@@ -60,7 +58,6 @@ export async function checkWellnessMilestonesAndSendChat(): Promise<number> {
   ]);
   const stepsSince = wellnessData?.steps ?? 0;
   const distanceSince = wellnessData?.distanceKm ?? 0;
-  const activeCalSince = wellnessData?.activeCalories ?? 0;
 
   let sent = 0;
 
@@ -112,16 +109,6 @@ export async function checkWellnessMilestonesAndSendChat(): Promise<number> {
     '🚶',
     'Distance',
     (n) => `${n.toFixed(1)} km`
-  );
-  await checkAndSend(
-    wellnessCaloriesOn,
-    activeCalSince,
-    WELLNESS_MILESTONES.activeCalories,
-    milestonesLast.activeCalories,
-    'activeCalories',
-    '🔥',
-    'Active calories',
-    (n) => n.toLocaleString('en-US')
   );
 
   return sent;

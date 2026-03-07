@@ -53,7 +53,7 @@ import {
   calculateMovedMeters
 } from '@/utils/fetch-decision';
 import { isSpeedStale } from '@/utils/staleness-utils';
-import { fetchMinutelyForecast, isNotableWeatherCondition, type MinutelyPrecipForecast } from '@/utils/weather-chat';
+import { isNotableWeatherCondition } from '@/utils/weather-chat';
 import { useOverlaySettings } from '@/hooks/useOverlaySettings';
 import { filterOptionForDisplay, filterTextForDisplay } from '@/lib/poll-content-filter';
 import BottomRightPanel from '@/components/BottomRightPanel';
@@ -127,7 +127,6 @@ function OverlayPage() {
     countryCode?: string;
   } | null>(null);
   const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
-  const [precipForecast, setPrecipForecast] = useState<MinutelyPrecipForecast | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [sunriseSunset, setSunriseSunset] = useState<SunriseSunsetData | null>(null);
   const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
@@ -1012,12 +1011,7 @@ function OverlayPage() {
                     }
                   })()
                 );
-                // Minutely precipitation forecast (One Call 3.0 — parallel, non-blocking)
-                promises.push(
-                  fetchMinutelyForecast(lat!, lon!, API_KEYS.OPENWEATHER!, weather?.temp)
-                    .then(f => setPrecipForecast(f))
-                    .catch(() => { /* non-critical */ })
-                );
+                // Minutely precipitation forecast removed — overlay shows current condition + temperature only
               }
               
               // Check if location should actually be fetched (with concurrency check)
@@ -1430,28 +1424,6 @@ function OverlayPage() {
     };
   }, [weather, getWeatherIcon, isNightTime]);
 
-  // Precipitation countdown — ticks every 15s to update "RAIN ~N MIN" display
-  const [precipTick, setPrecipTick] = useState(0);
-  useEffect(() => {
-    if (!precipForecast) return;
-    const id = setInterval(() => setPrecipTick(t => t + 1), 15_000);
-    return () => clearInterval(id);
-  }, [precipForecast]);
-
-  const precipCountdown = useMemo(() => {
-    void precipTick; // dependency for re-evaluation
-    if (!precipForecast) return null;
-    const minutesLeft = Math.ceil((precipForecast.targetTime - Date.now()) / 60_000);
-    if (minutesLeft <= 0 || minutesLeft > 60) return null;
-    const label = precipForecast.event === 'stopping'
-      ? `CLEARING ~${minutesLeft} MIN`
-      : `${precipForecast.precipType} ~${minutesLeft} MIN`;
-    const icon = precipForecast.event === 'stopping'
-      ? (isNightTime ? '🌙' : '☀️')
-      : '🌧️';
-    return { label, icon };
-  }, [precipForecast, precipTick, isNightTime]);
-
   // Animated speed value - counts through each integer (50, 51, 52...) - faster for responsiveness
   const displayedSpeed = useAnimatedValue(currentSpeed, {
     ...SPEED_ANIMATION,
@@ -1554,17 +1526,15 @@ function OverlayPage() {
               </div>
             )}
 
-            {/* Weather: rotates between temperature and condition (forecast priority > notable > nothing).
+            {/* Weather: rotates between temperature and condition (current only, no forecast).
                 Synced to the 10s wall-clock tick shared with goals and other overlay rotations. */}
             {settings.showWeather !== false && weatherDisplay && (
               <WeatherRotatingSlot
                 temperature={weatherDisplay.temperature}
                 condition={
-                  precipCountdown
-                    ? { label: precipCountdown.label, icon: precipCountdown.icon }
-                    : weatherDisplay.description
-                      ? { label: weatherDisplay.description, icon: weatherDisplay.icon ?? '' }
-                      : null
+                  weatherDisplay.description
+                    ? { label: weatherDisplay.description, icon: weatherDisplay.icon ?? '' }
+                    : null
                 }
               />
             )}

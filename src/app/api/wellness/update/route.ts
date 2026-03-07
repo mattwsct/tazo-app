@@ -32,25 +32,9 @@ export async function PATCH(request: NextRequest) {
       const v = parseNumber(body.steps);
       if (v !== undefined) updates.steps = Math.max(0, Math.floor(v));
     }
-    if (body.activeCalories !== undefined) {
-      const v = parseNumber(body.activeCalories);
-      if (v !== undefined) updates.activeCalories = Math.max(0, v);
-    }
-    if (body.restingCalories !== undefined) {
-      const v = parseNumber(body.restingCalories);
-      if (v !== undefined) updates.restingCalories = Math.max(0, v);
-    }
-    if (body.totalCalories !== undefined) {
-      const v = parseNumber(body.totalCalories);
-      if (v !== undefined) updates.totalCalories = Math.max(0, v);
-    }
     if (body.distanceKm !== undefined) {
       const v = parseNumber(body.distanceKm);
       if (v !== undefined) updates.distanceKm = Math.max(0, v);
-    }
-    if (body.flightsClimbed !== undefined) {
-      const v = parseNumber(body.flightsClimbed);
-      if (v !== undefined) updates.flightsClimbed = Math.max(0, Math.floor(v));
     }
     if (body.heightCm !== undefined) {
       const v = parseNumber(body.heightCm);
@@ -59,26 +43,6 @@ export async function PATCH(request: NextRequest) {
     if (body.weightKg !== undefined) {
       const v = parseNumber(body.weightKg);
       if (v !== undefined) updates.weightKg = Math.max(0, v);
-    }
-    if (body.bodyMassIndex !== undefined) {
-      const v = parseNumber(body.bodyMassIndex);
-      if (v !== undefined) updates.bodyMassIndex = Math.max(0, v);
-    }
-    if (body.bodyFatPercent !== undefined) {
-      const v = parseNumber(body.bodyFatPercent);
-      if (v !== undefined) updates.bodyFatPercent = Math.max(0, Math.min(100, v));
-    }
-    if (body.leanBodyMassKg !== undefined) {
-      const v = parseNumber(body.leanBodyMassKg);
-      if (v !== undefined) updates.leanBodyMassKg = Math.max(0, v);
-    }
-    if (body.heartRate !== undefined) {
-      const v = parseNumber(body.heartRate);
-      if (v !== undefined) updates.heartRate = Math.min(300, Math.max(0, Math.floor(v)));
-    }
-    if (body.restingHeartRate !== undefined) {
-      const v = parseNumber(body.restingHeartRate);
-      if (v !== undefined) updates.restingHeartRate = Math.min(300, Math.max(0, Math.floor(v)));
     }
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });

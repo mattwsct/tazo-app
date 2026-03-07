@@ -119,7 +119,6 @@ export async function GET() {
       today: {
         steps: wellnessData?.steps ?? 0,
         distanceKm: wellnessData?.distanceKm ?? 0,
-        activeCalories: wellnessData?.activeCalories ?? 0,
       },
       note: streamLive ? 'Milestones fire when live and today\'s value crosses the next threshold' : 'Milestones blocked — stream not live',
     },

@@ -295,7 +295,7 @@ export async function GET(request: NextRequest) {
   // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
   sent += await maybeBroadcastWeather();
 
-  // Wellness milestones: steps, distance, flights, active calories (shared with import route for immediate send)
+  // Wellness milestones: steps, distance (shared with import route for immediate send)
   const wellnessSent = await maybeBroadcastWellness();
   if (wellnessSent > 0) {
     sent += wellnessSent;

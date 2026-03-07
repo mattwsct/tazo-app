@@ -289,9 +289,9 @@ Example output: `⏱️ 11h 32m` or `⏱️ 1d 5h 12m`
 !hr → $(customapi https://app.tazo.wtf/api/chat/hr)
 ```
 
-Returns heart rate from Pulsoid (live when connected), or from Apple Health via Health Auto Export when Pulsoid is not running.
+Returns heart rate from Pulsoid only (overlay must be open with Pulsoid connected). Session stats: current, low, high this stream.
 
-Example output: `💓 Current: 85 bpm (live) | Low: 72 bpm | High: 120 bpm` or `💓 72 bpm (Apple Health)`
+Example output: `💓 Current: 85 bpm (live) | Low: 72 bpm | High: 120 bpm` or `💓 No heart rate data this stream yet. (Pulsoid on overlay)`
 
 ### Speed
 
@@ -337,28 +337,24 @@ Example output: `⭐ 1,234 subscribers`
 
 ## Wellness Commands (Health Auto Export)
 
-These commands use wellness data imported from Health Auto Export (steps, distance, flights, calories, height, weight). Steps, distance, flights, and active calories are "since stream start"; resting calories and body metrics use today's data.
+These commands use wellness data imported from Health Auto Export (steps, distance, height, weight). Steps and distance are today's totals; height/weight are latest values.
 
 ```
 !steps → $(customapi https://app.tazo.wtf/api/chat/steps)
 !distance → $(customapi https://app.tazo.wtf/api/chat/distance)
-!flights → $(customapi https://app.tazo.wtf/api/chat/flights)
-!calories → $(customapi https://app.tazo.wtf/api/chat/calories)
 !height → $(customapi https://app.tazo.wtf/api/chat/height)
 !weight → $(customapi https://app.tazo.wtf/api/chat/weight)
 !wellness → $(customapi https://app.tazo.wtf/api/chat/wellness)
 ```
 
-**Aliases:** `!dist` for distance, `!cal` for calories, `!stairs` for flights, `!ht` for height, `!wt` for weight.
+**Aliases:** `!dist` for distance, `!ht` for height, `!wt` for weight.
 
 Example outputs:
-- `👟 12,450 steps this stream`
-- `🚶 8.2 km (5.1 mi) walked/run this stream`
-- `🪜 25 flights climbed this stream`
-- `🔥 450 active, 1,200 resting cal today`
+- `👟 12,450 steps today`
+- `🚶 8.2 km (5.1 mi) walked/run today`
 - `📏 180 cm (5'11")`
-- `⚖️ 75.2 kg (165.8 lbs) · BMI 23.5 · Body fat 21.6%`
-- `📊 12,450 steps · 8.2 km (5.1 mi) · 25 flights · 450 active cal · 75.2 kg`
+- `⚖️ 75.2 kg (165.8 lbs)`
+- `📊 12,450 steps · 8.2 km (5.1 mi) · 180 cm (5'11") · 75.2 kg`
 
 ## Fun Commands
 

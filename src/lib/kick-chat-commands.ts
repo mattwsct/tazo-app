@@ -6,11 +6,9 @@ import { getHeartrateStats, getStreamStartedAt, getStreamEndedAt } from '@/utils
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
-  getWellnessCaloriesResponse,
   getWellnessHeightResponse,
   getWellnessWeightResponse,
   getWellnessSummaryResponse,
-  getWellnessHeartRateResponse,
 } from '@/utils/wellness-chat';
 import { getLocationData } from '@/utils/location-cache';
 import { formatUvResponse, formatAqiResponse } from '@/utils/weather-chat';
@@ -146,8 +144,6 @@ export const KICK_CHAT_COMMANDS = [
   'steps',
   'distance',
   'stand',
-  'calories',
-  'flights',
   'height',
   'length',
   'weight',
@@ -200,8 +196,6 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'steps') return { cmd: 'steps' };
   if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
   if (cmd === 'stand') return { cmd: 'stand' };
-  if (cmd === 'calories' || cmd === 'cal') return { cmd: 'calories' };
-  if (cmd === 'flights') return { cmd: 'flights' };
   if (cmd === 'height') return { cmd: 'height' };
   if (cmd === 'length') return { cmd: 'length' };
   if (cmd === 'weight') return { cmd: 'weight' };
@@ -321,9 +315,7 @@ export async function handleKickChatCommand(
       if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
       return `💓 ${parts.join(' | ')}`;
     }
-    const wellnessHr = await getWellnessHeartRateResponse();
-    if (wellnessHr) return wellnessHr;
-    return '💓 No heart rate data this stream yet.';
+    return '💓 No heart rate data this stream yet. (Pulsoid on overlay)';
   }
   if (cmd === 'steps') return getWellnessStepsResponse();
   if (cmd === 'distance') return getWellnessDistanceResponse();
@@ -333,7 +325,6 @@ export async function handleKickChatCommand(
     const standBal = await getTazos(user);
     return `🃏 No active hand. !deal <amount> to play. (${standBal} tazos)`;
   }
-  if (cmd === 'calories') return getWellnessCaloriesResponse();
   if (cmd === 'height') return getWellnessHeightResponse();
   if (cmd === 'length') return '📏 18 cm × 14 cm (7.1" × 5.5")';
   if (cmd === 'weight') return getWellnessWeightResponse();
@@ -503,12 +494,12 @@ export async function handleKickChatCommand(
     const args = splitArgs(arg);
     let target = args[0] ?? '';
     if (target.startsWith('@')) target = target.slice(1);
-    if (!target) return '🎁 Usage: !give user <amount|all>';
+    if (!target) return '💸 Usage: !give user <amount|all>';
     const raw = (args[1] ?? '').toLowerCase();
     const isAll = raw === 'all' || raw === 'max';
     const amount = isAll ? Infinity : parseInt(raw, 10);
     if (!isAll && (isNaN(amount) || amount < 1))
-      return '🎁 Usage: !give user <amount|all>';
+      return '💸 Usage: !give user <amount|all>';
     return giftTazos(user, target, amount);
   }
   return null;

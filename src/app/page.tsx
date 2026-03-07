@@ -93,7 +93,6 @@ export default function AdminPage() {
   const [kickChatBroadcastAltitudeTimeoutMin, setKickChatBroadcastAltitudeTimeoutMin] = useState(5);
   const [kickChatBroadcastWellnessSteps, setKickChatBroadcastWellnessSteps] = useState(true);
   const [kickChatBroadcastWellnessDistance, setKickChatBroadcastWellnessDistance] = useState(true);
-  const [kickChatBroadcastWellnessActiveCalories, setKickChatBroadcastWellnessActiveCalories] = useState(false);
   const [kickStreamTitleCustom, setKickStreamTitleCustom] = useState('');
   const [kickStreamTitleIncludeLocation, setKickStreamTitleIncludeLocation] = useState(true);
   const [kickStreamTitleLocation, setKickStreamTitleLocation] = useState<string>('');
@@ -257,7 +256,6 @@ export default function AdminPage() {
         if (d.alertSettings?.chatBroadcastAltitudeTimeoutMin != null) setKickChatBroadcastAltitudeTimeoutMin(d.alertSettings.chatBroadcastAltitudeTimeoutMin);
         if (d.alertSettings?.chatBroadcastWellnessSteps !== undefined) setKickChatBroadcastWellnessSteps(d.alertSettings.chatBroadcastWellnessSteps);
         if (d.alertSettings?.chatBroadcastWellnessDistance !== undefined) setKickChatBroadcastWellnessDistance(d.alertSettings.chatBroadcastWellnessDistance);
-        if (d.alertSettings?.chatBroadcastWellnessActiveCalories !== undefined) setKickChatBroadcastWellnessActiveCalories(d.alertSettings.chatBroadcastWellnessActiveCalories);
       })
       .catch(() => {});
     fetch('/api/kick-poll-settings', { credentials: 'include' })
@@ -456,7 +454,6 @@ export default function AdminPage() {
       chatBroadcastAltitudeTimeoutMin: number;
       chatBroadcastWellnessSteps: boolean;
       chatBroadcastWellnessDistance: boolean;
-      chatBroadcastWellnessActiveCalories: boolean;
     }>;
   }) => {
     const messages = overrides?.messages ?? kickMessages;
@@ -477,7 +474,6 @@ export default function AdminPage() {
       chatBroadcastAltitudeTimeoutMin: kickChatBroadcastAltitudeTimeoutMin,
       chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
       chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
-      chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
     };
     setToast({ type: 'saving', message: 'Saving...' });
     try {
@@ -496,7 +492,7 @@ export default function AdminPage() {
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save' });
     }
     setTimeout(() => setToast(null), 3000);
-  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance, kickChatBroadcastWellnessActiveCalories]);
+  }, [kickMessages, kickMessageEnabled, kickTemplateEnabled, kickMinimumKicks, kickChatBroadcastStreamTitle, kickChatBroadcastWeather, kickChatBroadcastHeartrate, kickChatBroadcastHeartrateMinBpm, kickChatBroadcastHeartrateVeryHighBpm, kickChatBroadcastSpeed, kickChatBroadcastSpeedMinKmh, kickChatBroadcastSpeedTimeoutMin, kickChatBroadcastAltitude, kickChatBroadcastAltitudeMinM, kickChatBroadcastAltitudeTimeoutMin, kickChatBroadcastWellnessSteps, kickChatBroadcastWellnessDistance]);
 
   const kickAlertSettingsRef = useRef({
     minimumKicks: kickMinimumKicks,
@@ -513,7 +509,6 @@ export default function AdminPage() {
     chatBroadcastWeather: kickChatBroadcastWeather,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
-    chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
   });
   kickAlertSettingsRef.current = {
     minimumKicks: kickMinimumKicks,
@@ -530,7 +525,6 @@ export default function AdminPage() {
     chatBroadcastWeather: kickChatBroadcastWeather,
     chatBroadcastWellnessSteps: kickChatBroadcastWellnessSteps,
     chatBroadcastWellnessDistance: kickChatBroadcastWellnessDistance,
-    chatBroadcastWellnessActiveCalories: kickChatBroadcastWellnessActiveCalories,
   };
   kickMessagesRef.current = kickMessages;
   kickTemplateEnabledRef.current = kickTemplateEnabled;
@@ -757,8 +751,7 @@ export default function AdminPage() {
   // Derived overlay block toggles for simpler UI
   const wellnessBlockEnabled =
     (settings.showSteps ?? true) ||
-    (settings.showDistance ?? true) ||
-    (settings.showActiveCalories ?? true);
+    (settings.showDistance ?? true);
 
   const travelBlockEnabled =
     (settings.showWeather ?? false) ||
@@ -1032,12 +1025,11 @@ export default function AdminPage() {
                       handleSettingsChange({
                         showSteps: checked,
                         showDistance: checked,
-                        showActiveCalories: checked,
                       });
                     }}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Show wellness block (steps, distance, active calories)</span>
+                  <span className="checkbox-text">Show wellness block (steps, distance)</span>
                 </label>
               </div>
               <details className="admin-advanced-details" style={{ marginTop: 4, marginBottom: 12 }}>
@@ -1052,10 +1044,6 @@ export default function AdminPage() {
                   <label className="checkbox-label">
                     <input type="checkbox" checked={settings.showDistance ?? true} onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })} className="checkbox-input" />
                     <span className="checkbox-text">Distance</span>
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={settings.showActiveCalories ?? true} onChange={(e) => handleSettingsChange({ showActiveCalories: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Active calories</span>
                   </label>
                 </div>
               </details>
@@ -1714,7 +1702,7 @@ export default function AdminPage() {
                 </label>
                 <details className="admin-advanced-details" style={{ marginTop: 12 }}>
                   <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>
-                    Advanced options (heart rate, speed, altitude, calories)
+                    Advanced options (heart rate, speed, altitude)
                   </summary>
                   <div style={{ marginTop: 12 }}>
                     <label className="checkbox-label-row broadcast-checkbox-item">
@@ -1768,17 +1756,12 @@ export default function AdminPage() {
                         </div>
                       </div>
                     )}
-                    <label className="checkbox-label-row broadcast-checkbox-item">
-                      <input type="checkbox" checked={kickChatBroadcastWellnessActiveCalories} onChange={(e) => { setKickChatBroadcastWellnessActiveCalories(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastWellnessActiveCalories: e.target.checked } }); }} className="checkbox-input" />
-                      <span className="radio-icon">🔥</span>
-                      <span>Active calories — at 100, 250, 500, 1k…</span>
-                    </label>
                     <div style={{ marginTop: 12 }}>
                       <button
                         type="button"
                         className="btn btn-danger btn-small"
                         onClick={async () => {
-                          if (!confirm("Reset wellness milestones? This only resets chat milestones for steps, distance, and calories. Today's totals stay unchanged.")) return;
+                          if (!confirm("Reset wellness milestones? This only resets chat milestones for steps and distance. Today's totals stay unchanged.")) return;
                           try {
                             const r = await authenticatedFetch('/api/reset-wellness-session', { method: 'POST' });
                             const data = await r.json();

@@ -1887,21 +1887,21 @@ export async function resetEventTimestamps(): Promise<void> {
   ]);
 }
 
-// --- Tazo Gifting ---
+// --- Give tazos (transfer to another user) ---
 
 export async function giftTazos(senderUsername: string, recipientUsername: string, amount: number): Promise<string> {
   const sender = normalizeUser(senderUsername);
   const recipient = normalizeUser(recipientUsername);
-  if (sender === recipient) return '🎁 You can\'t gift tazos to yourself.';
+  if (sender === recipient) return '💸 You can\'t give tazos to yourself.';
 
   const currentBal = await getTazos(sender);
-  if (currentBal < 1) return '🎁 You have no tazos to gift.';
+  if (currentBal < 1) return '💸 You have no tazos to give.';
   const actual = Math.min(amount, currentBal); // clamps Infinity and any overage to full balance
 
   const { ok, balance } = await deductTazos(sender, actual);
-  if (!ok) return `🎁 Not enough tazos (have ${balance}).`;
+  if (!ok) return `💸 Not enough tazos (have ${balance}).`;
 
   const recipientBal = await addTazos(recipient, actual);
   const senderBal = balance - actual;
-  return `🎁 ${senderUsername.trim()} gifted ${actual} tazos to ${recipientUsername.trim()}! (${senderBal} | ${recipientBal} tazos)`;
+  return `💸 ${senderUsername.trim()} gave ${actual} tazos to ${recipientUsername.trim()}! (${senderBal} | ${recipientBal} tazos)`;
 }

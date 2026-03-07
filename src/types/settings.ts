@@ -21,7 +21,6 @@ export interface OverlaySettings {
   mapZoomLevel: MapZoomLevel;
   showSteps: boolean;
   showDistance?: boolean;
-  showActiveCalories?: boolean;
   showSpeed?: boolean;
   showAltitude?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
@@ -68,6 +67,7 @@ export interface OverlaySettings {
   coinflipEnabled?: boolean;
   duelEnabled?: boolean;
   heistEnabled?: boolean;
+  /** Enable !give — users can give/transfer tazos to others (not subs). */
   giftEnabled?: boolean;
   /** Utility command toggles. */
   convertEnabled?: boolean;
@@ -122,7 +122,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   mapZoomLevel: 'match',
   showSteps: true,
   showDistance: true,
-  showActiveCalories: true,
   showSpeed: true,
   showAltitude: true,
   showLeaderboard: true,
@@ -181,7 +180,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   mapZoomLevel: 'string',
   showSteps: 'boolean',
   showDistance: 'boolean',
-  showActiveCalories: 'boolean',
   showSpeed: 'boolean',
   showAltitude: 'boolean',
   showLeaderboard: 'boolean',

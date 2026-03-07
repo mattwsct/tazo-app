@@ -9,18 +9,17 @@ import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 const POLL_INTERVAL_MS = 60000;
 const CYCLE_DURATION_MS = 10_000;
 
-type SlotType = 'date' | 'steps' | 'distance' | 'activeCalories';
+type SlotType = 'date' | 'steps' | 'distance';
 
 interface TopLeftRotatingWellnessProps {
   date: string | null;
   timezoneValid: boolean;
-  settings: Pick<OverlaySettings, 'showSteps' | 'showDistance' | 'showActiveCalories'>;
+  settings: Pick<OverlaySettings, 'showSteps' | 'showDistance'>;
 }
 
 interface WellnessData {
   steps?: number;
   distanceKm?: number;
-  activeCalories?: number;
   updatedAt?: number;
 }
 
@@ -39,7 +38,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
           setWellness({
             steps: typeof data.steps === 'number' ? data.steps : undefined,
             distanceKm: typeof data.distanceKm === 'number' ? data.distanceKm : undefined,
-            activeCalories: typeof data.activeCalories === 'number' ? data.activeCalories : undefined,
             updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : undefined,
           });
           setNow(Date.now());
@@ -67,9 +65,8 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     if (timezoneValid && date) s.push('date');
     if (settings.showSteps !== false && dataFresh && (wellness?.steps ?? 0) > 0) s.push('steps');
     if (settings.showDistance !== false && dataFresh && (wellness?.distanceKm ?? 0) >= 0.1) s.push('distance');
-    if (settings.showActiveCalories !== false && dataFresh && (wellness?.activeCalories ?? 0) > 0) s.push('activeCalories');
     return s;
-  }, [timezoneValid, date, settings.showSteps, settings.showDistance, settings.showActiveCalories, dataFresh, wellness]);
+  }, [timezoneValid, date, settings.showSteps, settings.showDistance, dataFresh, wellness]);
 
   const animatedSteps = useAnimatedValue(
     wellness?.steps ?? null,
@@ -79,11 +76,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
   const animatedDistanceKm = useAnimatedValue(
     wellness?.distanceKm ?? null,
     { precision: 1, durationMultiplier: 3000, maxDuration: 1000, immediateThreshold: 0.05, allowNull: true }
-  );
-
-  const animatedActiveCalories = useAnimatedValue(
-    wellness?.activeCalories ?? null,
-    { precision: 0, durationMultiplier: 5, maxDuration: 1500, immediateThreshold: 1, allowNull: true }
   );
 
   const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
@@ -118,15 +110,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
           </div>
         );
       }
-      case 'activeCalories':
-        return (
-          <div className="step-counter-wrapper">
-            <div className="step-counter-row">
-              <span className="step-counter-icon">🔥</span>
-              <span className="step-counter-value">{(animatedActiveCalories ?? 0).toLocaleString()} cal</span>
-            </div>
-          </div>
-        );
       default:
         return null;
     }

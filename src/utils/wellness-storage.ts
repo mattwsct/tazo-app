@@ -13,28 +13,17 @@ const WELLNESS_LAST_MIDNIGHT_RESET_DATE_KEY = 'wellness_last_midnight_reset_date
 export interface WellnessSnapshotAtStreamEnd {
   steps?: number;
   distanceKm?: number;
-  flightsClimbed?: number;
-  activeCalories?: number;
   updatedAt: number;
 }
 
 /** Per-metric timestamps (ms) — when each field was last updated. Falls back to updatedAt if missing. */
-export type WellnessMetricKey = 'steps' | 'distanceKm' | 'flightsClimbed' | 'activeCalories' | 'restingCalories' | 'totalCalories' | 'heightCm' | 'weightKg' | 'bodyMassIndex' | 'bodyFatPercent' | 'leanBodyMassKg' | 'heartRate' | 'restingHeartRate';
+export type WellnessMetricKey = 'steps' | 'distanceKm' | 'heightCm' | 'weightKg';
 
 export interface WellnessData {
   steps?: number;
-  activeCalories?: number;
-  restingCalories?: number;
-  totalCalories?: number;
   distanceKm?: number;
-  flightsClimbed?: number;
   heightCm?: number;
   weightKg?: number;
-  bodyMassIndex?: number;
-  bodyFatPercent?: number;
-  leanBodyMassKg?: number;
-  heartRate?: number;
-  restingHeartRate?: number;
   updatedAt: number;
   /** Per-metric last-updated timestamps (ms). Falls back to updatedAt. */
   metricUpdatedAt?: Partial<Record<WellnessMetricKey, number>>;
@@ -49,7 +38,7 @@ export async function getWellnessData(): Promise<WellnessData | null> {
   }
 }
 
-/** Get wellness data for display: when stream has ended, session metrics (steps, distance, flights, activeCal) are frozen from snapshot. */
+/** Get wellness data for display: when stream has ended, session metrics (steps, distance) are frozen from snapshot. */
 export async function getWellnessDataForDisplay(): Promise<WellnessData | null> {
   const { isStreamLive } = await import('@/utils/stats-storage');
   const live = await isStreamLive();
@@ -61,8 +50,6 @@ export async function getWellnessDataForDisplay(): Promise<WellnessData | null> 
     ...data,
     steps: snapshot.steps ?? data.steps,
     distanceKm: snapshot.distanceKm ?? data.distanceKm,
-    flightsClimbed: snapshot.flightsClimbed ?? data.flightsClimbed,
-    activeCalories: snapshot.activeCalories ?? data.activeCalories,
     updatedAt: data.updatedAt,
   };
 }
@@ -75,8 +62,6 @@ export async function setWellnessSnapshotAtStreamEnd(): Promise<void> {
     await kv.set(WELLNESS_SNAPSHOT_AT_STREAM_END_KEY, {
       steps: data?.steps,
       distanceKm: data?.distanceKm,
-      flightsClimbed: data?.flightsClimbed,
-      activeCalories: data?.activeCalories,
       updatedAt: now,
     } as WellnessSnapshotAtStreamEnd);
   } catch (error) {
@@ -94,8 +79,8 @@ export async function clearWellnessSnapshotAtStreamEnd(): Promise<void> {
 }
 
 /**
- * If it is now a new calendar day in the given timezone, reset steps, distanceKm, activeCalories,
- * and flightsClimbed to 0 for cleanliness (next Health Auto Export will show new day's data).
+ * If it is now a new calendar day in the given timezone, reset steps and distanceKm to 0 for cleanliness
+ * (next Health Auto Export will show new day's data).
  * Uses IANA timezone (e.g. "America/New_York", "UTC"). Call from a cron that runs at least once per minute.
  * @returns true if a reset was performed
  */
@@ -112,15 +97,11 @@ export async function resetWellnessDailyMetricsAtMidnight(timezone: string): Pro
     const metricUpdatedAt = { ...(existing?.metricUpdatedAt ?? {}) };
     metricUpdatedAt.steps = ts;
     metricUpdatedAt.distanceKm = ts;
-    metricUpdatedAt.activeCalories = ts;
-    metricUpdatedAt.flightsClimbed = ts;
 
     const merged: WellnessData = {
       ...(existing || {}),
       steps: 0,
       distanceKm: 0,
-      activeCalories: 0,
-      flightsClimbed: 0,
       updatedAt: ts,
       metricUpdatedAt,
     };
@@ -137,8 +118,7 @@ export async function resetWellnessDailyMetricsAtMidnight(timezone: string): Pro
 }
 
 const WELLNESS_DATA_KEYS: readonly WellnessMetricKey[] = [
-  'steps', 'distanceKm', 'flightsClimbed', 'activeCalories', 'restingCalories', 'totalCalories',
-  'heightCm', 'weightKg', 'bodyMassIndex', 'bodyFatPercent', 'leanBodyMassKg', 'heartRate', 'restingHeartRate',
+  'steps', 'distanceKm', 'heightCm', 'weightKg',
 ];
 
 export interface UpdateWellnessOptions {
@@ -149,9 +129,6 @@ export interface UpdateWellnessOptions {
 /** Float metrics: treat as "unchanged" if within tolerance (avoids "just now" on re-import of same values). */
 const FLOAT_METRIC_EPSILON: Partial<Record<WellnessMetricKey, number>> = {
   weightKg: 0.01,
-  bodyMassIndex: 0.01,
-  bodyFatPercent: 0.01,
-  leanBodyMassKg: 0.01,
   heightCm: 0.01,
   distanceKm: 0.001,
 };
@@ -217,7 +194,6 @@ const WELLNESS_MILESTONES_LAST_SENT_KEY = 'wellness_milestones_last_sent';
 export interface WellnessMilestonesLastSent {
   steps?: number;
   distanceKm?: number;
-  activeCalories?: number;
 }
 
 export async function getWellnessMilestonesLastSent(): Promise<WellnessMilestonesLastSent> {

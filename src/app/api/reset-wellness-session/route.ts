@@ -1,7 +1,7 @@
 /**
  * POST /api/reset-wellness-session
  * Clears the wellness milestone tracking so daily cron chat messages restart from zero.
- * Does not clear actual wellness data (steps/distance/calories) — those come from Health Auto Export
+ * Does not clear actual wellness data (steps/distance) — those come from Health Auto Export
  * and reset naturally at midnight.
  * Requires admin auth.
  */
@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
     await Promise.all([
       setWellnessMilestoneLastSent('steps', 0),
       setWellnessMilestoneLastSent('distanceKm', 0),
-      setWellnessMilestoneLastSent('activeCalories', 0),
     ]);
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -1,5 +1,5 @@
 /**
- * GET: Return today's wellness data (steps, distance, calories, body metrics) for overlay display.
+ * GET: Return today's wellness data (steps, distance, body metrics) for overlay display.
  * Public — overlay needs it without auth.
  * Health Auto Export sends today's cumulative totals; data resets naturally at midnight.
  */

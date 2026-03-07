@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/reset-stream-session
  * Manually resets stream session: leaderboard and stream goals.
- * Wellness data (steps/distance/calories) resets naturally at midnight via Health Auto Export.
+ * Wellness data (steps/distance) resets naturally at midnight via Health Auto Export.
  * Requires admin auth.
  */
 export async function POST(request: NextRequest) {

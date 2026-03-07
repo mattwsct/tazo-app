@@ -2,20 +2,19 @@
  * POST: Receive wellness data from Health Auto Export (or similar).
  * Requires X-Wellness-Secret header to match WELLNESS_IMPORT_SECRET env.
  * Supports two formats:
- * 1. Flat: { steps, activeCalories, distanceKm, ... }
+ * 1. Flat: { steps, distanceKm, heightCm, weightKg, ... }
  * 2. Health Auto Export: { data: { metrics: [{ name, units, data: [{ qty, date, ... }] }] } }
  *
  * Health Auto Export should be configured to send TODAY'S CUMULATIVE TOTALS (not "Since last sync").
  * The server calculates deltas as (newTotal - lastKnown), recovering late Apple Watch data automatically.
  *
- * Active metrics: step_count, active_energy, walking_running_distance.
- * Body metrics (optional): body_mass, body_mass_index, body_fat_percentage, lean_body_mass.
+ * Tracked metrics: step_count, walking_running_distance, height, body_mass (weight). Heart rate is from Pulsoid only (not stored in wellness).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { kv } from '@/lib/kv';
-import { updateWellnessData, getWellnessData } from '@/utils/wellness-storage';
+import { updateWellnessData } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 import { checkWellnessMilestonesAndSendChat } from '@/lib/wellness-milestone-chat';
 
@@ -43,13 +42,6 @@ interface HealthMetric {
 /** Normalize units string for comparison (lowercase, strip whitespace) */
 function normUnits(u: string | undefined): string {
   return (u ?? '').toLowerCase().trim();
-}
-
-/** Parse energy to kcal. Health Auto Export / Apple Health: kJ or kcal (user preference). 1 kcal = 4.184 kJ. */
-function energyToKcal(val: number, units: string | undefined): number {
-  const u = normUnits(units);
-  if (u.includes('kcal') || u.includes('cal') || u === 'c') return val;
-  return val * 0.239; // kJ → kcal
 }
 
 /** Parse distance to km. Apple Health stores meters; Health Auto Export may export m, km, or mi per user preference. */
@@ -96,19 +88,13 @@ function parseHealthAutoExport(body: Record<string, unknown>): { updates: Partia
     if (total >= 0) updates.steps = total;
   }
 
-  // active_energy
-  const activeEnergy = byName.get('active_energy') ?? byName.get('activeEnergyBurned') ?? byName.get('active_energy_burned');
-  if (activeEnergy) {
-    updates.activeCalories = Math.max(0, Math.round(energyToKcal(sumQty(activeEnergy), activeEnergy.units)));
-  }
-
   // walking_running_distance
   const walkingDist = byName.get('walking_running_distance');
   if (walkingDist) {
     updates.distanceKm = Math.max(0, Math.round(distanceToKm(sumQty(walkingDist), walkingDist.units) * 1000) / 1000);
   }
 
-  // Body metrics (optional, unchanged)
+  // Body metrics: height, weight only
   const heightMetric = byName.get('height') ?? byName.get('body_height') ?? byName.get('stature');
   if (heightMetric) {
     const raw = lastQty(heightMetric);
@@ -135,27 +121,6 @@ function parseHealthAutoExport(body: Record<string, unknown>): { updates: Partia
     }
   }
 
-  const bmiMetric = byName.get('body_mass_index') ?? byName.get('bmi');
-  const bmiVal = lastQty(bmiMetric) ?? lastAvg(bmiMetric);
-  if (bmiVal != null && bmiVal > 0) updates.bodyMassIndex = Math.round(bmiVal * 10) / 10;
-
-  const bodyFatMetric = byName.get('body_fat_percentage') ?? byName.get('body_fat') ?? byName.get('bodyFatPercentage');
-  const bodyFatVal = lastQty(bodyFatMetric) ?? lastAvg(bodyFatMetric);
-  if (bodyFatVal != null && bodyFatVal > 0) {
-    const pct = bodyFatVal <= 1 ? bodyFatVal * 100 : bodyFatVal;
-    const rounded = Math.round(pct * 10) / 10;
-    if (rounded > 0) updates.bodyFatPercent = rounded;
-  }
-
-  const leanMassMetric = byName.get('lean_body_mass') ?? byName.get('leanBodyMass');
-  const leanMassVal = lastQty(leanMassMetric) ?? lastAvg(leanMassMetric);
-  if (leanMassVal != null && leanMassVal > 0) {
-    const units = normUnits(leanMassMetric?.units);
-    const kg = units.includes('lb') ? leanMassVal * 0.453592 : leanMassVal;
-    const rounded = Math.round(kg * 100) / 100;
-    if (rounded > 0) updates.leanBodyMassKg = rounded;
-  }
-
   return { updates };
 }
 
@@ -178,7 +143,6 @@ export async function POST(request: NextRequest) {
       Object.assign(updates, parsed.updates);
       const parts = [
         parsed.updates.steps != null && `steps=${parsed.updates.steps}`,
-        parsed.updates.activeCalories != null && `cal=${parsed.updates.activeCalories}`,
         parsed.updates.distanceKm != null && `dist=${parsed.updates.distanceKm}km`,
       ].filter(Boolean).join(' ');
       console.log(`[Wellness] HAE received=[${metricNames.join(',')}] ${parts || '(no tracked metrics)'}`);
@@ -186,32 +150,15 @@ export async function POST(request: NextRequest) {
 
     // Flat format
     if (body.steps !== undefined) updates.steps = Math.max(0, Math.floor(parseNumber(body.steps) ?? 0));
-    if (body.activeCalories !== undefined) updates.activeCalories = Math.max(0, parseNumber(body.activeCalories) ?? 0);
     if (body.distanceKm !== undefined) updates.distanceKm = Math.max(0, parseNumber(body.distanceKm) ?? 0);
     const heightVal = body.heightCm !== undefined ? Math.max(0, parseNumber(body.heightCm) ?? 0) : undefined;
     if (heightVal != null && heightVal > 0) updates.heightCm = heightVal;
     const weightVal = body.weightKg !== undefined ? Math.max(0, parseNumber(body.weightKg) ?? 0) : undefined;
     if (weightVal != null && weightVal > 0) updates.weightKg = weightVal;
-    const bmiVal = body.bodyMassIndex !== undefined ? Math.max(0, parseNumber(body.bodyMassIndex) ?? 0) : undefined;
-    if (bmiVal != null && bmiVal > 0) updates.bodyMassIndex = bmiVal;
-    const bodyFatVal = body.bodyFatPercent !== undefined ? Math.max(0, Math.min(100, parseNumber(body.bodyFatPercent) ?? 0)) : undefined;
-    if (bodyFatVal != null && bodyFatVal > 0) updates.bodyFatPercent = bodyFatVal;
-    const leanVal = body.leanBodyMassKg !== undefined ? Math.max(0, parseNumber(body.leanBodyMassKg) ?? 0) : undefined;
-    if (leanVal != null && leanVal > 0) updates.leanBodyMassKg = leanVal;
 
     if (Object.keys(updates).length === 0) {
       console.warn('[Wellness] No valid fields.', { topLevelKeys: Object.keys(body) });
       return NextResponse.json({ error: 'No valid wellness fields provided' }, { status: 400 });
-    }
-
-    // Auto-calculate BMI from weight + height when BMI wasn't supplied directly
-    if (updates.weightKg && !updates.bodyMassIndex) {
-      const heightCm = updates.heightCm ?? (await getWellnessData())?.heightCm;
-      if (heightCm && heightCm > 0) {
-        const heightM = heightCm / 100;
-        updates.bodyMassIndex = Math.round((updates.weightKg / (heightM * heightM)) * 10) / 10;
-        console.log(`[Wellness] BMI auto-calculated: ${updates.bodyMassIndex} (${updates.weightKg}kg, ${heightCm}cm)`);
-      }
     }
 
     // Idempotency check — reject identical payloads within IMPORT_DEDUP_TTL_SEC

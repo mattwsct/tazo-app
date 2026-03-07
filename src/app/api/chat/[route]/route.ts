@@ -244,7 +244,6 @@ export async function GET(
   // Stats routes (no RTIRL required - use KV storage)
   if (route === 'heartrate' || route === 'hr') {
     const { getHeartrateStats } = await import('@/utils/stats-storage');
-    const { getWellnessHeartRateResponse } = await import('@/utils/wellness-chat');
     const stats = await getHeartrateStats();
     if (stats.hasData) {
       const parts: string[] = [];
@@ -256,9 +255,7 @@ export async function GET(
       if (stats.max) parts.push(`High: ${stats.max.bpm} bpm`);
       return txtResponse(`💓 ${parts.join(' | ')}`);
     }
-    const wellnessHr = await getWellnessHeartRateResponse();
-    if (wellnessHr) return txtResponse(wellnessHr);
-    return txtResponse('💓 No heart rate data this stream yet.');
+    return txtResponse('💓 No heart rate data this stream yet. (Pulsoid on overlay)');
   }
 
   if (route === 'speed') {
@@ -322,7 +319,6 @@ export async function GET(
   const {
     getWellnessStepsResponse,
     getWellnessDistanceResponse,
-    getWellnessCaloriesResponse,
     getWellnessHeightResponse,
     getWellnessWeightResponse,
     getWellnessSummaryResponse,
@@ -330,7 +326,6 @@ export async function GET(
 
   if (route === 'steps') return txtResponse(await getWellnessStepsResponse());
   if (route === 'distance' || route === 'dist') return txtResponse(await getWellnessDistanceResponse());
-  if (route === 'calories' || route === 'cal') return txtResponse(await getWellnessCaloriesResponse());
   if (route === 'height' || route === 'ht') return txtResponse(await getWellnessHeightResponse());
   if (route === 'weight' || route === 'wt') return txtResponse(await getWellnessWeightResponse());
   if (route === 'wellness') return txtResponse(await getWellnessSummaryResponse());
