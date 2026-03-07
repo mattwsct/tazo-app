@@ -29,6 +29,7 @@ import {
   double as blackjackDouble,
   split as blackjackSplit,
   getTazos,
+  getTazosIfExists,
   getGamblingLeaderboardTop,
   isGamblingEnabled,
   isSettingEnabled,
@@ -392,10 +393,13 @@ export async function handleKickChatCommand(
   if (cmd === 'tazos') {
     if (!user) return null;
     const targetUser = (arg ?? '').trim() || user;
-    const bal = await getTazos(targetUser);
-    if (targetUser.toLowerCase() === user.toLowerCase()) {
+    const isSelf = targetUser.toLowerCase() === user.toLowerCase();
+    if (isSelf) {
+      const bal = await getTazos(user);
       return `🃏 ${bal} tazos. !games for options.`;
     }
+    const bal = await getTazosIfExists(targetUser);
+    if (bal === null) return `🃏 That user hasn't played yet.`;
     return `🃏 ${targetUser}: ${bal} tazos`;
   }
   if (cmd === 'deal' || cmd === 'bj') {

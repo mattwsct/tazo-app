@@ -159,6 +159,18 @@ export async function getTazos(username: string): Promise<number> {
   }
 }
 
+/** Get tazos balance only if the user already exists (no create). Use for lookups like !tazos <other>. */
+export async function getTazosIfExists(username: string): Promise<number | null> {
+  const user = normalizeUser(username);
+  try {
+    const bal = await kv.hget<number | string>(TAZOS_BALANCE_KEY, user);
+    if (bal == null) return null;
+    return typeof bal === 'string' ? parseInt(bal, 10) : Math.floor(bal);
+  } catch {
+    return null;
+  }
+}
+
 async function deductTazos(user: string, amount: number): Promise<{ ok: boolean; balance: number }> {
   const bal = await getTazos(user);
   if (bal < amount) return { ok: false, balance: bal };

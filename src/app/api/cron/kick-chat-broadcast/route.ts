@@ -12,9 +12,6 @@ import { kv } from '@/lib/kv';
 import { getPersistentLocation } from '@/utils/location-cache';
 import type { LocationDisplayMode } from '@/types/settings';
 import { isStreamLive, getStreamStartedAt, onStreamStarted, healStreamStateFromKickAPI } from '@/utils/stats-storage';
-import {
-    resetWellnessDailyMetricsAtMidnight,
-  } from '@/utils/wellness-storage';
 import { checkWellnessMilestonesAndSendChat } from '@/lib/wellness-milestone-chat';
 import { checkStatsBroadcastsAndSendChat } from '@/lib/stats-broadcast-chat';
 import { getLocationData } from '@/utils/location-cache';
@@ -62,25 +59,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const [storedAlertRaw, lastLocationAt, lastLocationMsg, overlaySettings, streamTitleSettings, kvIsLive, persistentForMidnight] = await Promise.all([
+  const [storedAlertRaw, lastLocationAt, lastLocationMsg, overlaySettings, streamTitleSettings, kvIsLive] = await Promise.all([
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
     kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number; showSubGoal?: boolean; subGoalTarget?: number; showKicksGoal?: boolean; kicksGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     isStreamLive(),
-    getPersistentLocation(),
   ]);
 
   const storedAlert = { ...DEFAULT_KICK_ALERT_SETTINGS, ...storedAlertRaw } as Record<string, unknown>;
-
-  // At midnight local time (timezone from overlay/RTIRL location only), reset steps/distance/calories/flights for the new day
-  try {
-    const tz = persistentForMidnight?.location?.timezone;
-    if (tz) await resetWellnessDailyMetricsAtMidnight(tz);
-  } catch (e) {
-    console.warn('[Cron HR] Midnight wellness reset check failed:', e);
-  }
 
   const now = Date.now();
 
