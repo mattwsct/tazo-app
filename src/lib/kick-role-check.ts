@@ -6,9 +6,20 @@
  * Checks all known Kick API shapes:
  *  - identity.role / top-level role string
  *  - roles array
+ *  - badges array (Kick often sends mod/owner/broadcaster here in chat.message.sent)
  *  - boolean flags (is_moderator, moderator, isModerator)
  *  - username match against the stored broadcaster slug (fallback)
  */
+function hasModOrBroadcasterBadge(badges: unknown): boolean {
+  if (!badges || !Array.isArray(badges)) return false;
+  for (const b of badges) {
+    const v = typeof b === 'string' ? b.toLowerCase() : (b as Record<string, unknown>)?.type ?? (b as Record<string, unknown>)?.slug ?? (b as Record<string, unknown>)?.name ?? (b as Record<string, unknown>)?.text;
+    const str = String(v ?? '').toLowerCase();
+    if (str.includes('mod') || str === 'owner' || str === 'broadcaster') return true;
+  }
+  return false;
+}
+
 export function isModOrBroadcaster(
   sender: unknown,
   senderUsername: string,
@@ -23,6 +34,8 @@ export function isModOrBroadcaster(
   if (role === 'moderator' || role === 'owner' || role === 'broadcaster') return true;
   if (rolesLower.includes('moderator') || rolesLower.includes('owner') || rolesLower.includes('broadcaster')) return true;
   if (s.is_moderator === true || s.moderator === true || s.isModerator === true) return true;
+  const badges = s.badges ?? (identity?.badges as unknown);
+  if (hasModOrBroadcasterBadge(badges)) return true;
   const broadcasterLower = broadcasterSlug?.toLowerCase() ?? '';
   if (senderUsername?.toLowerCase() === broadcasterLower) return true;
   return false;
