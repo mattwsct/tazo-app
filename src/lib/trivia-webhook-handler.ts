@@ -1,5 +1,5 @@
 /**
- * Handles trivia in the Kick webhook: !trivia (start random), !endtrivia, and guess matching.
+ * Handles trivia in the Kick webhook: !trivia / !quiz (start random), !endtrivia / !endquiz, and guess matching.
  */
 
 import { kv } from '@/lib/kv';
@@ -40,8 +40,8 @@ export async function handleTrivia(
   const trimmed = content.trim();
   const lower = trimmed.toLowerCase();
 
-  // --- !endtrivia: mod/broadcaster only ---
-  if (lower === '!endtrivia') {
+  // --- !endtrivia / !endquiz: mod/broadcaster only ---
+  if (lower === '!endtrivia' || lower === '!endquiz') {
     const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
     const roles = getSenderRoles(payload.sender);
     const isModOrBroadcaster = roles.isMod || senderUsername.toLowerCase() === (broadcasterSlug?.toLowerCase() ?? '');
@@ -60,8 +60,8 @@ export async function handleTrivia(
     return { handled: true };
   }
 
-  // --- !trivia: mod/broadcaster only, start random from list ---
-  if (lower === '!trivia' || /^!trivia\s*$/.test(lower)) {
+  // --- !trivia / !quiz: mod/broadcaster only, start random from list ---
+  if (/^!(trivia|quiz)\s*$/.test(lower)) {
     const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
     const roles = getSenderRoles(payload.sender);
     const isModOrBroadcaster = roles.isMod || senderUsername.toLowerCase() === (broadcasterSlug?.toLowerCase() ?? '');
@@ -71,7 +71,7 @@ export async function handleTrivia(
     const existing = await getTriviaState();
     if (existing) {
       const token = await getValidAccessToken();
-      await replyChat(token, 'A trivia is already active. Use !endtrivia to cancel.');
+      await replyChat(token, 'A trivia is already active. Use !endtrivia or !endquiz to cancel.');
       return { handled: true };
     }
     const trivia = await pickRandomTrivia();

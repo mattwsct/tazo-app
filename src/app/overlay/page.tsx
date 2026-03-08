@@ -152,10 +152,10 @@ function OverlayPage() {
     }
     const endsAt = poll.startedAt + poll.durationSeconds * 1000;
     const remainingMs = Math.max(0, endsAt - Date.now());
-    if (pollCountdownRef.current?.pollId === poll.id) return; // already scheduled
-    pollCountdownRef.current = { pollId: poll.id };
     const winnerDisplaySeconds = 10;
-    const timeout = setTimeout(() => {
+    pollCountdownRef.current = { pollId: poll.id };
+
+    const runPollEnd = () => {
       pollCountdownRef.current = null;
       const current = latestPollRef.current;
       const totalVotes = current?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
@@ -171,7 +171,12 @@ function OverlayPage() {
               winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
             },
           }));
-          setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
+          // After winner display, clear the slot and fetch server state (next poll or null)
+          setTimeout(() => {
+            lastPollIdRef.current = null;
+            setSettings((prev) => ({ ...prev, pollState: null }));
+            refreshSettings();
+          }, winnerDisplaySeconds * 1000);
         } else {
           lastPollIdRef.current = null;
           setSettings((prev) => ({ ...prev, pollState: null }));
@@ -181,8 +186,14 @@ function OverlayPage() {
 
       // Fire-and-forget: tell server to end poll and post winner to chat; SSE/refresh will overwrite with authoritative state
       fetch('/api/poll-end-trigger', { cache: 'no-store' }).catch(() => {});
-    }, remainingMs);
-    return () => clearTimeout(timeout);
+    };
+
+    // Always schedule a timeout (no early return). When vote updates change settings.pollState, this effect
+    // re-runs and replaces the timeout; the timer must fire when the poll ends even if no chat messages arrive.
+    // If the poll is already past end (e.g. tab was backgrounded), run immediately.
+    const timeout = remainingMs <= 0 ? null : setTimeout(runPollEnd, remainingMs);
+    if (remainingMs <= 0) runPollEnd();
+    return () => (timeout != null ? clearTimeout(timeout) : undefined);
   }, [settings.pollState, refreshSettings, setSettings]);
 
   // Re-render every second when showing winner or active poll (for timer bar)

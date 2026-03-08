@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
     const existing = await getTriviaState();
     if (existing) {
-      return NextResponse.json({ error: 'A trivia is already active. Use !endtrivia in chat to cancel.' }, { status: 409 });
+      return NextResponse.json({ error: 'A trivia is already active. Use !endtrivia or !endquiz in chat to cancel.' }, { status: 409 });
     }
     const state: TriviaState = {
       id: `trivia_${Date.now()}`,
