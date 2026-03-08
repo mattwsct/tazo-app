@@ -10,7 +10,7 @@ import { handleChatPoll } from '@/lib/poll-webhook-handler';
 import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
 import { handleGoalCommand } from '@/lib/goal-chat-handler';
-import { handleAddTazosCommand } from '@/lib/addchips-chat-handler';
+import { handleAddCreditsCommand } from '@/lib/addcredits-chat-handler';
 import { handleCategoryCommand } from '@/lib/category-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
@@ -26,10 +26,7 @@ import {
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
 import { markStreamLiveFromWebhook } from '@/utils/stats-storage';
 import {
-  addViewTimeTazos, resetGamblingOnStreamStart, isGamblingEnabled, addTazosAsAdmin,
-  trackChatActivity, tryRaffleKeywordEntry, startRaffle, tryTazoDropEntry, tryBossAttack, startBossEvent,
-  resetEventTimestamps,
-  getAttackList,
+  clearBlackjackStateOnStreamStart, isGamblingEnabled, addCredits,
 } from '@/utils/gambling-storage';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
@@ -157,13 +154,12 @@ export async function POST(request: NextRequest) {
       await clearWellnessSnapshotAtStreamEnd();
     })();
     void (async () => {
-      if (await isGamblingEnabled()) void resetGamblingOnStreamStart();
+      if (await isGamblingEnabled()) void clearBlackjackStateOnStreamStart();
     })();
     void (async () => {
       try {
         const { subTarget: initialSubTarget } = await resetStreamGoalsOnStreamStart();
         void updateKickTitleGoals(0, initialSubTarget).catch(() => {});
-        await resetEventTimestamps();
       } catch (e) {
         console.warn('Failed to reset stream session on stream start:', e);
       }
@@ -186,19 +182,14 @@ export async function POST(request: NextRequest) {
     })();
   }
 
-  // Chat: poll handling first (if enabled), then !ping. Award view-time chips when gambling enabled.
+  // Chat: poll handling first (if enabled), then other commands.
   if (eventNorm === 'chat.message.sent') {
     const content = (payload.content as string) || '';
     const sender = (payload.sender as { username?: string })?.username ?? '?';
-    void (async () => {
-      if (await isGamblingEnabled()) void addViewTimeTazos(sender);
-    })();
-    void trackChatActivity(sender, content);
     try {
       await kv.set(KICK_LAST_CHAT_MESSAGE_AT_KEY, Date.now());
     } catch { /* ignore */ }
-    // Track human chat activity for offline auto-game gate.
-    // Excludes @-prefixed bot accounts, the broadcaster slug, and users in the leaderboard exclusions list.
+    // Track human chat activity for offline gate (e.g. future features).
     void (async () => {
       try {
         const senderNorm = sender.trim().toLowerCase();
@@ -249,16 +240,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    const addtazosResult = await handleAddTazosCommand(content, sender, payload);
-    if (addtazosResult.handled) {
-      if (addtazosResult.reply) {
+    const addcreditsResult = await handleAddCreditsCommand(content, sender, payload);
+    if (addcreditsResult.handled) {
+      if (addcreditsResult.reply) {
         const accessToken = await getValidAccessToken();
         if (accessToken) {
           const messageId = (payload.id ?? payload.message_id) as string | undefined;
           try {
-            await sendKickChatMessage(accessToken, addtazosResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
+            await sendKickChatMessage(accessToken, addcreditsResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
           } catch (err) {
-            console.error('[Kick webhook] !addtazos reply failed:', err instanceof Error ? err.message : String(err));
+            console.error('[Kick webhook] !addcredits reply failed:', err instanceof Error ? err.message : String(err));
           }
         }
       }
@@ -281,48 +272,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    // !raffle — broadcaster/mod only: manually start a raffle
-    const trimmedLower = content.trim().toLowerCase();
-    if (trimmedLower === '!raffle' || trimmedLower.startsWith('!raffle ')) {
-      const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
-      const isAuthorized = isModOrBroadcaster(payload.sender, sender, broadcasterSlug);
-      if (isAuthorized) {
-        const raffleReply = await startRaffle();
-        const accessToken = await getValidAccessToken();
-        if (accessToken) {
-          try {
-            await sendKickChatMessage(accessToken, raffleReply);
-          } catch (err) {
-            console.error('[Kick webhook] !raffle reply failed:', err instanceof Error ? err.message : String(err));
-          }
-        }
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
-    // !boss — anyone can start a boss battle (startBossEvent handles active-boss case)
-    if (trimmedLower === '!boss' || trimmedLower.startsWith('!boss ')) {
-      const bossReply = await startBossEvent();
-      const accessToken = await getValidAccessToken();
-      if (accessToken) {
-        try {
-          await sendKickChatMessage(accessToken, bossReply);
-        } catch (err) {
-          console.error('[Kick webhook] !boss reply failed:', err instanceof Error ? err.message : String(err));
-        }
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
-    if (trimmedLower === '!attacks') {
-      const list = getAttackList();
-      const accessToken = await getValidAccessToken();
-      if (accessToken) {
-        try { await sendKickChatMessage(accessToken, `⚔️ ${list}`); } catch {}
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
     const parsed = parseKickChatMessage(content);
     if (parsed) {
       const response = await handleKickChatCommand(parsed, sender);
@@ -340,7 +289,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    // Non-command messages: check raffle, drops, boss, bare-word actions, challenges
+    // Non-command messages: bare-word blackjack actions (hit, stand, double, split)
     const replyNonCmd = async (msg: string) => {
       const accessToken = await getValidAccessToken();
       if (accessToken) {
@@ -351,31 +300,13 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // 1. Raffle keyword
-    const raffleEntry = await tryRaffleKeywordEntry(sender, content);
-    if (raffleEntry) { await replyNonCmd(raffleEntry); return NextResponse.json({ received: true }, { status: 200 }); }
-
-    // 2. Tazo drop keyword
-    const dropEntry = await tryTazoDropEntry(sender, content);
-    if (dropEntry) { await replyNonCmd(dropEntry); return NextResponse.json({ received: true }, { status: 200 }); }
-
-    // 3. Boss attack word
-    const bossHit = await tryBossAttack(sender, content);
-    if (bossHit) { await replyNonCmd(bossHit); return NextResponse.json({ received: true }, { status: 200 }); }
-
-    // 4. Bare-word blackjack actions (hit, stand, double, split)
+    // Bare-word blackjack actions (hit, stand, double, split)
     const bareWord = content.trim().toLowerCase();
     const bareBlackjackCmds: Record<string, 'hit' | 'stand' | 'double' | 'split'> = { hit: 'hit', stand: 'stand', double: 'double', split: 'split' };
     const bjCmd = bareBlackjackCmds[bareWord];
     if (bjCmd) {
       const bjResponse = await handleKickChatCommand({ cmd: bjCmd }, sender);
       if (bjResponse) { await replyNonCmd(bjResponse); return NextResponse.json({ received: true }, { status: 200 }); }
-    }
-
-    // 5. Bare-word accept (duels)
-    if (bareWord === 'accept') {
-      const acceptResponse = await handleKickChatCommand({ cmd: 'accept' }, sender);
-      if (acceptResponse) { await replyNonCmd(acceptResponse); return NextResponse.json({ received: true }, { status: 200 }); }
     }
 
     return NextResponse.json({ received: true }, { status: 200 });
@@ -428,30 +359,7 @@ export async function POST(request: NextRequest) {
     } catch {
       /* ignore */
     }
-    const status = String(payload.status ?? '').toLowerCase();
-    const isApproved = status === 'approved' || status === 'accepted';
-    if (isApproved) {
-      const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardChips?: number }>('overlay_settings')) ?? {};
-      const configuredTitle = (settings.chipRewardTitle ?? 'Buy Tazos').trim();
-      const tazosAmount = Math.max(1, Math.floor(Number(settings.chipRewardChips ?? 50)));
-      if (configuredTitle && rewardTitle.toLowerCase() === configuredTitle.toLowerCase()) {
-        const redeemer = (payload.redeemer as { username?: string })?.username;
-        if (redeemer) {
-          const added = await addTazosAsAdmin(redeemer, tazosAmount);
-          if (added > 0) {
-            const token = await getValidAccessToken();
-            if (token) {
-              try {
-                await sendKickChatMessage(token, `🃏 @${redeemer} +${added} tazos!`);
-                chipRewardMessageSent = true;
-              } catch (err) {
-                console.warn('[Kick webhook] Tazo redemption chat message failed:', err instanceof Error ? err.message : String(err));
-              }
-            }
-          }
-        }
-      }
-    }
+    // Channel reward → Credits removed in Phase 1; can re-add later if desired.
   }
 
   const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
@@ -499,6 +407,8 @@ export async function POST(request: NextRequest) {
   } else if (eventNorm === 'channel.subscription.new') {
     const subscriber = payload.subscriber;
     if (subscriber) {
+      const username = getUsername(subscriber);
+      if (username) void addCredits(username, 100);
       await Promise.all([addStreamGoalSubs(1), pushSubAlert(subscriber)]);
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(1);
@@ -507,6 +417,8 @@ export async function POST(request: NextRequest) {
     const subscriber = payload.subscriber;
     const duration = (payload.duration as number) ?? 0;
     if (subscriber) {
+      const username = getUsername(subscriber);
+      if (username) void addCredits(username, 100);
       await Promise.all([addStreamGoalSubs(1), pushResubAlert(subscriber, duration > 0 ? duration : undefined)]);
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(1);
@@ -516,6 +428,8 @@ export async function POST(request: NextRequest) {
     const giftees = (payload.giftees as unknown[]) ?? [];
     const count = giftees.length > 0 ? giftees.length : 1;
     if (gifter) {
+      const gifterUsername = getUsername(gifter);
+      if (gifterUsername) void addCredits(gifterUsername, 100);
       await Promise.all([
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
@@ -529,6 +443,8 @@ export async function POST(request: NextRequest) {
     const amount = Number(gift?.amount ?? 0);
     const giftName = gift?.name as string | undefined;
     if (sender && amount > 0) {
+      const senderUsername = getUsername(sender);
+      if (senderUsername) void addCredits(senderUsername, amount);
       await Promise.all([
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),

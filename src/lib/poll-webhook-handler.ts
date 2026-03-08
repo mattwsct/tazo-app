@@ -5,7 +5,7 @@
 import { kv } from '@/lib/kv';
 import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
-import { addTazosForReward, startAutoPoll } from '@/utils/gambling-storage';
+import { generateAutoPoll } from '@/utils/auto-poll-content';
 import {
   parsePollCommand,
   parseRankCommand,
@@ -136,6 +136,29 @@ export function buildPollStartMessage(question: string, options: { label: string
   const labels = options.map((o) => `'${o.label.toLowerCase()}'`);
   const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
   return `Poll started! ${question} Type ${optionStr} in chat to vote. (${timeStr})`;
+}
+
+const DEFAULT_AUTO_POLL_NAMES = ['Option A', 'Option B', 'Option C', 'Option D', 'Option E'];
+
+/** Start a random auto poll (used when mod types !poll with no args). Returns announcement message. */
+async function startAutoPoll(durationSeconds: number): Promise<string> {
+  const { kv } = await import('@/lib/kv');
+  const settingsRaw = (await kv.get<{ bossEventNames?: string; bossNames?: string }>('overlay_settings')) ?? {};
+  const namesStr = settingsRaw.bossEventNames ?? settingsRaw.bossNames ?? '';
+  const bossNames = namesStr
+    ? namesStr.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+    : DEFAULT_AUTO_POLL_NAMES;
+  const { question, options } = generateAutoPoll(bossNames.length ? bossNames : DEFAULT_AUTO_POLL_NAMES);
+  const state: PollState = {
+    id: `poll_${Date.now()}`,
+    question,
+    options: options.map((o) => ({ ...o, votes: 0, voters: {} })),
+    startedAt: Date.now(),
+    durationSeconds,
+    status: 'active',
+  };
+  await setPollState(state);
+  return buildPollStartMessage(question, options, durationSeconds);
 }
 
 /** Apply a vote to poll state. Mutates options. */
@@ -348,7 +371,6 @@ export async function handleChatPoll(
           console.log('[poll] webhook: winner+empty queue, starting immediately (skip queue msg)');
         }
         void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
-        void addTazosForReward(senderUsername, 25);
         await setPollState(null);
         const state: PollState = {
           id: `poll_${Date.now()}`,
@@ -380,7 +402,6 @@ export async function handleChatPoll(
         durationSeconds: effectiveDuration,
       };
       const newQueue = [...queue, newPoll];
-      void addTazosForReward(senderUsername, 25);
       await setPollQueue(newQueue);
 
       const position = newQueue.length;
@@ -396,7 +417,6 @@ export async function handleChatPoll(
       console.log('[poll] webhook: starting new poll (no active/winner)', parsed.question?.slice(0, 40));
     }
     void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
-    void addTazosForReward(senderUsername, 25);
     const state: PollState = {
       id: `poll_${Date.now()}`,
       question: parsed.question,
@@ -453,11 +473,8 @@ export async function handleChatPoll(
 
   const vote = parseVote(contentTrimmed, initialState.options);
   if (vote) {
-    // Reward 5 tazos on first vote in this poll (before mutating state)
-    const isFirstVote = !initialState.options.some(o => (o.voters?.[senderUsername] ?? 0) > 0);
     applyVote(initialState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? true);
     void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
-    if (isFirstVote) void addTazosForReward(senderUsername, 5);
     const stateNow = await getPollState();
     if (stateNow?.id !== initialState.id) return { handled: true };
     await setPollState(initialState);

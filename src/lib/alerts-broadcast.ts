@@ -1,13 +1,12 @@
 /**
- * Broadcast overlay data (settings + poll + leaderboard + alerts) to SSE clients
- * when alerts or leaderboard change. Gives overlays instant updates instead of
+ * Broadcast overlay data (settings + poll + alerts) to SSE clients
+ * when alerts change. Gives overlays instant updates instead of
  * waiting for the 2s poll.
  */
 
 import { kv } from '@/lib/kv';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { broadcastSettings } from '@/lib/settings-broadcast';
-import { getGamblingLeaderboardTop } from '@/utils/gambling-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 import { POLL_STATE_KEY } from '@/types/poll';
@@ -23,18 +22,13 @@ export async function broadcastAlertsAndLeaderboard(): Promise<void> {
       ...(settings && typeof settings === 'object' ? settings : {}),
       pollState: rawPoll ?? null,
     });
-    const gamblingEnabled = merged.gamblingEnabled !== false;
-    const showLeaderboard = merged.showLeaderboard !== false && gamblingEnabled;
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
-    const leaderboardTopN = merged.gamblingLeaderboardTopN ?? merged.leaderboardTopN ?? 5;
-    const [gamblingLeaderboardTop, overlayAlerts, streamGoals] = await Promise.all([
-      showLeaderboard ? getGamblingLeaderboardTop(leaderboardTopN) : [],
+    const [overlayAlerts, streamGoals] = await Promise.all([
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
     ]);
     const combined = {
       ...merged,
-      gamblingLeaderboardTop,
       overlayAlerts,
       streamGoals,
     };

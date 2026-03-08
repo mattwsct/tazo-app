@@ -1109,7 +1109,7 @@ export default function AdminPage() {
               <div className="checkbox-group">
                 <label className="checkbox-label">
                   <input type="checkbox" checked={settings.showGoalsRotation !== false} onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Show rotating section (leaderboard, goals, poll)</span>
+                  <span className="checkbox-text">Show rotating section (goals, poll)</span>
                 </label>
                 <label className="checkbox-label" style={{ marginTop: 4 }}>
                   <input type="checkbox" checked={settings.showOverlayAlerts ?? true} onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })} className="checkbox-input" />
@@ -1369,7 +1369,7 @@ export default function AdminPage() {
           </CollapsibleSection>
 
           {/* Gambling & events */}
-          <CollapsibleSection id="gambling" title="🎰 Gambling & events">
+          <CollapsibleSection id="gambling" title="🎰 Credits & blackjack">
             <div className="setting-group">
               <div className="checkbox-group" style={{ marginBottom: '12px' }}>
                 <label className="checkbox-label">
@@ -1379,207 +1379,21 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Enable gambling</span>
+                  <span className="checkbox-text">Enable Credits & blackjack</span>
                 </label>
               </div>
               {settings.gamblingEnabled !== false && (
-                <>
-                  <div className="admin-select-wrap" style={{ marginBottom: '8px' }}>
-                    <label>Tazos leaderboard slides</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                      {([
-                        ['showLeaderboard', '🃏 Stream (top tazos)'] as const,
-                        ['showWeeklyEarnedLb', '📊 Weekly earned'] as const,
-                        ['showMonthlyEarnedLb', '📊 Monthly earned'] as const,
-                        ['showLifetimeEarnedLb', '🏆 All-time earned'] as const,
-                      ] as [keyof typeof settings, string][]).map(([key, label]) => (
-                        <label key={key} className="checkbox-label" style={{ fontSize: '0.85rem' }}>
-                          <input
-                            type="checkbox"
-                            className="checkbox-input"
-                            checked={settings[key] !== false}
-                            onChange={(e) => handleSettingsChange({ [key]: e.target.checked })}
-                          />
-                          <span className="checkbox-text">{label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  {settings.showLeaderboard !== false && (
-                    <div className="admin-select-wrap" style={{ marginBottom: '12px' }}>
-                      <label>Top N tazos</label>
-                      <select
-                        className="admin-select-big"
-                        value={settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5}
-                        onChange={(e) => handleSettingsChange({ gamblingLeaderboardTopN: Number(e.target.value) })}
-                      >
-                        {[1, 3, 5, 10].map((n) => (
-                          <option key={n} value={n}>Top {n}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className="admin-select-wrap" style={{ marginTop: '12px' }}>
-                    <label>Channel point reward name (redeem for tazos)</label>
+                <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                  <label className="checkbox-label">
                     <input
-                      type="text"
-                      className="text-input"
-                      value={settings.chipRewardTitle ?? 'Buy Tazos'}
-                      onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value })}
-                      placeholder="Buy Tazos"
+                      type="checkbox"
+                      checked={settings.blackjackEnabled !== false}
+                      onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })}
+                      className="checkbox-input"
                     />
-                  </div>
-                  <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                    <label>Tazos per redemption</label>
-                    <input
-                      type="number"
-                      className="text-input"
-                      value={settings.chipRewardChips ?? 50}
-                      onChange={(e) => handleSettingsChange({ chipRewardChips: Math.max(1, parseInt(e.target.value, 10) || 50) })}
-                      min={1}
-                    />
-                  </div>
-
-                  <details className="admin-advanced-details" style={{ marginTop: 20 }}>
-                    <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>Advanced options</summary>
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                      <div className="admin-select-wrap">
-                        <label>Excluded users (comma separated)</label>
-                        <textarea
-                          className="text-input"
-                          value={leaderboardExcludedBotsInput}
-                          onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
-                          placeholder="e.g. nightbot, moobot, streamelements"
-                          rows={2}
-                          style={{ resize: 'vertical', minHeight: 50 }}
-                        />
-                      </div>
-                      <div className="admin-select-wrap" style={{ marginTop: 12 }}>
-                        <label>Leaderboard rotation (seconds per slide)</label>
-                        <select
-                          className="admin-select-big"
-                          value={settings.leaderboardRotationSec ?? 15}
-                          onChange={(e) => handleSettingsChange({ leaderboardRotationSec: Number(e.target.value) })}
-                        >
-                          {[5, 10, 15, 20, 30, 45, 60].map(n => (
-                            <option key={n} value={n}>{n}s</option>
-                          ))}
-                        </select>
-                      </div>
-                      <h4 className="subsection-label" style={{ marginTop: 20, marginBottom: 8 }}>Automated events</h4>
-                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.autoRaffleEnabled !== false}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          const anyOther =
-                            (settings.chipDropsEnabled !== false) ||
-                            (settings.bossEventsEnabled !== false) ||
-                            (settings.autoPollEnabled !== false);
-                          const nextAny = checked || anyOther;
-                          handleSettingsChange({ autoRaffleEnabled: checked, autoGamesEnabled: nextAny });
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Raffles</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.chipDropsEnabled !== false}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          const anyOther =
-                            (settings.autoRaffleEnabled !== false) ||
-                            (settings.bossEventsEnabled !== false) ||
-                            (settings.autoPollEnabled !== false);
-                          const nextAny = checked || anyOther;
-                          handleSettingsChange({ chipDropsEnabled: checked, autoGamesEnabled: nextAny });
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Tazo drops</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.bossEventsEnabled !== false}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          const anyOther =
-                            (settings.autoRaffleEnabled !== false) ||
-                            (settings.chipDropsEnabled !== false) ||
-                            (settings.autoPollEnabled !== false);
-                          const nextAny = checked || anyOther;
-                          handleSettingsChange({ bossEventsEnabled: checked, autoGamesEnabled: nextAny });
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Boss events</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px', marginLeft: 24 }}>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.autoPollEnabled !== false}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          const anyOther =
-                            (settings.autoRaffleEnabled !== false) ||
-                            (settings.chipDropsEnabled !== false) ||
-                            (settings.bossEventsEnabled !== false);
-                          const nextAny = checked || anyOther;
-                          handleSettingsChange({ autoPollEnabled: checked, autoGamesEnabled: nextAny });
-                        }}
-                        className="checkbox-input"
-                      />
-                      <span className="checkbox-text">Auto polls</span>
-                    </label>
-                  </div>
-                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label className="input-label" style={{ margin: 0 }}>
-                      Wait after game ends (min):
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={120}
-                      value={settings.autoGameIntervalMin ?? 5}
-                      onChange={(e) => handleSettingsChange({ autoGameIntervalMin: Math.max(1, Math.min(120, parseInt(e.target.value, 10) || 5)) })}
-                      className="number-input"
-                      style={{ width: 64 }}
-                    />
-                  </div>
-                  <div style={{ marginTop: 12 }}>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!confirm('Reset event timestamps? Use if drops/raffles/challenges aren\'t starting. They\'ll be eligible to start again on next cron run.')) return;
-                        try {
-                          const r = await authenticatedFetch('/api/reset-event-timestamps', { method: 'POST' });
-                          const data = await r.json();
-                          if (r.ok) setToast({ type: 'saved', message: 'Event timestamps reset — events can start again' });
-                          else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
-                        } catch { setToast({ type: 'error', message: 'Reset failed' }); }
-                        setTimeout(() => setToast(null), 3000);
-                      }}
-                      className="button-secondary"
-                      style={{ padding: '6px 12px', fontSize: 12 }}
-                    >
-                        Reset event timestamps
-                    </button>
-                  </div>
-                    </div>
-                  </details>
-
-                </>
+                    <span className="checkbox-text">Blackjack (!bj / !deal)</span>
+                  </label>
+                </div>
               )}
             </div>
           </CollapsibleSection>
@@ -1589,74 +1403,13 @@ export default function AdminPage() {
             <div className="setting-group">
               {settings.gamblingEnabled !== false && (
                 <>
-                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Games</h4>
+                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Credits & blackjack</h4>
                   <div className="checkbox-group">
                     <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.coinflipEnabled !== false} onChange={(e) => handleSettingsChange({ coinflipEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!gamble — coin flip (50/50)</span>
-                    </label>
-                  </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
                       <input type="checkbox" checked={settings.blackjackEnabled !== false} onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!deal — blackjack</span>
+                      <span className="checkbox-text">!bj / !deal — blackjack</span>
                     </label>
                   </div>
-                  <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.slotsEnabled !== false} onChange={(e) => handleSettingsChange({ slotsEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!slots — slot machine</span>
-                    </label>
-                  </div>
-                  <details className="admin-advanced-details" style={{ marginTop: 12 }}>
-                    <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>
-                      More games (!dice, !crash, !roulette, !war, !duel, !heist, !give)
-                    </summary>
-                    <div style={{ marginTop: 12, marginLeft: 4 }}>
-                      <div className="checkbox-group">
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={settings.diceEnabled !== false} onChange={(e) => handleSettingsChange({ diceEnabled: e.target.checked })} className="checkbox-input" />
-                          <span className="checkbox-text">!dice — high/low roll</span>
-                        </label>
-                      </div>
-                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={settings.crashEnabled !== false} onChange={(e) => handleSettingsChange({ crashEnabled: e.target.checked })} className="checkbox-input" />
-                          <span className="checkbox-text">!crash — cash out before crash</span>
-                        </label>
-                      </div>
-                      <div className="checkbox-group">
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={settings.rouletteEnabled !== false} onChange={(e) => handleSettingsChange({ rouletteEnabled: e.target.checked })} className="checkbox-input" />
-                          <span className="checkbox-text">!roulette — red/black/number</span>
-                        </label>
-                      </div>
-                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={settings.warEnabled !== false} onChange={(e) => handleSettingsChange({ warEnabled: e.target.checked })} className="checkbox-input" />
-                          <span className="checkbox-text">!war — card war</span>
-                        </label>
-                      </div>
-                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={settings.duelEnabled !== false} onChange={(e) => handleSettingsChange({ duelEnabled: e.target.checked })} className="checkbox-input" />
-                          <span className="checkbox-text">!duel — challenge another player</span>
-                        </label>
-                      </div>
-                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={settings.heistEnabled !== false} onChange={(e) => handleSettingsChange({ heistEnabled: e.target.checked })} className="checkbox-input" />
-                          <span className="checkbox-text">!heist — group heist</span>
-                        </label>
-                      </div>
-                      <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                        <label className="checkbox-label">
-                          <input type="checkbox" checked={settings.giftEnabled !== false} onChange={(e) => handleSettingsChange({ giftEnabled: e.target.checked })} className="checkbox-input" />
-                          <span className="checkbox-text">!give — tazo transfers</span>
-                        </label>
-                      </div>
-                    </div>
-                  </details>
                   <div className="setting-separator" style={{ margin: '1rem 0' }} />
                 </>
               )}
@@ -2088,17 +1841,17 @@ export default function AdminPage() {
                 type="button"
                 className="btn btn-danger btn-small"
                 onClick={async () => {
-                  if (!confirm('Reset tazos leaderboard? Clears all player tazos and gambling state.')) return;
+                  if (!confirm('Reset blackjack state? Clears active hands and deal cooldown. Does not reset Credits balances.')) return;
                   try {
                     const r = await authenticatedFetch('/api/reset-leaderboard', { method: 'POST' });
                     const data = await r.json();
-                    if (r.ok) setToast({ type: 'saved', message: 'Tazos leaderboard reset' });
+                    if (r.ok) setToast({ type: 'saved', message: 'Blackjack state reset' });
                     else setToast({ type: 'error', message: data.error ?? 'Reset failed' });
                   } catch { setToast({ type: 'error', message: 'Reset failed' }); }
                   setTimeout(() => setToast(null), 3000);
                 }}
               >
-                🔄 Reset tazos leaderboard
+                🔄 Reset blackjack state
               </button>
               <button
                 type="button"

@@ -19,16 +19,9 @@ import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-tit
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
-import {
-  checkAndResolveExpiredHeist, resolveRaffle, getRaffleReminder, resolveTopChatter,
-  resolveExpiredTazoDrop,
-  resolveExpiredBoss, getBossReminder,
-  shouldStartAnyAutoGame, pickAndStartAutoGame,
-} from '@/utils/gambling-storage';
-import { getPollSettings } from '@/lib/poll-store';
 import { KICK_ALERT_SETTINGS_KEY } from '@/types/kick-messages';
 import { DEFAULT_KICK_ALERT_SETTINGS } from '@/app/api/kick-messages/route';
-import { maybeBroadcastWeather, maybeBroadcastWellness, maybeBroadcastStats, sendSystemMessage } from '@/lib/chat-broadcast-service';
+import { maybeBroadcastWeather, maybeBroadcastWellness, maybeBroadcastStats } from '@/lib/chat-broadcast-service';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
@@ -63,7 +56,7 @@ export async function GET(request: NextRequest) {
     kv.get<Record<string, unknown>>(KICK_ALERT_SETTINGS_KEY),
     kv.get<number>(KICK_BROADCAST_LAST_LOCATION_KEY),
     kv.get<string>(KICK_BROADCAST_LAST_LOCATION_MSG_KEY),
-    kv.get<{ locationDisplay?: string; customLocation?: string; autoRaffleEnabled?: boolean; chipDropsEnabled?: boolean; bossEventsEnabled?: boolean; autoGamesEnabled?: boolean; autoGameIntervalMin?: number; showSubGoal?: boolean; subGoalTarget?: number; showKicksGoal?: boolean; kicksGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
+    kv.get<{ locationDisplay?: string; customLocation?: string; showSubGoal?: boolean; subGoalTarget?: number; showKicksGoal?: boolean; kicksGoalTarget?: number }>(OVERLAY_SETTINGS_KEY),
     kv.get<{ autoUpdateLocation?: boolean; customTitle?: string; includeLocationInTitle?: boolean }>(KICK_STREAM_TITLE_SETTINGS_KEY),
     isStreamLive(),
   ]);
@@ -111,106 +104,6 @@ export async function GET(request: NextRequest) {
 
   if (diagnostic) debug.isLive = isLive;
   console.log('[Cron HR] LIVE_CHECK', JSON.stringify({ isLive, apiIsLive, kvIsLive, currentTitle: currentTitle.slice(0, 50) }));
-
-  // ===== EVENT RESOLUTION & AUTO-START (run first — time-critical, TTL-bound) =====
-
-  // Heist resolution (always attempt, regardless of isLive)
-  try {
-    const heistResult = await checkAndResolveExpiredHeist();
-    if (heistResult) {
-      await sendSystemMessage('heist_resolve', heistResult);
-      sent++;
-      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'heist_resolve', msgPreview: heistResult.slice(0, 80) }));
-    }
-  } catch (err) {
-    console.error('[Cron HR] HEIST_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-
-  // Raffle: always resolve (even if not live — already-started raffles must pay out)
-  try {
-    const raffleResult = await resolveRaffle();
-    if (raffleResult) {
-      await sendSystemMessage('raffle_resolve', raffleResult);
-      sent++;
-      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'raffle_resolve', msgPreview: raffleResult.slice(0, 80) }));
-    } else {
-      const reminder = await getRaffleReminder();
-      if (reminder && isLive) {
-        await sendSystemMessage('raffle_resolve', reminder);
-        sent++;
-      }
-    }
-  } catch (err) {
-    console.error('[Cron HR] RAFFLE_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-
-  // Tazo drops: always resolve, only auto-start when live
-  try {
-    const dropResult = await resolveExpiredTazoDrop();
-    if (dropResult) {
-      await sendSystemMessage('tazo_drop_resolve', dropResult);
-      sent++;
-      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'tazo_drop_resolve', msgPreview: dropResult.slice(0, 80) }));
-    }
-  } catch (err) {
-    console.error('[Cron HR] TAZO_DROP_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-
-  // Boss events: always resolve + remind, only auto-start when live
-  try {
-    const bossResult = await resolveExpiredBoss();
-    if (bossResult) {
-      await sendSystemMessage('boss_resolve', bossResult);
-      sent++;
-      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_resolve', msgPreview: bossResult.slice(0, 80) }));
-    }
-    const bossReminder = await getBossReminder();
-    if (bossReminder && isLive) {
-      await sendSystemMessage('boss_reminder', bossReminder);
-      sent++;
-      console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'boss_reminder', msgPreview: bossReminder.slice(0, 80) }));
-    }
-  } catch (err) {
-    console.error('[Cron HR] BOSS_RESOLVE_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-
-  // Unified auto games: single alternating scheduler
-  try {
-    const shouldStart = await shouldStartAnyAutoGame(overlaySettings ?? undefined, isLive);
-    if (diagnostic) Object.assign(debug, { autoGameShouldStart: shouldStart });
-    if (shouldStart) {
-      const pollSettings = await getPollSettings();
-        const announcement = await pickAndStartAutoGame({ ...(overlaySettings ?? {}), pollDurationSeconds: pollSettings.durationSeconds });
-      if (announcement) {
-        try {
-          await sendSystemMessage('auto_game_start', announcement);
-          sent++;
-          console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'auto_game_start', msgPreview: announcement.slice(0, 80) }));
-        } catch (sendErr) {
-          await kv.del('raffle_active');
-          await kv.del('chip_drop_active');
-          await kv.del('boss_active');
-          console.error('[Cron HR] AUTO_GAME_SEND_FAIL', JSON.stringify({ error: sendErr instanceof Error ? sendErr.message : String(sendErr) }));
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[Cron HR] AUTO_GAME_START_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-  }
-
-  // Top chatter: only when live
-  if (isLive) {
-    try {
-      const topChatterResult = await resolveTopChatter();
-      if (topChatterResult) {
-        await sendSystemMessage('top_chatter', topChatterResult);
-        sent++;
-        console.log('[Cron HR] CHAT_SENT', JSON.stringify({ type: 'top_chatter', msgPreview: topChatterResult.slice(0, 80) }));
-      }
-    } catch (err) {
-      console.error('[Cron HR] TOP_CHATTER_FAIL', JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
-    }
-  }
 
   // ===== BROADCASTS (non-critical, can tolerate being skipped) =====
 

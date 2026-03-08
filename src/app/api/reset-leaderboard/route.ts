@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resetGamblingOnStreamStart } from '@/utils/gambling-storage';
+import { clearBlackjackStateOnStreamStart } from '@/utils/gambling-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/reset-leaderboard
- * Resets chips leaderboard, gambling state, and display names.
- * Does not reset steps, distance, wellness, or stream_started_at.
+ * Clears only blackjack state (active hands + deal cooldown). Does not reset Credits balances.
  * Requires admin auth.
  */
 export async function POST(request: NextRequest) {
@@ -16,7 +15,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await resetGamblingOnStreamStart();
+    await clearBlackjackStateOnStreamStart();
     return NextResponse.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Reset failed';

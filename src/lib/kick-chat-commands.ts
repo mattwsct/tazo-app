@@ -26,25 +26,11 @@ import {
   stand as blackjackStand,
   double as blackjackDouble,
   split as blackjackSplit,
-  getTazos,
-  getTazosIfExists,
-  getGamblingLeaderboardTop,
+  getCredits,
+  getCreditsIfExists,
   isGamblingEnabled,
   isSettingEnabled,
-  playCoinflip,
-  playSlots,
-  playRoulette,
-  playDice,
-  playCrash,
-  playWar,
-  challengeDuel,
-  acceptDuel,
-  joinOrStartHeist,
-  getHeistStatus,
-  checkAndResolveExpiredHeist,
-  giftTazos,
 } from '@/utils/gambling-storage';
-import { getEarnedLeaderboard } from '@/utils/tazo-vault-storage';
 import {
   parseConvertArgs,
   convertUnit,
@@ -160,23 +146,10 @@ export const KICK_CHAT_COMMANDS = [
   'hit',
   'double',
   'split',
-  'tazos',
-  'slots',
-  'spin',
-  'roulette',
-  'dice',
-  'crash',
-  'war',
-  'duel',
-  'accept',
-  'gamble',
-  'gamba',
-  'games',
-  'heist',
+  'credits',
   'convert',
   'cv',
   'math',
-  'give',
 ] as const;
 export type KickChatCommand = (typeof KICK_CHAT_COMMANDS)[number];
 
@@ -210,20 +183,9 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'hit') return { cmd: 'hit' };
   if (cmd === 'double') return { cmd: 'double' };
   if (cmd === 'split') return { cmd: 'split' };
-  if (cmd === 'tazos' || cmd === 'chips') return { cmd: 'tazos', arg };
-  if (cmd === 'slots' || cmd === 'spin') return { cmd: 'slots', arg: arg ?? parts.slice(1).join(' ') };
-  if (cmd === 'roulette') return { cmd: 'roulette', arg: parts.slice(1).join(' ') };
-  if (cmd === 'dice') return { cmd: 'dice', arg: parts.slice(1).join(' ') };
-  if (cmd === 'crash') return { cmd: 'crash', arg: parts.slice(1).join(' ') };
-  if (cmd === 'war') return { cmd: 'war', arg };
-  if (cmd === 'duel') return { cmd: 'duel', arg: parts.slice(1).join(' ') };
-  if (cmd === 'accept') return { cmd: 'accept' };
-  if (cmd === 'gamba' || cmd === 'gamble') return { cmd: 'gamble', arg: arg ?? parts.slice(1).join(' ') };
-  if (cmd === 'games') return { cmd: 'games' };
-  if (cmd === 'heist') return { cmd: 'heist', arg };
+  if (cmd === 'credits') return { cmd: 'credits', arg };
   if (cmd === 'convert' || cmd === 'cv') return { cmd: 'convert', arg: parts.slice(1).join(' ') };
   if (cmd === 'math' || cmd === 'calc') return { cmd: 'math', arg: parts.slice(1).join(' ') };
-  if (cmd === 'give') return { cmd: 'give', arg: parts.slice(1).join(' ') };
   return null;
 }
 
@@ -288,20 +250,8 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'leaderboard') {
     const gamblingOn = await isGamblingEnabled();
-    if (!gamblingOn) return '🃏 Gambling is disabled for this stream.';
-    const sub = (arg ?? '').trim().toLowerCase();
-    if (sub === 'weekly' || sub === 'monthly' || sub === 'alltime' || sub === 'lifetime' || sub === 'all') {
-      const period = (sub === 'alltime' || sub === 'lifetime' || sub === 'all') ? 'lifetime' : sub as 'weekly' | 'monthly';
-      const top = await getEarnedLeaderboard(period, 5);
-      if (top.length === 0) return `📊 No ${period === 'lifetime' ? 'all-time' : period} earned tazos yet — play to get on the board!`;
-      const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.earned}`).join(' | ');
-      const label = period === 'lifetime' ? 'All-time earned' : period === 'weekly' ? 'This week' : 'This month';
-      return `📊 ${label}: ${lines}`;
-    }
-    const top = await getGamblingLeaderboardTop(5);
-    if (top.length === 0) return '🃏 No tazos yet! !deal <amount> to play — start with 100 tazos.';
-    const lines = top.map((u, i) => `#${i + 1} ${u.username}: ${u.chips}`).join(' | ');
-    return `🃏 Stream tazos: ${lines} | !lb weekly/monthly/alltime`;
+    if (!gamblingOn) return null;
+    return 'No leaderboards. Use !credits to check your balance.';
   }
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();
@@ -322,8 +272,8 @@ export async function handleKickChatCommand(
   if (cmd === 'stand') {
     const bjGame = await getActiveGame(user);
     if (bjGame) return blackjackStand(user);
-    const standBal = await getTazos(user);
-    return `🃏 No active hand. !deal <amount> to play. (${standBal} tazos)`;
+    const standBal = await getCredits(user);
+    return `🃏 No active hand. !deal <amount> or !bj <amount> to play. (${standBal} Credits)`;
   }
   if (cmd === 'height') return getWellnessHeightResponse();
   if (cmd === 'length') return '📏 18 cm × 14 cm (7.1" × 5.5")';
@@ -359,39 +309,26 @@ export async function handleKickChatCommand(
     const formatted = Number.isInteger(result) ? result.toLocaleString() : parseFloat(result.toPrecision(10)).toLocaleString(undefined, { maximumFractionDigits: 6 });
     return `🔢 ${expr.replace(/\*/g, '×').replace(/\//g, '÷')} = ${formatted}`;
   }
-  // Gambling (all require gambling enabled)
-  const gamblingCmds = ['tazos', 'deal', 'bj', 'hit', 'double', 'split', 'slots', 'spin', 'roulette', 'dice', 'crash', 'war', 'duel', 'accept', 'gamba', 'gamble', 'games', 'heist'];
+  // Credits and blackjack (require gambling enabled)
+  const gamblingCmds = ['credits', 'deal', 'bj', 'hit', 'double', 'split'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
-    return '🃏 Gambling is disabled for this stream.';
+    return 'Credits and blackjack are disabled.';
   }
-  // Individual game toggle checks
-  const gameToggleMap: Record<string, string> = {
-    deal: 'blackjackEnabled', bj: 'blackjackEnabled', hit: 'blackjackEnabled', stand: 'blackjackEnabled', double: 'blackjackEnabled', split: 'blackjackEnabled',
-    slots: 'slotsEnabled', spin: 'slotsEnabled',
-    roulette: 'rouletteEnabled',
-    dice: 'diceEnabled',
-    crash: 'crashEnabled',
-    war: 'warEnabled',
-    gamble: 'coinflipEnabled', gamba: 'coinflipEnabled',
-    duel: 'duelEnabled', accept: 'duelEnabled',
-    heist: 'heistEnabled',
-  };
-  const toggleKey = gameToggleMap[cmd];
-  if (toggleKey && !(await isSettingEnabled(toggleKey))) {
-    return `🃏 That game is currently disabled.`;
-  }
-  if (cmd === 'tazos') {
+  if (cmd === 'credits') {
     if (!user) return null;
     const targetUser = (arg ?? '').trim() || user;
     const isSelf = targetUser.toLowerCase() === user.toLowerCase();
     if (isSelf) {
-      const bal = await getTazos(user);
-      return `🃏 ${bal} tazos. !games for options.`;
+      const bal = await getCredits(user);
+      return `🃏 ${bal} Credits. !bj <amount> to play blackjack.`;
     }
-    const bal = await getTazosIfExists(targetUser);
-    if (bal === null) return `🃏 That user hasn't played yet.`;
-    return `🃏 ${targetUser}: ${bal} tazos`;
+    const bal = await getCreditsIfExists(targetUser);
+    if (bal === null) return `That user has no Credits yet.`;
+    return `🃏 ${targetUser}: ${bal} Credits`;
+  }
+  if (cmd === 'deal' || cmd === 'bj' || cmd === 'hit' || cmd === 'double' || cmd === 'split') {
+    if (!(await isSettingEnabled('blackjackEnabled'))) return 'Blackjack is disabled.';
   }
   if (cmd === 'deal' || cmd === 'bj') {
     if (!user) return null;
@@ -408,99 +345,6 @@ export async function handleKickChatCommand(
   if (cmd === 'split') {
     if (!user) return null;
     return blackjackSplit(user);
-  }
-  if (cmd === 'slots' || cmd === 'spin') {
-    if (!user) return null;
-    return playSlots(user, parseBet(arg));
-  }
-  if (cmd === 'roulette') {
-    if (!user) return null;
-    const args = splitArgs(arg);
-    const choice = args[0];
-    if (!choice) return '🎡 Usage: !roulette <red|black|number> <amount> — e.g. !roulette red 10 or !roulette 27 10';
-    const num = parseInt(choice, 10);
-    const isColorBet = ['red', 'black'].includes(choice.toLowerCase());
-    const validNumber = !isColorBet && !isNaN(num) && num >= 1 && num <= 36;
-    return playRoulette(user, validNumber ? String(num) : choice, parseBet(args[1]));
-  }
-  if (cmd === 'dice') {
-    if (!user) return null;
-    const args = splitArgs(arg);
-    const choice = args[0]?.toLowerCase();
-    if (!choice || !['high', 'h', 'low', 'l'].includes(choice)) return '🎲 Usage: !dice <high|low> [amount] — default 5';
-    return playDice(user, choice, parseBet(args[1]));
-  }
-  if (cmd === 'crash') {
-    if (!user) return null;
-    const args = splitArgs(arg);
-    if (!args.length) return '💥 Usage: !crash <amount> [target multiplier] — e.g. !crash 50 2.0 (cash out before it crashes!)';
-    const multRaw = args.length >= 2 ? parseFloat(args[1]) : undefined;
-    return playCrash(user, parseBet(args[0]), multRaw && !isNaN(multRaw) && multRaw >= 1.1 ? multRaw : undefined);
-  }
-  if (cmd === 'war') {
-    if (!user) return null;
-    return playWar(user, parseBet(arg));
-  }
-  if (cmd === 'duel') {
-    if (!user) return null;
-    const args = splitArgs(arg);
-    let target = args[0] ?? '';
-    if (target.startsWith('@')) target = target.slice(1);
-    if (!target) return '⚔️ Usage: !duel @user <amount>';
-    return challengeDuel(user, target, parseBet(args[1]));
-  }
-  if (cmd === 'accept') {
-    if (!user) return null;
-    return acceptDuel(user);
-  }
-  if (cmd === 'gamba' || cmd === 'gamble') {
-    if (!user) return null;
-    return playCoinflip(user, parseBet(arg));
-  }
-  if (cmd === 'games') {
-    const gameList: { cmd: string; toggle: string }[] = [
-      { cmd: '!gamble', toggle: 'coinflipEnabled' },
-      { cmd: '!deal', toggle: 'blackjackEnabled' },
-      { cmd: '!slots', toggle: 'slotsEnabled' },
-      { cmd: '!dice', toggle: 'diceEnabled' },
-      { cmd: '!roulette', toggle: 'rouletteEnabled' },
-      { cmd: '!crash', toggle: 'crashEnabled' },
-      { cmd: '!war', toggle: 'warEnabled' },
-      { cmd: '!duel', toggle: 'duelEnabled' },
-      { cmd: '!heist', toggle: 'heistEnabled' },
-    ];
-    const enabled: string[] = [];
-    for (const g of gameList) {
-      if (await isSettingEnabled(g.toggle)) enabled.push(g.cmd);
-    }
-    if (enabled.length === 0) return '🎲 No games are currently enabled.';
-    return `🎲 Games: ${enabled.join(' ')} — Use max/all to go all-in. !tazos for balance.`;
-  }
-  if (cmd === 'heist') {
-    if (!user) return null;
-    const bet = parseBet(arg);
-    if (bet < 1) {
-      const status = await getHeistStatus();
-      if (status) return status;
-      const expired = await checkAndResolveExpiredHeist();
-      if (expired) return expired;
-      return '🏦 !heist [amount] — Start or join a group heist. Default 5 tazos. More robbers = better odds!';
-    }
-    return joinOrStartHeist(user, bet);
-  }
-  if (cmd === 'give') {
-    if (!user) return null;
-    if (!(await isSettingEnabled('giftEnabled'))) return null;
-    const args = splitArgs(arg);
-    let target = args[0] ?? '';
-    if (target.startsWith('@')) target = target.slice(1);
-    if (!target) return '💸 Usage: !give user <amount|all>';
-    const raw = (args[1] ?? '').toLowerCase();
-    const isAll = raw === 'all' || raw === 'max';
-    const amount = isAll ? Infinity : parseInt(raw, 10);
-    if (!isAll && (isNaN(amount) || amount < 1))
-      return '💸 Usage: !give user <amount|all>';
-    return giftTazos(user, target, amount);
   }
   return null;
 }

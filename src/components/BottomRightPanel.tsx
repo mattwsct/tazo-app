@@ -11,8 +11,6 @@ const GOALS_CYCLE_DURATION_MS = ROTATION_TICK_MS;
 const CROSSFADE_DURATION_MS = 500;
 
 type GoalSlide = 'subs' | 'kicks';
-type LbSlide = 'stream' | 'weekly' | 'monthly' | 'lifetime';
-type LbPollSlide = LbSlide | 'poll';
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -45,23 +43,7 @@ export default function BottomRightPanel({
   const totalVotes = poll?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
   const showPoll = !!(isPollActive && totalVotes >= 0);
 
-  const gamblingEnabled = settings.gamblingEnabled !== false;
-  const showLeaderboard = settings.showLeaderboard !== false && gamblingEnabled;
   const showGoalsRotation = settings.showGoalsRotation !== false;
-  const leaderboardTopN = settings.gamblingLeaderboardTopN ?? settings.leaderboardTopN ?? 5;
-  const gamblingLeaderboardTop = settings.gamblingLeaderboardTop ?? [];
-  const earnedWeekly = settings.earnedLeaderboardWeekly ?? [];
-  const earnedMonthly = settings.earnedLeaderboardMonthly ?? [];
-  const earnedLifetime = settings.earnedLeaderboardLifetime ?? [];
-  // Gate earned slides by showLeaderboard — when leaderboard is off, hide all slides (including empty weekly/monthly/lifetime)
-  const showWeeklyEarnedLb = showLeaderboard && settings.showWeeklyEarnedLb !== false && gamblingEnabled;
-  const showMonthlyEarnedLb = showLeaderboard && settings.showMonthlyEarnedLb !== false && gamblingEnabled;
-  const showLifetimeEarnedLb = showLeaderboard && settings.showLifetimeEarnedLb !== false && gamblingEnabled;
-  // Snap to nearest multiple of ROTATION_TICK_MS so lb and goal transitions coincide
-  const lbCycleMs = Math.max(
-    ROTATION_TICK_MS,
-    Math.round((Math.max(5, settings.leaderboardRotationSec ?? 10) * 1000) / ROTATION_TICK_MS) * ROTATION_TICK_MS
-  );
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
 
@@ -70,10 +52,6 @@ export default function BottomRightPanel({
   const hasSubTarget = (settings.subGoalTarget ?? 0) > 0;
   const hasKicksTarget = (settings.kicksGoalTarget ?? 0) > 0;
   const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0 };
-
-  // Cache poll children for outgoing crossfade (children may be null when poll ends)
-  const pollChildrenCacheRef = useRef<React.ReactNode>(null);
-  if (children) pollChildrenCacheRef.current = children;
 
   // =============================================
   // SECTION 1: Goals rotation (subs / kicks)
@@ -194,71 +172,8 @@ export default function BottomRightPanel({
   }, [showGoalsRotation, goalSlides.length, goalSlidesKey]);
 
   // =============================================
-  // SECTION 2: Leaderboard / Poll crossfade rotation
+  // SECTION 2: Poll (when active)
   // =============================================
-
-  // Build slide list from toggles — slides always present when enabled (empty data shows placeholder)
-  const lbSlides = useMemo((): LbSlide[] => {
-    const slides: LbSlide[] = [];
-    if (showLeaderboard) slides.push('stream');
-    if (showWeeklyEarnedLb) slides.push('weekly');
-    if (showMonthlyEarnedLb) slides.push('monthly');
-    if (showLifetimeEarnedLb) slides.push('lifetime');
-    return slides;
-  }, [showLeaderboard, showWeeklyEarnedLb, showMonthlyEarnedLb, showLifetimeEarnedLb]);
-
-  const lbSlidesRef = useRef<LbSlide[]>(lbSlides);
-  useEffect(() => { lbSlidesRef.current = lbSlides; }, [lbSlides]);
-
-  const [activeLbSlide, setActiveLbSlide] = useState<LbSlide>(lbSlides[0] ?? 'stream');
-
-  // Reset active slide when slide list changes (e.g. toggle off current slide)
-  useEffect(() => {
-    if (lbSlides.length === 0) return;
-    setActiveLbSlide(prev => lbSlides.includes(prev) ? prev : lbSlides[0]);
-  }, [lbSlides]);
-
-  // Cycle through lb slides (wall-clock aligned, uses configurable speed)
-  useEffect(() => {
-    if (lbSlides.length <= 1) return;
-    const tick = () => {
-      const current = lbSlidesRef.current;
-      if (current.length <= 1) return;
-      setActiveLbSlide(prev => {
-        const idx = current.indexOf(prev);
-        return current[(idx >= 0 ? idx + 1 : 1) % current.length];
-      });
-    };
-    const msUntilNext = lbCycleMs - (Date.now() % lbCycleMs);
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    const initialTimeout = setTimeout(() => {
-      tick();
-      intervalId = setInterval(tick, lbCycleMs);
-    }, msUntilNext);
-    return () => { clearTimeout(initialTimeout); if (intervalId) clearInterval(intervalId); };
-  }, [lbSlides.length, lbCycleMs]);
-
-  // Poll overrides active lb slide; resume cycling after poll ends
-  const lbTarget: LbPollSlide = showPoll ? 'poll' : activeLbSlide;
-  const [lbDisplayed, setLbDisplayed] = useState<LbPollSlide>(lbTarget);
-  const [lbOutgoing, setLbOutgoing] = useState<LbPollSlide | null>(null);
-  const lbTransRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (lbTransRef.current) { clearTimeout(lbTransRef.current); lbTransRef.current = null; }
-    if (lbTarget === lbDisplayed) {
-      setLbOutgoing(null);
-      return;
-    }
-    setLbOutgoing(lbDisplayed);
-    lbTransRef.current = setTimeout(() => {
-      lbTransRef.current = null;
-      setLbDisplayed(lbTarget);
-      setLbOutgoing(null);
-    }, CROSSFADE_DURATION_MS);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lbTarget]);
-
 
   useEffect(() => {
     return () => {
@@ -273,58 +188,14 @@ export default function BottomRightPanel({
 
   const hasGoalsContent = showGoalsRotation && goalSlides.length > 0;
   const hasGoalAlertContent = !hasGoalsContent && (hasSubTarget || hasKicksTarget) && (subsAlert != null || kicksAlert != null);
-  const hasLbPollContent = lbSlides.length > 0 || showPoll;
-  const hasContent = hasGoalsContent || hasGoalAlertContent || hasLbPollContent;
+  const hasPollContent = showPoll;
+  const hasContent = hasGoalsContent || hasGoalAlertContent || hasPollContent;
 
   if (!hasContent) return null;
 
   // =============================================
   // Render helpers
   // =============================================
-
-  const renderStreamLeaderboard = () => (
-    <div className="overlay-box leaderboard-box">
-      <div className="leaderboard-title">🃏 Top Tazos</div>
-      <div className="leaderboard-subtitle">Resets each stream</div>
-      <div className="leaderboard-entries">
-        {gamblingLeaderboardTop.length > 0 ? (
-          gamblingLeaderboardTop.slice(0, leaderboardTopN).map((u, i) => (
-            <div key={u.username} className="leaderboard-entry">
-              <span className="leaderboard-rank">#{i + 1}</span>
-              <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
-              <span className="leaderboard-chips">{u.chips}</span>
-            </div>
-          ))
-        ) : (
-          <div className="leaderboard-entry leaderboard-empty">No tazos yet — !deal to play!</div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderEarnedLeaderboard = (
-    title: string,
-    subtitle: string,
-    entries: { username: string; earned: number }[],
-  ) => (
-    <div className="overlay-box leaderboard-box">
-      <div className="leaderboard-title">{title}</div>
-      <div className="leaderboard-subtitle">{subtitle}</div>
-      <div className="leaderboard-entries">
-        {entries.length > 0 ? (
-          entries.slice(0, leaderboardTopN).map((u, i) => (
-            <div key={u.username} className="leaderboard-entry">
-              <span className="leaderboard-rank">#{i + 1}</span>
-              <span className="leaderboard-username">{u.username.replace(/^@+/, '')}</span>
-              <span className="leaderboard-chips">{u.earned}</span>
-            </div>
-          ))
-        ) : (
-          <div className="leaderboard-entry leaderboard-empty">No earned tazos yet!</div>
-        )}
-      </div>
-    </div>
-  );
 
   const renderSubsGoal = () => (
     <div className="goal-progress-stack">
@@ -364,14 +235,6 @@ export default function BottomRightPanel({
     return null;
   };
 
-  const renderLbPollSlide = (type: LbPollSlide, isOutgoing = false) => {
-    if (type === 'stream') return showLeaderboard ? renderStreamLeaderboard() : null;
-    if (type === 'weekly') return renderEarnedLeaderboard('📊 Weekly Earned', 'Resets every Monday', earnedWeekly);
-    if (type === 'monthly') return renderEarnedLeaderboard('📊 Monthly Earned', 'Resets 1st of month', earnedMonthly);
-    if (type === 'lifetime') return renderEarnedLeaderboard('🏆 All-Time Earned', 'Never resets', earnedLifetime);
-    return isOutgoing ? pollChildrenCacheRef.current : (children || pollChildrenCacheRef.current);
-  };
-
   return (
     <div className="bottom-right">
       {/* Top: Goals rotation (subs/kicks) */}
@@ -398,17 +261,12 @@ export default function BottomRightPanel({
           {kicksAlert && hasKicksTarget && renderKicksGoal()}
         </div>
       )}
-      {/* Bottom: Leaderboard / Poll crossfade */}
-      {hasLbPollContent && (
+      {/* Bottom: Poll when active */}
+      {hasPollContent && (
         <div className="bottom-right-cycling-wrapper">
           <div className="bottom-right-cycling-slots">
-            {lbOutgoing && (
-              <div className="bottom-right-cycling-slide cycling-slide-out" key={`lb-out-${lbOutgoing}`}>
-                {renderLbPollSlide(lbOutgoing, true)}
-              </div>
-            )}
-            <div className="bottom-right-cycling-slide cycling-slide-in" key={`lb-in-${lbTarget}`}>
-              {renderLbPollSlide(lbTarget)}
+            <div className="bottom-right-cycling-slide cycling-slide-in">
+              {children}
             </div>
           </div>
         </div>

@@ -25,54 +25,63 @@ export interface OverlaySettings {
   showAltitude?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
   pollState?: PollState | null;
-  /** Leaderboard: include in rotation (true) or hidden (false). */
+  /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   showLeaderboard?: boolean;
   /** When false, hide the rotating carousel — alerts still pop up in goal bars when they fire. */
   showGoalsRotation?: boolean;
+  /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   leaderboardTopN?: number;
-  /** Comma or newline-separated usernames to exclude from leaderboard (e.g. bots, your own name). */
+  /** Comma or newline-separated usernames to exclude from earning Credits (e.g. bots). */
   leaderboardExcludedBots?: string;
   showOverlayAlerts?: boolean;
-  /** Master switch: gambling enabled. When false, commands disabled and tazos hidden. */
+  /** Master switch: Credits & blackjack enabled. */
   gamblingEnabled?: boolean;
-  /** Top N for gambling leaderboard. */
+  /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   gamblingLeaderboardTopN?: number;
-  /** Channel point reward title to redeem for tazos (exact match, case-insensitive). Empty = disabled. */
+  /** @deprecated Phase 1: channel reward credits removed. Kept for KV compat. */
   chipRewardTitle?: string;
-  /** Tazos granted per channel point redemption (when chipRewardTitle matches). */
+  /** @deprecated Phase 1: channel reward credits removed. Kept for KV compat. */
   chipRewardChips?: number;
-  /** Auto-start raffles every ~30 min when live. */
+  /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   autoRaffleEnabled?: boolean;
-  /** Auto tazo drops every ~15 min. */
+  /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   chipDropsEnabled?: boolean;
-  /** Boss events every ~45-60 min. */
+  /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   bossEventsEnabled?: boolean;
-  /** Auto streamer polls (random question with 5 boss names as options) in auto-game rotation. */
+  /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   autoPollEnabled?: boolean;
-  /** Master switch: enable all auto games (raffle/drops/boss/polls). Default true. */
+  /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   autoGamesEnabled?: boolean;
-  /** Minutes to wait after a game ends before starting the next. Default 5. */
+  /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   autoGameIntervalMin?: number;
   /** @deprecated Win streak bonuses — feature removed, kept for KV backwards compat. */
   winStreaksEnabled?: boolean;
   /** @deprecated Tazo rewards for subs/gifts/kicks — feature removed, kept for KV backwards compat. */
   subGiftChipRewards?: boolean;
-  /** Individual game toggles (all default true, only apply when gamblingEnabled). */
+  /** Blackjack (!bj / !deal). */
   blackjackEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   slotsEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   rouletteEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   diceEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   crashEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   warEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   coinflipEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   duelEnabled?: boolean;
+  /** @deprecated Phase 1: removed. Kept for KV compat. */
   heistEnabled?: boolean;
-  /** Enable !give — users can give/transfer tazos to others (not subs). */
+  /** @deprecated Phase 1: !give removed. Kept for KV compat. */
   giftEnabled?: boolean;
   /** Utility command toggles. */
   convertEnabled?: boolean;
   mathEnabled?: boolean;
-  /** Runtime: top tazos (from get-settings). */
+  /** Runtime: top tazos (from get-settings). @deprecated Phase 1: no longer sent. */
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
@@ -90,15 +99,17 @@ export interface OverlaySettings {
   kicksGoalIncrement?: number;
   /** Optional second line for kicks goal — when set, goal is fixed (no auto-iterate). */
   kicksGoalSubtext?: string;
-  /** IANA timezone for weekly/monthly leaderboard resets (e.g. "Asia/Bangkok"). */
+  /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
   streamerTimezone?: string;
-  /** Show individual earned leaderboard periods in overlay rotation. */
+  /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
   showWeeklyEarnedLb?: boolean;
+  /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
   showMonthlyEarnedLb?: boolean;
+  /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
   showLifetimeEarnedLb?: boolean;
-  /** Seconds each leaderboard slide is shown before crossfading to the next. Default 15. */
+  /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   leaderboardRotationSec?: number;
-  /** Runtime: earned leaderboard data (weekly/monthly/lifetime). */
+  /** Runtime: earned leaderboard data. @deprecated Phase 1: no longer sent. */
   earnedLeaderboardWeekly?: { username: string; earned: number }[];
   earnedLeaderboardMonthly?: { username: string; earned: number }[];
   earnedLeaderboardLifetime?: { username: string; earned: number }[];
