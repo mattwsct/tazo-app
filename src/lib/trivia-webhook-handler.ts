@@ -127,18 +127,20 @@ export async function handleTrivia(
   const current = await getTriviaState();
   if (!current || current.winnerDisplayUntil) return { handled: false };
 
+  // Use the winner's actual reply for display (questions can have multiple correct answers)
+  const answerDisplay = trimmed.length > 100 ? trimmed.slice(0, 97) + '...' : trimmed;
+
   const winnerDisplayMs = 8 * 1000;
   const winnerState: TriviaState = {
     ...current,
     winnerUsername: senderUsername,
-    winnerAnswer: current.acceptedAnswers[0] ?? '?',
+    winnerAnswer: answerDisplay,
     winnerPoints: current.points,
     winnerDisplayUntil: Date.now() + winnerDisplayMs,
   };
   await setTriviaState(winnerState);
   await addCredits(senderUsername, current.points, { skipExclusions: true });
   const token = await getValidAccessToken();
-  const answerDisplay = current.acceptedAnswers[0] ?? '?';
   await replyChat(token, `${senderUsername} got it! Answer: ${answerDisplay}. +${current.points} Credits.`);
   return { handled: true };
 }
