@@ -17,7 +17,7 @@ import { formatLocation } from '@/utils/location-utils';
 import { kv } from '@/lib/kv';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import type { OverlaySettings } from '@/types/settings';
-import { getSpeedStats, getAltitudeStats } from '@/utils/stats-storage';
+import { getSpeedStats, getAltitudeStats, isStreamLive } from '@/utils/stats-storage';
 import { getFollowersResponse, getSubsResponse } from '@/lib/chat-response-helpers';
 
 export const dynamic = 'force-dynamic';
@@ -239,6 +239,17 @@ export async function GET(
     if (h % 24 > 0) parts.push(`${h % 24}h`);
     parts.push(`${m % 60}m`);
     return txtResponse(`⏱️ Time since stream ended: ${parts.join(' ')}`);
+  }
+
+  // Stats and location routes: only when stream is live
+  const STREAM_OFFLINE_MSG = "Stream is offline — stats and location are hidden until we're live.";
+  const STREAM_GATED_ROUTES = new Set([
+    'location', 'weather', 'uv', 'aqi', 'forecast', 'map',
+    'heartrate', 'hr', 'speed', 'altitude', 'elevation',
+    'steps', 'distance', 'dist', 'height', 'ht', 'weight', 'wt', 'wellness',
+  ]);
+  if (STREAM_GATED_ROUTES.has(route) && !(await isStreamLive())) {
+    return txtResponse(STREAM_OFFLINE_MSG);
   }
 
   // Stats routes (no RTIRL required - use KV storage)

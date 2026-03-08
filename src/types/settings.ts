@@ -38,9 +38,9 @@ export interface OverlaySettings {
   gamblingEnabled?: boolean;
   /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   gamblingLeaderboardTopN?: number;
-  /** @deprecated Phase 1: channel reward credits removed. Kept for KV compat. */
+  /** Channel reward: exact reward title that grants Credits (e.g. "Buy Credits"). */
   chipRewardTitle?: string;
-  /** @deprecated Phase 1: channel reward credits removed. Kept for KV compat. */
+  /** Channel reward: Credits granted per redemption when title matches. */
   chipRewardChips?: number;
   /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   autoRaffleEnabled?: boolean;
@@ -81,7 +81,7 @@ export interface OverlaySettings {
   /** Utility command toggles. */
   convertEnabled?: boolean;
   mathEnabled?: boolean;
-  /** Runtime: top tazos (from get-settings). @deprecated Phase 1: no longer sent. */
+  /** Runtime: top Credits (from get-settings). Used for overlay and chat !leaderboard. */
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   /** Runtime: recent overlay alerts (from get-settings). */
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
@@ -141,7 +141,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   leaderboardExcludedBots: '',
   gamblingEnabled: true,
   gamblingLeaderboardTopN: 5,
-  chipRewardTitle: 'Buy Tazos',
+  chipRewardTitle: 'Buy Credits',
   chipRewardChips: 50,
   showOverlayAlerts: true,
   autoRaffleEnabled: true,

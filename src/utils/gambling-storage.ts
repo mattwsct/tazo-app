@@ -3,8 +3,10 @@
  * Credits: persistent across streams, new users start with 0. Earn via Sub (+100), Gift sub (+100), Kicks (+1), !addcredits.
  * Blackjack: !bj <amount>, !deal, !hit, !stand, !double, !split.
  * Stream start clears only active blackjack hands and deal cooldown, not balances.
+ * Shuffle: Fisher–Yates with crypto.randomInt (CSPRNG) so the deck is provably unpredictable.
  */
 
+import { randomInt } from 'node:crypto';
 import { kv } from '@/lib/kv';
 import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
 
@@ -14,7 +16,7 @@ const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
 const GAME_TIMEOUT_MS = 90_000;
 const DEAL_COOLDOWN_MS = 15_000;
-const MIN_BET = 1;
+const MIN_BET = 25;
 
 function parseKvInt(value: number | string | null | undefined, fallback = 0): number {
   if (value == null) return fallback;
@@ -49,6 +51,7 @@ function handValue(cards: Card[]): { value: number; isSoft: boolean } {
   return { value: total, isSoft: aces > 0 };
 }
 
+/** Fisher–Yates shuffle using crypto.randomInt (CSPRNG). Each permutation of the deck is equally likely and unpredictable. */
 function shuffleDeck(): Card[] {
   const deck: Card[] = [];
   for (const s of SUITS) {
@@ -57,7 +60,7 @@ function shuffleDeck(): Card[] {
     }
   }
   for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(0, i + 1);
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   return deck;
@@ -148,6 +151,26 @@ export async function getCreditsIfExists(username: string): Promise<number | nul
     return typeof bal === 'string' ? parseInt(bal, 10) : Math.floor(bal);
   } catch {
     return null;
+  }
+}
+
+/** Top N users by credits (for !leaderboard and overlay). Excludes leaderboard-excluded users. */
+export async function getCreditsLeaderboard(topN: number): Promise<{ username: string; credits: number }[]> {
+  const n = Math.max(1, Math.min(20, Math.floor(topN)));
+  try {
+    const raw = (await kv.hgetall(CREDITS_BALANCE_KEY)) as Record<string, string> | null;
+    if (!raw || typeof raw !== 'object') return [];
+    const excluded = await getLeaderboardExclusions();
+    const entries: { username: string; credits: number }[] = [];
+    for (const [user, val] of Object.entries(raw)) {
+      if (excluded.has(user)) continue;
+      const credits = parseKvInt(val);
+      if (credits > 0) entries.push({ username: user, credits });
+    }
+    entries.sort((a, b) => b.credits - a.credits);
+    return entries.slice(0, n);
+  } catch {
+    return [];
   }
 }
 

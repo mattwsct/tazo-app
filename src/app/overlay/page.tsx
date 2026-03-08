@@ -1576,9 +1576,8 @@ function OverlayPage() {
           )}
         </div>
 
-        {/* Bottom Right: To-Do, Poll, Leaderboard, Alerts */}
+        {/* Bottom Right: Poll, Alerts */}
         {settings.pollState ||
-        (settings.showLeaderboard !== false && settings.gamblingEnabled !== false) ||
         settings.showOverlayAlerts !== false ? (
           <BottomRightPanel settings={settings} refreshSettings={refreshSettings}>
             {settings.pollState && (() => {

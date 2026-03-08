@@ -2,7 +2,7 @@
  * Kick chat command handlers: !ping, !heartrate / !hr, wellness commands, blackjack
  */
 
-import { getHeartrateStats, getStreamStartedAt, getStreamEndedAt } from '@/utils/stats-storage';
+import { getHeartrateStats, getStreamStartedAt, getStreamEndedAt, isStreamLive } from '@/utils/stats-storage';
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
@@ -28,6 +28,7 @@ import {
   split as blackjackSplit,
   getCredits,
   getCreditsIfExists,
+  getCreditsLeaderboard,
   isGamblingEnabled,
   isSettingEnabled,
 } from '@/utils/gambling-storage';
@@ -38,6 +39,10 @@ import {
   handleConvertBareNumber,
   handleConvertDefault,
 } from '@/utils/convert-utils';
+import { kv } from '@/lib/kv';
+
+/** Shown when stream is offline for stats/location commands. */
+const STREAM_OFFLINE_MSG = "Stream is offline — stats and location are hidden until we're live.";
 
 /**
  * Safe math expression evaluator — supports +, -, *, /, ^, %, parentheses.
@@ -249,9 +254,20 @@ export async function handleKickChatCommand(
     return `⏱️ Time since stream ended: ${parts.join(' ')}`;
   }
   if (cmd === 'leaderboard') {
-    const gamblingOn = await isGamblingEnabled();
-    if (!gamblingOn) return null;
-    return 'No leaderboards. Use !credits to check your balance.';
+    const settings = (await kv.get<{ leaderboardTopN?: number }>('overlay_settings')) ?? {};
+    const topN = Math.min(10, Math.max(1, Math.floor(settings.leaderboardTopN ?? 5)));
+    const list = await getCreditsLeaderboard(topN);
+    if (list.length === 0) return 'Credits — No entries yet.';
+    const parts = list.map((e, i) => `${i + 1}. ${e.username}: ${e.credits.toLocaleString()}`);
+    return `Credits — ${parts.join(' | ')}`;
+  }
+  // Stats and location commands: only when stream is live
+  const streamSessionOrLocationCommands: KickChatCommand[] = [
+    'heartrate', 'steps', 'distance', 'height', 'weight', 'wellness',
+    'speed', 'altitude', 'forecast', 'map', 'uv', 'aqi',
+  ];
+  if (streamSessionOrLocationCommands.includes(cmd)) {
+    if (!(await isStreamLive())) return STREAM_OFFLINE_MSG;
   }
   if (cmd === 'heartrate') {
     const stats = await getHeartrateStats();

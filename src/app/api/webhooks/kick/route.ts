@@ -359,7 +359,18 @@ export async function POST(request: NextRequest) {
     } catch {
       /* ignore */
     }
-    // Channel reward → Credits removed in Phase 1; can re-add later if desired.
+    // Credits channel reward: if reward title matches and status is approved, grant credits.
+    const status = String(payload.status ?? '').toLowerCase();
+    const redeemer = (payload.redeemer as { username?: string })?.username ?? '';
+    const redeemerUsername = redeemer.trim();
+    if (redeemerUsername && (status === 'approved' || status === 'completed' || status === 'fulfilled')) {
+      const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardChips?: number }>('overlay_settings')) ?? {};
+      const matchTitle = (settings.chipRewardTitle ?? 'Buy Credits').trim().toLowerCase();
+      const credits = Math.max(0, Math.floor(settings.chipRewardChips ?? 50));
+      if (matchTitle && rewardTitle.toLowerCase() === matchTitle && credits > 0) {
+        void addCredits(redeemerUsername, credits, { skipExclusions: true });
+      }
+    }
   }
 
   const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;

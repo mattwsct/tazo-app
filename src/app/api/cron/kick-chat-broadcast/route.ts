@@ -117,20 +117,17 @@ export async function GET(request: NextRequest) {
     } catch { /* non-critical */ }
   }
 
-  // Unified location: silently update stream title only — no chat announcements for auto-updates
+  // Unified location: silently update stream title only — no chat announcements for auto-updates.
+  // Update title whenever location/title changed (no interval gating) so title stays in sync with overlay.
   const autoUpdateLocation = streamTitleSettings?.autoUpdateLocation !== false;
-  const intervalMin = (storedAlert?.chatBroadcastLocationIntervalMin as number) ?? 1;
-  const intervalMs = intervalMin * 60 * 1000;
 
   if (autoUpdateLocation && isLive) {
     // Use freshly geocoded location if available, fall back to persistent storage
     const freshLocationData = sharedLocationData?.location?.rawLocationData;
     const persistent = freshLocationData ? null : await getPersistentLocation();
     const locationForTitle = freshLocationData ?? persistent?.location;
-    const lastAt = typeof lastLocationAt === 'number' ? lastLocationAt : 0;
-    const intervalOk = now - lastAt >= intervalMs;
 
-    if (locationForTitle && intervalOk) {
+    if (locationForTitle) {
       const includeLocationInTitle = streamTitleSettings?.includeLocationInTitle !== false;
       const displayMode = (overlaySettings?.locationDisplay as LocationDisplayMode) ?? 'city';
       const customLoc = (overlaySettings?.customLocation as string) ?? '';

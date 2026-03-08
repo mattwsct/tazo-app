@@ -1395,6 +1395,30 @@ export default function AdminPage() {
                   </label>
                 </div>
               )}
+              {settings.gamblingEnabled !== false && (
+                <div className="setting-group" style={{ marginTop: 12 }}>
+                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Channel reward title</label>
+                  <input
+                    type="text"
+                    value={settings.chipRewardTitle ?? 'Buy Credits'}
+                    onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value || 'Buy Credits' })}
+                    placeholder="Buy Credits"
+                    className="setting-input"
+                    style={{ maxWidth: 240 }}
+                  />
+                  <p className="setting-hint" style={{ marginTop: 4, marginBottom: 8 }}>Create a Kick reward with this exact title; each redemption grants the credits below.</p>
+                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Credits per redemption</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={settings.chipRewardChips ?? 50}
+                    onChange={(e) => handleSettingsChange({ chipRewardChips: Math.max(1, Math.min(10000, parseInt(e.target.value, 10) || 50)) })}
+                    className="setting-input"
+                    style={{ maxWidth: 100 }}
+                  />
+                </div>
+              )}
             </div>
           </CollapsibleSection>
 
