@@ -86,7 +86,8 @@ export async function handleTrivia(
       return { handled: false };
     }
     const existing = await getTriviaState();
-    if (existing) {
+    // Only block if there's an active question; winner-display phase is not "active" — allow starting a new one
+    if (existing && !existing.winnerDisplayUntil) {
       const token = await getValidAccessToken();
       await replyChat(token, 'A trivia is already active. Use !endtrivia or !endquiz to cancel.');
       return { handled: true };
@@ -111,7 +112,8 @@ export async function handleTrivia(
     await new Promise((r) => setTimeout(r, 150));
     state = await getTriviaState();
   }
-  if (!state) return { handled: false };
+  // Ignore guesses when we're only showing the winner (no new answers)
+  if (!state || state.winnerDisplayUntil) return { handled: false };
 
   const guess = normalizeGuess(trimmed);
   if (!guess) return { handled: false };
@@ -121,18 +123,22 @@ export async function handleTrivia(
   );
   if (!matched) return { handled: false };
 
+  // Only one winner: re-read state right before write so we don't award twice if multiple messages race
+  const current = await getTriviaState();
+  if (!current || current.winnerDisplayUntil) return { handled: false };
+
   const winnerDisplayMs = 8 * 1000;
   const winnerState: TriviaState = {
-    ...state,
+    ...current,
     winnerUsername: senderUsername,
-    winnerAnswer: state.acceptedAnswers[0] ?? '?',
-    winnerPoints: state.points,
+    winnerAnswer: current.acceptedAnswers[0] ?? '?',
+    winnerPoints: current.points,
     winnerDisplayUntil: Date.now() + winnerDisplayMs,
   };
   await setTriviaState(winnerState);
-  await addCredits(senderUsername, state.points, { skipExclusions: true });
+  await addCredits(senderUsername, current.points, { skipExclusions: true });
   const token = await getValidAccessToken();
-  const answerDisplay = state.acceptedAnswers[0] ?? '?';
-  await replyChat(token, `${senderUsername} got it! Answer: ${answerDisplay}. +${state.points} Credits.`);
+  const answerDisplay = current.acceptedAnswers[0] ?? '?';
+  await replyChat(token, `${senderUsername} got it! Answer: ${answerDisplay}. +${current.points} Credits.`);
   return { handled: true };
 }
