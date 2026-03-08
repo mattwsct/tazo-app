@@ -66,7 +66,7 @@ export async function setTriviaSettings(updates: Partial<TriviaSettings>): Promi
 /**
  * Parse "Question ? Answer", "Question? Answer", or "Question\tAnswer" lines from randomQuestionsText.
  * Returns array of { question, answers } (answers normalized to lowercase).
- * Answer part can be comma-separated for multiple spellings (e.g. "colour, color").
+ * Answer part can be comma- or semicolon-separated for multiple accepted answers (e.g. "chicken Parmigiana, chicken parmi, chicken parma").
  */
 export function parseRandomQuestionsText(text: string): { question: string; answers: string[] }[] {
   const lines = text.split(/\n/).map((s) => s.trim()).filter(Boolean);

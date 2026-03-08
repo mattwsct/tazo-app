@@ -1963,7 +1963,7 @@ export default function AdminPage() {
               <div className="form-stack" style={{ maxWidth: 520, marginTop: 24 }}>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Random quiz questions (for !trivia)</label>
                 <p className="setting-hint" style={{ marginBottom: 6 }}>
-                  One question and answer per line. Format: <code>Question? Answer</code> or <code>Question ? Answer</code> (e.g. Favourite meal in Australia? Chicken Parmigiana). To use the same questions in local and production, set the same <code>KV_REST_API_URL</code> and <code>KV_REST_API_TOKEN</code> in both (e.g. copy production&apos;s Upstash credentials into local .env).
+                  One question and answer per line. Format: <code>Question? Answer</code> or <code>Question ? Answer</code>. Use commas for multiple accepted answers (e.g. Favourite food? chicken Parmigiana, chicken parmi, chicken parma). To use the same questions in local and production, set the same <code>KV_REST_API_URL</code> and <code>KV_REST_API_TOKEN</code> in both (e.g. copy production&apos;s Upstash credentials into local .env).
                 </p>
                 <textarea
                   className="setting-input"
