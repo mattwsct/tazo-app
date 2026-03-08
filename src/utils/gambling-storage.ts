@@ -18,6 +18,9 @@ const GAME_TIMEOUT_MS = 90_000;
 const DEAL_COOLDOWN_MS = 15_000;
 const MIN_BET = 25;
 
+/** Minimum blackjack bet (for chat balance/limits messages). */
+export const BLACKJACK_MIN_BET = MIN_BET;
+
 function parseKvInt(value: number | string | null | undefined, fallback = 0): number {
   if (value == null) return fallback;
   return typeof value === 'number' ? Math.floor(value) : parseInt(String(value), 10) || fallback;
@@ -255,9 +258,21 @@ export async function deal(username: string, betAmount: number): Promise<string>
     return `🃏 You're already in a hand (${formatHand(existing.playerHand)} = ${value}). !hit or !stand`;
   }
 
-  const result = await placeBet(user, betAmount);
+  const balance = await getCredits(user);
+  if (balance < MIN_BET) {
+    return `🃏 You need at least ${MIN_BET} Credits to play. You have ${balance} Credits.`;
+  }
+  const requestedFloored = Number.isFinite(betAmount) ? Math.floor(betAmount) : balance;
+  if (requestedFloored < MIN_BET) {
+    return `🃏 Min bet is ${MIN_BET} Credits. You have ${balance} Credits. Use !bj <amount> (${MIN_BET}–${balance}).`;
+  }
+  if (requestedFloored > balance) {
+    return `🃏 Not enough Credits for that bet. You have ${balance} Credits. Use !bj <amount> (${MIN_BET}–${balance}).`;
+  }
+
+  const result = await placeBet(user, requestedFloored);
   if (!result.ok) {
-    return `🃏 Not enough Credits (${result.balance}).`;
+    return `🃏 Not enough Credits (${result.balance}). Min bet: ${MIN_BET}. Use !bj <amount> (${MIN_BET}–${result.balance}).`;
   }
   const { bet } = result;
 
