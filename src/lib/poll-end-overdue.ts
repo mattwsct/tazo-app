@@ -13,7 +13,6 @@ import {
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { computePollResult } from '@/lib/poll-logic';
-import { isStreamLive } from '@/utils/stats-storage';
 import type { PollState } from '@/types/poll';
 
 /**
@@ -30,14 +29,15 @@ export async function endOverduePollIfAny(): Promise<boolean> {
 
   if (!(await tryAcquirePollEndLock())) return false; // Another process is ending this poll
 
-  const [settings, isLive, token] = await Promise.all([
+  const [settings, token] = await Promise.all([
     getPollSettings(),
-    isStreamLive(),
     getValidAccessToken(),
   ]);
   const { winnerMessage, topVoter } = computePollResult(state);
 
-  if (token && isLive) {
+  // Always post winner to chat when we have a token (poll was run in chat; viewers expect the result).
+  // Don't require isStreamLive() — e.g. overlay trigger or cron can end the poll when stream state is stale.
+  if (token && winnerMessage) {
     try {
       await sendKickChatMessage(
         token,
@@ -59,7 +59,7 @@ export async function endOverduePollIfAny(): Promise<boolean> {
       status: 'active',
     };
     await setPollState(newState);
-    if (token && isLive) {
+    if (token) {
       try {
         await sendKickChatMessage(token, buildPollStartMessage(queued.question, queued.options, queued.durationSeconds));
       } catch { /* ignore */ }

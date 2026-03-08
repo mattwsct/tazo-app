@@ -207,11 +207,13 @@ export async function POST(request: NextRequest) {
         }
       } catch { /* ignore */ }
     })();
-    const pollResult = await handleChatPoll(content, sender, payload);
-    if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
-
+    // Check trivia before poll: if both are active, a message that matches both (e.g. "north yorkshire"
+    // as trivia answer and as poll option) should count as the trivia answer, not as a poll vote.
     const triviaResult = await handleTrivia(content, sender, payload);
     if (triviaResult.handled) return NextResponse.json({ received: true }, { status: 200 });
+
+    const pollResult = await handleChatPoll(content, sender, payload);
+    if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
 
     const titleResult = await handleStreamTitleCommand(content, sender, payload);
     if (titleResult.handled) {
