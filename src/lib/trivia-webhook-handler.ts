@@ -17,7 +17,23 @@ export interface HandleTriviaResult {
 }
 
 function normalizeGuess(text: string): string {
-  return text.trim().toLowerCase().replace(/\s+/g, ' ');
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '') // strip punctuation/symbols
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeAnswerForMatch(a: string): string {
+  return a
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 async function replyChat(
@@ -87,13 +103,21 @@ export async function handleTrivia(
   }
 
   // --- Guess check: any message when trivia is active ---
-  const state = await getTriviaState();
+  // Retry getTriviaState once after a short delay if null, to handle race where the guess
+  // webhook is processed before KV has the trivia state (e.g. right after !trivia).
+  let state = await getTriviaState();
+  if (!state && !trimmed.startsWith('!')) {
+    await new Promise((r) => setTimeout(r, 150));
+    state = await getTriviaState();
+  }
   if (!state) return { handled: false };
 
   const guess = normalizeGuess(trimmed);
   if (!guess) return { handled: false };
 
-  const matched = state.acceptedAnswers.some((a) => a.trim().toLowerCase() === guess);
+  const matched = state.acceptedAnswers.some(
+    (a) => normalizeAnswerForMatch(a) === guess
+  );
   if (!matched) return { handled: false };
 
   await setTriviaState(null);
