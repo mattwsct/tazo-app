@@ -69,6 +69,8 @@ export function useOverlaySettings(): [
             OverlayLogger.settings('Settings updated via SSE', { locationDisplay: merged.locationDisplay, showWeather: merged.showWeather, showMinimap: merged.showMinimap });
             setSettings((prev) => ({
               ...merged,
+              pollState: merged.pollState ?? null,
+              triviaState: merged.triviaState ?? null,
               gamblingLeaderboardTop: Array.isArray(merged.gamblingLeaderboardTop) && merged.gamblingLeaderboardTop.length > 0 ? merged.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               earnedLeaderboardWeekly: merged.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
               earnedLeaderboardMonthly: merged.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,

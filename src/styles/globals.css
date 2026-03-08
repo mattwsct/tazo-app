@@ -177,17 +177,31 @@ html, body {
 }
 
 /* === POLL STYLES === */
-/* Sized for 1920x1080: min 280px, max 420px */
+/* Sized for 1920x1080: min 280px, max 420px; own color scheme (amber/gold) */
 .poll-box {
   font-size: var(--font-size-sm);
   min-width: 280px;
   max-width: 420px;
   overflow: visible;
+  background: linear-gradient(145deg, rgba(35, 32, 25, 0.94) 0%, rgba(50, 42, 28, 0.9) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  border-radius: var(--radius-md);
 }
 
 .poll-box-winner {
-  border: 1px solid rgba(251, 191, 36, 0.5);
-  box-shadow: 0 0 16px rgba(251, 191, 36, 0.25);
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 16px rgba(251, 191, 36, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+.poll-badge {
+  font-size: 0.65em;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(251, 191, 36, 0.9);
+  margin-bottom: 4px;
+  padding-top: 0;
 }
 
 .poll-question {
@@ -201,12 +215,31 @@ html, body {
   white-space: normal;
   word-break: break-word;
   overflow: visible;
+  color: #fff;
+  text-shadow: var(--text-shadow);
 }
 
 .poll-top-voter {
   font-size: 0.9em;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.88);
   margin-bottom: 6px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.poll-timer-bar {
+  width: 100%;
+  height: 4px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.poll-timer-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.9) 0%, rgba(251, 191, 36, 0.95) 100%);
+  border-radius: 999px;
+  transition: width 1s linear;
 }
 
 .poll-options {
@@ -220,7 +253,7 @@ html, body {
 }
 
 .poll-option-winner .poll-option-bar {
-  box-shadow: 0 0 6px rgba(250, 204, 21, 0.25);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.2);
 }
 
 .poll-option-bar {
@@ -231,7 +264,7 @@ html, body {
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.12) 100%
+    rgba(255, 255, 255, 0.1) 100%
   );
   border-radius: 999px;
   overflow: hidden;
@@ -244,8 +277,8 @@ html, body {
   bottom: 0;
   background: linear-gradient(
     90deg,
-    rgba(99, 102, 241, 0.85) 0%,
-    rgba(129, 140, 248, 0.92) 100%
+    rgba(180, 83, 9, 0.75) 0%,
+    rgba(245, 158, 11, 0.88) 100%
   );
   border-radius: 999px;
   transition: width 0.4s ease-out;
@@ -258,10 +291,10 @@ html, body {
 .poll-option-fill-winner {
   background: linear-gradient(
     90deg,
-    rgba(217, 119, 6, 0.9) 0%,
-    rgba(245, 158, 11, 0.95) 100%
+    rgba(217, 119, 6, 0.95) 0%,
+    rgba(251, 191, 36, 0.98) 100%
   );
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.2);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.35);
 }
 
 .poll-option-text {
@@ -279,6 +312,47 @@ html, body {
   font-size: var(--font-size-sm);
   word-break: break-word;
   white-space: normal;
+}
+
+/* === TRIVIA BOX (first-to-answer, same slot as poll) === */
+.trivia-box {
+  min-width: 260px;
+  max-width: 400px;
+  background: linear-gradient(145deg, rgba(30, 27, 45, 0.92) 0%, rgba(45, 40, 65, 0.88) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  border-radius: var(--radius-md);
+}
+
+.trivia-badge {
+  font-size: 0.65em;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(167, 139, 250, 0.9);
+  margin-bottom: 4px;
+  padding-top: 0;
+}
+
+.trivia-question {
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-compact);
+  line-height: 1.25;
+  white-space: normal;
+  word-break: break-word;
+  color: #fff;
+  text-shadow: var(--text-shadow);
+  margin-bottom: 6px;
+}
+
+.trivia-reward {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  margin-top: 2px;
 }
 
 /* === LEADERBOARD & OVERLAY ALERTS === */

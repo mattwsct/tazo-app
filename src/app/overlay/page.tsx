@@ -199,11 +199,13 @@ function OverlayPage() {
     return () => clearTimeout(timeout);
   }, [settings.pollState, refreshSettings, setSettings]);
 
-  // Re-render every second when showing winner so we hide when winnerDisplayUntil passes
+  // Re-render every second when showing winner or active poll (for timer bar)
   const [pollTick, setPollTick] = useState(0);
   useEffect(() => {
     const poll = settings.pollState;
-    if (poll?.status === 'winner' && poll.winnerDisplayUntil != null && Date.now() < poll.winnerDisplayUntil) {
+    const isWinnerDisplay = poll?.status === 'winner' && poll.winnerDisplayUntil != null && Date.now() < poll.winnerDisplayUntil;
+    const isActivePoll = poll?.status === 'active';
+    if (isWinnerDisplay || isActivePoll) {
       const id = setInterval(() => setPollTick((n) => n + 1), 1000);
       return () => clearInterval(id);
     }
@@ -1597,7 +1599,18 @@ function OverlayPage() {
                   <div
                     className={`overlay-box poll-box ${showWinner ? 'poll-box-winner' : ''} ${isNewPoll ? 'poll-fill-instant' : ''}`}
                   >
+                    <div className="poll-badge">POLL</div>
                     <div className="poll-question">{filterTextForDisplay(poll.question)}</div>
+                    {!showWinner && poll.status === 'active' && (
+                      <div className="poll-timer-bar" aria-label="Time remaining">
+                        <div
+                          className="poll-timer-bar-fill"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, ((poll.startedAt + poll.durationSeconds * 1000 - now) / (poll.durationSeconds * 1000)) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                     {showWinner && poll.topVoter && poll.topVoter.count > 1 && (
                       <div className="poll-top-voter">
                         Top voter: {filterTextForDisplay(poll.topVoter.username)} ({poll.topVoter.count} votes)
@@ -1661,9 +1674,10 @@ function OverlayPage() {
               }
               if (trivia) {
                 return (
-                  <div className="overlay-box poll-box">
-                    <div className="poll-question">{filterTextForDisplay(trivia.question)}</div>
-                    <div className="poll-option-text" style={{ marginTop: 4 }}>
+                  <div className="overlay-box trivia-box">
+                    <div className="trivia-badge">TRIVIA</div>
+                    <div className="trivia-question">{filterTextForDisplay(trivia.question)}</div>
+                    <div className="trivia-reward">
                       First correct answer wins {trivia.points} Credits
                     </div>
                   </div>

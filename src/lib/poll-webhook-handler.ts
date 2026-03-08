@@ -242,6 +242,22 @@ export async function handleChatPoll(
       await replyChat(token, 'No poll active.', messageId);
       return { handled: true };
     }
+    const totalVotes = initialState.options?.reduce((s, o) => s + (o?.votes ?? 0), 0) ?? 0;
+    if (totalVotes > 0) {
+      const { winnerMessage, topVoter } = computePollResult(initialState);
+      const now = Date.now();
+      const winnerDisplaySeconds = Math.max(1, Math.min(60, settings.winnerDisplaySeconds ?? 10));
+      const winnerState: PollState = {
+        ...initialState,
+        status: 'winner',
+        winnerMessage,
+        winnerDisplayUntil: now + winnerDisplaySeconds * 1000,
+        topVoter,
+      };
+      await setPollState(winnerState);
+      await replyChat(token, winnerMessage, messageId);
+      return { handled: true };
+    }
     await setPollState(null);
     await replyChat(token, 'Poll ended early.', messageId);
     const queued = await popPollQueue();

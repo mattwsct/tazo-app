@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/api-auth';
 import { setTriviaState, getTriviaState } from '@/lib/trivia-store';
+import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import type { TriviaState } from '@/types/trivia';
 
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,10 @@ export async function POST(request: NextRequest) {
       startedAt: Date.now(),
     };
     await setTriviaState(state);
+    const token = await getValidAccessToken();
+    if (token) {
+      sendKickChatMessage(token, `Trivia: ${state.question} — First correct answer wins ${state.points} Credits.`).catch(() => {});
+    }
     return NextResponse.json({ success: true, trivia: state });
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

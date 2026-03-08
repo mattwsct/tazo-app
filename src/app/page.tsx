@@ -11,6 +11,7 @@ import {
   DEFAULT_KICK_MESSAGE_ENABLED,
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickMessageEnabled, KickMessageTemplateEnabled } from '@/types/kick-messages';
+import type { TriviaState } from '@/types/trivia';
 import { getLocationForStreamTitle, getStreamTitleLocationPart, parseStreamTitleToCustom, buildStreamTitle } from '@/utils/stream-title-utils';
 import { formatLocation, type LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
@@ -123,6 +124,7 @@ export default function AdminPage() {
   const [triviaRandomQuestionsText, setTriviaRandomQuestionsText] = useState('');
   const [triviaDefaultPoints, setTriviaDefaultPoints] = useState(50);
   const [triviaStartLoading, setTriviaStartLoading] = useState(false);
+  const [activeTriviaState, setActiveTriviaState] = useState<TriviaState | null | undefined>(undefined);
   const triviaRandomQuestionsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
@@ -290,6 +292,12 @@ export default function AdminPage() {
         if (d?.defaultPoints != null) setTriviaDefaultPoints(d.defaultPoints);
       })
       .catch(() => {});
+    fetch('/api/get-settings', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        setActiveTriviaState(d?.triviaState ?? null);
+      })
+      .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => {
@@ -303,6 +311,19 @@ export default function AdminPage() {
         }
       })
       .catch(() => {});
+  }, [isAuthenticated]);
+
+  // Poll current trivia state so admin reflects when someone wins (overlay clears via SSE)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const poll = () => {
+      fetch('/api/get-settings', { credentials: 'include' })
+        .then((r) => r.json())
+        .then((d) => setActiveTriviaState(d?.triviaState ?? null))
+        .catch(() => {});
+    };
+    const id = setInterval(poll, 10000);
+    return () => clearInterval(id);
   }, [isAuthenticated]);
 
   const handleKickTemplateToggleChange = useCallback(
@@ -1858,6 +1879,27 @@ export default function AdminPage() {
               <p className="setting-hint" style={{ marginBottom: 12 }}>
                 First-to-answer trivia. When active, uses the same overlay slot as the poll (poll takes priority). Mods can use <strong>!trivia</strong> in chat to start a random question from the list below, or start a custom one here.
               </p>
+              <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span className="setting-hint" style={{ margin: 0 }}>
+                  {activeTriviaState === undefined
+                    ? 'Current: …'
+                    : activeTriviaState
+                      ? `Current: "${activeTriviaState.question}" (${activeTriviaState.points} pts)`
+                      : 'Current: No trivia active'}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  onClick={() => {
+                    fetch('/api/get-settings', { credentials: 'include' })
+                      .then((r) => r.json())
+                      .then((d) => setActiveTriviaState(d?.triviaState ?? null))
+                      .catch(() => {});
+                  }}
+                >
+                  Refresh
+                </button>
+              </div>
               <div className="form-stack" style={{ maxWidth: 520 }}>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Custom question</label>
                 <input
@@ -1904,6 +1946,7 @@ export default function AdminPage() {
                       const data = await r.json();
                       if (r.ok) {
                         setToast({ type: 'saved', message: 'Trivia started!' });
+                        setActiveTriviaState(data.trivia ?? null);
                       } else {
                         setToast({ type: 'error', message: data.error ?? 'Failed to start trivia' });
                       }
@@ -1920,7 +1963,7 @@ export default function AdminPage() {
               <div className="form-stack" style={{ maxWidth: 520, marginTop: 24 }}>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Random quiz questions (for !trivia)</label>
                 <p className="setting-hint" style={{ marginBottom: 6 }}>
-                  One question and answer per line. Format: <code>Question ? Answer</code> (e.g. What&apos;s Tazo&apos;s favourite dinner? Pizza)
+                  One question and answer per line. Format: <code>Question ? Answer</code> (e.g. What&apos;s Tazo&apos;s favourite dinner? Pizza). Saved per environment — add questions here on the production site if you use !trivia in production; local dev uses separate storage.
                 </p>
                 <textarea
                   className="setting-input"
