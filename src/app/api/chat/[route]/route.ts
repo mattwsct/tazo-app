@@ -246,7 +246,7 @@ export async function GET(
   const STREAM_GATED_ROUTES = new Set([
     'location', 'weather', 'uv', 'aqi', 'forecast', 'map',
     'heartrate', 'hr', 'speed', 'altitude', 'elevation',
-    'steps', 'distance', 'dist', 'height', 'ht', 'weight', 'wt', 'wellness',
+    'steps', 'distance', 'dist', 'wellness',
   ]);
   if (STREAM_GATED_ROUTES.has(route) && !(await isStreamLive())) {
     return txtResponse(STREAM_OFFLINE_MSG);
@@ -330,15 +330,11 @@ export async function GET(
   const {
     getWellnessStepsResponse,
     getWellnessDistanceResponse,
-    getWellnessHeightResponse,
-    getWellnessWeightResponse,
     getWellnessSummaryResponse,
   } = await import('@/utils/wellness-chat');
 
   if (route === 'steps') return txtResponse(await getWellnessStepsResponse());
   if (route === 'distance' || route === 'dist') return txtResponse(await getWellnessDistanceResponse());
-  if (route === 'height' || route === 'ht') return txtResponse(await getWellnessHeightResponse());
-  if (route === 'weight' || route === 'wt') return txtResponse(await getWellnessWeightResponse());
   if (route === 'wellness') return txtResponse(await getWellnessSummaryResponse());
 
   // Routes that require location data

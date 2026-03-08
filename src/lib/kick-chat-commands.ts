@@ -6,8 +6,6 @@ import { getHeartrateStats, getStreamStartedAt, getStreamEndedAt, isStreamLive }
 import {
   getWellnessStepsResponse,
   getWellnessDistanceResponse,
-  getWellnessHeightResponse,
-  getWellnessWeightResponse,
   getWellnessSummaryResponse,
 } from '@/utils/wellness-chat';
 import { getLocationData } from '@/utils/location-cache';
@@ -135,9 +133,6 @@ export const KICK_CHAT_COMMANDS = [
   'steps',
   'distance',
   'stand',
-  'height',
-  'length',
-  'weight',
   'wellness',
   'uv',
   'aqi',
@@ -174,9 +169,6 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'steps') return { cmd: 'steps' };
   if (cmd === 'distance' || cmd === 'dist') return { cmd: 'distance' };
   if (cmd === 'stand') return { cmd: 'stand' };
-  if (cmd === 'height') return { cmd: 'height' };
-  if (cmd === 'length') return { cmd: 'length' };
-  if (cmd === 'weight') return { cmd: 'weight' };
   if (cmd === 'wellness') return { cmd: 'wellness' };
   if (cmd === 'uv') return { cmd: 'uv' };
   if (cmd === 'aqi') return { cmd: 'aqi' };
@@ -263,7 +255,7 @@ export async function handleKickChatCommand(
   }
   // Stats and location commands: only when stream is live
   const streamSessionOrLocationCommands: KickChatCommand[] = [
-    'heartrate', 'steps', 'distance', 'height', 'weight', 'wellness',
+    'heartrate', 'steps', 'distance', 'wellness',
     'speed', 'altitude', 'forecast', 'map', 'uv', 'aqi',
   ];
   if (streamSessionOrLocationCommands.includes(cmd)) {
@@ -291,9 +283,6 @@ export async function handleKickChatCommand(
     const standBal = await getCredits(user);
     return `🃏 No active hand. !deal <amount> or !bj <amount> to play. (${standBal} Credits)`;
   }
-  if (cmd === 'height') return getWellnessHeightResponse();
-  if (cmd === 'length') return '📏 18 cm × 14 cm (7.1" × 5.5")';
-  if (cmd === 'weight') return getWellnessWeightResponse();
   if (cmd === 'wellness') return getWellnessSummaryResponse();
   if (cmd === 'uv') {
     const data = await getLocationData();

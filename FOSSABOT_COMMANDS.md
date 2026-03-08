@@ -337,24 +337,20 @@ Example output: `⭐ 1,234 subscribers`
 
 ## Wellness Commands (Health Auto Export)
 
-These commands use wellness data imported from Health Auto Export (steps, distance, height, weight). Steps and distance are today's totals; height/weight are latest values.
+These commands use wellness data imported from Health Auto Export (steps, distance). Steps and distance are today's totals.
 
 ```
 !steps → $(customapi https://app.tazo.wtf/api/chat/steps)
 !distance → $(customapi https://app.tazo.wtf/api/chat/distance)
-!height → $(customapi https://app.tazo.wtf/api/chat/height)
-!weight → $(customapi https://app.tazo.wtf/api/chat/weight)
 !wellness → $(customapi https://app.tazo.wtf/api/chat/wellness)
 ```
 
-**Aliases:** `!dist` for distance, `!ht` for height, `!wt` for weight.
+**Aliases:** `!dist` for distance.
 
 Example outputs:
 - `👟 12,450 steps today`
 - `🚶 8.2 km (5.1 mi) walked/run today`
-- `📏 180 cm (5'11")`
-- `⚖️ 75.2 kg (165.8 lbs)`
-- `📊 12,450 steps · 8.2 km (5.1 mi) · 180 cm (5'11") · 75.2 kg`
+- `📊 12,450 steps · 8.2 km (5.1 mi)`
 
 ## Fun Commands
 
