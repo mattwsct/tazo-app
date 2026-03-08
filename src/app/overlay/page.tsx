@@ -477,7 +477,6 @@ function OverlayPage() {
   
 
   // Refs
-  const timeUpdateTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Global error handling - suppress harmless errors, log others
   useEffect(() => {
@@ -586,48 +585,31 @@ function OverlayPage() {
       : Date.now();
   }, []);
   
-  // Time and date updates - simplified single useEffect
-  // Updates immediately when timezone changes, then every minute
+  // Time and date updates - run every 10s and only update state when time/date string changes.
+  // This avoids skipping a minute when the tab is throttled (e.g. OBS browser source in background):
+  // a single 60s timer can fire late and jump 6:43 → 6:45; frequent ticks keep the display in sync.
   useEffect(() => {
     if (!isValidTimezone(timezone)) {
       setTimeDisplay({ time: '', date: '' });
       return;
     }
-    
-    let isActive = true;
-    
-    // Update function - formats time using current timezone
+
+    let lastTime = '';
+    let lastDate = '';
+
     const updateTime = () => {
-      if (!isActive) return;
       const formatted = formatTime(timezone);
-      if (isActive) {
+      if (formatted.time !== lastTime || formatted.date !== lastDate) {
+        lastTime = formatted.time;
+        lastDate = formatted.date;
         setTimeDisplay(formatted);
-        }
-    };
-    
-    // Immediate update when timezone changes
-    updateTime();
-      
-    // Calculate delay until next minute boundary for clean updates
-      const now = new Date();
-      const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-      
-    // Schedule first update at minute boundary, then every minute
-    const timeoutId = setTimeout(() => {
-        if (!isActive) return;
-      updateTime();
-      // Start interval for regular updates
-      timeUpdateTimer.current = setInterval(updateTime, 60000);
-      }, Math.max(0, msUntilNextMinute));
-    
-    return () => {
-      isActive = false;
-      clearTimeout(timeoutId);
-      if (timeUpdateTimer.current) {
-        clearInterval(timeUpdateTimer.current);
-        timeUpdateTimer.current = null;
       }
     };
+
+    updateTime();
+
+    const intervalId = setInterval(updateTime, 10000); // every 10 seconds
+    return () => clearInterval(intervalId);
   }, [timezone, formatTime]);
 
   // Persistent storage fallback - load from KV if RTIRL doesn't provide data within 15s
