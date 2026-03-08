@@ -160,41 +160,27 @@ function OverlayPage() {
       const current = latestPollRef.current;
       const totalVotes = current?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
 
-      fetch('/api/poll-end-trigger', { cache: 'no-store' })
-        .then((res) => res.ok ? res.json() : { acted: false })
-        .then((data) => {
-          if (!data?.acted && current) return; // Server didn't end (e.g. clock skew) - don't overwrite, wait for SSE
-          if (current) {
-            if (totalVotes > 0) {
-              setSettings((prev) => ({
-                ...prev,
-                pollState: {
-                  ...current,
-                  status: 'winner',
-                  winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
-                },
-              }));
-              setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
-            } else {
-              lastPollIdRef.current = null;
-              setSettings((prev) => ({ ...prev, pollState: null }));
-              refreshSettings();
-            }
-          }
-        })
-        .catch(() => {
-          if (current && totalVotes > 0) {
-            setSettings((prev) => ({
-              ...prev,
-              pollState: {
-                ...current,
-                status: 'winner',
-                winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
-              },
-            }));
-            setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
-          }
-        });
+      // Update UI immediately (optimistic): show winner or clear, then sync with server when it responds
+      if (current) {
+        if (totalVotes > 0) {
+          setSettings((prev) => ({
+            ...prev,
+            pollState: {
+              ...current,
+              status: 'winner',
+              winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
+            },
+          }));
+          setTimeout(() => refreshSettings(), winnerDisplaySeconds * 1000);
+        } else {
+          lastPollIdRef.current = null;
+          setSettings((prev) => ({ ...prev, pollState: null }));
+          refreshSettings();
+        }
+      }
+
+      // Fire-and-forget: tell server to end poll and post winner to chat; SSE/refresh will overwrite with authoritative state
+      fetch('/api/poll-end-trigger', { cache: 'no-store' }).catch(() => {});
     }, remainingMs);
     return () => clearTimeout(timeout);
   }, [settings.pollState, refreshSettings, setSettings]);
