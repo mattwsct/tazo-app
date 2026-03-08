@@ -64,7 +64,7 @@ export async function setTriviaSettings(updates: Partial<TriviaSettings>): Promi
 }
 
 /**
- * Parse "Question ? Answer" or "Question\tAnswer" lines from randomQuestionsText.
+ * Parse "Question ? Answer", "Question? Answer", or "Question\tAnswer" lines from randomQuestionsText.
  * Returns array of { question, answers } (answers normalized to lowercase).
  * Answer part can be comma-separated for multiple spellings (e.g. "colour, color").
  */
@@ -75,13 +75,17 @@ export function parseRandomQuestionsText(text: string): { question: string; answ
     let question: string;
     let answerPart: string;
     const tabIdx = line.indexOf('\t');
-    const qIdx = line.indexOf(' ? ');
-    if (tabIdx !== -1 && (qIdx === -1 || tabIdx < qIdx)) {
+    const spaceQSpaceIdx = line.indexOf(' ? ');
+    const anyQIdx = line.indexOf('?');
+    if (tabIdx !== -1 && (spaceQSpaceIdx === -1 || tabIdx < spaceQSpaceIdx) && (anyQIdx === -1 || tabIdx < anyQIdx)) {
       question = line.slice(0, tabIdx).trim();
       answerPart = line.slice(tabIdx + 1).trim();
-    } else if (qIdx !== -1) {
-      question = line.slice(0, qIdx).trim();
-      answerPart = line.slice(qIdx + 3).trim();
+    } else if (spaceQSpaceIdx !== -1) {
+      question = line.slice(0, spaceQSpaceIdx).trim();
+      answerPart = line.slice(spaceQSpaceIdx + 3).trim();
+    } else if (anyQIdx !== -1) {
+      question = line.slice(0, anyQIdx).trim();
+      answerPart = line.slice(anyQIdx + 1).trim();
     } else {
       continue;
     }

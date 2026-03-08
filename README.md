@@ -37,6 +37,7 @@ NEXT_PUBLIC_OPENWEATHERMAP_KEY=your_openweathermap_key
 # Required - Settings Storage (Vercel KV)
 KV_REST_API_URL=your_vercel_kv_url
 KV_REST_API_TOKEN=your_vercel_kv_token
+# Use the same values in production and local to share trivia questions, poll state, and other KV data.
 
 # Optional - Additional Features
 NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token  # Heart rate monitoring (optional)

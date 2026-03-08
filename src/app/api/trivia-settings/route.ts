@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
     await setTriviaSettings(updates);
     const settings = await getTriviaSettings();
     return NextResponse.json(settings);
-  } catch {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to save';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

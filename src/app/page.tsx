@@ -1963,7 +1963,7 @@ export default function AdminPage() {
               <div className="form-stack" style={{ maxWidth: 520, marginTop: 24 }}>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Random quiz questions (for !trivia)</label>
                 <p className="setting-hint" style={{ marginBottom: 6 }}>
-                  One question and answer per line. Format: <code>Question ? Answer</code> (e.g. What&apos;s Tazo&apos;s favourite dinner? Pizza). Saved per environment — add questions here on the production site if you use !trivia in production; local dev uses separate storage.
+                  One question and answer per line. Format: <code>Question? Answer</code> or <code>Question ? Answer</code> (e.g. Favourite meal in Australia? Chicken Parmigiana). To use the same questions in local and production, set the same <code>KV_REST_API_URL</code> and <code>KV_REST_API_TOKEN</code> in both (e.g. copy production&apos;s Upstash credentials into local .env).
                 </p>
                 <textarea
                   className="setting-input"
@@ -1978,7 +1978,16 @@ export default function AdminPage() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ randomQuestionsText: val }),
-                      }).then(() => setToast({ type: 'saved', message: 'Saved!' })).catch(() => {}).finally(() => setTimeout(() => setToast(null), 2000));
+                      })
+                        .then(async (r) => {
+                          if (!r.ok) {
+                            const d = await r.json().catch(() => ({}));
+                            throw new Error((d as { error?: string }).error ?? 'Failed to save');
+                          }
+                          setToast({ type: 'saved', message: 'Saved!' });
+                        })
+                        .catch((e) => setToast({ type: 'error', message: e instanceof Error ? e.message : 'Failed to save' }))
+                        .finally(() => setTimeout(() => setToast(null), 2000));
                     }, 1000);
                   }}
                   placeholder={"What's my favourite dinner? Pizza\nBest pizza topping? Pepperoni"}
