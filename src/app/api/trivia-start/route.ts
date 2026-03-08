@@ -34,7 +34,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'At least one answer is required' }, { status: 400 });
     }
     const existing = await getTriviaState();
-    if (existing) {
+    // Only block when a question is actively accepting answers; winner-display phase can be replaced
+    if (existing && !existing.winnerDisplayUntil) {
       return NextResponse.json({ error: 'A trivia is already active. Use !endtrivia or !endquiz in chat to cancel.' }, { status: 409 });
     }
     const state: TriviaState = {

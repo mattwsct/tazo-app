@@ -1883,7 +1883,7 @@ export default function AdminPage() {
                 <span className="setting-hint" style={{ margin: 0 }}>
                   {activeTriviaState === undefined
                     ? 'Current: …'
-                    : activeTriviaState
+                    : activeTriviaState && !activeTriviaState.winnerDisplayUntil
                       ? `Current: "${activeTriviaState.question}" (${activeTriviaState.points} pts)`
                       : 'Current: No trivia active'}
                 </span>
