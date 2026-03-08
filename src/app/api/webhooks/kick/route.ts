@@ -12,7 +12,7 @@ import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
 import { handleGoalCommand } from '@/lib/goal-chat-handler';
 import { handleAddCreditsCommand } from '@/lib/addcredits-chat-handler';
-import { handleCategoryCommand } from '@/lib/category-chat-handler';
+import { handleCategoryCommand, setChannelCategoryToIRL } from '@/lib/category-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
@@ -167,11 +167,12 @@ export async function POST(request: NextRequest) {
     })();
   }
 
-  // Stream end: clear live flag, set stream_ended_at, reset title to location only, reset goals
+  // Stream end: clear live flag, set stream_ended_at, reset title to location only, default to IRL category, reset goals
   if (eventNorm === 'livestream.status.updated' && payload.is_live === false) {
     const now = Date.now();
     void markStreamLiveFromWebhook(false, now);
     void resetStreamTitleToLocationOnly();
+    void setChannelCategoryToIRL();
     void resetStreamGoalsOnStreamStart();
     void (async () => {
       try {

@@ -72,3 +72,21 @@ export async function handleCategoryCommand(
 
   return { handled: true, reply: `Category changed to ${categoryName}` };
 }
+
+/** Set channel category to IRL (e.g. when stream ends). Fire-and-forget; logs on failure. */
+export async function setChannelCategoryToIRL(): Promise<void> {
+  try {
+    const accessToken = await getValidAccessToken();
+    if (!accessToken) return;
+    const categoryId = await getCachedCategoryId(accessToken, CATEGORY_COMMANDS.irl);
+    if (categoryId == null) return;
+    const result = await updateChannelCategory(accessToken, categoryId);
+    if (!result.ok && process.env.NODE_ENV === 'development') {
+      console.warn('[category] Failed to set IRL on stream end:', result.error);
+    }
+  } catch (e) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[category] setChannelCategoryToIRL error:', e);
+    }
+  }
+}
