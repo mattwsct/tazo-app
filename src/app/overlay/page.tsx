@@ -1576,17 +1576,21 @@ function OverlayPage() {
           )}
         </div>
 
-        {/* Bottom Right: Poll, Alerts */}
+        {/* Bottom Right: Poll, Trivia, Alerts */}
         {settings.pollState ||
+        settings.triviaState ||
         settings.showOverlayAlerts !== false ? (
           <BottomRightPanel settings={settings} refreshSettings={refreshSettings}>
-            {settings.pollState && (() => {
+            {(() => {
               const poll = settings.pollState;
+              const trivia = settings.triviaState;
               const now = Date.now();
-              const totalVotes = poll.options.reduce((s, o) => s + o.votes, 0);
-              const isWinner = poll.status === 'winner';
-              const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
-              if (poll.status === 'active' || (showWinner && totalVotes > 0)) {
+              const isPollActive = poll && (poll.status === 'active' || (poll.status === 'winner' && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil));
+              const totalVotes = poll?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
+              const showPoll = !!(isPollActive && totalVotes >= 0);
+              if (showPoll && poll) {
+                const isWinner = poll.status === 'winner';
+                const showWinner = isWinner && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil;
                 const isNewPoll = poll.id !== lastPollIdRef.current;
                 if (isNewPoll) lastPollIdRef.current = poll.id;
                 return (
@@ -1651,6 +1655,16 @@ function OverlayPage() {
                           );
                         });
                       })()}
+                    </div>
+                  </div>
+                );
+              }
+              if (trivia) {
+                return (
+                  <div className="overlay-box poll-box">
+                    <div className="poll-question">{filterTextForDisplay(trivia.question)}</div>
+                    <div className="poll-option-text" style={{ marginTop: 4 }}>
+                      First correct answer wins {trivia.points} Credits
                     </div>
                   </div>
                 );

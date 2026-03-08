@@ -8,6 +8,7 @@ export type DisplayMode = 'always' | 'auto' | 'hidden';
 export type MinimapTheme = 'auto' | 'light' | 'dark';
 
 import type { PollState } from '@/types/poll';
+import type { TriviaState } from '@/types/trivia';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
@@ -25,6 +26,8 @@ export interface OverlaySettings {
   showAltitude?: boolean;
   /** Chat poll state (from Kick). Not persisted in settings. */
   pollState?: PollState | null;
+  /** Trivia (first-to-answer) state. Not persisted in overlay_settings. */
+  triviaState?: TriviaState | null;
   /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   showLeaderboard?: boolean;
   /** When false, hide the rotating carousel — alerts still pop up in goal bars when they fire. */
@@ -179,7 +182,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 
 // Valid settings schema for validation
 // Note: runtime fields are not persisted to KV
-export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'gamblingLeaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'earnedLeaderboardWeekly' | 'earnedLeaderboardMonthly' | 'earnedLeaderboardLifetime'>, 'boolean' | 'string' | 'number'> = {
+export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' | 'triviaState' | 'gamblingLeaderboardTop' | 'overlayAlerts' | 'streamGoals' | 'earnedLeaderboardWeekly' | 'earnedLeaderboardMonthly' | 'earnedLeaderboardLifetime'>, 'boolean' | 'string' | 'number'> = {
   locationDisplay: 'string',
   customLocation: 'string',
   showCountryName: 'boolean',

@@ -60,8 +60,12 @@ export default function AdminPage() {
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
+  const [chipRewardTitleInput, setChipRewardTitleInput] = useState<string>('Buy Credits');
+  const [chipRewardChipsInput, setChipRewardChipsInput] = useState<string>('50');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const chipRewardTitleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const chipRewardChipsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
@@ -113,6 +117,13 @@ export default function AdminPage() {
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
   const [kickPollOneVotePerPerson, setKickPollOneVotePerPerson] = useState(false);
+  const [triviaQuestion, setTriviaQuestion] = useState('');
+  const [triviaAnswers, setTriviaAnswers] = useState('');
+  const [triviaPoints, setTriviaPoints] = useState(50);
+  const [triviaRandomQuestionsText, setTriviaRandomQuestionsText] = useState('');
+  const [triviaDefaultPoints, setTriviaDefaultPoints] = useState(50);
+  const [triviaStartLoading, setTriviaStartLoading] = useState(false);
+  const triviaRandomQuestionsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
   
@@ -270,6 +281,13 @@ export default function AdminPage() {
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
         if (d?.oneVotePerPerson !== undefined) setKickPollOneVotePerPerson(d.oneVotePerPerson);
+      })
+      .catch(() => {});
+    fetch('/api/trivia-settings', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.randomQuestionsText !== undefined) setTriviaRandomQuestionsText(d.randomQuestionsText ?? '');
+        if (d?.defaultPoints != null) setTriviaDefaultPoints(d.defaultPoints);
       })
       .catch(() => {});
     fetch('/api/kick-channel', { credentials: 'include' })
@@ -700,8 +718,38 @@ export default function AdminPage() {
     return () => {
       if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
       if (kicksGoalTargetTimeoutRef.current) clearTimeout(kicksGoalTargetTimeoutRef.current);
+      if (chipRewardTitleTimeoutRef.current) clearTimeout(chipRewardTitleTimeoutRef.current);
+      if (chipRewardChipsTimeoutRef.current) clearTimeout(chipRewardChipsTimeoutRef.current);
+      if (triviaRandomQuestionsTimeoutRef.current) clearTimeout(triviaRandomQuestionsTimeoutRef.current);
     };
   }, []);
+
+  // Sync channel reward inputs from settings
+  useEffect(() => {
+    setChipRewardTitleInput(settings.chipRewardTitle ?? 'Buy Credits');
+    setChipRewardChipsInput(String(settings.chipRewardChips ?? 50));
+  }, [settings.chipRewardTitle, settings.chipRewardChips]);
+
+  // Debounced channel reward title (1s delay before saving)
+  const handleChipRewardTitleChange = useCallback((value: string) => {
+    setChipRewardTitleInput(value);
+    if (chipRewardTitleTimeoutRef.current) clearTimeout(chipRewardTitleTimeoutRef.current);
+    chipRewardTitleTimeoutRef.current = setTimeout(() => {
+      chipRewardTitleTimeoutRef.current = null;
+      handleSettingsChange({ chipRewardTitle: value || 'Buy Credits' });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  // Debounced credits per redemption (1s delay before saving)
+  const handleChipRewardChipsChange = useCallback((value: string) => {
+    setChipRewardChipsInput(value);
+    if (chipRewardChipsTimeoutRef.current) clearTimeout(chipRewardChipsTimeoutRef.current);
+    chipRewardChipsTimeoutRef.current = setTimeout(() => {
+      chipRewardChipsTimeoutRef.current = null;
+      const n = Math.max(1, Math.min(10000, parseInt(value, 10) || 50));
+      handleSettingsChange({ chipRewardChips: n });
+    }, 1000);
+  }, [handleSettingsChange]);
 
   // Manual location update (browser geolocation, clear)
   const [locationFromBrowserLoading, setLocationFromBrowserLoading] = useState(false);
@@ -1400,8 +1448,8 @@ export default function AdminPage() {
                   <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Channel reward title</label>
                   <input
                     type="text"
-                    value={settings.chipRewardTitle ?? 'Buy Credits'}
-                    onChange={(e) => handleSettingsChange({ chipRewardTitle: e.target.value || 'Buy Credits' })}
+                    value={chipRewardTitleInput}
+                    onChange={(e) => handleChipRewardTitleChange(e.target.value)}
                     placeholder="Buy Credits"
                     className="setting-input"
                     style={{ maxWidth: 240 }}
@@ -1412,11 +1460,25 @@ export default function AdminPage() {
                     type="number"
                     min={1}
                     max={10000}
-                    value={settings.chipRewardChips ?? 50}
-                    onChange={(e) => handleSettingsChange({ chipRewardChips: Math.max(1, Math.min(10000, parseInt(e.target.value, 10) || 50)) })}
+                    value={chipRewardChipsInput}
+                    onChange={(e) => handleChipRewardChipsChange(e.target.value)}
                     className="setting-input"
                     style={{ maxWidth: 100 }}
                   />
+                </div>
+              )}
+              {settings.gamblingEnabled !== false && (
+                <div className="setting-group" style={{ marginTop: 16 }}>
+                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Ignored users</label>
+                  <textarea
+                    value={leaderboardExcludedBotsInput}
+                    onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
+                    placeholder="e.g. bot1, bot2"
+                    className="setting-input"
+                    rows={3}
+                    style={{ maxWidth: 360, resize: 'vertical' }}
+                  />
+                  <p className="setting-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won’t earn Credits from sub/gift/kicks and won’t appear on !leaderboard.</p>
                 </div>
               )}
             </div>
@@ -1789,6 +1851,121 @@ export default function AdminPage() {
                     )}
                   </div>
                 </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="trivia" title="❓ Trivia">
+            <div className="setting-group">
+              <p className="setting-hint" style={{ marginBottom: 12 }}>
+                First-to-answer trivia. When active, uses the same overlay slot as the poll (poll takes priority). Mods can use <strong>!trivia</strong> in chat to start a random question from the list below, or start a custom one here.
+              </p>
+              <div className="form-stack" style={{ maxWidth: 520 }}>
+                <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Custom question</label>
+                <input
+                  type="text"
+                  className="setting-input"
+                  value={triviaQuestion}
+                  onChange={(e) => setTriviaQuestion(e.target.value)}
+                  placeholder="e.g. What's my favourite dinner?"
+                  style={{ maxWidth: 360 }}
+                />
+                <label className="setting-label" style={{ display: 'block', marginTop: 8, marginBottom: 4 }}>Correct answer(s)</label>
+                <textarea
+                  className="setting-input"
+                  value={triviaAnswers}
+                  onChange={(e) => setTriviaAnswers(e.target.value)}
+                  placeholder="Comma or newline separated, e.g. Pizza, pasta"
+                  rows={2}
+                  style={{ maxWidth: 360, resize: 'vertical' }}
+                />
+                <label className="setting-label" style={{ display: 'block', marginTop: 8, marginBottom: 4 }}>Points for correct answer</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10000}
+                  className="setting-input"
+                  value={triviaPoints}
+                  onChange={(e) => setTriviaPoints(Math.max(1, Math.min(10000, parseInt(e.target.value, 10) || 50)))}
+                  style={{ maxWidth: 100 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ marginTop: 12 }}
+                  disabled={!triviaQuestion.trim() || !triviaAnswers.trim() || triviaStartLoading}
+                  onClick={async () => {
+                    setTriviaStartLoading(true);
+                    try {
+                      const answers = triviaAnswers.split(/[\n,]+/).map((a) => a.trim()).filter(Boolean);
+                      const r = await authenticatedFetch('/api/trivia-start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: triviaQuestion.trim(), answers, points: triviaPoints }),
+                      });
+                      const data = await r.json();
+                      if (r.ok) {
+                        setToast({ type: 'saved', message: 'Trivia started!' });
+                      } else {
+                        setToast({ type: 'error', message: data.error ?? 'Failed to start trivia' });
+                      }
+                    } catch {
+                      setToast({ type: 'error', message: 'Failed to start trivia' });
+                    }
+                    setTimeout(() => setToast(null), 3000);
+                    setTriviaStartLoading(false);
+                  }}
+                >
+                  {triviaStartLoading ? 'Starting…' : 'Start custom trivia'}
+                </button>
+              </div>
+              <div className="form-stack" style={{ maxWidth: 520, marginTop: 24 }}>
+                <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Random quiz questions (for !trivia)</label>
+                <p className="setting-hint" style={{ marginBottom: 6 }}>
+                  One question and answer per line. Format: <code>Question ? Answer</code> (e.g. What&apos;s Tazo&apos;s favourite dinner? Pizza)
+                </p>
+                <textarea
+                  className="setting-input"
+                  value={triviaRandomQuestionsText}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTriviaRandomQuestionsText(val);
+                    if (triviaRandomQuestionsTimeoutRef.current) clearTimeout(triviaRandomQuestionsTimeoutRef.current);
+                    triviaRandomQuestionsTimeoutRef.current = setTimeout(() => {
+                      triviaRandomQuestionsTimeoutRef.current = null;
+                      authenticatedFetch('/api/trivia-settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ randomQuestionsText: val }),
+                      }).then(() => setToast({ type: 'saved', message: 'Saved!' })).catch(() => {}).finally(() => setTimeout(() => setToast(null), 2000));
+                    }, 1000);
+                  }}
+                  placeholder={"What's my favourite dinner? Pizza\nBest pizza topping? Pepperoni"}
+                  rows={6}
+                  style={{ maxWidth: 360, resize: 'vertical' }}
+                />
+                <label className="setting-label" style={{ display: 'block', marginTop: 8, marginBottom: 4 }}>Default points (for !trivia random)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10000}
+                  className="setting-input"
+                  value={triviaDefaultPoints}
+                  onChange={async (e) => {
+                    const val = Math.max(1, Math.min(10000, parseInt(e.target.value, 10) || 50));
+                    setTriviaDefaultPoints(val);
+                    try {
+                      await authenticatedFetch('/api/trivia-settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ defaultPoints: val }),
+                      });
+                      setToast({ type: 'saved', message: 'Saved!' });
+                    } catch { setToast({ type: 'error', message: 'Failed to save' }); }
+                    setTimeout(() => setToast(null), 2000);
+                  }}
+                  style={{ maxWidth: 100 }}
+                />
+              </div>
+            </div>
           </CollapsibleSection>
 
           <CollapsibleSection id="message-templates" title="📋 Chat message templates">

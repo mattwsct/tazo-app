@@ -417,6 +417,12 @@ export async function hit(username: string): Promise<string> {
     return `🃏 Bust (${value})! -${game.bet}. (${bal} Credits)`;
   }
 
+  if (value === 21) {
+    game.createdAt = Date.now();
+    await kv.set(gameKey(user), game);
+    return stand(username);
+  }
+
   game.createdAt = Date.now();
   await kv.set(gameKey(user), game);
   const handLabel = game.split ? (isHand1 ? 'H1' : 'H2') : '';

@@ -7,6 +7,7 @@ import {
 } from '@/lib/kick-api';
 import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
 import { handleChatPoll } from '@/lib/poll-webhook-handler';
+import { handleTrivia } from '@/lib/trivia-webhook-handler';
 import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
 import { handleGoalCommand } from '@/lib/goal-chat-handler';
@@ -207,6 +208,9 @@ export async function POST(request: NextRequest) {
     })();
     const pollResult = await handleChatPoll(content, sender, payload);
     if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
+
+    const triviaResult = await handleTrivia(content, sender, payload);
+    if (triviaResult.handled) return NextResponse.json({ received: true }, { status: 200 });
 
     const titleResult = await handleStreamTitleCommand(content, sender, payload);
     if (titleResult.handled) {

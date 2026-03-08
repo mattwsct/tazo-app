@@ -42,6 +42,7 @@ export default function BottomRightPanel({
       (poll.status === 'winner' && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil));
   const totalVotes = poll?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
   const showPoll = !!(isPollActive && totalVotes >= 0);
+  const showTrivia = !showPoll && !!settings.triviaState;
 
   const showGoalsRotation = settings.showGoalsRotation !== false;
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
@@ -189,7 +190,9 @@ export default function BottomRightPanel({
   const hasGoalsContent = showGoalsRotation && goalSlides.length > 0;
   const hasGoalAlertContent = !hasGoalsContent && (hasSubTarget || hasKicksTarget) && (subsAlert != null || kicksAlert != null);
   const hasPollContent = showPoll;
-  const hasContent = hasGoalsContent || hasGoalAlertContent || hasPollContent;
+  const hasTriviaContent = showTrivia;
+  const hasPollOrTriviaContent = hasPollContent || hasTriviaContent;
+  const hasContent = hasGoalsContent || hasGoalAlertContent || hasPollOrTriviaContent;
 
   if (!hasContent) return null;
 
@@ -261,8 +264,8 @@ export default function BottomRightPanel({
           {kicksAlert && hasKicksTarget && renderKicksGoal()}
         </div>
       )}
-      {/* Bottom: Poll when active */}
-      {hasPollContent && (
+      {/* Bottom: Poll or Trivia when active */}
+      {hasPollOrTriviaContent && (
         <div className="bottom-right-cycling-wrapper">
           <div className="bottom-right-cycling-slots">
             <div className="bottom-right-cycling-slide cycling-slide-in">

@@ -5,6 +5,7 @@ import { validateEnvironment } from '@/lib/env-validator';
 import { OverlayLogger } from '@/lib/logger';
 import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { POLL_STATE_KEY, type PollState } from '@/types/poll';
+import { TRIVIA_STATE_KEY, type TriviaState } from '@/types/trivia';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 
@@ -13,12 +14,12 @@ export const dynamic = 'force-dynamic';
 async function handleGET() {
   try {
     logKVUsage('read');
-    const [settings, rawPollState] = await kv.mget<[Record<string, unknown> | null, PollState | null]>(
-      'overlay_settings',
-      POLL_STATE_KEY
-    );
+    const [settings, rawPollState, rawTriviaState] = await kv.mget<
+      [Record<string, unknown> | null, PollState | null, TriviaState | null]
+    >('overlay_settings', POLL_STATE_KEY, TRIVIA_STATE_KEY);
     const pollState: PollState | null = rawPollState ?? null;
-    const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState });
+    const triviaState: TriviaState | null = rawTriviaState ?? null;
+    const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState, triviaState });
 
     const needGoals = merged.showSubGoal || merged.showKicksGoal;
 

@@ -5,7 +5,6 @@
 import { kv } from '@/lib/kv';
 import { KICK_BROADCASTER_SLUG_KEY, sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
-import { generateAutoPoll } from '@/utils/auto-poll-content';
 import {
   parsePollCommand,
   parseRankCommand,
@@ -47,8 +46,8 @@ function parseBadges(badges: unknown): { isMod: boolean; isVip: boolean; isOg: b
   return out;
 }
 
-/** Kick sender roles from payload. Checks identity.role, roles[], badges[], is_moderator/isModerator, etc. */
-function getSenderRoles(sender: unknown): { isMod: boolean; isVip: boolean; isOg: boolean; isSub: boolean } {
+/** Kick sender roles from payload. Checks identity.role, roles[], badges[], is_moderator/isModerator, etc. Exported for trivia handler. */
+export function getSenderRoles(sender: unknown): { isMod: boolean; isVip: boolean; isOg: boolean; isSub: boolean } {
   const out = { isMod: false, isVip: false, isOg: false, isSub: false };
   if (!sender || typeof sender !== 'object') return out;
   const s = sender as Record<string, unknown>;
@@ -136,29 +135,6 @@ export function buildPollStartMessage(question: string, options: { label: string
   const labels = options.map((o) => `'${o.label.toLowerCase()}'`);
   const optionStr = labels.length === 2 ? `${labels[0]} or ${labels[1]}` : labels.join(', ');
   return `Poll started! ${question} Type ${optionStr} in chat to vote. (${timeStr})`;
-}
-
-const DEFAULT_AUTO_POLL_NAMES = ['Option A', 'Option B', 'Option C', 'Option D', 'Option E'];
-
-/** Start a random auto poll (used when mod types !poll with no args). Returns announcement message. */
-async function startAutoPoll(durationSeconds: number): Promise<string> {
-  const { kv } = await import('@/lib/kv');
-  const settingsRaw = (await kv.get<{ bossEventNames?: string; bossNames?: string }>('overlay_settings')) ?? {};
-  const namesStr = settingsRaw.bossEventNames ?? settingsRaw.bossNames ?? '';
-  const bossNames = namesStr
-    ? namesStr.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-    : DEFAULT_AUTO_POLL_NAMES;
-  const { question, options } = generateAutoPoll(bossNames.length ? bossNames : DEFAULT_AUTO_POLL_NAMES);
-  const state: PollState = {
-    id: `poll_${Date.now()}`,
-    question,
-    options: options.map((o) => ({ ...o, votes: 0, voters: {} })),
-    startedAt: Date.now(),
-    durationSeconds,
-    status: 'active',
-  };
-  await setPollState(state);
-  return buildPollStartMessage(question, options, durationSeconds);
 }
 
 /** Apply a vote to poll state. Mutates options. */
@@ -295,21 +271,9 @@ export async function handleChatPoll(
     return { handled: true };
   }
 
-  // --- !poll with no args: start a random auto poll (broadcaster/mod only) ---
+  // --- !poll with no args: show usage (no random poll) ---
   if (isBarePoll) {
-    const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
-    const roles = getSenderRoles(payload.sender);
-    const isModOrBroadcaster = roles.isMod || senderUsername.toLowerCase() === (broadcasterSlug?.toLowerCase() ?? '');
-    if (!isModOrBroadcaster) {
-      await replyChat(token, 'Usage: !poll Question? Option1, Option2 — or type !poll to start a random poll (mods only)', messageId);
-      return { handled: true };
-    }
-    if (initialState?.status === 'active') {
-      await replyChat(token, 'A poll is already active. Use !endpoll to end it first.', messageId);
-      return { handled: true };
-    }
-    const announcement = await startAutoPoll(settings.durationSeconds);
-    if (token) await sendKickChatMessage(token, announcement);
+    await replyChat(token, 'Usage: !poll Question? Option1, Option2 — or queue: !poll 60 Question? A, B', messageId);
     return { handled: true };
   }
 

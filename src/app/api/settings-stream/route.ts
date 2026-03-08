@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { kv } from '@/lib/kv';
 import { addConnection, removeConnection, getConnectionInfo, connections } from '@/lib/settings-broadcast';
 import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
+import { TRIVIA_STATE_KEY, TRIVIA_MODIFIED_KEY } from '@/types/trivia';
 import { STREAM_GOALS_MODIFIED_KEY } from '@/utils/stream-goals-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 
@@ -74,17 +75,20 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Function to check for settings and poll updates
       const checkForUpdates = async () => {
         try {
-          const [settings, settingsModified, pollState, pollModified, goalsModified] = await kv.mget([
+          const [settings, settingsModified, pollState, pollModified, triviaState, triviaModified, goalsModified] = await kv.mget([
             'overlay_settings',
             'overlay_settings_modified',
             POLL_STATE_KEY,
             POLL_MODIFIED_KEY,
+            TRIVIA_STATE_KEY,
+            TRIVIA_MODIFIED_KEY,
             STREAM_GOALS_MODIFIED_KEY,
           ]);
           const settingsTs = (settingsModified as number) ?? 0;
           const pollTs = (pollModified as number) ?? 0;
+          const triviaTs = (triviaModified as number) ?? 0;
           const goalsTs = (goalsModified as number) ?? 0;
-          const maxTs = Math.max(settingsTs, pollTs);
+          const maxTs = Math.max(settingsTs, pollTs, triviaTs);
 
           const settingsChanged = lastModified === 0 || maxTs > lastModified;
           const goalsChanged = goalsTs > lastGoalsModified;
@@ -94,6 +98,7 @@ export async function GET(request: NextRequest): Promise<Response> {
           const sendData: Record<string, unknown> = {
             ...(settings && typeof settings === 'object' ? settings : {}),
             pollState: pollState ?? null,
+            triviaState: triviaState ?? null,
             type: 'settings_update',
             timestamp: Math.max(maxTs, goalsTs),
           };

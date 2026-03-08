@@ -1,0 +1,25 @@
+/**
+ * Trivia (first-to-answer) types for overlay and Kick webhook.
+ */
+
+export interface TriviaState {
+  id: string;
+  question: string;
+  /** Normalized (lowercase) for matching; can have multiple spellings */
+  acceptedAnswers: string[];
+  points: number;
+  startedAt: number;
+}
+
+export interface TriviaSettings {
+  /** Default points when starting via !trivia (random from list) */
+  defaultPoints: number;
+  /** Raw text: one question and answer per line, format "Question ? Answer" */
+  randomQuestionsText: string;
+}
+
+export const DEFAULT_TRIVIA_POINTS = 50;
+
+export const TRIVIA_STATE_KEY = 'trivia_state';
+export const TRIVIA_MODIFIED_KEY = 'trivia_modified';
+export const TRIVIA_SETTINGS_KEY = 'trivia_settings';
