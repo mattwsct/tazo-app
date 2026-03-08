@@ -1652,6 +1652,24 @@ function OverlayPage() {
                 );
               }
               if (trivia) {
+                const isTriviaWinnerPhase =
+                  trivia.winnerDisplayUntil != null && now < trivia.winnerDisplayUntil;
+                const showTriviaBox =
+                  !trivia.winnerDisplayUntil || now < trivia.winnerDisplayUntil;
+                if (!showTriviaBox) return null;
+                if (isTriviaWinnerPhase && trivia.winnerUsername != null) {
+                  return (
+                    <div className="overlay-box trivia-box trivia-box-winner">
+                      <div className="trivia-badge">TRIVIA</div>
+                      <div className="trivia-winner-line">
+                        {filterTextForDisplay(trivia.winnerUsername)} got it!
+                      </div>
+                      <div className="trivia-answer-reward">
+                        {filterTextForDisplay(trivia.winnerAnswer ?? '')} — {trivia.winnerPoints ?? 0} Credits
+                      </div>
+                    </div>
+                  );
+                }
                 return (
                   <div className="overlay-box trivia-box">
                     <div className="trivia-badge">TRIVIA</div>

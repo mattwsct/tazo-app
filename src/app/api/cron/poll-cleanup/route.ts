@@ -1,6 +1,6 @@
 /**
  * Cron: Ends active polls when duration exceeded (no chat needed) and clears winner display.
- * Runs every minute. Overlay also calls poll-end-trigger when countdown ends for immediate chat update.
+ * Also clears expired trivia winner state. Runs every minute.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -8,6 +8,7 @@ import { getPollState, setPollState, popPollQueue, getPollQueue, tryAcquirePollE
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { buildPollStartMessage } from '@/lib/poll-webhook-handler';
 import { endOverduePollIfAny } from '@/lib/poll-end-overdue';
+import { getTriviaState, setTriviaState } from '@/lib/trivia-store';
 import type { PollState } from '@/types/poll';
 
 export const dynamic = 'force-dynamic';
@@ -20,8 +21,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const state = await getPollState();
   const now = Date.now();
+
+  // Clear expired trivia winner so the slot can be used and KV stays clean
+  const triviaState = await getTriviaState();
+  if (triviaState?.winnerDisplayUntil != null && now >= triviaState.winnerDisplayUntil) {
+    await setTriviaState(null);
+  }
+
+  const state = await getPollState();
 
   if (process.env.NODE_ENV === 'development') {
     const queue = await getPollQueue();

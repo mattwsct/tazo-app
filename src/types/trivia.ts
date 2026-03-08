@@ -9,6 +9,11 @@ export interface TriviaState {
   acceptedAnswers: string[];
   points: number;
   startedAt: number;
+  /** Set when someone wins; overlay shows winner until winnerDisplayUntil */
+  winnerUsername?: string;
+  winnerAnswer?: string;
+  winnerPoints?: number;
+  winnerDisplayUntil?: number;
 }
 
 export interface TriviaSettings {

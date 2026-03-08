@@ -42,7 +42,11 @@ export default function BottomRightPanel({
       (poll.status === 'winner' && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil));
   const totalVotes = poll?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
   const showPoll = !!(isPollActive && totalVotes >= 0);
-  const showTrivia = !showPoll && !!settings.triviaState;
+  const trivia = settings.triviaState;
+  const showTrivia =
+    !showPoll &&
+    !!trivia &&
+    (!trivia.winnerDisplayUntil || now < trivia.winnerDisplayUntil);
 
   const showGoalsRotation = settings.showGoalsRotation !== false;
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);

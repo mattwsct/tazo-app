@@ -11,6 +11,7 @@ import {
   setTriviaState,
   pickRandomTrivia,
 } from '@/lib/trivia-store';
+import type { TriviaState } from '@/types/trivia';
 
 export interface HandleTriviaResult {
   handled: boolean;
@@ -120,7 +121,15 @@ export async function handleTrivia(
   );
   if (!matched) return { handled: false };
 
-  await setTriviaState(null);
+  const winnerDisplayMs = 8 * 1000;
+  const winnerState: TriviaState = {
+    ...state,
+    winnerUsername: senderUsername,
+    winnerAnswer: state.acceptedAnswers[0] ?? '?',
+    winnerPoints: state.points,
+    winnerDisplayUntil: Date.now() + winnerDisplayMs,
+  };
+  await setTriviaState(winnerState);
   await addCredits(senderUsername, state.points, { skipExclusions: true });
   const token = await getValidAccessToken();
   const answerDisplay = state.acceptedAnswers[0] ?? '?';
