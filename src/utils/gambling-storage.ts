@@ -12,7 +12,6 @@ import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/lea
 
 const CREDITS_BALANCE_KEY = 'credits_balance';
 const DEAL_COOLDOWN_KEY = 'blackjack_deal_last_at';
-const LEADERBOARD_DISPLAY_NAMES_KEY = 'leaderboard_display_names';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
 const GAME_TIMEOUT_MS = 90_000;
 const DEAL_COOLDOWN_MS = 15_000;

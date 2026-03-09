@@ -23,7 +23,6 @@ const ALERT_LABELS: Record<string, string> = {
 
 export default function BottomRightPanel({
   settings,
-  refreshSettings,
   children,
 }: {
   settings: OverlaySettings;

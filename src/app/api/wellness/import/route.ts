@@ -75,11 +75,6 @@ function parseHealthAutoExport(body: Record<string, unknown>): { updates: Partia
     const last = m.data[m.data.length - 1];
     return typeof last?.qty === 'number' ? last.qty : undefined;
   };
-  const lastAvg = (m: HealthMetric | undefined): number | undefined => {
-    if (!m?.data?.length) return undefined;
-    const last = m.data[m.data.length - 1];
-    return typeof last?.Avg === 'number' ? last.Avg : undefined;
-  };
 
   // step_count
   const stepCount = byName.get('step_count');

@@ -5,7 +5,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuth } from '@/lib/api-auth';
 import { getTriviaSettings, setTriviaSettings } from '@/lib/trivia-store';
-import { DEFAULT_TRIVIA_POINTS } from '@/types/trivia';
 
 export const dynamic = 'force-dynamic';
 

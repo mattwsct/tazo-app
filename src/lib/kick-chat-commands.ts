@@ -193,10 +193,6 @@ function parseBet(input: string | undefined, defaultBet = 5): number {
   return !isNaN(raw) && raw >= 1 ? raw : defaultBet;
 }
 
-function splitArgs(arg: string | undefined): string[] {
-  return (arg ?? '').trim().split(/\s+/).filter(Boolean);
-}
-
 export async function handleKickChatCommand(
   parsed: { cmd: KickChatCommand; arg?: string },
   senderUsername?: string

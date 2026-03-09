@@ -240,6 +240,26 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   leaderboardRotationSec: 'number',
 };
 
+/**
+ * Runtime-only overlay state — never stored to KV, computed/fetched at runtime.
+ * Used by get-settings endpoint and overlay page to combine persisted + live data.
+ */
+export interface OverlayRuntimeState {
+  pollState?: import('@/types/poll').PollState | null;
+  triviaState?: import('@/types/trivia').TriviaState | null;
+  streamGoals?: { subs: number; kicks: number };
+  gamblingLeaderboardTop?: { username: string; chips: number }[];
+  overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
+  earnedLeaderboardWeekly?: { username: string; earned: number }[];
+  earnedLeaderboardMonthly?: { username: string; earned: number }[];
+  earnedLeaderboardLifetime?: { username: string; earned: number }[];
+}
+
+/**
+ * Combined persisted + runtime state — used by overlay page and get-settings endpoint.
+ */
+export type OverlayState = OverlaySettings & OverlayRuntimeState;
+
 // SSE message types
 export interface SettingsUpdateMessage {
   type: 'settings_update';

@@ -19,8 +19,6 @@ interface GoalProgressBarProps {
   activeAlert?: GoalAlert | null;
   /** Label for the alert (e.g. "🎉 New sub") */
   alertLabel?: string;
-  /** Current time (ms) — passed from parent to avoid Date.now() in render. */
-  now?: number;
 }
 
 export default function GoalProgressBar({
@@ -32,7 +30,6 @@ export default function GoalProgressBar({
   subtext,
   activeAlert,
   alertLabel,
-  now,
 }: GoalProgressBarProps) {
   const targetSafe = Math.max(1, target);
   const pct = Math.min(100, Math.round((current / targetSafe) * 100));

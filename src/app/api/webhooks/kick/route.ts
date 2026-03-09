@@ -5,14 +5,6 @@ import {
   sendKickChatMessage,
   getValidAccessToken,
 } from '@/lib/kick-api';
-import { parseKickChatMessage, handleKickChatCommand } from '@/lib/kick-chat-commands';
-import { handleChatPoll } from '@/lib/poll-webhook-handler';
-import { handleTrivia } from '@/lib/trivia-webhook-handler';
-import { isModOrBroadcaster } from '@/lib/kick-role-check';
-import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
-import { handleGoalCommand } from '@/lib/goal-chat-handler';
-import { handleAddCreditsCommand } from '@/lib/addcredits-chat-handler';
-import { handleCategoryCommand, setChannelCategoryToIRL } from '@/lib/category-chat-handler';
 import { buildEventMessage } from '@/lib/kick-webhook-handler';
 import { getChannelRewardResponse } from '@/lib/kick-event-responses';
 import {
@@ -24,28 +16,20 @@ import {
   KICK_MESSAGE_TEMPLATE_ENABLED_KEY,
   KICK_ALERT_SETTINGS_KEY,
 } from '@/types/kick-messages';
-import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
-import { markStreamLiveFromWebhook } from '@/utils/stats-storage';
-import {
-  clearBlackjackStateOnStreamStart, isGamblingEnabled, addCredits,
-} from '@/utils/gambling-storage';
-import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
-import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
-import { pushSubAlert, pushResubAlert, pushGiftSubAlert, pushKicksAlert } from '@/utils/overlay-alerts-storage';
-import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
-import { resetStreamGoalsOnStreamStart, addStreamGoalSubs, addStreamGoalKicks, getStreamGoals } from '@/utils/stream-goals-storage';
-import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
-import { updateKickTitleGoals, resetStreamTitleToLocationOnly } from '@/lib/stream-title-updater';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
+import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
+import { handleStreamStatus } from './handlers/stream-status-handler';
+import { handleChatMessage } from './handlers/chat-handler';
+import { handleRewardRedemption } from './handlers/reward-handler';
+import { handleAlertEvents } from './handlers/alert-handler';
+
 const KICK_WEBHOOK_LOG_KEY = 'kick_webhook_log';
 const KICK_WEBHOOK_DEBUG_KEY = 'kick_webhook_last_debug';
 const KICK_WEBHOOK_DECISION_LOG_KEY = 'kick_webhook_decision_log';
-const KICK_REWARD_PAYLOAD_LOG_KEY = 'kick_reward_payload_log';
-const KICK_RECENT_EVENTS_KEY = 'kick_recent_events';
-const REWARD_PAYLOAD_LOG_MAX = 10;
-const RECENT_EVENTS_MAX = 25;
 const KICK_REWARD_SEEN_PREFIX = 'kick_reward_seen:';
+const KICK_RECENT_EVENTS_KEY = 'kick_recent_events';
+const RECENT_EVENTS_MAX = 25;
 const WEBHOOK_LOG_MAX = 20;
 const WEBHOOK_DECISION_LOG_MAX = 15;
 
@@ -77,8 +61,6 @@ export const maxDuration = 30;
 
 /**
  * GET - Webhook URL verification.
- * Kick (or similar) may send a GET when subscribing to verify the URL is reachable.
- * Some APIs use hub.mode=subscribe&hub.challenge=xxx — echo the challenge if present.
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -146,176 +128,12 @@ export async function POST(request: NextRequest) {
     await logWebhookReceived(eventType || '(unknown)');
   }
 
-  // Stream start: reset stats session, steps counter, and leaderboard when going live
-  if (eventNorm === 'livestream.status.updated' && payload.is_live === true) {
-    const now = Date.now();
-    void markStreamLiveFromWebhook(true, now);
-    void (async () => {
-      const { clearWellnessSnapshotAtStreamEnd } = await import('@/utils/wellness-storage');
-      await clearWellnessSnapshotAtStreamEnd();
-    })();
-    void (async () => {
-      if (await isGamblingEnabled()) void clearBlackjackStateOnStreamStart();
-    })();
-    void (async () => {
-      try {
-        const { subTarget: initialSubTarget } = await resetStreamGoalsOnStreamStart();
-        void updateKickTitleGoals(0, initialSubTarget).catch(() => {});
-      } catch (e) {
-        console.warn('Failed to reset stream session on stream start:', e);
-      }
-    })();
-  }
+  // Handle stream status events
+  await handleStreamStatus(payload, eventNorm);
 
-  // Stream end: clear live flag, set stream_ended_at, reset title to location only, default to IRL category, reset goals
-  if (eventNorm === 'livestream.status.updated' && payload.is_live === false) {
-    const now = Date.now();
-    void markStreamLiveFromWebhook(false, now);
-    void resetStreamTitleToLocationOnly();
-    void setChannelCategoryToIRL();
-    void resetStreamGoalsOnStreamStart();
-    void (async () => {
-      try {
-        const { setWellnessSnapshotAtStreamEnd } = await import('@/utils/wellness-storage');
-        await setWellnessSnapshotAtStreamEnd();
-      } catch (e) {
-        console.warn('Failed to set wellness snapshot at stream end:', e);
-      }
-    })();
-  }
-
-  // Chat: poll handling first (if enabled), then other commands.
+  // Handle chat messages
   if (eventNorm === 'chat.message.sent') {
-    const content = (payload.content as string) || '';
-    const sender = (payload.sender as { username?: string })?.username ?? '?';
-    try {
-      await kv.set(KICK_LAST_CHAT_MESSAGE_AT_KEY, Date.now());
-    } catch { /* ignore */ }
-    // Track human chat activity for offline gate (e.g. future features).
-    void (async () => {
-      try {
-        const senderNorm = sender.trim().toLowerCase();
-        if (!senderNorm.startsWith('@')) {
-          const [broadcasterSlug, excluded] = await Promise.all([
-            kv.get<string>(KICK_BROADCASTER_SLUG_KEY),
-            getLeaderboardExclusions(),
-          ]);
-          const isBroadcaster = broadcasterSlug && senderNorm === broadcasterSlug.trim().toLowerCase();
-          if (!isBroadcaster && !excluded.has(senderNorm)) {
-            await kv.set('offline_human_chat_at', String(Date.now()));
-          }
-        }
-      } catch { /* ignore */ }
-    })();
-    // Check trivia before poll: if both are active, a message that matches both (e.g. "north yorkshire"
-    // as trivia answer and as poll option) should count as the trivia answer, not as a poll vote.
-    const triviaResult = await handleTrivia(content, sender, payload);
-    if (triviaResult.handled) return NextResponse.json({ received: true }, { status: 200 });
-
-    const pollResult = await handleChatPoll(content, sender, payload);
-    if (pollResult.handled) return NextResponse.json({ received: true }, { status: 200 });
-
-    const titleResult = await handleStreamTitleCommand(content, sender, payload);
-    if (titleResult.handled) {
-      if (titleResult.reply) {
-        const accessToken = await getValidAccessToken();
-        if (accessToken) {
-          const messageId = (payload.id ?? payload.message_id) as string | undefined;
-          try {
-            await sendKickChatMessage(accessToken, titleResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
-          } catch (err) {
-            console.error('[Kick webhook] !title reply failed:', err instanceof Error ? err.message : String(err));
-          }
-        }
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
-    const categoryResult = await handleCategoryCommand(content, sender, payload);
-    if (categoryResult.handled) {
-      if (categoryResult.reply) {
-        const accessToken = await getValidAccessToken();
-        if (accessToken) {
-          const messageId = (payload.id ?? payload.message_id) as string | undefined;
-          try {
-            await sendKickChatMessage(accessToken, categoryResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
-          } catch (err) {
-            console.error('[Kick webhook] category reply failed:', err instanceof Error ? err.message : String(err));
-          }
-        }
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
-    const addcreditsResult = await handleAddCreditsCommand(content, sender, payload);
-    if (addcreditsResult.handled) {
-      if (addcreditsResult.reply) {
-        const accessToken = await getValidAccessToken();
-        if (accessToken) {
-          const messageId = (payload.id ?? payload.message_id) as string | undefined;
-          try {
-            await sendKickChatMessage(accessToken, addcreditsResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
-          } catch (err) {
-            console.error('[Kick webhook] !addcredits reply failed:', err instanceof Error ? err.message : String(err));
-          }
-        }
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
-    const goalResult = await handleGoalCommand(content, sender, payload);
-    if (goalResult.handled) {
-      if (goalResult.reply) {
-        const accessToken = await getValidAccessToken();
-        if (accessToken) {
-          const messageId = (payload.id ?? payload.message_id) as string | undefined;
-          try {
-            await sendKickChatMessage(accessToken, goalResult.reply, messageId ? { replyToMessageId: messageId } : undefined);
-          } catch (err) {
-            console.error('[Kick webhook] goal command reply failed:', err instanceof Error ? err.message : String(err));
-          }
-        }
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
-    const parsed = parseKickChatMessage(content);
-    if (parsed) {
-      const response = await handleKickChatCommand(parsed, sender);
-      if (response) {
-        const accessToken = await getValidAccessToken();
-        if (accessToken) {
-          const messageId = (payload.id ?? payload.message_id) as string | undefined;
-          try {
-            await sendKickChatMessage(accessToken, response, messageId ? { replyToMessageId: messageId } : undefined);
-          } catch (err) {
-            console.error('[Kick webhook] Chat command failed:', err instanceof Error ? err.message : String(err));
-          }
-        }
-      }
-      return NextResponse.json({ received: true }, { status: 200 });
-    }
-
-    // Non-command messages: bare-word blackjack actions (hit, stand, double, split)
-    const replyNonCmd = async (msg: string) => {
-      const accessToken = await getValidAccessToken();
-      if (accessToken) {
-        const messageId = (payload.id ?? payload.message_id) as string | undefined;
-        try {
-          await sendKickChatMessage(accessToken, msg, messageId ? { replyToMessageId: messageId } : undefined);
-        } catch { /* silent */ }
-      }
-    };
-
-    // Bare-word blackjack actions (hit, stand, double, split)
-    const bareWord = content.trim().toLowerCase();
-    const bareBlackjackCmds: Record<string, 'hit' | 'stand' | 'double' | 'split'> = { hit: 'hit', stand: 'stand', double: 'double', split: 'split' };
-    const bjCmd = bareBlackjackCmds[bareWord];
-    if (bjCmd) {
-      const bjResponse = await handleKickChatCommand({ cmd: bjCmd }, sender);
-      if (bjResponse) { await replyNonCmd(bjResponse); return NextResponse.json({ received: true }, { status: 200 }); }
-    }
-
+    await handleChatMessage(payload);
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
@@ -348,36 +166,11 @@ export async function POST(request: NextRequest) {
     } catch { /* ignore */ }
   };
 
+  // Handle reward redemption
   let chipRewardMessageSent = false;
   if (eventNorm === 'channel.reward.redemption.updated') {
-    const reward = payload.reward as { title?: string; name?: string } | undefined;
-    const rewardTitle = (reward?.title ?? reward?.name ?? '').trim();
-    const rewardLog = {
-      at: new Date().toISOString(),
-      id: payload.id,
-      status: String(payload.status ?? '').toLowerCase(),
-      redeemer: (payload.redeemer as { username?: string })?.username,
-      rewardTitle: rewardTitle || '?',
-      userInput: (payload.user_input as string)?.slice(0, 100) ?? null,
-    };
-    try {
-      await kv.lpush(KICK_REWARD_PAYLOAD_LOG_KEY, rewardLog);
-      await kv.ltrim(KICK_REWARD_PAYLOAD_LOG_KEY, 0, REWARD_PAYLOAD_LOG_MAX - 1);
-    } catch {
-      /* ignore */
-    }
-    // Credits channel reward: if reward title matches and status is approved, grant credits.
-    const status = String(payload.status ?? '').toLowerCase();
-    const redeemer = (payload.redeemer as { username?: string })?.username ?? '';
-    const redeemerUsername = redeemer.trim();
-    if (redeemerUsername && (status === 'accepted' || status === 'approved' || status === 'completed' || status === 'fulfilled')) {
-      const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardChips?: number }>('overlay_settings')) ?? {};
-      const matchTitle = (settings.chipRewardTitle ?? 'Buy Credits').trim().toLowerCase();
-      const credits = Math.max(0, Math.floor(settings.chipRewardChips ?? 50));
-      if (matchTitle && rewardTitle.toLowerCase() === matchTitle && credits > 0) {
-        void addCredits(redeemerUsername, credits, { skipExclusions: true });
-      }
-    }
+    const result = await handleRewardRedemption(payload);
+    chipRewardMessageSent = result.chipRewardMessageSent;
   }
 
   const isKnownEvent = EVENT_TYPE_TO_TOGGLE[eventNorm] !== undefined || EVENT_TYPE_TO_TOGGLE[eventType] !== undefined;
@@ -385,114 +178,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
-  // Push overlay alerts for follows, subs, gifts, kicks
-  const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
-  let didAlertOrLeaderboard = false;
+  // Handle alert events (follows, subs, gifts, kicks)
+  const { didAlertOrLeaderboard } = await handleAlertEvents(eventNorm, payload);
 
-  /** Handle sub-goal milestone after adding `count` new subs. */
-  const handleSubGoalMilestone = async (count: number) => {
-    const [goals, settings] = await Promise.all([
-      getStreamGoals(),
-      kv.get<Record<string, unknown>>('overlay_settings'),
-    ]);
-    const target = (settings?.subGoalTarget as number) ?? 5;
-    const increment = (settings?.subGoalIncrement as number) ?? 5;
-    const kicksTarget = (settings?.kicksGoalTarget as number) ?? 100;
-    const hasSubtext = !!(settings?.subGoalSubtext as string | null | undefined);
-    const showSubGoal = !!(settings?.showSubGoal);
-    const prevSubs = goals.subs - count;
-    if (showSubGoal && target > 0 && prevSubs < target && goals.subs >= target) {
-      // No label: auto-iterate to next multiple. With label: hold at 100% until cleared.
-      const newTarget = hasSubtext ? target : await bumpGoalTarget('subs', target, increment, goals.subs);
-      const token = await getValidAccessToken();
-      if (token) {
-        try {
-          await sendKickChatMessage(token, `🎉 Sub goal reached! ${goals.subs}/${target} subs this stream!`);
-        } catch (err) {
-          console.error('[Webhook] Sub milestone chat failed:', err instanceof Error ? err.message : String(err));
-        }
-        void updateKickTitleGoals(goals.subs, newTarget, goals.kicks, kicksTarget).catch(() => {});
-      } else {
-        console.warn('[Webhook] Sub milestone: no access token, chat message skipped');
-      }
-    } else {
-      void updateKickTitleGoals(goals.subs, target, goals.kicks, kicksTarget).catch(() => {});
-    }
-  };
-  if (eventNorm === 'channel.followed') {
-    const follower = getUsername(payload.follower);
-    if (follower) didAlertOrLeaderboard = true;
-  } else if (eventNorm === 'channel.subscription.new') {
-    const subscriber = payload.subscriber;
-    if (subscriber) {
-      const username = getUsername(subscriber);
-      if (username) void addCredits(username, 100);
-      await Promise.all([addStreamGoalSubs(1), pushSubAlert(subscriber)]);
-      didAlertOrLeaderboard = true;
-      await handleSubGoalMilestone(1);
-    }
-  } else if (eventNorm === 'channel.subscription.renewal') {
-    const subscriber = payload.subscriber;
-    const duration = (payload.duration as number) ?? 0;
-    if (subscriber) {
-      const username = getUsername(subscriber);
-      if (username) void addCredits(username, 100);
-      await Promise.all([addStreamGoalSubs(1), pushResubAlert(subscriber, duration > 0 ? duration : undefined)]);
-      didAlertOrLeaderboard = true;
-      await handleSubGoalMilestone(1);
-    }
-  } else if (eventNorm === 'channel.subscription.gifts') {
-    const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
-    const giftees = (payload.giftees as unknown[]) ?? [];
-    const count = giftees.length > 0 ? giftees.length : 1;
-    if (gifter) {
-      const gifterUsername = getUsername(gifter);
-      if (gifterUsername) void addCredits(gifterUsername, 100);
-      await Promise.all([
-        addStreamGoalSubs(count),
-        pushGiftSubAlert(gifter, count),
-      ]);
-      didAlertOrLeaderboard = true;
-      await handleSubGoalMilestone(count);
-    }
-  } else if (eventNorm === 'kicks.gifted') {
-    const sender = payload.sender;
-    const gift = payload.gift as { amount?: number; name?: string } | undefined;
-    const amount = Number(gift?.amount ?? 0);
-    const giftName = gift?.name as string | undefined;
-    if (sender && amount > 0) {
-      const senderUsername = getUsername(sender);
-      if (senderUsername) void addCredits(senderUsername, amount);
-      await Promise.all([
-        addStreamGoalKicks(amount),
-        pushKicksAlert(sender, amount, giftName),
-      ]);
-      didAlertOrLeaderboard = true;
-      const [goals, settings] = await Promise.all([
-        getStreamGoals(),
-        kv.get<Record<string, unknown>>('overlay_settings'),
-      ]);
-      const target = (settings?.kicksGoalTarget as number) ?? 100;
-      const increment = (settings?.kicksGoalIncrement as number) ?? 100;
-      const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
-      const prevKicks = goals.kicks - amount;
-      const showKicksGoal = !!(settings?.showKicksGoal);
-      if (showKicksGoal && target > 0 && prevKicks < target && goals.kicks >= target) {
-        // No label: auto-iterate to next multiple. With label: hold at 100% until cleared.
-        if (!hasKicksSubtext) await bumpGoalTarget('kicks', target, increment, goals.kicks);
-        const token = await getValidAccessToken();
-        if (token) {
-          try {
-            await sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`);
-          } catch (err) {
-            console.error('[Webhook] Kicks milestone chat failed:', err instanceof Error ? err.message : String(err));
-          }
-        } else {
-          console.warn('[Webhook] Kicks milestone: no access token, chat message skipped');
-        }
-      }
-    }
-  }
   if (didAlertOrLeaderboard) {
     void broadcastAlertsAndLeaderboard();
   }

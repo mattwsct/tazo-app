@@ -12,6 +12,11 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 // Hook imports
 import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { useRenderPerformance } from '@/lib/performance';
+import { useTimeDisplay } from '@/hooks/overlay/useTimeDisplay';
+import { useWeatherData } from '@/hooks/overlay/useWeatherData';
+import { useLocationData } from '@/hooks/overlay/useLocationData';
+import { useMovementData } from '@/hooks/overlay/useMovementData';
+import { useMinimapVisibility } from '@/hooks/overlay/useMinimapVisibility';
 
 // Type imports
 import type { RTIRLPayload } from '@/utils/overlay-constants';
@@ -25,16 +30,14 @@ import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/
 import { formatLocation, formatCountryName } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
-import { 
-  createLocationWithCountryFallback, 
-  createWeatherFallback, 
+import {
+  createLocationWithCountryFallback,
+  createWeatherFallback,
   createSunriseSunsetFallback,
-  isNightTimeFallback
 } from '@/utils/fallback-utils';
-import { 
+import {
   clearTimer,
   safeApiCall,
-  formatTimeWithTimezone,
   isValidTimezone,
 } from '@/utils/overlay-helpers';
 import {
@@ -62,10 +65,7 @@ import WeatherRotatingSlot from '@/components/WeatherRotatingSlot';
 // Extract constants for cleaner code
 const {
   WALKING_PACE_THRESHOLD,
-  MINIMAP_STALENESS_CHECK_INTERVAL,
-  MINIMAP_HIDE_DELAY,
   MINIMAP_SPEED_MIN_READINGS,
-  MINIMAP_SPEED_MIN_DURATION_MS,
   GPS_STALE_TIMEOUT,
   ALTITUDE_CHANGE_THRESHOLD_M,
   ALTITUDE_DISPLAY_DURATION_MS,
@@ -119,23 +119,86 @@ function OverlayPage() {
   // Version parameter is added server-side via middleware to prevent OBS caching
   // No client-side code needed - middleware handles it before the page loads
 
-  // State
-  const [timeDisplay, setTimeDisplay] = useState({ time: '', date: '' });
-  const [location, setLocation] = useState<{ 
-    primary: string; 
-    secondary?: string;
-    countryCode?: string;
-  } | null>(null);
-  const [weather, setWeather] = useState<{ temp: number; desc: string } | null>(null);
-  const [timezone, setTimezone] = useState<string | null>(null);
-  const [sunriseSunset, setSunriseSunset] = useState<SunriseSunsetData | null>(null);
-  const [mapCoords, setMapCoords] = useState<[number, number] | null>(null);
-  const [currentSpeed, setCurrentSpeed] = useState(0);
-  const [currentAltitude, setCurrentAltitude] = useState<number | null>(null);
+  // Settings
   const [settings, setSettings, settingsLoadedRef, refreshSettings] = useOverlaySettings();
-  const [minimapVisible, setMinimapVisible] = useState(false);
-  const [minimapOpacity, setMinimapOpacity] = useState(1.0); // Fully opaque for better readability
-  const [overlayVisible, setOverlayVisible] = useState(false); // Track if overlay should be visible (fade-in delay)
+
+  // Weather data hook
+  const {
+    weather,
+    sunriseSunset,
+    timezone,
+    setSunriseSunset,
+    weatherFetchInProgress,
+    lastWeatherTime,
+    lastSuccessfulWeatherFetch,
+    updateWeather,
+    updateTimezone,
+    computeIsNightTime,
+  } = useWeatherData();
+
+  // Location data hook (depends on updateTimezone)
+  const {
+    location,
+    setLocation,
+    lastRawLocation,
+    locationReceivedFromRtirlRef,
+    lastLocationSourceTimestampRef,
+    persistentFallbackTimerRef,
+    lastLocationTime,
+    lastSuccessfulLocationFetch,
+    locationFetchInProgress,
+    updateLocation,
+  } = useLocationData(updateTimezone);
+
+  // Movement data hook
+  const {
+    currentSpeed,
+    setCurrentSpeed,
+    currentAltitude,
+    setCurrentAltitude,
+    mapCoords,
+    setMapCoords,
+    speedUpdateTimestamp,
+    setSpeedUpdateTimestamp,
+    altitudeUpdateTimestamp,
+    setAltitudeUpdateTimestamp,
+    gpsTimestampForDisplay,
+    setGpsTimestampForDisplay,
+    altitudeShowUntil,
+    setAltitudeShowUntil,
+    altitudeBaselineRef,
+    currentAltitudeRef,
+    altitudeShowTimeoutRef,
+    currentSpeedRef,
+    lastGpsUpdateTime,
+    lastGpsTimestamp,
+    lastCoords,
+    lastCoordsTime,
+    lastSpeedGpsTimestamp,
+    lastAltitudeGpsTimestamp,
+    lastStatsUpdateTime,
+    lastSentSpeed,
+    lastSentAltitude,
+  } = useMovementData();
+
+  // Speed readings ref for minimap visibility (defined here so RTIRL listener can also write to it)
+  const speedReadingsRef = useRef<{ speed: number; ts: number }[]>([]);
+
+  // Minimap visibility hook
+  const {
+    minimapVisible,
+    minimapOpacity,
+    sustainedSpeedVisibleRef,
+    updateMinimapVisibility,
+  } = useMinimapVisibility({
+    lastGpsUpdateTime,
+    speedReadingsRef,
+    currentSpeed,
+    settings,
+  });
+
+  // Overlay fade-in state
+  const [overlayVisible, setOverlayVisible] = useState(false);
   
   // When active poll countdown ends: show winner immediately from current votes, then sync with server
   const pollCountdownRef = useRef<{ pollId: string } | null>(null);
@@ -209,171 +272,10 @@ function OverlayPage() {
     return undefined;
   }, [settings.pollState, pollTick]);
 
-  // Rate-gating refs for external API calls
-  const lastWeatherTime = useRef(0);
-  const lastLocationTime = useRef(0);
-  const lastGpsUpdateTime = useRef(0); // Track when we last got GPS data (use ref for synchronous updates)
-  const lastGpsTimestamp = useRef(0); // Track the actual GPS timestamp from payload (not reception time)
-  const weatherFetchInProgress = useRef(false); // Track if weather fetch is already in progress
-  const locationFetchInProgress = useRef(false);
-  
-  // Stats update throttling
-  const lastStatsUpdateTime = useRef(0);
-  const lastSentSpeed = useRef<number | null>(null);
-  const lastSentAltitude = useRef<number | null>(null);
+  // Stats update throttling constants (kept local; not worth a hook)
   const STATS_UPDATE_INTERVAL = 5000; // Send stats updates every 5 seconds max
   const SPEED_CHANGE_THRESHOLD = 2; // Only send if speed changed by 2+ km/h
-  const ALTITUDE_CHANGE_THRESHOLD = 10; // Only send if altitude changed by 10+ meters // Track if location fetch is already in progress
-  const lastCoords = useRef<[number, number] | null>(null);
-  const lastCoordsTime = useRef(0);
-  const lastRawLocation = useRef<LocationData | null>(null);
-  const locationReceivedFromRtirlRef = useRef(false); // Prevents persistent fallback from overwriting RTIRL data
-  const lastLocationSourceTimestampRef = useRef(0); // updatedAt of current display (RTIRL or persistent) — used to prefer newer data
-  const persistentFallbackTimerRef = useRef<NodeJS.Timeout | null>(null); // Cleared when RTIRL provides data
-  const lastSuccessfulWeatherFetch = useRef(0); // Track when weather was last successfully fetched
-  const lastSuccessfulLocationFetch = useRef(0); // Track when location was last successfully fetched
-  
-  // API rate limiting tracking (per-second only)
-  // GPS update tracking for minimap
-  const minimapFadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Track speed readings with timestamps for minimap visibility
-  // Need N consecutive readings above threshold spanning at least MIN_DURATION_MS to filter GPS spikes
-  const speedReadingsRef = useRef<{ speed: number; ts: number }[]>([]);
-  
-  // Minimap speed-based visibility tracking
-  const lowSpeedStartTimeRef = useRef<number | null>(null); // Track when speed dropped below 10 km/h
-  const sustainedSpeedVisibleRef = useRef(false); // When speed-based: true only after sustained >= 10 km/h (minimap and speed display use this)
-  
-  // Speed and altitude staleness tracking
-  // Track GPS timestamps (from payload), not reception times, so staleness works when stationary
-  const lastSpeedGpsTimestamp = useRef(0); // Track GPS timestamp when speed was last updated
-  const lastAltitudeGpsTimestamp = useRef(0); // Track GPS timestamp when altitude was last updated
-  const [speedUpdateTimestamp, setSpeedUpdateTimestamp] = useState(0); // State to trigger re-renders
-  const [altitudeUpdateTimestamp, setAltitudeUpdateTimestamp] = useState(0); // State to trigger re-renders
-  const [gpsTimestampForDisplay, setGpsTimestampForDisplay] = useState(0); // Triggers locationDisplay recalc when GPS freshness changes (ref alone doesn't re-render)
-  // Altitude auto-display: baseline = first altitude this session; show when change >= threshold for duration
-  const altitudeBaselineRef = useRef<number | null>(null);
-  const currentAltitudeRef = useRef<number | null>(null); // Latest altitude for timeout callback
-  const [altitudeShowUntil, setAltitudeShowUntil] = useState(0); // Timestamp until we show (0 = hidden)
-  const altitudeShowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Ref to track current speed for minimap visibility (prevents infinite loops)
-  const currentSpeedRef = useRef(0);
-
-
-  
-  // Simplified minimap visibility logic:
-  // - Show: Speed >= 10 km/h for N consecutive RTIRL updates spanning ≥ 10s (filters GPS spikes)
-  // - Hide: Speed < 10 km/h for more than 1 minute OR no GPS updates in 1 minute
-  // When speed-based, minimap and speed display use the same condition so they appear together.
-  const updateMinimapVisibility = useCallback(() => {
-    // Hidden location mode → never show minimap (one setting controls both)
-    if (settings.locationDisplay === 'hidden') {
-      speedReadingsRef.current = [];
-      lowSpeedStartTimeRef.current = null;
-      sustainedSpeedVisibleRef.current = false;
-      if (minimapVisible) {
-        setMinimapVisible(false);
-        setMinimapOpacity(0);
-      }
-      return;
-    }
-
-    const now = Date.now();
-    const timeSinceLastGps = lastGpsUpdateTime.current > 0 ? (now - lastGpsUpdateTime.current) : Infinity;
-    const isGpsStale = timeSinceLastGps > MINIMAP_HIDE_DELAY; // 1 minute without GPS updates
-    
-    clearTimer(minimapFadeTimeoutRef);
-    
-    // Use current speed state directly - ref updated inline when needed
-    const speed = currentSpeed;
-    
-    if (settings.minimapSpeedBased) {
-      // Check if GPS is stale (no updates in 1 minute) - hide after delay
-      if (isGpsStale) {
-        if (minimapVisible) {
-          setMinimapVisible(false);
-          setMinimapOpacity(0);
-        }
-        sustainedSpeedVisibleRef.current = false;
-        // Clear speed readings and low speed timer when GPS is stale
-        speedReadingsRef.current = [];
-        lowSpeedStartTimeRef.current = null;
-        return;
-      }
-      
-      // GPS is fresh - check speed readings
-      // Require N consecutive readings all above threshold AND spanning at least MIN_DURATION_MS
-      // This prevents brief GPS spikes (1-3s) from triggering the minimap
-      const readings = speedReadingsRef.current;
-      const allAboveThreshold = readings.length >= MINIMAP_SPEED_MIN_READINGS &&
-        readings.every(r => r.speed >= WALKING_PACE_THRESHOLD);
-      const durationMs = readings.length >= 2
-        ? readings[readings.length - 1].ts - readings[0].ts
-        : 0;
-      const hasSustainedHighSpeed = allAboveThreshold && durationMs >= MINIMAP_SPEED_MIN_DURATION_MS;
-
-      if (speed >= WALKING_PACE_THRESHOLD) {
-        // Speed >= 10 km/h — show minimap (and speed display) only after sustained readings
-        if (hasSustainedHighSpeed) {
-          // Reset low speed timer since we're moving
-          lowSpeedStartTimeRef.current = null;
-          sustainedSpeedVisibleRef.current = true;
-
-          if (!minimapVisible) {
-            setMinimapVisible(true);
-            setMinimapOpacity(1.0);
-          } else {
-            setMinimapOpacity(1.0);
-          }
-        }
-      } else {
-        // Speed < 10 km/h — start timer, hide after 1 minute
-        sustainedSpeedVisibleRef.current = false;
-        if (minimapVisible) {
-          // Start tracking when speed dropped below threshold
-          if (lowSpeedStartTimeRef.current === null) {
-            lowSpeedStartTimeRef.current = now;
-          }
-          
-          // Check if 1 minute has passed since speed dropped
-          const timeSinceLowSpeed = now - lowSpeedStartTimeRef.current;
-          if (timeSinceLowSpeed >= MINIMAP_HIDE_DELAY) {
-          setMinimapVisible(false);
-          setMinimapOpacity(0);
-            speedReadingsRef.current = [];
-            lowSpeedStartTimeRef.current = null;
-          }
-        } else {
-          // Already hidden - clear readings and timer
-          speedReadingsRef.current = [];
-          lowSpeedStartTimeRef.current = null;
-        }
-      }
-    } else if (settings.showMinimap) {
-      // Manual show mode
-      lowSpeedStartTimeRef.current = null; // Clear low speed timer in manual mode
-      if (!minimapVisible) {
-        setMinimapVisible(true);
-        setMinimapOpacity(0);
-        requestAnimationFrame(() => setMinimapOpacity(1.0));
-      } else {
-        setMinimapOpacity(1.0);
-      }
-    } else {
-      // Manual hide mode (showMinimap is false and minimapSpeedBased is false)
-      // Hide immediately when manually turned off (no fade delay)
-      sustainedSpeedVisibleRef.current = false;
-      speedReadingsRef.current = [];
-      lowSpeedStartTimeRef.current = null;
-      if (minimapVisible) {
-        setMinimapVisible(false);
-        setMinimapOpacity(0);
-        // Clear any pending fade timeout
-        clearTimer(minimapFadeTimeoutRef);
-      }
-    }
-  }, [settings.showMinimap, settings.minimapSpeedBased, settings.locationDisplay, minimapVisible, currentSpeed]);
+  const ALTITUDE_CHANGE_THRESHOLD = 10; // Only send if altitude changed by 10+ meters
 
   // Track the last locationDisplay value to detect actual changes
   const lastLocationDisplayRef = useRef<string | undefined>(undefined);
@@ -383,25 +285,14 @@ function OverlayPage() {
     const locationDisplayChanged = settings.locationDisplay !== lastLocationDisplayRef.current;
     lastLocationDisplayRef.current = settings.locationDisplay;
 
-    // Only re-format location when locationDisplay actually changes
-    // Other settings changes (showWeather, showMinimap, etc.) don't need location re-formatting
     if (!locationDisplayChanged) {
-      return; // Skip re-formatting if locationDisplay hasn't changed
+      return;
     }
 
-    // Re-render location display instantly from cached raw data if available
-    // This ensures location display updates immediately when settings change
-    // IMPORTANT: Only re-format if we have complete location data (not just country)
-    // This prevents trying to format incomplete fallback data
     const hasCompleteData = hasCompleteLocationData(lastRawLocation.current);
-    
-    // Re-format location when locationDisplay changes if we have complete location data
-    // Use effective mode (staleness broadening) so fallback matches useMemo behavior
     if (hasCompleteData && settings.locationDisplay !== 'hidden') {
       try {
         const formatted = formatLocation(lastRawLocation.current!, settings.locationDisplay);
-        // Log only when locationDisplay actually changes (reduced verbosity)
-        // Force update location state to trigger re-render with new format
         setLocation({
           primary: formatted.primary || '',
           secondary: formatted.secondary,
@@ -409,11 +300,8 @@ function OverlayPage() {
         });
       } catch (error) {
         OverlayLogger.warn('Location re-formatting failed on settings change', { error });
-        // Ignore formatting errors; UI will update on next normal cycle
       }
     } else if (locationDisplayChanged && !hasCompleteData && settingsLoadedRef.current) {
-      // Only log if settings have been loaded (not initial default state)
-      // Log when locationDisplay changes but we don't have complete location data yet
       if (lastRawLocation.current) {
         OverlayLogger.location('Location display mode changed but no complete location data available yet', {
           mode: settings.locationDisplay
@@ -426,57 +314,6 @@ function OverlayPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- settingsLoadedRef is stable, only locationDisplay matters
   }, [settings.locationDisplay]);
-
-  // Combined minimap visibility updates - simpler than multiple separate effects
-  useEffect(() => {
-    try {
-      // Clear speed readings and timers when switching modes or disabling minimap
-      if (!settings.minimapSpeedBased) {
-        sustainedSpeedVisibleRef.current = false;
-        speedReadingsRef.current = [];
-        lowSpeedStartTimeRef.current = null;
-      }
-      updateMinimapVisibility();
-    } catch (error) {
-      OverlayLogger.error('Failed to update minimap visibility', error);
-      // Don't throw - allow overlay to continue functioning
-    }
-  }, [settings.showMinimap, settings.minimapSpeedBased, currentSpeed, updateMinimapVisibility]);
-
-  // Periodic check for GPS staleness (speed-based mode only)
-  useEffect(() => {
-    if (!settings.minimapSpeedBased) return;
-
-    const interval = setInterval(() => {
-      try {
-        updateMinimapVisibility();
-      } catch (error) {
-        OverlayLogger.error('Failed to update minimap visibility in staleness check', error);
-      }
-    }, MINIMAP_STALENESS_CHECK_INTERVAL);
-
-    return () => clearInterval(interval);
-  }, [settings.minimapSpeedBased, updateMinimapVisibility]);
-
-  // Cleanup timers on unmount
-  useEffect(() => {
-    return () => {
-      clearTimer(minimapFadeTimeoutRef);
-    };
-  }, []);
-
-
-
-
-  // Rate limiting is handled by checkRateLimit() from rate-limiting.ts
-  // This ensures both per-second (1/sec) and daily (5,000/day) limits are enforced
-
-
-
-
-  
-
-  // Refs
 
   // Global error handling - suppress harmless errors, log others
   useEffect(() => {
@@ -526,168 +363,34 @@ function OverlayPage() {
   }, []);
 
 
-  // Helper function to format time/date using timezone
-  const formatTime = useCallback((tz: string | null): { time: string; date: string } => {
-    if (!isValidTimezone(tz)) {
-      return { time: '', date: '' };
-    }
-    
-    // TypeScript: tz is guaranteed to be string here due to isValidTimezone check
-    const timezone = tz as string;
-    
-    try {
-      return formatTimeWithTimezone(timezone);
-    } catch (error) {
-      OverlayLogger.warn('Invalid timezone format, using UTC fallback', { timezone: tz, error });
-      return formatTimeWithTimezone('UTC');
-    }
-  }, []);
+  // Time display hook (depends on timezone from useWeatherData)
+  const { timeDisplay } = useTimeDisplay(timezone);
 
-  // Helper functions to update data - always update (no GPS staleness check)
-  // Visibility is controlled by "Hidden" option in location display mode
-  const updateLocation = useCallback((locationData: { primary: string; secondary?: string; countryCode?: string }) => {
-    setLocation(locationData);
-    lastSuccessfulLocationFetch.current = Date.now();
-  }, []);
-
-  const updateWeather = useCallback((weatherData: { temp: number; desc: string }) => {
-    setWeather(weatherData);
-    lastSuccessfulWeatherFetch.current = Date.now();
-  }, []);
-
-  // Single function to update timezone - used by all sources (LocationIQ, OpenWeatherMap, RTIRL)
-  // Timezone updates even when GPS is stale - we need accurate timezone for time display
-  const updateTimezone = useCallback((timezoneData: string) => {
-    if (!isValidTimezone(timezoneData)) {
-      return; // Don't set invalid timezones
-    }
-    setTimezone(timezoneData);
-    // Don't call markGpsReceived() here - timezone updates even when GPS is stale
-    // Location/weather visibility is controlled separately by hasReceivedFreshGps
-  }, []);
-
-  // Extract GPS timestamp from RTIRL payload (still needed for some edge cases)
+  // Extract GPS timestamp from RTIRL payload (still needed for location update in RTIRL closure)
   const extractGpsTimestamp = useCallback((payload: RTIRLPayload): number => {
-    const payloadWithTimestamp = payload as RTIRLPayload & { 
-      timestamp?: number; 
+    const payloadWithTimestamp = payload as RTIRLPayload & {
+      timestamp?: number;
       time?: number;
       reportedAt?: number;
       updatedAt?: number;
     };
-    
-    const payloadTimestamp = payloadWithTimestamp.reportedAt || 
-                            payloadWithTimestamp.updatedAt || 
-                            payloadWithTimestamp.timestamp || 
+
+    const payloadTimestamp = payloadWithTimestamp.reportedAt ||
+                            payloadWithTimestamp.updatedAt ||
+                            payloadWithTimestamp.timestamp ||
                             payloadWithTimestamp.time;
-    
-    return payloadTimestamp && typeof payloadTimestamp === 'number' 
-      ? payloadTimestamp 
+
+    return payloadTimestamp && typeof payloadTimestamp === 'number'
+      ? payloadTimestamp
       : Date.now();
-  }, []);
-  
-  // Time and date updates - run every 10s and only update state when time/date string changes.
-  // This avoids skipping a minute when the tab is throttled (e.g. OBS browser source in background):
-  // a single 60s timer can fire late and jump 6:43 → 6:45; frequent ticks keep the display in sync.
-  useEffect(() => {
-    if (!isValidTimezone(timezone)) {
-      setTimeDisplay({ time: '', date: '' });
-      return;
-    }
-
-    let lastTime = '';
-    let lastDate = '';
-
-    const updateTime = () => {
-      const formatted = formatTime(timezone);
-      if (formatted.time !== lastTime || formatted.date !== lastDate) {
-        lastTime = formatted.time;
-        lastDate = formatted.date;
-        setTimeDisplay(formatted);
-      }
-    };
-
-    updateTime();
-
-    const intervalId = setInterval(updateTime, 10000); // every 10 seconds
-    return () => clearInterval(intervalId);
-  }, [timezone, formatTime]);
-
-  // Persistent storage fallback - load from KV if RTIRL doesn't provide data within 15s
-  useEffect(() => {
-    const PERSISTENT_FALLBACK_DELAY = 15000;
-    const loadFromPersistentFallback = async () => {
-      if (locationReceivedFromRtirlRef.current) {
-        OverlayLogger.location('Skipping persistent fallback - already have RTIRL data');
-        return;
-      }
-      try {
-        OverlayLogger.location('Loading from persistent storage (RTIRL fallback)', { reason: 'no RTIRL data received' });
-        const res = await fetch('/api/location', { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.location && data.rawLocation) {
-            if (locationReceivedFromRtirlRef.current) return;
-            setLocation(data.location);
-            lastRawLocation.current = data.rawLocation;
-            // Use 0 when updatedAt missing — treat as very old so staleness broadening triggers (old browser-set data may lack timestamp)
-            lastLocationSourceTimestampRef.current = (typeof data.updatedAt === 'number' && data.updatedAt > 0) ? data.updatedAt : 0;
-            if (process.env.NODE_ENV !== 'production') {
-              OverlayLogger.location('Location from persistent storage (RTIRL unavailable)', {
-                primary: data.location.primary || 'none',
-                secondary: data.location.secondary || 'none'
-              });
-            }
-          } else {
-            OverlayLogger.location('Persistent storage empty - waiting for RTIRL');
-          }
-        } else {
-          OverlayLogger.warn('Persistent location fetch failed', { status: res.status });
-        }
-      } catch (error) {
-        OverlayLogger.warn('Failed to load from persistent storage', { error });
-      }
-    };
-    persistentFallbackTimerRef.current = setTimeout(loadFromPersistentFallback, PERSISTENT_FALLBACK_DELAY);
-    OverlayLogger.location('Waiting for RTIRL data', { fallbackIn: `${PERSISTENT_FALLBACK_DELAY / 1000}s if no data` });
-    return () => {
-      if (persistentFallbackTimerRef.current) {
-        clearTimeout(persistentFallbackTimerRef.current);
-        persistentFallbackTimerRef.current = null;
-      }
-    };
   }, []);
 
   // Cleanup altitude show timeout on unmount
-  useEffect(() => () => {
-    clearTimer(altitudeShowTimeoutRef);
-  }, []);
-
-  // Periodic check for browser-set location — use persistent when newer than our current display (e.g. admin clicked Get from browser)
   useEffect(() => {
-    const PERSISTENT_CHECK_INTERVAL = 90000; // 90s
-    const checkPersistent = async () => {
-      try {
-        const res = await fetch('/api/location', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.location?.primary && !data.rawLocation) return;
-        const persistentUpdatedAt = data.updatedAt as number | undefined;
-        if (persistentUpdatedAt && persistentUpdatedAt > lastLocationSourceTimestampRef.current) {
-          lastLocationSourceTimestampRef.current = persistentUpdatedAt;
-          lastRawLocation.current = data.rawLocation ?? lastRawLocation.current;
-          setLocation(data.location);
-          // Apply timezone from stored location if available (browser-location path has no RTIRL to trigger weather fetch)
-          const storedTz = data.rawLocation?.timezone as string | undefined;
-          if (storedTz) updateTimezone(storedTz);
-          if (process.env.NODE_ENV !== 'production') {
-            OverlayLogger.location('Using persistent (newer than RTIRL)', { updatedAt: persistentUpdatedAt, timezone: storedTz ?? 'none' });
-          }
-        }
-      } catch { /* ignore */ }
+    return () => {
+      clearTimer(altitudeShowTimeoutRef);
     };
-    const id = setInterval(checkPersistent, PERSISTENT_CHECK_INTERVAL);
-    return () => clearInterval(id);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- altitudeShowTimeoutRef is a stable ref
 
   // RTIRL connection - use refs to avoid re-running on timezone/settings changes
   const timezoneRef = useRef(timezone);
@@ -851,7 +554,6 @@ function OverlayPage() {
                   if (speedReadingsRef.current.length > MINIMAP_SPEED_MIN_READINGS) {
                     speedReadingsRef.current.shift();
                   }
-                  lowSpeedStartTimeRef.current = null;
                 } else {
                   // Speed dropped — clear readings so we require a fresh sustained run
                   sustainedSpeedVisibleRef.current = false;
@@ -1314,40 +1016,7 @@ function OverlayPage() {
 
   // Accurate day/night check using OpenWeatherMap sunrise/sunset data
   // Recalculates when sunriseSunset, timezone, or staleCheckTime changes
-  const isNightTime = useMemo((): boolean => {
-    if (!sunriseSunset) {
-      // Wait for location data before computing day/night
-      // If no timezone either, we're still loading - assume day until data arrives
-      if (!timezone) return false;
-      // Have timezone but no sunrise/sunset (API edge case) - use timezone-based fallback
-      return isNightTimeFallback(timezone);
-    }
-    
-    try {
-      const now = new Date();
-      const sunriseUTC = new Date(sunriseSunset.sunrise);
-      const sunsetUTC = new Date(sunriseSunset.sunset);
-      
-      // Get current time components in the location's timezone
-      const tz = timezone || 'UTC';
-      const currentHour = parseInt(now.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', hour12: false }));
-      const currentMinute = parseInt(now.toLocaleString('en-US', { timeZone: tz, minute: '2-digit' }));
-      const sunriseHour = parseInt(sunriseUTC.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', hour12: false }));
-      const sunriseMin = parseInt(sunriseUTC.toLocaleString('en-US', { timeZone: tz, minute: '2-digit' }));
-      const sunsetHour = parseInt(sunsetUTC.toLocaleString('en-US', { timeZone: tz, hour: '2-digit', hour12: false }));
-      const sunsetMin = parseInt(sunsetUTC.toLocaleString('en-US', { timeZone: tz, minute: '2-digit' }));
-      
-      // Convert to minutes since midnight for comparison
-      const currentMinutes = currentHour * 60 + currentMinute;
-      const sunriseMinutes = sunriseHour * 60 + sunriseMin;
-      const sunsetMinutes = sunsetHour * 60 + sunsetMin;
-      
-      return currentMinutes < sunriseMinutes || currentMinutes > sunsetMinutes;
-    } catch (error) {
-      OverlayLogger.error('Day/night calculation error', error);
-      return false;
-    }
-  }, [sunriseSunset, timezone, staleCheckTime]); // eslint-disable-line react-hooks/exhaustive-deps -- staleCheckTime forces periodic re-check
+  const isNightTime = useMemo(() => computeIsNightTime(staleCheckTime), [computeIsNightTime, staleCheckTime]);
 
   // Get weather icon based on description and time of day
   // Returns emoji string

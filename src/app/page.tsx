@@ -472,7 +472,20 @@ export default function AdminPage() {
     }
     setKickStreamTitleSaving(false);
     setTimeout(() => setToast(null), 3000);
-  }, [kickStatus?.connected, kickStreamTitleCustom, kickStreamTitleRawLocation, kickStreamTitleIncludeLocation, settings.locationDisplay, settings.customLocation, settings.showSubGoal, settings.showKicksGoal, settings.streamGoals?.subs, settings.streamGoals?.kicks]);
+  }, [
+    kickStatus?.connected,
+    kickStreamTitleCustom,
+    kickStreamTitleRawLocation,
+    kickStreamTitleIncludeLocation,
+    settings.locationDisplay,
+    settings.customLocation,
+    settings.showSubGoal,
+    settings.showKicksGoal,
+    settings.subGoalTarget,
+    settings.kicksGoalTarget,
+    settings.streamGoals?.subs,
+    settings.streamGoals?.kicks,
+  ]);
 
   const saveKickMessages = useCallback(async (overrides?: {
     messages?: KickMessageTemplates;
