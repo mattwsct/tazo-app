@@ -142,9 +142,10 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
 
     if (hasData) {
       const isNewTop = topKmh > lastAnnouncedTop && topKmh >= minKmh;
-      const isOverMin = currentKmh >= minKmh;
 
-      // New-top message (hype) — keep existing behavior, but still respects timeout to avoid spam.
+      // New-top message only (matches admin label: "Speed — new top speed above min").
+      // We intentionally do NOT send periodic "Speed: X km/h" updates to avoid chat spam
+      // when cruising at roughly the same speed.
       if (timeoutOk && isNewTop) {
         const msg = `🚀 New top speed: ${Math.round(topKmh)} km/h!`;
         try {
@@ -154,17 +155,6 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
           console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'speed_top', topKmh, source }));
         } catch (err) {
           console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'speed_top', source, error: err instanceof Error ? err.message : String(err) }));
-        }
-      } else if (timeoutOk && isOverMin) {
-        // Simplified "over min" behavior — sends periodic updates even without a new top.
-        const msg = `🚀 Speed: ${Math.round(currentKmh)} km/h`;
-        try {
-          await sendKickChatMessage(token, msg);
-          sent++;
-          await setBroadcastState({ speed: { lastSentAt: now, lastAnnouncedTop } });
-          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'speed', speedKmh: currentKmh, source }));
-        } catch (err) {
-          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'speed', source, error: err instanceof Error ? err.message : String(err) }));
         }
       }
     }
