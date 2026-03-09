@@ -214,7 +214,6 @@ export default function BottomRightPanel({
         subtext={settings.subGoalSubtext}
         activeAlert={subsAlert}
         alertLabel={subsAlert ? ALERT_LABELS[subsAlert.type] ?? subsAlert.type : undefined}
-        now={now}
       />
     </div>
   );
@@ -230,7 +229,6 @@ export default function BottomRightPanel({
         subtext={settings.kicksGoalSubtext}
         activeAlert={kicksAlert}
         alertLabel={kicksAlert ? ALERT_LABELS[kicksAlert.type] ?? kicksAlert.type : undefined}
-        now={now}
       />
     </div>
   );
