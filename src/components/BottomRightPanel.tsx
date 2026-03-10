@@ -60,6 +60,35 @@ export default function BottomRightPanel({
   const showDonationsGoal = settings.showDonationsGoal && donationsTargetCents > 0;
   const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0, donationsCents: 0 };
 
+  // Debug logging for tips goal behaviour
+  const lastDonationsCentsRef = useRef<number | null>(null);
+  useEffect(() => {
+    const current = streamGoals.donationsCents ?? 0;
+    const target = donationsTargetCents;
+    const prev = lastDonationsCentsRef.current;
+    if (!showDonationsGoal) {
+      lastDonationsCentsRef.current = current;
+      return;
+    }
+    if (prev === null || prev !== current) {
+      // Helpful console trace for debugging why tips jump between values
+      // (visible in both local dev and production browser console).
+      // Example: { from: 10000, to: 0, targetCents: 100000 }
+      // Amounts are in cents.
+      // eslint-disable-next-line no-console
+      console.log('[TIPS] donationsCents changed', {
+        from: prev,
+        to: current,
+        targetCents: target,
+      });
+      if (prev !== null && prev > 0 && current === 0) {
+        // eslint-disable-next-line no-console
+        console.warn('[TIPS] donationsCents reset to 0 — another request likely overwrote the current total. Check recent PATCH /api/stream-goals calls and KV config.');
+      }
+      lastDonationsCentsRef.current = current;
+    }
+  }, [streamGoals.donationsCents, donationsTargetCents, showDonationsGoal]);
+
   // =============================================
   // SECTION 1: Goals rotation (subs / kicks)
   // =============================================
