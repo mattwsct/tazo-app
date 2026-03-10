@@ -1299,6 +1299,16 @@ export default function AdminPage() {
                     <span className="checkbox-text">Show progress on overlay & title</span>
                   </label>
                 </div>
+                <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                  <label>Subtitle (fixed goal label)</label>
+                  <input
+                    type="text"
+                    className="text-input"
+                    value={settings.subGoalSubtext ?? ''}
+                    onChange={(e) => handleSettingsChange({ subGoalSubtext: e.target.value || null })}
+                    placeholder='e.g. "Push-ups", keeps goal fixed'
+                  />
+                </div>
               </div>
 
               {/* Kicks goal */}
@@ -1353,6 +1363,16 @@ export default function AdminPage() {
                     <input type="checkbox" checked={settings.showKicksGoal ?? false} onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })} className="checkbox-input" />
                     <span className="checkbox-text">Show progress on overlay & title</span>
                   </label>
+                </div>
+                <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                  <label>Subtitle (fixed goal label)</label>
+                  <input
+                    type="text"
+                    className="text-input"
+                    value={settings.kicksGoalSubtext ?? ''}
+                    onChange={(e) => handleSettingsChange({ kicksGoalSubtext: e.target.value || null })}
+                    placeholder='e.g. "PLANK", keeps goal fixed'
+                  />
                 </div>
               </div>
 
@@ -1431,6 +1451,16 @@ export default function AdminPage() {
                     />
                     <span className="checkbox-text">Show donations goal on overlay</span>
                   </label>
+                </div>
+                <div className="admin-select-wrap" style={{ marginTop: 8 }}>
+                  <label>Subtitle (fixed goal label)</label>
+                  <input
+                    type="text"
+                    className="text-input"
+                    value={settings.donationsGoalSubtext ?? ''}
+                    onChange={(e) => handleSettingsChange({ donationsGoalSubtext: e.target.value || null })}
+                    placeholder='e.g. "Charity drive", keeps goal fixed'
+                  />
                 </div>
               </div>
             </div>

@@ -30,9 +30,9 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as { subs?: number; kicks?: number };
-    if (body.subs === undefined && body.kicks === undefined) {
-      return NextResponse.json({ error: 'Provide subs and/or kicks' }, { status: 400 });
+    const body = (await request.json()) as { subs?: number; kicks?: number; donationsCents?: number };
+    if (body.subs === undefined && body.kicks === undefined && body.donationsCents === undefined) {
+      return NextResponse.json({ error: 'Provide subs and/or kicks and/or donationsCents' }, { status: 400 });
     }
     await setStreamGoals(body);
     void broadcastAlertsAndLeaderboard();
