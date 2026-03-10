@@ -718,7 +718,7 @@ export default function AdminPage() {
     if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
     subGoalSubtextTimeoutRef.current = setTimeout(() => {
       subGoalSubtextTimeoutRef.current = null;
-      handleSettingsChange({ subGoalSubtext: value || null });
+      handleSettingsChange({ subGoalSubtext: value || undefined });
     }, 1000);
   }, [handleSettingsChange]);
 
@@ -727,7 +727,7 @@ export default function AdminPage() {
     if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
     kicksGoalSubtextTimeoutRef.current = setTimeout(() => {
       kicksGoalSubtextTimeoutRef.current = null;
-      handleSettingsChange({ kicksGoalSubtext: value || null });
+      handleSettingsChange({ kicksGoalSubtext: value || undefined });
     }, 1000);
   }, [handleSettingsChange]);
 
@@ -736,7 +736,7 @@ export default function AdminPage() {
     if (donationsGoalSubtextTimeoutRef.current) clearTimeout(donationsGoalSubtextTimeoutRef.current);
     donationsGoalSubtextTimeoutRef.current = setTimeout(() => {
       donationsGoalSubtextTimeoutRef.current = null;
-      handleSettingsChange({ donationsGoalSubtext: value || null });
+      handleSettingsChange({ donationsGoalSubtext: value || undefined });
     }, 1000);
   }, [handleSettingsChange]);
 
