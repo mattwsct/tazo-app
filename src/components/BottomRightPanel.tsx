@@ -66,10 +66,6 @@ export default function BottomRightPanel({
     const current = streamGoals.donationsCents ?? 0;
     const target = donationsTargetCents;
     const prev = lastDonationsCentsRef.current;
-    if (!showDonationsGoal) {
-      lastDonationsCentsRef.current = current;
-      return;
-    }
     if (prev === null || prev !== current) {
       // Helpful console trace for debugging why tips jump between values
       // (visible in both local dev and production browser console).
@@ -81,7 +77,7 @@ export default function BottomRightPanel({
         to: current,
         targetCents: target,
       });
-      if (prev !== null && prev > 0 && current === 0) {
+      if (showDonationsGoal && prev !== null && prev > 0 && current === 0) {
         // eslint-disable-next-line no-console
         console.warn('[TIPS] donationsCents reset to 0 — another request likely overwrote the current total. Check recent PATCH /api/stream-goals calls and KV config.');
       }
