@@ -22,9 +22,7 @@ export interface EmergencyInfo {
 export interface TravelData {
   foods: string[];
   phrases: TravelPhrase[];
-  culturalTips?: string[];
   flirt?: string[]; // Flirting phrases, compliments, and suggestions
-  sex?: string[]; // Vulgar/sexually suggestive phrases (for humor in drinking environments)
   insults?: string[]; // Local insults and vulgar language
   emergencyInfo?: EmergencyInfo;
   currency?: {

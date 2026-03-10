@@ -4,7 +4,7 @@ import { pickN, getCountryNameFromCode } from '@/utils/chat-utils';
 import { txtResponse, ChatContext } from './shared';
 
 const TRAVEL_ROUTES = new Set([
-  'food', 'phrase', 'tips', 'emergency', 'flirt', 'sex', 'insults', 'insult',
+  'food', 'phrase', 'emergency', 'flirt', 'insults', 'insult',
   'countries', 'fact', 'facts', 'currency', 'convert',
 ]);
 
@@ -13,8 +13,8 @@ export async function handleTravelRoutes(route: string, q: string, ctx: ChatCont
 
   const { persistentLocation } = ctx;
 
-  // Travel routes (food, phrase, tips, emergency, flirt, sex, insults/insult)
-  if (route === 'food' || route === 'phrase' || route === 'tips' || route === 'emergency' || route === 'flirt' || route === 'sex' || route === 'insults' || route === 'insult') {
+  // Travel routes (food, phrase, emergency, flirt, insults/insult)
+  if (route === 'food' || route === 'phrase' || route === 'emergency' || route === 'flirt' || route === 'insults' || route === 'insult') {
     const queryCountryCode = q ? q.trim().toUpperCase() : null;
     const requestedCountryCode = queryCountryCode && queryCountryCode.length === 2 ? queryCountryCode : null;
 
@@ -32,15 +32,13 @@ export async function handleTravelRoutes(route: string, q: string, ctx: ChatCont
       : (persistentLocation?.location?.country || (countryCode ? getCountryNameFromCode(countryCode) : null));
     const travelData = getTravelData(countryCode);
 
-    const getNoDataMsg = (type: 'food' | 'phrase' | 'tips' | 'emergency' | 'flirt' | 'sex' | 'insults') => {
+    const getNoDataMsg = (type: 'food' | 'phrase' | 'emergency' | 'flirt' | 'insults') => {
       if (countryName && !travelData.isCountrySpecific) {
         const typeNames: Record<string, string> = {
           food: 'local food',
           phrase: 'local phrase',
-          tips: 'cultural tips',
           emergency: 'emergency information',
           flirt: 'flirting phrases',
-          sex: 'sexual phrases',
           insults: 'local insults'
         };
         return `No ${typeNames[type]} data available for ${countryName} yet. Use !countries to see available countries.`;
@@ -48,10 +46,8 @@ export async function handleTravelRoutes(route: string, q: string, ctx: ChatCont
       const typeNames: Record<string, string> = {
         food: 'food',
         phrase: 'phrase',
-        tips: 'cultural tips',
         emergency: 'emergency information',
         flirt: 'flirting phrases',
-        sex: 'sexual phrases',
         insults: 'local insults'
       };
       return `No ${typeNames[type]} data available. Specify a country code (e.g., !${route} JP) or use !countries to see available countries.`;
@@ -93,18 +89,6 @@ export async function handleTravelRoutes(route: string, q: string, ctx: ChatCont
         : '';
 
       return txtResponse(countryPrefix + formatted.join(' · ') + note);
-    }
-
-    if (route === 'tips') {
-      const tips = travelData.culturalTips || [];
-      if (tips.length === 0) {
-        return txtResponse(getNoDataMsg('tips'));
-      }
-      const selectedTips = pickN(tips, 3);
-      const countryPrefix = requestedCountryCode && travelData.isCountrySpecific
-        ? `[${countryName}] `
-        : '';
-      return txtResponse(countryPrefix + selectedTips.join(' · '));
     }
 
     if (route === 'emergency') {
@@ -153,18 +137,6 @@ export async function handleTravelRoutes(route: string, q: string, ctx: ChatCont
         return txtResponse(getNoDataMsg('flirt'));
       }
       const selectedPhrases = pickN(flirtPhrases, 3);
-      const countryPrefix = travelData.isCountrySpecific && countryName
-        ? `[${countryName}] `
-        : '';
-      return txtResponse(countryPrefix + selectedPhrases.join(' · '));
-    }
-
-    if (route === 'sex') {
-      const sexPhrases = travelData.sex || [];
-      if (sexPhrases.length === 0) {
-        return txtResponse(getNoDataMsg('sex'));
-      }
-      const selectedPhrases = pickN(sexPhrases, 3);
       const countryPrefix = travelData.isCountrySpecific && countryName
         ? `[${countryName}] `
         : '';
