@@ -10,7 +10,7 @@ const ROTATION_TICK_MS = 10000;
 const GOALS_CYCLE_DURATION_MS = ROTATION_TICK_MS;
 const CROSSFADE_DURATION_MS = 500;
 
-type GoalSlide = 'subs' | 'kicks';
+type GoalSlide = 'subs' | 'kicks' | 'donations';
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -19,6 +19,7 @@ const ALERT_LABELS: Record<string, string> = {
   resub: '💪 Resub',
   giftSub: '🎁 Gift sub',
   kicks: '💚 Kicks',
+  donation: '💸 Tip',
 };
 
 export default function BottomRightPanel({
@@ -53,17 +54,20 @@ export default function BottomRightPanel({
 
   const subTarget = Math.max(1, settings.subGoalTarget ?? 10);
   const kicksTarget = Math.max(1, settings.kicksGoalTarget ?? 100);
+  const donationsTargetCents = Math.max(1, settings.donationsGoalTargetCents ?? 0);
   const showSubGoal = settings.showSubGoal && subTarget > 0;
   const showKicksGoal = settings.showKicksGoal && kicksTarget > 0;
-  const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0 };
+  const showDonationsGoal = settings.showDonationsGoal && donationsTargetCents > 0;
+  const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0, donationsCents: 0 };
 
   // =============================================
   // SECTION 1: Goals rotation (subs / kicks)
   // =============================================
 
-  const goalSlides = (['subs', 'kicks'] as GoalSlide[]).filter((s) => {
+  const goalSlides = (['subs', 'kicks', 'donations'] as GoalSlide[]).filter((s) => {
     if (s === 'subs') return showSubGoal;
     if (s === 'kicks') return showKicksGoal;
+    if (s === 'donations') return showDonationsGoal;
     return false;
   });
   const goalSlidesRef = useRef<GoalSlide[]>(goalSlides);
@@ -233,9 +237,31 @@ export default function BottomRightPanel({
     </div>
   );
 
+  const renderDonationsGoal = () => {
+    const currentCents = streamGoals.donationsCents ?? 0;
+    const targetCents = donationsTargetCents;
+    const formatCurrency = (cents: number) => {
+      const value = cents / 100;
+      return value.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    return (
+      <div className="goal-progress-stack">
+        <GoalProgressBar
+          label="TIPS"
+          current={currentCents}
+          target={targetCents}
+          formatValue={(n) => formatCurrency(Math.round(n))}
+          fillStyle="linear-gradient(90deg, rgba(234, 179, 8, 0.8) 0%, rgba(251, 191, 36, 1) 100%)"
+          subtext={settings.donationsGoalSubtext}
+        />
+      </div>
+    );
+  };
+
   const renderGoalSlide = (type: GoalSlide) => {
     if (type === 'subs') return renderSubsGoal();
     if (type === 'kicks') return renderKicksGoal();
+    if (type === 'donations') return renderDonationsGoal();
     return null;
   };
 

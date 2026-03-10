@@ -1,13 +1,6 @@
 import { kv } from '@/lib/kv';
 import { isStreamLive, getStreamStartedAt, getStreamEndedAt } from './stream-state';
-import {
-  HEARTRATE_SAMPLE_INTERVAL,
-  STALE_THRESHOLD_MS,
-  MAX_ENTRIES,
-  filterSessionEntries,
-  cleanOldEntries,
-  formatAge,
-} from './sampling-utils';
+import { STALE_THRESHOLD_MS, MAX_ENTRIES, filterSessionEntries, cleanOldEntries, formatAge } from './sampling-utils';
 
 export interface HeartrateEntry {
   bpm: number;

@@ -8,6 +8,7 @@ import { getStreamStartedAt, onStreamStarted } from '@/utils/stats-storage';
 
 const STREAM_GOALS_SUBS_KEY = 'stream_goals_subs';
 const STREAM_GOALS_KICKS_KEY = 'stream_goals_kicks';
+const STREAM_GOALS_DONATIONS_KEY = 'stream_goals_donations_cents';
 // Written whenever goals change — SSE watches this to push updates to the overlay
 export const STREAM_GOALS_MODIFIED_KEY = 'stream_goals_modified';
 
@@ -70,24 +71,38 @@ export async function addStreamGoalKicks(amount: number): Promise<void> {
   }
 }
 
-/** Get subs and kicks since stream start. */
-export async function getStreamGoals(): Promise<{ subs: number; kicks: number }> {
+/** Increment donations total (in cents) for the current stream. Uses atomic INCRBY. */
+export async function addStreamGoalDonations(amountCents: number): Promise<void> {
+  if (amountCents <= 0) return;
   try {
-    const [subs, kicks] = await Promise.all([
+    await ensureSessionStarted();
+    await kv.incrby(STREAM_GOALS_DONATIONS_KEY, Math.floor(amountCents));
+    void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
+  } catch (e) {
+    console.warn('[StreamGoals] Failed to add donations:', e);
+  }
+}
+
+/** Get subs, kicks, and donations since stream start. */
+export async function getStreamGoals(): Promise<{ subs: number; kicks: number; donationsCents: number }> {
+  try {
+    const [subs, kicks, donationsCents] = await Promise.all([
       kv.get<number>(STREAM_GOALS_SUBS_KEY),
       kv.get<number>(STREAM_GOALS_KICKS_KEY),
+      kv.get<number>(STREAM_GOALS_DONATIONS_KEY),
     ]);
     return {
       subs: Math.max(0, subs ?? 0),
       kicks: Math.max(0, kicks ?? 0),
+      donationsCents: Math.max(0, donationsCents ?? 0),
     };
   } catch {
-    return { subs: 0, kicks: 0 };
+    return { subs: 0, kicks: 0, donationsCents: 0 };
   }
 }
 
 /** Manually set subs and/or kicks (admin override). */
-export async function setStreamGoals(updates: { subs?: number; kicks?: number }): Promise<void> {
+export async function setStreamGoals(updates: { subs?: number; kicks?: number; donationsCents?: number }): Promise<void> {
   try {
     const promises: Promise<unknown>[] = [];
     if (updates.subs !== undefined) {
@@ -95,6 +110,9 @@ export async function setStreamGoals(updates: { subs?: number; kicks?: number })
     }
     if (updates.kicks !== undefined) {
       promises.push(kv.set(STREAM_GOALS_KICKS_KEY, Math.max(0, Math.floor(updates.kicks))));
+    }
+    if (updates.donationsCents !== undefined) {
+      promises.push(kv.set(STREAM_GOALS_DONATIONS_KEY, Math.max(0, Math.floor(updates.donationsCents))));
     }
     if (promises.length > 0) {
       promises.push(kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()));

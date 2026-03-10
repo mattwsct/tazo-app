@@ -102,6 +102,10 @@ export interface OverlaySettings {
   kicksGoalIncrement?: number;
   /** Optional second line for kicks goal — when set, goal is fixed (no auto-iterate). */
   kicksGoalSubtext?: string;
+  /** Donations goal: show progress bar, target (in cents, runtime aggregated from tips). */
+  showDonationsGoal?: boolean;
+  donationsGoalTargetCents?: number;
+  donationsGoalSubtext?: string;
   /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
   streamerTimezone?: string;
   /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
@@ -116,10 +120,11 @@ export interface OverlaySettings {
   earnedLeaderboardWeekly?: { username: string; earned: number }[];
   earnedLeaderboardMonthly?: { username: string; earned: number }[];
   earnedLeaderboardLifetime?: { username: string; earned: number }[];
-  /** Runtime: subs and kicks since stream start (from get-settings). */
+  /** Runtime: subs, kicks, and donations since stream start (from get-settings). */
   streamGoals?: {
     subs: number;
     kicks: number;
+    donationsCents: number;
   };
 }
 

@@ -61,6 +61,7 @@ export default function AdminPage() {
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
+  const [donationsGoalTargetInput, setDonationsGoalTargetInput] = useState<string>('0');
   const [chipRewardTitleInput, setChipRewardTitleInput] = useState<string>('Buy Credits');
   const [chipRewardChipsInput, setChipRewardChipsInput] = useState<string>('50');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -748,6 +749,18 @@ export default function AdminPage() {
     }, 1000);
   }, [handleSettingsChange, settings.streamGoals]);
 
+  const donationsGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleDonationsGoalTargetChange = useCallback((value: string) => {
+    setDonationsGoalTargetInput(value);
+    if (donationsGoalTargetTimeoutRef.current) clearTimeout(donationsGoalTargetTimeoutRef.current);
+    donationsGoalTargetTimeoutRef.current = setTimeout(() => {
+      donationsGoalTargetTimeoutRef.current = null;
+      const n = Math.max(0, parseFloat(value) || 0);
+      handleSettingsChange({ donationsGoalTargetCents: Math.round(n * 100) });
+    }, 1000);
+  }, [handleSettingsChange]);
+
   useEffect(() => {
     return () => {
       if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
@@ -755,6 +768,7 @@ export default function AdminPage() {
       if (chipRewardTitleTimeoutRef.current) clearTimeout(chipRewardTitleTimeoutRef.current);
       if (chipRewardChipsTimeoutRef.current) clearTimeout(chipRewardChipsTimeoutRef.current);
       if (triviaRandomQuestionsTimeoutRef.current) clearTimeout(triviaRandomQuestionsTimeoutRef.current);
+      if (donationsGoalTargetTimeoutRef.current) clearTimeout(donationsGoalTargetTimeoutRef.current);
     };
   }, []);
 
@@ -1281,7 +1295,7 @@ export default function AdminPage() {
               </div>
 
               {/* Kicks goal */}
-              <div>
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Kicks</div>
                 <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
                   <label>Goal step (milestone interval)</label>
@@ -1324,6 +1338,84 @@ export default function AdminPage() {
                   <label className="checkbox-label">
                     <input type="checkbox" checked={settings.showKicksGoal ?? false} onChange={(e) => handleSettingsChange({ showKicksGoal: e.target.checked })} className="checkbox-input" />
                     <span className="checkbox-text">Show progress on overlay & title</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Donations goal */}
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Donations</div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Goal amount (USD)</label>
+                  <input
+                    type="number"
+                    className="text-input"
+                    value={donationsGoalTargetInput}
+                    min={0}
+                    step="0.5"
+                    onChange={(e) => handleDonationsGoalTargetChange(e.target.value)}
+                  />
+                </div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Current total (USD)</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      key={`donations-${settings.streamGoals?.donationsCents ?? 0}`}
+                      type="number"
+                      className="text-input admin-number-input"
+                      defaultValue={(settings.streamGoals?.donationsCents ?? 0) / 100}
+                      id="stream-goals-donations-input"
+                      min={0}
+                      step="0.5"
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={async () => {
+                        try {
+                          const el = document.getElementById('stream-goals-donations-input') as HTMLInputElement;
+                          if (!el) return;
+                          const raw = Math.max(0, parseFloat(el.value) || 0);
+                          const cents = Math.round(raw * 100);
+                          const r = await authenticatedFetch('/api/stream-goals', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ donationsCents: cents }),
+                          });
+                          const data = await r.json();
+                          if (r.ok && data) {
+                            setSettings((prev) => ({
+                              ...prev,
+                              streamGoals: {
+                                subs: data.subs ?? prev.streamGoals?.subs ?? 0,
+                                kicks: data.kicks ?? prev.streamGoals?.kicks ?? 0,
+                                donationsCents: data.donationsCents ?? 0,
+                              },
+                            }));
+                            setToast({ type: 'saved', message: 'Donations updated' });
+                          } else {
+                            setToast({ type: 'error', message: 'Update failed' });
+                          }
+                        } catch {
+                          setToast({ type: 'error', message: 'Update failed' });
+                        }
+                        setTimeout(() => setToast(null), 2000);
+                      }}
+                    >
+                      Set
+                    </button>
+                  </div>
+                </div>
+                <div className="checkbox-group">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.showDonationsGoal ?? false}
+                      onChange={(e) => handleSettingsChange({ showDonationsGoal: e.target.checked })}
+                      className="checkbox-input"
+                    />
+                    <span className="checkbox-text">Show donations goal on overlay</span>
                   </label>
                 </div>
               </div>
