@@ -65,6 +65,7 @@ export default function AdminPage() {
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
   const [donationsGoalTargetInput, setDonationsGoalTargetInput] = useState<string>('0');
+  const [donationsCurrentInput, setDonationsCurrentInput] = useState<string>('0');
   const [chipRewardTitleInput, setChipRewardTitleInput] = useState<string>('Buy Credits');
   const [chipRewardChipsInput, setChipRewardChipsInput] = useState<string>('50');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -822,6 +823,11 @@ export default function AdminPage() {
     setDonationsGoalSubtextInput(settings.donationsGoalSubtext ?? '');
   }, [settings.donationsGoalSubtext]);
 
+  // Sync donations current total input from stream goals
+  useEffect(() => {
+    setDonationsCurrentInput(String((settings.streamGoals?.donationsCents ?? 0) / 100));
+  }, [settings.streamGoals?.donationsCents]);
+
   // Sync channel reward inputs from settings
   useEffect(() => {
     setChipRewardTitleInput(settings.chipRewardTitle ?? 'Buy Credits');
@@ -1447,7 +1453,8 @@ export default function AdminPage() {
                       key={`donations-${settings.streamGoals?.donationsCents ?? 0}`}
                       type="number"
                       className="text-input admin-number-input"
-                      value={(settings.streamGoals?.donationsCents ?? 0) / 100}
+                      value={donationsCurrentInput}
+                      onChange={(e) => setDonationsCurrentInput(e.target.value)}
                       id="stream-goals-donations-input"
                       min={0}
                       step="0.5"
@@ -1458,9 +1465,7 @@ export default function AdminPage() {
                       className="btn btn-secondary btn-small"
                       onClick={async () => {
                         try {
-                          const el = document.getElementById('stream-goals-donations-input') as HTMLInputElement;
-                          if (!el) return;
-                          const raw = Math.max(0, parseFloat(el.value) || 0);
+                          const raw = Math.max(0, parseFloat(donationsCurrentInput) || 0);
                           const cents = Math.round(raw * 100);
                           const r = await authenticatedFetch('/api/stream-goals', {
                             method: 'PATCH',
