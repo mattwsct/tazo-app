@@ -242,7 +242,13 @@ export default function BottomRightPanel({
     const targetCents = donationsTargetCents;
     const formatCurrency = (cents: number) => {
       const value = cents / 100;
-      return value.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const isWhole = cents % 100 === 0;
+      return value.toLocaleString(undefined, {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: isWhole ? 0 : 2,
+        maximumFractionDigits: isWhole ? 0 : 2,
+      });
     };
     return (
       <div className="goal-progress-stack">

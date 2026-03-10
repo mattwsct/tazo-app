@@ -1447,7 +1447,7 @@ export default function AdminPage() {
                       key={`donations-${settings.streamGoals?.donationsCents ?? 0}`}
                       type="number"
                       className="text-input admin-number-input"
-                      defaultValue={(settings.streamGoals?.donationsCents ?? 0) / 100}
+                      value={(settings.streamGoals?.donationsCents ?? 0) / 100}
                       id="stream-goals-donations-input"
                       min={0}
                       step="0.5"
