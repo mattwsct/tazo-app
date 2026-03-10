@@ -7,9 +7,11 @@
  * !kicksgoal <target> <label>  — fixed kicks goal with label
  * !clearsubsgoal               — hide sub goal, reset to saved increment
  * !clearkicksgoal              — hide kicks goal, reset to saved increment
+ * !cleartipsgoal               — hide tips goal, clear target/subtext
  * !cleargoals                  — hide both, reset both to saved increments
  * !subscount <count>           — manually override current subs count
  * !kickscount <count>          — manually override current kicks count
+ * !tipscount <amount>          — manually override current tips total (USD)
  */
 
 import { kv } from '@/lib/kv';
@@ -58,10 +60,13 @@ export async function handleGoalCommand(
     lower === '!cleargoals' ||
     lower === '!clearsubsgoal' ||
     lower === '!clearkicksgoal' ||
+    lower === '!cleartipsgoal' ||
     lower.startsWith('!subsgoal') ||
     lower.startsWith('!kicksgoal') ||
     lower === '!subscount' || lower.startsWith('!subscount ') ||
-    lower === '!kickscount' || lower.startsWith('!kickscount ');
+    lower === '!kickscount' || lower.startsWith('!kickscount ') ||
+    lower.startsWith('!tipsgoal') ||
+    lower === '!tipscount' || lower.startsWith('!tipscount ');
 
   if (!isGoalCmd) return { handled: false };
 
@@ -129,6 +134,18 @@ export async function handleGoalCommand(
     return { handled: true, reply: '✅ All goals cleared' };
   }
 
+  // ── !cleartipsgoal ──────────────────────────────────────────────────────────
+  if (lower === '!cleartipsgoal') {
+    await kv.set(OVERLAY_SETTINGS_KEY, {
+      ...settings,
+      showDonationsGoal: false,
+      donationsGoalTargetCents: 0,
+      donationsGoalSubtext: null,
+    });
+    notifyOverlay();
+    return { handled: true, reply: '✅ Tips goal cleared' };
+  }
+
   // ── !subsgoal ───────────────────────────────────────────────────────────────
   if (lower.startsWith('!subsgoal')) {
     const args = trimmed.slice('!subsgoal'.length).trim();
@@ -187,6 +204,29 @@ export async function handleGoalCommand(
     return { handled: true, reply };
   }
 
+  // ── !tipsgoal <amount> [label] ──────────────────────────────────────────────
+  if (lower.startsWith('!tipsgoal')) {
+    const args = trimmed.slice('!tipsgoal'.length).trim();
+    const parts = args.trim().split(/\s+/);
+    const amount = parseFloat(parts[0]);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { handled: true, reply: 'Usage: !tipsgoal <amount> [label]  e.g. !tipsgoal 100  or  !tipsgoal 100 Charity stream' };
+    }
+    const subtext = parts.slice(1).join(' ').trim() || undefined;
+    const targetCents = Math.round(amount * 100);
+    await kv.set(OVERLAY_SETTINGS_KEY, {
+      ...settings,
+      showDonationsGoal: true,
+      donationsGoalTargetCents: targetCents,
+      donationsGoalSubtext: subtext ?? null,
+    });
+    notifyOverlay();
+    const label = subtext
+      ? ` — "${subtext}"`
+      : '';
+    return { handled: true, reply: `✅ Tips goal set: $${amount} total${label}` };
+  }
+
   // ── !subscount <count> ──────────────────────────────────────────────────────
   if (lower === '!subscount' || lower.startsWith('!subscount ')) {
     const arg = trimmed.slice('!subscount'.length).trim();
@@ -231,6 +271,20 @@ export async function handleGoalCommand(
     notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
     return { handled: true, reply: `✅ Kicks count set to ${count}` }; 
+  }
+
+  // ── !tipscount <amount> ─────────────────────────────────────────────────────
+  if (lower === '!tipscount' || lower.startsWith('!tipscount ')) {
+    const arg = trimmed.slice('!tipscount'.length).trim();
+    const amount = parseFloat(arg);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return { handled: true, reply: 'Usage: !tipscount <amount>  e.g. !tipscount 150.50' };
+    }
+    const cents = Math.round(amount * 100);
+    await setStreamGoals({ donationsCents: cents });
+    void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
+    notifyOverlay();
+    return { handled: true, reply: `✅ Tips total set to $${amount.toFixed(2)}` };
   }
 
   return { handled: false };
