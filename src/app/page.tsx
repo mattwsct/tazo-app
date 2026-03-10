@@ -1271,7 +1271,14 @@ export default function AdminPage() {
                           });
                           const data = await r.json();
                           if (r.ok && data) {
-                            setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? 0, kicks: data.kicks ?? prev.streamGoals?.kicks ?? 0 } }));
+                            setSettings((prev) => ({
+                              ...prev,
+                              streamGoals: {
+                                subs: data.subs ?? 0,
+                                kicks: data.kicks ?? prev.streamGoals?.kicks ?? 0,
+                                donationsCents: data.donationsCents ?? prev.streamGoals?.donationsCents ?? 0,
+                              },
+                            }));
                             setToast({ type: 'saved', message: 'Subs updated' });
                           } else {
                             setToast({ type: 'error', message: 'Update failed' });
@@ -1319,7 +1326,14 @@ export default function AdminPage() {
                           });
                           const data = await r.json();
                           if (r.ok && data) {
-                            setSettings((prev) => ({ ...prev, streamGoals: { subs: data.subs ?? prev.streamGoals?.subs ?? 0, kicks: data.kicks ?? 0 } }));
+                            setSettings((prev) => ({
+                              ...prev,
+                              streamGoals: {
+                                subs: data.subs ?? prev.streamGoals?.subs ?? 0,
+                                kicks: data.kicks ?? 0,
+                                donationsCents: data.donationsCents ?? prev.streamGoals?.donationsCents ?? 0,
+                              },
+                            }));
                             setToast({ type: 'saved', message: 'Kicks updated' });
                           } else {
                             setToast({ type: 'error', message: 'Update failed' });

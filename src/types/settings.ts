@@ -238,6 +238,9 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalTarget: 'number',
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
+  showDonationsGoal: 'boolean',
+  donationsGoalTargetCents: 'number',
+  donationsGoalSubtext: 'string',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
   showMonthlyEarnedLb: 'boolean',
@@ -252,7 +255,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
 export interface OverlayRuntimeState {
   pollState?: import('@/types/poll').PollState | null;
   triviaState?: import('@/types/trivia').TriviaState | null;
-  streamGoals?: { subs: number; kicks: number };
+  streamGoals?: { subs: number; kicks: number; donationsCents: number };
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
   earnedLeaderboardWeekly?: { username: string; earned: number }[];
