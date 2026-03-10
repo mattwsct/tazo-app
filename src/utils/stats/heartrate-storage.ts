@@ -31,30 +31,21 @@ export async function storeHeartrate(bpm: number, timestamp?: number): Promise<v
       const bpmChange = Math.abs(bpm - lastEntry.bpm);
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Store Heartrate] Received:', bpm, 'BPM, timeSinceLast:', Math.round(timeSinceLast / 1000), 's, bpmChange:', bpmChange);
+        console.log(
+          '[Store Heartrate] Received:',
+          bpm,
+          'BPM, timeSinceLast:',
+          Math.round(timeSinceLast / 1000),
+          's, bpmChange:',
+          bpmChange,
+        );
       }
-
-      const oneMinute = 60 * 1000;
-      if (timeSinceLast >= oneMinute) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[Store Heartrate] Storing entry - more than 1 minute since last');
-        }
-      } else {
-        if (timeSinceLast < HEARTRATE_SAMPLE_INTERVAL && bpmChange < 3 && Math.abs(timeSinceLast) < 60000) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[Store Heartrate] Skipping - too soon, small change');
-          }
-          return;
-        }
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[Store Heartrate] Storing entry - condition met');
-        }
-      }
-    } else {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[Store Heartrate] Storing first entry');
-      }
+      // Previously we skipped storing when updates were too frequent with tiny changes.
+      // Now we always record every in-range sample while the stream is live so stats/graphs
+      // can use the full fidelity of the incoming data. Overall history size is still
+      // bounded by MAX_ENTRIES + cleanOldEntries().
+    } else if (process.env.NODE_ENV === 'development') {
+      console.log('[Store Heartrate] Storing first entry');
     }
 
     const entry: HeartrateEntry = { bpm, timestamp: ts };

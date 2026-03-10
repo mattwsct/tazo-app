@@ -51,10 +51,10 @@ export default function BottomRightPanel({
   const overlayAlerts = useMemo(() => settings.overlayAlerts ?? [], [settings.overlayAlerts]);
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
 
-  const showSubGoal = settings.showSubGoal && (settings.subGoalTarget ?? 0) > 0;
-  const showKicksGoal = settings.showKicksGoal && (settings.kicksGoalTarget ?? 0) > 0;
-  const hasSubTarget = (settings.subGoalTarget ?? 0) > 0;
-  const hasKicksTarget = (settings.kicksGoalTarget ?? 0) > 0;
+  const subTarget = Math.max(1, settings.subGoalTarget ?? 10);
+  const kicksTarget = Math.max(1, settings.kicksGoalTarget ?? 100);
+  const showSubGoal = settings.showSubGoal && subTarget > 0;
+  const showKicksGoal = settings.showKicksGoal && kicksTarget > 0;
   const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0 };
 
   // =============================================
@@ -113,7 +113,7 @@ export default function BottomRightPanel({
 
   // Alert bumping — switch to relevant goal on sub/kicks alerts
   useEffect(() => {
-    if (!showOverlayAlerts || overlayAlerts.length === 0 || (!hasSubTarget && !hasKicksTarget)) return;
+    if (!showOverlayAlerts || overlayAlerts.length === 0) return;
     const seen = lastSeenAlertIdsRef.current;
     for (const a of overlayAlerts) {
       if (!a?.id || seen.has(a.id)) continue;
@@ -122,7 +122,7 @@ export default function BottomRightPanel({
       const isSubType = a.type === 'sub' || a.type === 'resub' || a.type === 'giftSub';
       const isKicksType = a.type === 'kicks';
 
-      if (isSubType && hasSubTarget) {
+      if (isSubType) {
         goalHoldUntilRef.current = Date.now() + ALERT_DISPLAY_MS;
         queueMicrotask(() => {
           if (showGoalsRotation) setActiveGoal('subs');
@@ -135,7 +135,7 @@ export default function BottomRightPanel({
         }, ALERT_DISPLAY_MS);
         break;
       }
-      if (isKicksType && hasKicksTarget) {
+      if (isKicksType) {
         goalHoldUntilRef.current = Date.now() + ALERT_DISPLAY_MS;
         queueMicrotask(() => {
           if (showGoalsRotation) setActiveGoal('kicks');
@@ -149,7 +149,7 @@ export default function BottomRightPanel({
         break;
       }
     }
-  }, [overlayAlerts, showOverlayAlerts, hasSubTarget, hasKicksTarget, showGoalsRotation]);
+  }, [overlayAlerts, showOverlayAlerts, showGoalsRotation]);
 
   // Goals cycling (wall clock aligned, re-aligned on every tick to prevent drift)
   useEffect(() => {
@@ -191,7 +191,7 @@ export default function BottomRightPanel({
   // =============================================
 
   const hasGoalsContent = showGoalsRotation && goalSlides.length > 0;
-  const hasGoalAlertContent = !hasGoalsContent && (hasSubTarget || hasKicksTarget) && (subsAlert != null || kicksAlert != null);
+  const hasGoalAlertContent = !hasGoalsContent && (subsAlert != null || kicksAlert != null);
   const hasPollContent = showPoll;
   const hasTriviaContent = showTrivia;
   const hasPollOrTriviaContent = hasPollContent || hasTriviaContent;
@@ -208,7 +208,7 @@ export default function BottomRightPanel({
       <GoalProgressBar
         label="SUBS"
         current={streamGoals.subs}
-        target={settings.subGoalTarget ?? 10}
+        target={subTarget}
         formatValue={(n) => String(Math.round(n))}
         fillStyle="linear-gradient(90deg, rgba(139, 92, 246, 0.75) 0%, rgba(168, 85, 247, 0.9) 100%)"
         subtext={settings.subGoalSubtext}
@@ -223,7 +223,7 @@ export default function BottomRightPanel({
       <GoalProgressBar
         label="KICKS"
         current={streamGoals.kicks}
-        target={settings.kicksGoalTarget ?? 1000}
+        target={kicksTarget}
         formatValue={(n) => String(Math.round(n))}
         fillStyle="linear-gradient(90deg, rgba(16, 185, 129, 0.75) 0%, rgba(52, 211, 153, 0.95) 100%)"
         subtext={settings.kicksGoalSubtext}
@@ -261,8 +261,8 @@ export default function BottomRightPanel({
       {/* Alert-only goals when rotation hidden */}
       {hasGoalAlertContent && (
         <div className="bottom-right-alert-only">
-          {subsAlert && hasSubTarget && renderSubsGoal()}
-          {kicksAlert && hasKicksTarget && renderKicksGoal()}
+          {subsAlert && renderSubsGoal()}
+          {kicksAlert && renderKicksGoal()}
         </div>
       )}
       {/* Bottom: Poll or Trivia when active */}

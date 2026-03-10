@@ -21,11 +21,9 @@ async function handleGET() {
     const triviaState: TriviaState | null = rawTriviaState ?? null;
     const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState, triviaState });
 
-    const needGoals = merged.showSubGoal || merged.showKicksGoal;
-
     const [overlayAlerts, streamGoals] = await Promise.all([
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
-      needGoals ? getStreamGoals() : { subs: 0, kicks: 0 },
+      getStreamGoals(),
     ]);
 
     const combinedSettings = {
