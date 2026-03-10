@@ -3,7 +3,7 @@ import { kv } from '@/lib/kv';
 import { addConnection, removeConnection, getConnectionInfo, connections } from '@/lib/settings-broadcast';
 import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
 import { TRIVIA_STATE_KEY, TRIVIA_MODIFIED_KEY } from '@/types/trivia';
-import { STREAM_GOALS_MODIFIED_KEY } from '@/utils/stream-goals-storage';
+import { STREAM_GOALS_MODIFIED_KEY, getStreamGoals } from '@/utils/stream-goals-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
@@ -108,15 +108,12 @@ export async function GET(request: NextRequest): Promise<Response> {
           // When goals have changed, push live counts and recent alerts instantly.
           if (goalsChanged) {
             lastGoalsModified = goalsTs;
-            const [subs, kicks, overlayAlerts] = await Promise.all([
-              kv.get<number>('stream_goals_subs'),
-              kv.get<number>('stream_goals_kicks'),
+            const [streamGoals, overlayAlerts] = await Promise.all([
+              getStreamGoals(),
               getRecentAlerts(),
             ]);
-            sendData.streamGoals = {
-              subs: Math.max(0, subs ?? 0),
-              kicks: Math.max(0, kicks ?? 0),
-            };
+            // Include all three goal dimensions so the overlay never drops donationsCents.
+            sendData.streamGoals = streamGoals;
             // Recent alerts — overlay uses them for the 8s full-width alert display
             sendData.overlayAlerts = overlayAlerts;
           }
