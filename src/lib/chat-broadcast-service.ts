@@ -69,14 +69,18 @@ export async function maybeBroadcastWeather(): Promise<number> {
   const { condition, desc, tempC, uvIndex, aqi } = locationData.weather;
   const condKey = `${condition}|${desc}|uv:${uvIndex ?? 'n'}|aqi:${aqi ?? 'n'}`;
   const lastCond = state.weather?.lastCondKey ?? null;
+  const lastSentAt = state.weather?.lastSentAt ?? 0;
+  const now = Date.now();
+  const WEATHER_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes between notable weather updates
 
   const weatherNotable = isNotableWeatherCondition(desc);
   const uvNotable = isHighUV(uvIndex);
   const aqiNotable = isPoorAirQuality(aqi);
   const isNotable = weatherNotable || uvNotable || aqiNotable;
   const isNewNotableChange = isNotable && condKey !== lastCond;
+  const cooldownOk = now - lastSentAt >= WEATHER_COOLDOWN_MS;
 
-  if (!isNewNotableChange) return 0;
+  if (!isNewNotableChange || !cooldownOk) return 0;
 
   const parts: string[] = [];
   if (weatherNotable) {
@@ -90,7 +94,7 @@ export async function maybeBroadcastWeather(): Promise<number> {
 
   try {
     await sendKickChatMessage(token, msg);
-    await setBroadcastState({ weather: { lastCondKey: condKey } });
+    await setBroadcastState({ weather: { lastCondKey: condKey, lastSentAt: now } });
     console.log('[ChatBroadcast] CHAT_SENT', JSON.stringify({ type: 'weather', cond: desc, uv: uvIndex, aqi }));
     return 1;
   } catch (err) {

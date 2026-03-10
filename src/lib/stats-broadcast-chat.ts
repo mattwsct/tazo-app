@@ -55,7 +55,7 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
 
   const broadcastState = await getBroadcastState();
 
-  // ----- Heart rate (threshold crossing; no spam until drops below min then exceeds again) -----
+  // ----- Heart rate (threshold crossing; gated by state + cooldown) -----
   if (chatBroadcastHeartrate) {
     const minBpm = (storedAlert?.chatBroadcastHeartrateMinBpm as number) ?? 100;
     let veryHighBpm = (storedAlert?.chatBroadcastHeartrateVeryHighBpm as number) ?? 120;
@@ -67,6 +67,10 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
       broadcastState.heartrate?.state === 'very_high'
         ? broadcastState.heartrate.state
         : 'below';
+
+    const lastHrSentAt = asNumberOrZero(broadcastState.heartrate?.lastSentAt);
+    const HIGH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes between "high" messages
+    const VERY_HIGH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between "very high" messages
 
     let bpm = asNumberOrZero(current.heartrateBpm);
     let hasData = bpm > 0;
@@ -87,7 +91,8 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
     } else if (!live || !token) {
       // Stream not live or token missing — do not send, but leave state unchanged.
     } else if (bpm >= veryHighBpm) {
-      if (state !== 'very_high') {
+      const cooldownOk = now - lastHrSentAt >= VERY_HIGH_COOLDOWN_MS;
+      if (state !== 'very_high' && cooldownOk) {
         const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
         try {
           await sendKickChatMessage(token, msg);
@@ -100,7 +105,8 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
         }
       }
     } else {
-      if (state === 'below') {
+      const cooldownOk = now - lastHrSentAt >= HIGH_COOLDOWN_MS;
+      if (state === 'below' && cooldownOk) {
         const msg = `❤️ High heart rate: ${bpm} BPM`;
         try {
           await sendKickChatMessage(token, msg);
@@ -112,6 +118,7 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
           console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', source, error: err instanceof Error ? err.message : String(err) }));
         }
       } else if (state === 'very_high' && bpm < veryHighBpm) {
+        // Drop from very_high to high without sending another message; cooldown still enforced.
         state = 'high';
         await setBroadcastState({ heartrate: { state, lastSentAt: broadcastState.heartrate?.lastSentAt } });
       }
@@ -183,7 +190,6 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
 
     if (hasData) {
       const isNewTop = topM > lastAnnouncedTop && topM >= minM;
-      const isOverMin = currentM >= minM;
       if (timeoutOk && isNewTop) {
         const msg = `⛰️ New top altitude: ${Math.round(topM)} m!`;
         try {
@@ -193,16 +199,6 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
           console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'altitude_top', topM, source }));
         } catch (err) {
           console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'altitude_top', source, error: err instanceof Error ? err.message : String(err) }));
-        }
-      } else if (timeoutOk && isOverMin) {
-        const msg = `⛰️ Altitude: ${Math.round(currentM)} m`;
-        try {
-          await sendKickChatMessage(token, msg);
-          sent++;
-          await setBroadcastState({ altitude: { lastSentAt: now, lastAnnouncedTop } });
-          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'altitude', altitudeM: currentM, source }));
-        } catch (err) {
-          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'altitude', source, error: err instanceof Error ? err.message : String(err) }));
         }
       }
     }

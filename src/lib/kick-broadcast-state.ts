@@ -17,6 +17,7 @@ export interface KickBroadcastState {
   };
   weather?: {
     lastCondKey?: string;
+    lastSentAt?: number;
   };
   wellness?: {
     lastSteps?: number;

@@ -356,11 +356,13 @@ html, body {
 }
 
 .trivia-reward {
-  font-size: 0.9em;
+  font-size: 0.8em;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.88);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-uppercase);
 }
 
 .trivia-box-winner .trivia-winner-line {
@@ -867,10 +869,12 @@ html, body {
 }
 
 .location-main {
-  font-size: var(--font-size-lg);
+  /* Primary line: city / custom text */
+  font-size: var(--font-size-base);
   font-weight: 700;
-  letter-spacing: var(--letter-spacing-compact);
-  line-height: 1;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+  text-transform: uppercase;
 }
 
 /* Line 2: country name + flag */
@@ -881,11 +885,13 @@ html, body {
 }
 
 .location-country-text {
-  font-size: var(--font-size-base);
+  /* Secondary line: country name */
+  font-size: var(--font-size-sm);
   font-weight: 600;
-  letter-spacing: var(--letter-spacing-compact);
+  letter-spacing: var(--letter-spacing-uppercase);
   line-height: 1;
-  opacity: 0.85;
+  text-transform: uppercase;
+  opacity: 0.9;
 }
 
 .location-flag {
