@@ -15,7 +15,9 @@ import { isStreamLive, getStreamStartedAt, onStreamStarted, healStreamStateFromK
 import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-title-utils';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 
-import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken } from '@/lib/kick-api';
+import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { TRIVIA_STATE_KEY, type TriviaState } from '@/types/trivia';
+import { setTriviaState } from '@/lib/trivia-store';
 import { maybeBroadcastWeather, maybeBroadcastWellness, maybeBroadcastStats } from '@/lib/chat-broadcast-service';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
@@ -181,6 +183,59 @@ export async function GET(request: NextRequest) {
   if (wellnessSent > 0) {
     sent += wellnessSent;
     console.log('[Cron HR] WELLNESS_MILESTONES', JSON.stringify({ sent: wellnessSent }));
+  }
+
+  // Trivia reminder + auto-close: if a trivia question is active and unanswered for a while,
+  // periodically remind chat of the question and eventually close it if nobody answers.
+  try {
+    const trivia = await kv.get<TriviaState>(TRIVIA_STATE_KEY);
+    if (trivia && !trivia.winnerDisplayUntil) {
+      const REMINDER_INTERVAL_MS = 90_000; // 90s between reminders
+      const FIRST_DELAY_MS = 60_000; // wait at least 60s after trivia starts
+      const MAX_REMINDERS = 5;
+      const CLOSE_GRACE_MS = 180_000; // wait 3 minutes after last reminder before auto-closing
+      const reminderCount = trivia.reminderCount ?? 0;
+      const lastReminderAt = trivia.lastReminderAt ?? trivia.startedAt;
+      const timeSinceStart = now - trivia.startedAt;
+      const timeSinceLast = now - lastReminderAt;
+
+      if (
+        reminderCount < MAX_REMINDERS &&
+        timeSinceStart >= FIRST_DELAY_MS &&
+        timeSinceLast >= REMINDER_INTERVAL_MS
+      ) {
+        const msg = `Trivia still open: ${trivia.question} — First correct answer wins ${trivia.points} Credits.`;
+        try {
+          await sendKickChatMessage(accessToken, msg);
+          await kv.set<TriviaState>(TRIVIA_STATE_KEY, {
+            ...trivia,
+            lastReminderAt: now,
+            reminderCount: reminderCount + 1,
+          });
+          sent++;
+        } catch {
+          // ignore reminder failures
+        }
+      } else if (
+        reminderCount >= MAX_REMINDERS &&
+        timeSinceStart >= FIRST_DELAY_MS + REMINDER_INTERVAL_MS &&
+        timeSinceLast >= CLOSE_GRACE_MS
+      ) {
+        // After all reminders have been sent and an extra grace period has passed with no winner,
+        // close the trivia so it doesn't run forever.
+        const msg = `Trivia closed: ${trivia.question} — No correct answer this time.`;
+        try {
+          await sendKickChatMessage(accessToken, msg);
+        } catch {
+          // ignore chat send failures
+        }
+        // Clear trivia via helper so overlay and modified timestamps stay in sync.
+        await setTriviaState(null);
+        sent++;
+      }
+    }
+  } catch {
+    // Ignore trivia reminder errors — non-critical
   }
 
   console.log('[Cron HR] CRON_END', JSON.stringify({ sent, runAt }));

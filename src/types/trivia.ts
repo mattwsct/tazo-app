@@ -14,6 +14,10 @@ export interface TriviaState {
   winnerAnswer?: string;
   winnerPoints?: number;
   winnerDisplayUntil?: number;
+  /** Last time a reminder message was sent in chat (ms since epoch). */
+  lastReminderAt?: number;
+  /** How many reminder messages have been sent for this question. */
+  reminderCount?: number;
 }
 
 export interface TriviaSettings {

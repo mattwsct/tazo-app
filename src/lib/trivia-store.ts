@@ -64,7 +64,7 @@ export async function setTriviaSettings(updates: Partial<TriviaSettings>): Promi
 }
 
 /**
- * Parse "Question ? Answer", "Question? Answer", or "Question\tAnswer" lines from randomQuestionsText.
+ * Parse "Question ? Answer", "Question? Answer", "Question. Answer", or "Question\tAnswer" lines from randomQuestionsText.
  * Returns array of { question, answers } (answers normalized to lowercase).
  * Answer part can be comma- or semicolon-separated for multiple accepted answers (e.g. "chicken Parmigiana, chicken parmi, chicken parma").
  */
@@ -77,15 +77,23 @@ export function parseRandomQuestionsText(text: string): { question: string; answ
     const tabIdx = line.indexOf('\t');
     const spaceQSpaceIdx = line.indexOf(' ? ');
     const anyQIdx = line.indexOf('?');
+    const dotSepIdx = line.lastIndexOf('. ');
     if (tabIdx !== -1 && (spaceQSpaceIdx === -1 || tabIdx < spaceQSpaceIdx) && (anyQIdx === -1 || tabIdx < anyQIdx)) {
       question = line.slice(0, tabIdx).trim();
       answerPart = line.slice(tabIdx + 1).trim();
     } else if (spaceQSpaceIdx !== -1) {
-      question = line.slice(0, spaceQSpaceIdx).trim();
+      // Include the '?' in the stored question text
+      question = line.slice(0, spaceQSpaceIdx + 2).trim();
       answerPart = line.slice(spaceQSpaceIdx + 3).trim();
     } else if (anyQIdx !== -1) {
-      question = line.slice(0, anyQIdx).trim();
+      // Include the '?' in the stored question text
+      question = line.slice(0, anyQIdx + 1).trim();
       answerPart = line.slice(anyQIdx + 1).trim();
+    } else if (dotSepIdx !== -1) {
+      // Allow questions that end with a full stop, e.g.
+      // "Name one of Tazo's cats. Miggles, Sassy, Tazo"
+      question = line.slice(0, dotSepIdx + 1).trim();
+      answerPart = line.slice(dotSepIdx + 2).trim();
     } else {
       continue;
     }
