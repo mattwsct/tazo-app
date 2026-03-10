@@ -52,7 +52,6 @@
   z-index: 9999;
   /* Performance optimizations */
   will-change: opacity;
-  contain: layout style paint;
 }
 
 /* === GLOBAL RESET === */
@@ -90,7 +89,6 @@ html, body {
   color: white;
   font-weight: 600;
   align-items: flex-start;
-  backdrop-filter: blur(8px);
 }
 
 .overlay-box > * {
@@ -142,7 +140,6 @@ html, body {
   top: 10px;
   left: 10px;
   text-align: left;
-  contain: layout style paint;
 }
 
 .top-right {
@@ -155,7 +152,6 @@ html, body {
   flex-direction: column;
   align-items: flex-end;
   gap: 16px;
-  contain: layout style paint;
 }
 
 .bottom-right {
@@ -189,8 +185,6 @@ html, body {
   border: 1px solid rgba(245, 158, 11, 0.35);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   border-radius: var(--radius-md);
-  /* Isolate layout/repaint so countdown and vote updates don't glitch top-left/top-right boxes */
-  contain: layout style paint;
 }
 
 .poll-box-winner {
@@ -238,8 +232,6 @@ html, body {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   overflow: hidden;
-  /* Prevent timer width updates from causing layout shift in sibling overlay boxes */
-  contain: layout paint;
 }
 
 .poll-timer-bar-fill {
@@ -329,7 +321,6 @@ html, body {
   border: 1px solid rgba(139, 92, 246, 0.35);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   border-radius: var(--radius-md);
-  contain: layout style paint;
 }
 
 .trivia-badge {
@@ -463,8 +454,6 @@ html, body {
   flex-direction: column;
   align-items: flex-end;
   justify-content: flex-end;
-  /* Isolate layout so poll/trivia timer and content changes don't affect the goals above */
-  contain: layout style;
 }
 
 .bottom-right-cycling-slots {
@@ -568,7 +557,7 @@ html, body {
 .goal-progress-stack {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   align-items: flex-end;
 }
 
@@ -582,7 +571,6 @@ html, body {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.35));
-  backdrop-filter: blur(8px);
 }
 
 .goal-progress-fill {
@@ -653,7 +641,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--gap-xl) var(--gap-3xl);
+  /* Slightly tighter vertical padding to reduce overall height while preserving font sizes */
+  padding: var(--gap-md) var(--gap-3xl);
   z-index: 1;
   min-width: 0;
 }
@@ -663,7 +652,8 @@ html, body {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 5px;
+  /* Smaller gap so value + subtext fit in a shorter bar */
+  gap: 3px;
   min-width: 0;
   max-width: 100%;
 }
@@ -870,11 +860,10 @@ html, body {
 
 .location-main {
   /* Primary line: city / custom text */
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-lg);
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--letter-spacing-compact);
   line-height: 1.05;
-  text-transform: uppercase;
 }
 
 /* Line 2: country name + flag */
@@ -1057,7 +1046,6 @@ html, body {
   outline: none;
   /* Performance optimizations */
   will-change: transform, opacity;
-  contain: layout style paint;
   /* Smooth fade transitions */
   transition: opacity 1s ease-out;
 }
@@ -1116,7 +1104,6 @@ html, body {
   z-index: 9999;
   /* Performance optimizations */
   will-change: transform;
-  contain: layout style paint;
 }
 
 .error-reload-btn {

@@ -200,6 +200,38 @@ export async function addCredits(username: string, amount: number, options?: { s
   return newBal;
 }
 
+/**
+ * Transfer credits from one user to another. Used by !give.
+ * Returns the updated balances for the sender and recipient when successful.
+ */
+export async function giveCredits(
+  fromUsername: string,
+  toUsername: string,
+  amount: number
+): Promise<{ ok: true; fromBalance: number; toBalance: number } | { ok: false; error: string; fromBalance?: number }> {
+  const from = normalizeUser(fromUsername);
+  const to = normalizeUser(toUsername);
+  if (!from || !to) return { ok: false, error: 'Invalid usernames.' };
+  if (from === to) return { ok: false, error: "You can't give Credits to yourself." };
+
+  const amt = Number.isFinite(amount) ? Math.floor(amount) : 0;
+  if (amt <= 0) return { ok: false, error: 'Amount must be at least 1 Credit.' };
+
+  // Deduct from sender first; if this fails we don't touch the recipient
+  const { ok, balance } = await deductCredits(from, amt);
+  if (!ok) {
+    return {
+      ok: false,
+      error: `Not enough Credits. You have ${balance}.`,
+      fromBalance: balance,
+    };
+  }
+
+  // Always allow the recipient to receive (skip leaderboard exclusions so mods/bots can still get Credits)
+  const toBalance = await addCredits(toUsername, amt, { skipExclusions: true });
+  return { ok: true, fromBalance: balance, toBalance };
+}
+
 async function placeBet(user: string, requestedBet: number): Promise<{ ok: false; balance: number } | { ok: true; bet: number; balance: number }> {
   const bal = await getCredits(user);
   if (bal < MIN_BET) return { ok: false, balance: bal };

@@ -27,6 +27,7 @@ import {
   getCredits,
   getCreditsIfExists,
   getCreditsLeaderboard,
+  giveCredits,
   isGamblingEnabled,
   isSettingEnabled,
 } from '@/utils/gambling-storage';
@@ -141,6 +142,7 @@ export const KICK_CHAT_COMMANDS = [
   'elevation',
   'forecast',
   'map',
+  'give',
   'deal',
   'bj',
   'hit',
@@ -176,6 +178,7 @@ export function parseKickChatMessage(content: string): { cmd: KickChatCommand; a
   if (cmd === 'altitude' || cmd === 'elevation') return { cmd: 'altitude' };
   if (cmd === 'forecast') return { cmd: 'forecast' };
   if (cmd === 'map') return { cmd: 'map' };
+  if (cmd === 'give') return { cmd: 'give', arg: parts.slice(1).join(' ') };
   if (cmd === 'deal' || cmd === 'bj') return { cmd: cmd as 'deal' | 'bj', arg };
   if (cmd === 'hit') return { cmd: 'hit' };
   if (cmd === 'double') return { cmd: 'double' };
@@ -311,10 +314,27 @@ export async function handleKickChatCommand(
     return `🔢 ${expr.replace(/\*/g, '×').replace(/\//g, '÷')} = ${formatted}`;
   }
   // Credits and blackjack (require gambling enabled)
-  const gamblingCmds = ['credits', 'deal', 'bj', 'hit', 'double', 'split'];
+  const gamblingCmds = ['credits', 'deal', 'bj', 'hit', 'double', 'split', 'give'];
   const gamblingOn = await isGamblingEnabled();
   if (!gamblingOn && gamblingCmds.includes(cmd)) {
     return 'Credits and blackjack are disabled.';
+  }
+  if (cmd === 'give') {
+    if (!user) return null;
+    if (!(await isSettingEnabled('giftEnabled'))) return 'Giving Credits is currently disabled.';
+    const raw = (arg ?? '').trim();
+    if (!raw) return 'Usage: !give <user> <amount> — e.g. !give Tazo 100';
+    const parts = raw.split(/\s+/);
+    const target = parts[0];
+    const amountStr = parts[1];
+    if (!target || !amountStr) return 'Usage: !give <user> <amount> — e.g. !give Tazo 100';
+    const amount = parseInt(amountStr, 10);
+    if (!Number.isFinite(amount) || amount <= 0) return 'Amount must be a positive number of Credits.';
+    const result = await giveCredits(user, target, amount);
+    if (!result.ok) {
+      return `🃏 ${result.error}`;
+    }
+    return `🃏 Gave ${amount} Credits to ${target}. You now have ${result.fromBalance} Credits.`;
   }
   if (cmd === 'credits') {
     if (!user) return null;

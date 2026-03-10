@@ -10,7 +10,6 @@ import dynamic from 'next/dynamic';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Hook imports
-import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 import { useRenderPerformance } from '@/lib/performance';
 import { useTimeDisplay } from '@/hooks/overlay/useTimeDisplay';
 import { useWeatherData } from '@/hooks/overlay/useWeatherData';
@@ -26,7 +25,7 @@ import type { LocationData } from '@/utils/location-utils';
 // Utility imports
 import { OverlayLogger } from '@/lib/logger';
 import { celsiusToFahrenheit, kmhToMph, metersToFeet } from '@/utils/unit-conversions';
-import { API_KEYS, TIMERS, SPEED_ANIMATION, ELEVATION_ANIMATION } from '@/utils/overlay-constants';
+import { API_KEYS, TIMERS } from '@/utils/overlay-constants';
 import { formatLocation, formatCountryName } from '@/utils/location-utils';
 import { fetchWeatherAndTimezoneFromOpenWeatherMap, fetchLocationFromLocationIQ } from '@/utils/api-utils';
 import { checkRateLimit, canMakeApiCall } from '@/utils/rate-limiting';
@@ -160,8 +159,6 @@ function OverlayPage() {
     setMapCoords,
     speedUpdateTimestamp,
     setSpeedUpdateTimestamp,
-    altitudeUpdateTimestamp,
-    setAltitudeUpdateTimestamp,
     gpsTimestampForDisplay,
     setGpsTimestampForDisplay,
     altitudeShowUntil,
@@ -494,7 +491,6 @@ function OverlayPage() {
                 setCurrentAltitude(roundedAltitude);
                 currentAltitudeRef.current = roundedAltitude;
                 lastAltitudeGpsTimestamp.current = payloadTimestamp;
-                setAltitudeUpdateTimestamp(now);
                 // Auto mode: track baseline and show when notable change from baseline
                 if (altitudeBaselineRef.current === null) {
                   altitudeBaselineRef.current = roundedAltitude;
@@ -509,7 +505,6 @@ function OverlayPage() {
                       altitudeShowTimeoutRef.current = null;
                       setAltitudeShowUntil(0);
                       altitudeBaselineRef.current = currentAltitudeRef.current ?? roundedAltitude; // New baseline = current when we hide
-                      setAltitudeUpdateTimestamp(Date.now());
                     }, ALTITUDE_DISPLAY_DURATION_MS);
                   }
                 }
@@ -1074,29 +1069,16 @@ function OverlayPage() {
     };
   }, [weather, getWeatherIcon, isNightTime]);
 
-  // Animated speed value - counts through each integer (50, 51, 52...) - faster for responsiveness
-  const displayedSpeed = useAnimatedValue(currentSpeed, {
-    ...SPEED_ANIMATION,
-    allowNull: false,
-  }) ?? 0;
-
-  // Animated altitude value - counts through each integer (100, 101, 102...) - slower, more contemplative
-  const displayedAltitude = useAnimatedValue(currentAltitude, {
-    ...ELEVATION_ANIMATION,
-    allowNull: true,
-  });
-
   // Altitude display logic - auto shows when altitude changes notably from baseline, hides when no longer relevant
   const altitudeDisplay = useMemo(() => {
-    if (currentAltitude === null || displayedAltitude === null) return null;
+    if (currentAltitude === null) return null;
     const now = Date.now();
     const isInShowWindow = altitudeShowUntil > 0 && now < altitudeShowUntil;
     if (!isInShowWindow) return null;
-    const altitudeM = displayedAltitude;
+    const altitudeM = currentAltitude;
     const altitudeFt = metersToFeet(altitudeM);
     return { value: altitudeM, formatted: `${altitudeM.toLocaleString()} m (${altitudeFt.toLocaleString()} ft)` };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- altitudeUpdateTimestamp + altitudeShowUntil
-  }, [currentAltitude, displayedAltitude, altitudeUpdateTimestamp, altitudeShowUntil]);
+  }, [currentAltitude, altitudeShowUntil]);
 
   // Speed display logic - auto shows when speed >= 10 km/h and fresh, hides when stale or below threshold
   // When speed-based minimap is on, speed display is locked to minimap (same sustained-speed condition)
@@ -1105,11 +1087,11 @@ function OverlayPage() {
     const meetsSpeedThreshold = currentSpeed >= 10;
     if (!shouldShowDisplayMode('auto', speedIsStale, meetsSpeedThreshold)) return null;
     if (settings.minimapSpeedBased && !sustainedSpeedVisibleRef.current) return null;
-    const speedKmh = displayedSpeed;
+    const speedKmh = currentSpeed;
     const speedMph = kmhToMph(speedKmh);
     return { value: speedKmh, formatted: `${Math.round(speedKmh)} km/h (${Math.round(speedMph)} mph)` };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- speedUpdateTimestamp + speedStaleCheckTime force re-run (latter when no RTIRL); minimapVisible so speed display follows minimap in speed-based mode
-  }, [currentSpeed, displayedSpeed, speedUpdateTimestamp, speedStaleCheckTime, settings.minimapSpeedBased, minimapVisible]);
+  }, [currentSpeed, speedUpdateTimestamp, speedStaleCheckTime, settings.minimapSpeedBased, minimapVisible]);
 
   return (
     <ErrorBoundary autoReload={false}>

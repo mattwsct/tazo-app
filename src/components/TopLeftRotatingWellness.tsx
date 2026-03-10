@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from 'react';
 import type { OverlaySettings } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
-import { useAnimatedValue } from '@/hooks/useAnimatedValue';
 
 const POLL_INTERVAL_MS = 60000;
 const CYCLE_DURATION_MS = 10_000;
@@ -68,16 +67,6 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     return s;
   }, [timezoneValid, date, settings.showSteps, settings.showDistance, dataFresh, wellness]);
 
-  const animatedSteps = useAnimatedValue(
-    wellness?.steps ?? null,
-    { precision: 0, durationMultiplier: 5, maxDuration: 1500, immediateThreshold: 1, allowNull: true }
-  );
-
-  const animatedDistanceKm = useAnimatedValue(
-    wellness?.distanceKm ?? null,
-    { precision: 1, durationMultiplier: 3000, maxDuration: 1000, immediateThreshold: 0.05, allowNull: true }
-  );
-
   const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
 
   if (slides.length === 0) return null;
@@ -95,12 +84,12 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
           <div className="step-counter-wrapper">
             <div className="step-counter-row">
               <span className="step-counter-icon">👟</span>
-              <span className="step-counter-value">{(animatedSteps ?? 0).toLocaleString()}</span>
+              <span className="step-counter-value">{(wellness?.steps ?? 0).toLocaleString()}</span>
             </div>
           </div>
         );
       case 'distance': {
-        const km = animatedDistanceKm ?? 0;
+        const km = wellness?.distanceKm ?? 0;
         return (
           <div className="step-counter-wrapper">
             <div className="step-counter-row">

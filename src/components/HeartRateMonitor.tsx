@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { HeartRateLogger } from '@/lib/logger';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { useAnimatedValue } from '@/hooks/useAnimatedValue';
-import { HEART_RATE_ANIMATION } from '@/utils/overlay-constants';
 
 // === 💗 HEART RATE TYPES & CONSTANTS ===
 interface PulsoidHeartRateData {
@@ -45,15 +43,6 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
   const [stableAnimationBpm, setStableAnimationBpm] = useState(0);
   const [debouncedBpm, setDebouncedBpm] = useState(0); // Debounced BPM for color calculation
   const [lastPersistedBpm, setLastPersistedBpm] = useState<{ bpm: number; at: number } | null>(null);
-  
-  // Use animated value hook for smooth BPM transitions - counts through each integer (70, 71, 72...)
-  const smoothHeartRate = useAnimatedValue(
-    heartRate.isConnected && heartRate.bpm > 0 ? heartRate.bpm : null,
-    {
-      ...HEART_RATE_ANIMATION,
-      allowNull: true,
-    }
-  ) ?? 0;
   
   // Refs for managing timeouts
   const heartRateTimer = useRef<NodeJS.Timeout | null>(null);
@@ -371,9 +360,6 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
       }, [pulsoidToken, onConnected, updateConnectionState, sendHeartrateToStats]);
 
   const hasLiveData = heartRate.isConnected && heartRate.bpm > 0;
-  const hasPersistedData = !hasLiveData && lastPersistedBpm != null &&
-    Date.now() - lastPersistedBpm.at < HEART_RATE_CONFIG.PERSIST_DISPLAY_MS;
-  const showHeartRate = hasLiveData || hasPersistedData;
 
   // Update persisted when Pulsoid is live so it's ready if we lose connection
   useEffect(() => {
@@ -394,12 +380,17 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     return () => clearTimeout(id);
   }, [lastPersistedBpm]);
 
-  if (!showHeartRate) return null;
+  // Determine what BPM to show:
+  // - Prefer live Pulsoid data when connected
+  // - Otherwise fall back to the last persisted BPM while it's fresh
+  // This avoids brief flicker when the connection blips.
+  const persistedIsFresh =
+    lastPersistedBpm != null &&
+    Date.now() - lastPersistedBpm.at < HEART_RATE_CONFIG.PERSIST_DISPLAY_MS;
+  const fallbackBpm = persistedIsFresh ? lastPersistedBpm!.bpm : 0;
+  const currentBpm = hasLiveData ? heartRate.bpm : fallbackBpm;
 
-  // Get current heart rate (live from Pulsoid, or last known Pulsoid value dimmed)
-  const currentBpm = hasLiveData
-    ? Math.round(smoothHeartRate || heartRate.bpm)
-    : lastPersistedBpm!.bpm;
+  if (currentBpm <= 0) return null;
   
   // Calculate color based on debounced BPM (only for numbers, not heart icon)
   // Use debouncedBpm if available, otherwise use currentBpm for initial display
@@ -420,7 +411,7 @@ export default function HeartRateMonitor({ pulsoidToken, onConnected }: HeartRat
     : undefined; // Use default CSS text-shadow for other colors
 
   const animationBpm = hasLiveData ? stableAnimationBpm : currentBpm;
-  const fallbackOpacity = hasPersistedData ? 0.6 : 1;
+  const fallbackOpacity = hasLiveData ? 1 : 0.6;
 
   return (
     <ErrorBoundary>
