@@ -11,6 +11,7 @@ import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
+import { OverlayLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,14 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = (await request.json()) as { subs?: number; kicks?: number; donationsCents?: number };
+    OverlayLogger.info('[stream-goals] PATCH body', {
+      subs: body.subs,
+      kicks: body.kicks,
+      donationsCents: body.donationsCents,
+      origin: request.headers.get('origin') ?? null,
+      host: request.headers.get('host') ?? null,
+      userAgent: request.headers.get('user-agent') ?? null,
+    });
     if (body.subs === undefined && body.kicks === undefined && body.donationsCents === undefined) {
       return NextResponse.json({ error: 'Provide subs and/or kicks and/or donationsCents' }, { status: 400 });
     }
@@ -56,6 +65,12 @@ export async function PATCH(request: NextRequest) {
     if (settings?.showSubGoal || settings?.showKicksGoal) {
       void updateKickTitleGoals(goals.subs, subTarget, goals.kicks, kicksTarget).catch(() => {});
     }
+
+    OverlayLogger.info('[stream-goals] PATCH result', {
+      goals,
+      subTarget,
+      kicksTarget,
+    });
 
     return NextResponse.json(goals);
   } catch (err) {
