@@ -59,6 +59,9 @@ export default function AdminPage() {
   const customLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [leaderboardExcludedBotsInput, setLeaderboardExcludedBotsInput] = useState('');
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [subGoalSubtextInput, setSubGoalSubtextInput] = useState('');
+  const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState('');
+  const [donationsGoalSubtextInput, setDonationsGoalSubtextInput] = useState('');
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
   const [donationsGoalTargetInput, setDonationsGoalTargetInput] = useState<string>('0');
@@ -66,6 +69,9 @@ export default function AdminPage() {
   const [chipRewardChipsInput, setChipRewardChipsInput] = useState<string>('50');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const subGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const kicksGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const donationsGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chipRewardTitleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chipRewardChipsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -706,6 +712,34 @@ export default function AdminPage() {
     }, 1000);
   }, [handleSettingsChange]);
 
+  // Debounced subtitle inputs (1s delay before saving)
+  const handleSubGoalSubtextChange = useCallback((value: string) => {
+    setSubGoalSubtextInput(value);
+    if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
+    subGoalSubtextTimeoutRef.current = setTimeout(() => {
+      subGoalSubtextTimeoutRef.current = null;
+      handleSettingsChange({ subGoalSubtext: value || null });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  const handleKicksGoalSubtextChange = useCallback((value: string) => {
+    setKicksGoalSubtextInput(value);
+    if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
+    kicksGoalSubtextTimeoutRef.current = setTimeout(() => {
+      kicksGoalSubtextTimeoutRef.current = null;
+      handleSettingsChange({ kicksGoalSubtext: value || null });
+    }, 1000);
+  }, [handleSettingsChange]);
+
+  const handleDonationsGoalSubtextChange = useCallback((value: string) => {
+    setDonationsGoalSubtextInput(value);
+    if (donationsGoalSubtextTimeoutRef.current) clearTimeout(donationsGoalSubtextTimeoutRef.current);
+    donationsGoalSubtextTimeoutRef.current = setTimeout(() => {
+      donationsGoalSubtextTimeoutRef.current = null;
+      handleSettingsChange({ donationsGoalSubtext: value || null });
+    }, 1000);
+  }, [handleSettingsChange]);
+
   useEffect(() => {
     setLeaderboardExcludedBotsInput(settings.leaderboardExcludedBots ?? '');
   }, [settings.leaderboardExcludedBots]);
@@ -765,12 +799,28 @@ export default function AdminPage() {
     return () => {
       if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
       if (kicksGoalTargetTimeoutRef.current) clearTimeout(kicksGoalTargetTimeoutRef.current);
+      if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
+      if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
+      if (donationsGoalSubtextTimeoutRef.current) clearTimeout(donationsGoalSubtextTimeoutRef.current);
       if (chipRewardTitleTimeoutRef.current) clearTimeout(chipRewardTitleTimeoutRef.current);
       if (chipRewardChipsTimeoutRef.current) clearTimeout(chipRewardChipsTimeoutRef.current);
       if (triviaRandomQuestionsTimeoutRef.current) clearTimeout(triviaRandomQuestionsTimeoutRef.current);
       if (donationsGoalTargetTimeoutRef.current) clearTimeout(donationsGoalTargetTimeoutRef.current);
     };
   }, []);
+
+  // Sync subtitle inputs from settings
+  useEffect(() => {
+    setSubGoalSubtextInput(settings.subGoalSubtext ?? '');
+  }, [settings.subGoalSubtext]);
+
+  useEffect(() => {
+    setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
+  }, [settings.kicksGoalSubtext]);
+
+  useEffect(() => {
+    setDonationsGoalSubtextInput(settings.donationsGoalSubtext ?? '');
+  }, [settings.donationsGoalSubtext]);
 
   // Sync channel reward inputs from settings
   useEffect(() => {
@@ -1304,8 +1354,8 @@ export default function AdminPage() {
                   <input
                     type="text"
                     className="text-input"
-                    value={settings.subGoalSubtext ?? ''}
-                    onChange={(e) => handleSettingsChange({ subGoalSubtext: e.target.value || null })}
+                    value={subGoalSubtextInput}
+                    onChange={(e) => handleSubGoalSubtextChange(e.target.value)}
                     placeholder='e.g. "Push-ups", keeps goal fixed'
                   />
                 </div>
@@ -1369,8 +1419,8 @@ export default function AdminPage() {
                   <input
                     type="text"
                     className="text-input"
-                    value={settings.kicksGoalSubtext ?? ''}
-                    onChange={(e) => handleSettingsChange({ kicksGoalSubtext: e.target.value || null })}
+                    value={kicksGoalSubtextInput}
+                    onChange={(e) => handleKicksGoalSubtextChange(e.target.value)}
                     placeholder='e.g. "PLANK", keeps goal fixed'
                   />
                 </div>
@@ -1457,8 +1507,8 @@ export default function AdminPage() {
                   <input
                     type="text"
                     className="text-input"
-                    value={settings.donationsGoalSubtext ?? ''}
-                    onChange={(e) => handleSettingsChange({ donationsGoalSubtext: e.target.value || null })}
+                    value={donationsGoalSubtextInput}
+                    onChange={(e) => handleDonationsGoalSubtextChange(e.target.value)}
                     placeholder='e.g. "Charity drive", keeps goal fixed'
                   />
                 </div>
