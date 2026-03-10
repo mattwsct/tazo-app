@@ -243,12 +243,11 @@ export default function BottomRightPanel({
     const formatCurrency = (cents: number) => {
       const value = cents / 100;
       const isWhole = cents % 100 === 0;
-      return value.toLocaleString(undefined, {
-        style: 'currency',
-        currency: 'USD',
+      const formattedNumber = value.toLocaleString(undefined, {
         minimumFractionDigits: isWhole ? 0 : 2,
         maximumFractionDigits: isWhole ? 0 : 2,
       });
+      return `$${formattedNumber}`;
     };
     return (
       <div className="goal-progress-stack">
