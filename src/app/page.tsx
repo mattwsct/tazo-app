@@ -757,6 +757,11 @@ export default function AdminPage() {
     setKicksGoalTargetInput(String(settings.kicksGoalIncrement ?? settings.kicksGoalTarget ?? 1000));
   }, [settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalTarget, settings.kicksGoalTarget]);
 
+  // Sync donations goal target input from settings (in USD)
+  useEffect(() => {
+    setDonationsGoalTargetInput(String((settings.donationsGoalTargetCents ?? 0) / 100));
+  }, [settings.donationsGoalTargetCents]);
+
   // Debounced handlers for number inputs (1s delay before saving)
   const handleSubGoalTargetChange = useCallback((value: string) => {
     setSubGoalTargetInput(value);
