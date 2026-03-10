@@ -11,7 +11,9 @@ import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
-import { OverlayLogger } from '@/lib/logger';
+import { Logger } from '@/lib/logger';
+
+const goalLogger = new Logger('STREAM-GOALS');
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +34,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = (await request.json()) as { subs?: number; kicks?: number; donationsCents?: number };
-    OverlayLogger.info('[stream-goals] PATCH body', {
+    goalLogger.info('[stream-goals] PATCH body', {
       subs: body.subs,
       kicks: body.kicks,
       donationsCents: body.donationsCents,
@@ -47,17 +49,22 @@ export async function PATCH(request: NextRequest) {
     void broadcastAlertsAndLeaderboard();
     const goals = await getStreamGoals();
 
-    const settings = await kv.get<Record<string, unknown>>('overlay_settings');
+    // Only fetch overlay_settings when subs or kicks are changing — donationsCents-only
+    // updates don't need milestone checks or title refreshes, saving a KV round-trip.
+    const needsMilestoneCheck = body.subs !== undefined || body.kicks !== undefined;
+    const settings = needsMilestoneCheck
+      ? await kv.get<Record<string, unknown>>('overlay_settings')
+      : null;
     let subTarget = (settings?.subGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget!;
     const subIncrement = (settings?.subGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalIncrement!;
     let kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
     const kicksIncrement = (settings?.kicksGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement!;
 
     // Bump targets immediately if admin set goals past the current target
-    if (goals.subs > 0 && goals.subs >= subTarget) {
+    if (needsMilestoneCheck && goals.subs > 0 && goals.subs >= subTarget) {
       subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, goals.subs);
     }
-    if (goals.kicks > 0 && goals.kicks >= kicksTarget) {
+    if (needsMilestoneCheck && goals.kicks > 0 && goals.kicks >= kicksTarget) {
       kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, goals.kicks);
     }
 
@@ -66,7 +73,7 @@ export async function PATCH(request: NextRequest) {
       void updateKickTitleGoals(goals.subs, subTarget, goals.kicks, kicksTarget).catch(() => {});
     }
 
-    OverlayLogger.info('[stream-goals] PATCH result', {
+    goalLogger.info('[stream-goals] PATCH result', {
       goals,
       subTarget,
       kicksTarget,

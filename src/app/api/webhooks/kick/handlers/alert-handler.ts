@@ -8,11 +8,9 @@ import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 
 const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
 
-const handleSubGoalMilestone = async (count: number) => {
-  const [goals, settings] = await Promise.all([
-    getStreamGoals(),
-    kv.get<Record<string, unknown>>('overlay_settings'),
-  ]);
+// Settings are fetched once per event and passed in to avoid a duplicate KV read.
+const handleSubGoalMilestone = async (count: number, settings: Record<string, unknown> | null) => {
+  const goals = await getStreamGoals();
   const target = (settings?.subGoalTarget as number) ?? 5;
   const increment = (settings?.subGoalIncrement as number) ?? 5;
   const kicksTarget = (settings?.kicksGoalTarget as number) ?? 100;
@@ -51,9 +49,14 @@ export async function handleAlertEvents(
     if (subscriber) {
       const username = getUsername(subscriber);
       if (username) void addCredits(username, 100);
-      await Promise.all([addStreamGoalSubs(1), pushSubAlert(subscriber)]);
+      // Fetch settings concurrently with the increment — settings don't change during INCRBY.
+      const [, , settings] = await Promise.all([
+        addStreamGoalSubs(1),
+        pushSubAlert(subscriber),
+        kv.get<Record<string, unknown>>('overlay_settings'),
+      ]);
       didAlertOrLeaderboard = true;
-      await handleSubGoalMilestone(1);
+      await handleSubGoalMilestone(1, settings);
     }
   } else if (eventNorm === 'channel.subscription.renewal') {
     const subscriber = payload.subscriber;
@@ -61,9 +64,13 @@ export async function handleAlertEvents(
     if (subscriber) {
       const username = getUsername(subscriber);
       if (username) void addCredits(username, 100);
-      await Promise.all([addStreamGoalSubs(1), pushResubAlert(subscriber, duration > 0 ? duration : undefined)]);
+      const [, , settings] = await Promise.all([
+        addStreamGoalSubs(1),
+        pushResubAlert(subscriber, duration > 0 ? duration : undefined),
+        kv.get<Record<string, unknown>>('overlay_settings'),
+      ]);
       didAlertOrLeaderboard = true;
-      await handleSubGoalMilestone(1);
+      await handleSubGoalMilestone(1, settings);
     }
   } else if (eventNorm === 'channel.subscription.gifts') {
     const gifter = payload.gifter ?? (payload.data as Record<string, unknown>)?.gifter;
@@ -72,12 +79,13 @@ export async function handleAlertEvents(
     if (gifter) {
       const gifterUsername = getUsername(gifter);
       if (gifterUsername) void addCredits(gifterUsername, 100);
-      await Promise.all([
+      const [, , settings] = await Promise.all([
         addStreamGoalSubs(count),
         pushGiftSubAlert(gifter, count),
+        kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       didAlertOrLeaderboard = true;
-      await handleSubGoalMilestone(count);
+      await handleSubGoalMilestone(count, settings);
     }
   } else if (eventNorm === 'kicks.gifted') {
     const sender = payload.sender;
@@ -87,15 +95,15 @@ export async function handleAlertEvents(
     if (sender && amount > 0) {
       const senderUsername = getUsername(sender);
       if (senderUsername) void addCredits(senderUsername, amount);
-      await Promise.all([
+      // Fetch settings concurrently with the increment — settings don't change during INCRBY.
+      // Goals must be read after the increment to get the updated total.
+      const [, , settings] = await Promise.all([
         addStreamGoalKicks(amount),
         pushKicksAlert(sender, amount, giftName),
-      ]);
-      didAlertOrLeaderboard = true;
-      const [goals, settings] = await Promise.all([
-        getStreamGoals(),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
+      didAlertOrLeaderboard = true;
+      const goals = await getStreamGoals();
       const target = (settings?.kicksGoalTarget as number) ?? 100;
       const increment = (settings?.kicksGoalIncrement as number) ?? 100;
       const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);

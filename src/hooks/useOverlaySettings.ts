@@ -155,8 +155,8 @@ export function useOverlaySettings(): [
     const runPoll = async () => {
       const sseFresh = Date.now() - lastSseUpdateRef.current < 15000;
       if (sseFresh) {
-        // SSE is alive — no need to poll, come back in 2s to check alerts if SSE goes stale
-        schedulePoll(POLL_BASE_MS);
+        // SSE is alive — skip the fetch entirely, reschedule in 15s to recheck staleness.
+        schedulePoll(15000);
         return;
       }
       if (process.env.NODE_ENV === 'development' && lastSseUpdateRef.current > 0) {

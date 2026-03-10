@@ -132,8 +132,9 @@ export async function GET(request: NextRequest): Promise<Response> {
         checkForUpdates();
       }, 100);
       
-      // Check every 3s for settings/goal changes — detects sub/kick events quickly
-      const checkInterval = setInterval(checkForUpdates, 3000);
+      // Check every 15s as a safety net — explicit broadcastSettings() calls handle real-time
+      // updates immediately, so this poll only catches cases where a broadcast fails.
+      const checkInterval = setInterval(checkForUpdates, 15000);
       
       // Heartbeat every 8s — must arrive before the 15s polling-fallback threshold
       const heartbeatInterval = setInterval(() => {
