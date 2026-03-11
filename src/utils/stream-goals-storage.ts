@@ -101,21 +101,9 @@ export async function getStreamGoals(): Promise<{ subs: number; kicks: number; d
   }
 }
 
-/** Manually set subs, kicks, and/or donations (admin override or chat commands).
- *  NOTE: To avoid mysterious resets from misconfigured callers, we treat an
- *  attempted donationsCents=0 as "no change" when a positive value already
- *  exists. To intentionally clear donations, callers should first ensure the
- *  current value is 0 or use a dedicated reset flow in future.
- */
+/** Manually set subs, kicks, and/or donations (admin override or chat commands). */
 export async function setStreamGoals(updates: { subs?: number; kicks?: number; donationsCents?: number }): Promise<void> {
   try {
-    // Load current donations once so we can guard against accidental resets.
-    let currentDonations: number | null = null;
-    if (updates.donationsCents !== undefined) {
-      const existing = await kv.get<number>(STREAM_GOALS_DONATIONS_KEY);
-      currentDonations = Math.max(0, existing ?? 0);
-    }
-
     const promises: Promise<unknown>[] = [];
     if (updates.subs !== undefined) {
       promises.push(kv.set(STREAM_GOALS_SUBS_KEY, Math.max(0, Math.floor(updates.subs))));
@@ -124,18 +112,7 @@ export async function setStreamGoals(updates: { subs?: number; kicks?: number; d
       promises.push(kv.set(STREAM_GOALS_KICKS_KEY, Math.max(0, Math.floor(updates.kicks))));
     }
     if (updates.donationsCents !== undefined) {
-      const next = Math.max(0, Math.floor(updates.donationsCents));
-      // Guard: if we already have a positive donations total and someone tries
-      // to write 0, assume it's an accidental reset from another environment.
-      if (currentDonations != null && currentDonations > 0 && next === 0) {
-        console.warn(
-          '[StreamGoals] Ignoring donationsCents reset to 0 because currentDonations is',
-          currentDonations,
-          '- check callers of setStreamGoals / /api/stream-goals in all environments.'
-        );
-      } else {
-        promises.push(kv.set(STREAM_GOALS_DONATIONS_KEY, next));
-      }
+      promises.push(kv.set(STREAM_GOALS_DONATIONS_KEY, Math.max(0, Math.floor(updates.donationsCents))));
     }
     if (promises.length > 0) {
       promises.push(kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()));
