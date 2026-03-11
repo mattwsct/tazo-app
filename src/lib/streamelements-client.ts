@@ -6,7 +6,8 @@ import type { StreamElementsTipEvent } from '@/types/streamelements';
 
 const seLogger = new Logger('STREAM-ELEMENTS');
 
-const STREAM_ELEMENTS_WS_URL = 'wss://realtime.streamelements.com';
+const ASTRO_WS_URL = 'wss://astro.streamelements.com';
+const SUBSCRIBE_TOPIC = 'channel.tips';
 
 let socket: WebSocket | null = null;
 let reconnectAttempts = 0;
@@ -34,22 +35,31 @@ function scheduleReconnect(): void {
 }
 
 function handleTipEvent(event: StreamElementsTipEvent): void {
-  const amount = event.data?.amount ?? 0;
-  const currency = event.data?.currency ?? '';
-  const username = event.data?.username ?? 'Someone';
+  const donation = event.donation;
+  if (!donation) {
+    seLogger.warn('Ignoring tip event with no donation payload', event);
+    return;
+  }
+
+  const amount = donation.amount ?? 0;
+  const currency = donation.currency ?? '';
+  const username = donation.user?.username ?? 'Someone';
+
   if (!amount || !Number.isFinite(amount)) {
     seLogger.warn('Ignoring tip event with invalid amount', event);
     return;
   }
+
   const amountLabel = `${currency.toUpperCase()} ${amount.toFixed(2)}`;
-  const message = event.data?.message ?? '';
-  // Persist donation goal in cents if we can infer a conversion (assume base currency unit → cents).
+  const message = donation.message ?? '';
+
   const amountCents = Math.round(amount * 100);
   if (amountCents > 0) {
     void addStreamGoalDonations(amountCents).catch((err) => {
       seLogger.warn('Failed to increment donation goals', err);
     });
   }
+
   void pushDonationAlert(username, amountLabel, message).catch((err) => {
     seLogger.warn('Failed to push donation alert', err);
   });
@@ -90,36 +100,62 @@ function connect(): void {
     return;
   }
   try {
-    seLogger.info('Connecting to StreamElements real-time API...');
-    socket = new WebSocket(STREAM_ELEMENTS_WS_URL);
+    seLogger.info('Connecting to StreamElements Astro gateway...');
+    socket = new WebSocket(ASTRO_WS_URL);
 
     socket.onopen = () => {
       reconnectAttempts = 0;
-      seLogger.info('StreamElements WebSocket connected, authenticating...');
-      const authPayload = {
-        type: 'authenticate',
-        data: { token: jwt },
+      seLogger.info('StreamElements WebSocket connected, subscribing to channel.tips...');
+
+      const nonce = `se-sub-${Date.now()}`;
+      const subscribePayload = {
+        type: 'subscribe',
+        nonce,
+        data: {
+          topic: SUBSCRIBE_TOPIC,
+          token: jwt,
+          token_type: 'jwt',
+        },
       };
-      socket?.send(JSON.stringify(authPayload));
+      socket?.send(JSON.stringify(subscribePayload));
     };
 
-    socket.onmessage = (event) => {
+    socket.onmessage = (evt) => {
       try {
-        const msg = JSON.parse(event.data as string) as { type?: string; event?: string; data?: unknown };
-        if (msg.type === 'authenticated') {
-          seLogger.info('StreamElements authentication succeeded');
+        const msg = JSON.parse(evt.data as string) as {
+          type?: string;
+          topic?: string;
+          nonce?: string;
+          error?: string;
+          data?: unknown;
+        };
+
+        if (msg.type === 'response') {
+          if (msg.error) {
+            seLogger.error('StreamElements subscription error', { error: msg.error, nonce: msg.nonce, data: msg.data });
+            if (msg.error === 'err_unauthorized') {
+              seLogger.error('JWT is invalid or expired — check STREAMELEMENTS_JWT. Closing connection.');
+              socket?.close();
+              socket = null;
+              return;
+            }
+          } else {
+            seLogger.info('StreamElements subscription confirmed', { nonce: msg.nonce, data: msg.data });
+          }
           return;
         }
-        if (msg.type === 'unauthorized') {
-          seLogger.error('StreamElements authentication failed; disabling client');
-          socket?.close();
-          socket = null;
-          return;
-        }
-        if (msg.type === 'event' && msg.event === 'tip' && msg.data) {
+
+        if (msg.type === 'message' && typeof msg.topic === 'string' && msg.topic.startsWith('channel.tips')) {
           const tipEvent = msg.data as StreamElementsTipEvent;
-          handleTipEvent(tipEvent);
+          if (tipEvent && tipEvent.donation) {
+            handleTipEvent(tipEvent);
+          } else {
+            seLogger.warn('Received channel.tips message with unexpected data shape', msg.data);
+          }
+          return;
         }
+
+        seLogger.info('StreamElements message', { type: msg.type, topic: msg.topic });
       } catch (err) {
         seLogger.warn('Failed to parse StreamElements message', err);
       }
@@ -140,7 +176,6 @@ function connect(): void {
   }
 }
 
-// Initialize connection when this module is first imported.
 if (typeof WebSocket !== 'undefined') {
   connect();
 } else {
@@ -150,4 +185,3 @@ if (typeof WebSocket !== 'undefined') {
 export function ensureStreamElementsClient(): void {
   connect();
 }
-

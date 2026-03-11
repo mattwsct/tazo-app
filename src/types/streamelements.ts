@@ -1,18 +1,28 @@
+/**
+ * Shape of a tip event received from the StreamElements Astro WebSocket gateway
+ * when subscribed to the `channel.tips` topic.
+ *
+ * Reference: https://docs.streamelements.com/websockets/topics/channel-tips
+ */
 export interface StreamElementsTipEvent {
   _id: string;
-  type: 'tip';
   channel: string;
+  provider: string;
+  approved: string;
+  status: string;
   createdAt: string;
-  /**
-   * Main payload for the tip event as documented by StreamElements.
-   * Amount is a number in the given currency (e.g. 5, 10.5).
-   */
-  data: {
-    username: string;
-    provider: string;
+  updatedAt?: string;
+  transactionId?: string;
+  donation: {
+    user: {
+      username: string;
+      geo?: string;
+      email?: string;
+      channel?: string;
+    };
+    message: string;
     amount: number;
     currency: string;
-    message?: string;
+    paymentMethod?: string;
   };
 }
-
