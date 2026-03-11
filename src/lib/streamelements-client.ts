@@ -1,6 +1,7 @@
 import { Logger } from '@/lib/logger';
 import { pushDonationAlert } from '@/utils/overlay-alerts-storage';
 import { addStreamGoalDonations } from '@/utils/stream-goals-storage';
+import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import type { StreamElementsTipEvent } from '@/types/streamelements';
 
 const seLogger = new Logger('STREAM-ELEMENTS');
@@ -52,6 +53,25 @@ function handleTipEvent(event: StreamElementsTipEvent): void {
   void pushDonationAlert(username, amountLabel, message).catch((err) => {
     seLogger.warn('Failed to push donation alert', err);
   });
+
+  {
+    const shortMsg = message.length > 80 ? `${message.slice(0, 77)}...` : message;
+    const chatLine = shortMsg
+      ? `${username} tipped ${amountLabel} via StreamElements: "${shortMsg}"`
+      : `${username} tipped ${amountLabel} via StreamElements.`;
+
+    void (async () => {
+      try {
+        const token = await getValidAccessToken();
+        if (token) {
+          await sendKickChatMessage(token, chatLine);
+        }
+      } catch (err) {
+        seLogger.warn('Failed to send StreamElements tip to Kick chat', err);
+      }
+    })();
+  }
+
   seLogger.info('Received tip event', {
     id: event._id,
     username,
