@@ -219,16 +219,21 @@ export async function handleGoalCommand(
     const snapped = goals.donationsCents >= incrementCents
       ? (Math.floor(goals.donationsCents / incrementCents) + 1) * incrementCents
       : incrementCents;
+    const activeTarget = subtext ? incrementCents : snapped;
     await kv.set(OVERLAY_SETTINGS_KEY, {
       ...settings,
       showDonationsGoal: true,
-      donationsGoalTargetCents: subtext ? incrementCents : snapped,
+      donationsGoalTargetCents: activeTarget,
       donationsGoalIncrementCents: incrementCents,
       donationsGoalSubtext: subtext ?? null,
     });
     notifyOverlay();
-    const label = subtext ? ` — "${subtext}"` : '';
-    return { handled: true, reply: `✅ Tips goal set: $${amount} total${label}` };
+    const activeUsd = (activeTarget / 100).toFixed(2).replace(/\.00$/, '');
+    const bumped = activeTarget !== incrementCents ? ` (bumped to $${activeUsd} — already at $${(goals.donationsCents / 100).toFixed(2).replace(/\.00$/, '')})` : '';
+    const reply = subtext
+      ? `✅ Tips goal set: $${amount} — "${subtext}"`
+      : `✅ Tips goal set: $${activeUsd}${bumped}`;
+    return { handled: true, reply };
   }
 
   // ── !subscount <count> ──────────────────────────────────────────────────────

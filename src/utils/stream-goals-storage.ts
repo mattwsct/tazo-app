@@ -27,9 +27,11 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
     const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
     const subIncrement = Math.max(1, (settings.subGoalIncrement as number) || 5);
     const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 100);
+    const donationsIncrementCents = Math.max(0, (settings.donationsGoalIncrementCents as number) || 0);
     await Promise.all([
       kv.set(STREAM_GOALS_SUBS_KEY, 0),
       kv.set(STREAM_GOALS_KICKS_KEY, 0),
+      kv.set(STREAM_GOALS_DONATIONS_KEY, 0),
     ]);
     await kv.set('overlay_settings', {
       ...settings,
@@ -39,6 +41,9 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
       showKicksGoal: false,
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
+      showDonationsGoal: false,
+      donationsGoalTargetCents: donationsIncrementCents,
+      donationsGoalSubtext: null,
     });
     return { subTarget: subIncrement, kicksTarget: kicksIncrement };
   } catch (e) {
