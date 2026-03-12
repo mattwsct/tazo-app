@@ -757,10 +757,10 @@ export default function AdminPage() {
     setKicksGoalTargetInput(String(settings.kicksGoalIncrement ?? settings.kicksGoalTarget ?? 1000));
   }, [settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalTarget, settings.kicksGoalTarget]);
 
-  // Sync donations goal target input from settings (in USD)
+  // Sync donations goal step input from settings (show the step/increment in USD, not the snapped target)
   useEffect(() => {
-    setDonationsGoalTargetInput(String((settings.donationsGoalTargetCents ?? 0) / 100));
-  }, [settings.donationsGoalTargetCents]);
+    setDonationsGoalTargetInput(String((settings.donationsGoalIncrementCents ?? settings.donationsGoalTargetCents ?? 0) / 100));
+  }, [settings.donationsGoalIncrementCents, settings.donationsGoalTargetCents]);
 
   // Debounced handlers for number inputs (1s delay before saving)
   const handleSubGoalTargetChange = useCallback((value: string) => {
@@ -797,9 +797,12 @@ export default function AdminPage() {
     donationsGoalTargetTimeoutRef.current = setTimeout(() => {
       donationsGoalTargetTimeoutRef.current = null;
       const n = Math.max(0, parseFloat(value) || 0);
-      handleSettingsChange({ donationsGoalTargetCents: Math.round(n * 100) });
+      const nCents = Math.round(n * 100);
+      const countCents = settings.streamGoals?.donationsCents ?? 0;
+      const snapped = nCents > 0 && countCents >= nCents ? (Math.floor(countCents / nCents) + 1) * nCents : nCents;
+      handleSettingsChange({ donationsGoalTargetCents: snapped, donationsGoalIncrementCents: nCents });
     }, 1000);
-  }, [handleSettingsChange]);
+  }, [handleSettingsChange, settings.streamGoals]);
 
   useEffect(() => {
     return () => {

@@ -1,7 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 import { Logger } from '@/lib/logger';
+import { kv } from '@/lib/kv';
 import { pushDonationAlert } from '@/utils/overlay-alerts-storage';
-import { addStreamGoalDonations } from '@/utils/stream-goals-storage';
+import { addStreamGoalDonations, getStreamGoals } from '@/utils/stream-goals-storage';
+import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import type { StreamElementsTipEvent } from '@/types/streamelements';
 
@@ -38,9 +40,25 @@ function handleTipEvent(event: StreamElementsTipEvent): void {
 
   const amountCents = Math.round(amount * 100);
   if (amountCents > 0) {
-    void addStreamGoalDonations(amountCents).catch((err) => {
-      seLogger.warn('Failed to increment donation goals', err);
-    });
+    void (async () => {
+      try {
+        await addStreamGoalDonations(amountCents);
+        const [goals, settings] = await Promise.all([
+          getStreamGoals(),
+          kv.get<Record<string, unknown>>('overlay_settings'),
+        ]);
+        const target = (settings?.donationsGoalTargetCents as number) ?? 0;
+        const increment = (settings?.donationsGoalIncrementCents as number) ?? 0;
+        const hasSubtext = !!(settings?.donationsGoalSubtext as string | null | undefined);
+        const showGoal = !!(settings?.showDonationsGoal);
+        if (showGoal && !hasSubtext && increment > 0 && target > 0 && goals.donationsCents >= target) {
+          await bumpGoalTarget('donations', target, increment, goals.donationsCents);
+          seLogger.info('Donations goal bumped', { prev: target, count: goals.donationsCents, increment });
+        }
+      } catch (err) {
+        seLogger.warn('Failed to process donation goal', err);
+      }
+    })();
   }
 
   void pushDonationAlert(username, amountLabel, message).catch((err) => {

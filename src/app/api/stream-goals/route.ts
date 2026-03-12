@@ -49,26 +49,26 @@ export async function PATCH(request: NextRequest) {
     void broadcastAlertsAndLeaderboard();
     const goals = await getStreamGoals();
 
-    // Only fetch overlay_settings when subs or kicks are changing — donationsCents-only
-    // updates don't need milestone checks or title refreshes, saving a KV round-trip.
-    const needsMilestoneCheck = body.subs !== undefined || body.kicks !== undefined;
-    const settings = needsMilestoneCheck
-      ? await kv.get<Record<string, unknown>>('overlay_settings')
-      : null;
+    const settings = await kv.get<Record<string, unknown>>('overlay_settings');
     let subTarget = (settings?.subGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalTarget!;
     const subIncrement = (settings?.subGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalIncrement!;
     let kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
     const kicksIncrement = (settings?.kicksGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement!;
+    let donationsTargetCents = (settings?.donationsGoalTargetCents as number) ?? 0;
+    const donationsIncrementCents = (settings?.donationsGoalIncrementCents as number) ?? 0;
+    const hasDonationsSubtext = !!(settings?.donationsGoalSubtext as string | null | undefined);
 
     // Bump targets immediately if admin set goals past the current target
-    if (needsMilestoneCheck && goals.subs > 0 && goals.subs >= subTarget) {
+    if (body.subs !== undefined && goals.subs > 0 && goals.subs >= subTarget) {
       subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, goals.subs);
     }
-    if (needsMilestoneCheck && goals.kicks > 0 && goals.kicks >= kicksTarget) {
+    if (body.kicks !== undefined && goals.kicks > 0 && goals.kicks >= kicksTarget) {
       kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, goals.kicks);
     }
+    if (body.donationsCents !== undefined && !hasDonationsSubtext && donationsIncrementCents > 0 && goals.donationsCents > 0 && goals.donationsCents >= donationsTargetCents) {
+      donationsTargetCents = await bumpGoalTarget('donations', donationsTargetCents, donationsIncrementCents, goals.donationsCents);
+    }
 
-    // Update stream title if either goal is shown there
     if (settings?.showSubGoal || settings?.showKicksGoal) {
       void updateKickTitleGoals(goals.subs, subTarget, goals.kicks, kicksTarget).catch(() => {});
     }
@@ -77,6 +77,7 @@ export async function PATCH(request: NextRequest) {
       goals,
       subTarget,
       kicksTarget,
+      donationsTargetCents,
     });
 
     return NextResponse.json(goals);

@@ -140,6 +140,7 @@ export async function handleGoalCommand(
       ...settings,
       showDonationsGoal: false,
       donationsGoalTargetCents: 0,
+      donationsGoalIncrementCents: 0,
       donationsGoalSubtext: null,
     });
     notifyOverlay();
@@ -213,17 +214,20 @@ export async function handleGoalCommand(
       return { handled: true, reply: 'Usage: !tipsgoal <amount> [label]  e.g. !tipsgoal 100  or  !tipsgoal 100 Charity stream' };
     }
     const subtext = parts.slice(1).join(' ').trim() || undefined;
-    const targetCents = Math.round(amount * 100);
+    const incrementCents = Math.round(amount * 100);
+    const goals = await getStreamGoals();
+    const snapped = goals.donationsCents >= incrementCents
+      ? (Math.floor(goals.donationsCents / incrementCents) + 1) * incrementCents
+      : incrementCents;
     await kv.set(OVERLAY_SETTINGS_KEY, {
       ...settings,
       showDonationsGoal: true,
-      donationsGoalTargetCents: targetCents,
+      donationsGoalTargetCents: subtext ? incrementCents : snapped,
+      donationsGoalIncrementCents: incrementCents,
       donationsGoalSubtext: subtext ?? null,
     });
     notifyOverlay();
-    const label = subtext
-      ? ` — "${subtext}"`
-      : '';
+    const label = subtext ? ` — "${subtext}"` : '';
     return { handled: true, reply: `✅ Tips goal set: $${amount} total${label}` };
   }
 
@@ -283,6 +287,15 @@ export async function handleGoalCommand(
     const cents = Math.round(amount * 100);
     await setStreamGoals({ donationsCents: cents });
     void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
+
+    const donationsTarget = (settings.donationsGoalTargetCents as number) ?? 0;
+    const donationsIncrement = (settings.donationsGoalIncrementCents as number) ?? 0;
+    const hasDonationsSubtext = !!(settings.donationsGoalSubtext as string | null | undefined);
+    const showDonationsGoal = !!(settings.showDonationsGoal);
+    if (showDonationsGoal && !hasDonationsSubtext && donationsIncrement > 0 && donationsTarget > 0 && cents >= donationsTarget) {
+      await bumpGoalTarget('donations', donationsTarget, donationsIncrement, cents);
+    }
+
     notifyOverlay();
     return { handled: true, reply: `✅ Tips total set to $${amount.toFixed(2)}` };
   }

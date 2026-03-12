@@ -105,6 +105,8 @@ export interface OverlaySettings {
   /** Donations goal: show progress bar, target (in cents, runtime aggregated from tips). */
   showDonationsGoal?: boolean;
   donationsGoalTargetCents?: number;
+  /** Amount to add to donations goal when reached (auto-increment), in cents. */
+  donationsGoalIncrementCents?: number;
   donationsGoalSubtext?: string;
   /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
   streamerTimezone?: string;
@@ -240,6 +242,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalSubtext: 'string',
   showDonationsGoal: 'boolean',
   donationsGoalTargetCents: 'number',
+  donationsGoalIncrementCents: 'number',
   donationsGoalSubtext: 'string',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
