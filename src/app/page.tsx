@@ -1034,8 +1034,8 @@ export default function AdminPage() {
               </div>
           </CollapsibleSection>
 
-          {/* Location, map & overlay — merged for IRL: where am I + what do I show */}
-          <CollapsibleSection id="location-map" title="📍 Location, map &amp; overlay">
+          {/* Location & map */}
+          <CollapsibleSection id="location-map" title="📍 Location &amp; map">
             <div className="setting-group">
               {/* A: Current location */}
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Current location</h4>
@@ -1161,9 +1161,12 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* C: Overlay toggles */}
-            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Overlay — what appears on stream</h4>
+          </CollapsibleSection>
+
+          {/* Overlay & goals — what shows on stream + goal tracking */}
+          <CollapsibleSection id="overlay" title="🖥️ Overlay &amp; goals">
+            <div className="setting-group">
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>What appears on stream</h4>
               <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-left (wellness)</h5>
               <div className="checkbox-group" style={{ marginBottom: 12 }}>
                 <label className="checkbox-label">
@@ -1232,12 +1235,11 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
-          </CollapsibleSection>
 
-          {/* Stream goals — common for IRL */}
-          <CollapsibleSection id="stream-goals" title="🎯 Stream goals">
-            <p className="input-hint" style={{ marginBottom: 12, marginTop: 0 }}>Goals auto-increment when reached. Set a subtitle to keep the goal fixed instead.</p>
-            <div className="setting-group">
+            {/* Stream goals */}
+            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Stream goals</h4>
+              <p className="input-hint" style={{ marginBottom: 12, marginTop: 0 }}>Goals auto-increment when reached. Set a subtitle to keep the goal fixed instead.</p>
               {/* Sub goal */}
               <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Subs</div>
@@ -1577,90 +1579,10 @@ export default function AdminPage() {
             
           </CollapsibleSection>
 
-          {/* Gambling & events */}
-          <CollapsibleSection id="gambling" title="🎰 Credits & blackjack">
+          {/* Chat — commands and auto-broadcasts */}
+          <CollapsibleSection id="chat" title="💬 Chat">
             <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={settings.gamblingEnabled !== false}
-                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Enable Credits & blackjack</span>
-                </label>
-              </div>
-              {settings.gamblingEnabled !== false && (
-                <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.blackjackEnabled !== false}
-                      onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })}
-                      className="checkbox-input"
-                    />
-                    <span className="checkbox-text">Blackjack (!bj / !deal)</span>
-                  </label>
-                </div>
-              )}
-              {settings.gamblingEnabled !== false && (
-                <div className="setting-group" style={{ marginTop: 12 }}>
-                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Channel reward title</label>
-                  <input
-                    type="text"
-                    value={chipRewardTitleInput}
-                    onChange={(e) => handleChipRewardTitleChange(e.target.value)}
-                    placeholder="Buy Credits"
-                    className="setting-input"
-                    style={{ maxWidth: 240 }}
-                  />
-                  <p className="setting-hint" style={{ marginTop: 4, marginBottom: 8 }}>Create a Kick reward with this exact title; each redemption grants the credits below.</p>
-                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Credits per redemption</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10000}
-                    value={chipRewardChipsInput}
-                    onChange={(e) => handleChipRewardChipsChange(e.target.value)}
-                    className="setting-input"
-                    style={{ maxWidth: 100 }}
-                  />
-                </div>
-              )}
-              {settings.gamblingEnabled !== false && (
-                <div className="setting-group" style={{ marginTop: 16 }}>
-                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Ignored users</label>
-                  <textarea
-                    value={leaderboardExcludedBotsInput}
-                    onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
-                    placeholder="e.g. bot1, bot2"
-                    className="setting-input"
-                    rows={3}
-                    style={{ maxWidth: 360, resize: 'vertical' }}
-                  />
-                  <p className="setting-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won’t earn Credits from sub/gift/kicks and won’t appear on !leaderboard.</p>
-                </div>
-              )}
-            </div>
-          </CollapsibleSection>
-
-          {/* Chat commands */}
-          <CollapsibleSection id="chat-commands" title="💬 Chat commands">
-            <div className="setting-group">
-              {settings.gamblingEnabled !== false && (
-                <>
-                  <h4 className="subsection-label" style={{ marginBottom: 8 }}>Credits & blackjack</h4>
-                  <div className="checkbox-group">
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={settings.blackjackEnabled !== false} onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })} className="checkbox-input" />
-                      <span className="checkbox-text">!bj / !deal — blackjack</span>
-                    </label>
-                  </div>
-                  <div className="setting-separator" style={{ margin: '1rem 0' }} />
-                </>
-              )}
-              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Utility commands</h4>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Commands</h4>
               <div className="checkbox-group">
                 <label className="checkbox-label">
                   <input type="checkbox" checked={settings.convertEnabled !== false} onChange={(e) => handleSettingsChange({ convertEnabled: e.target.checked })} className="checkbox-input" />
@@ -1673,12 +1595,8 @@ export default function AdminPage() {
                   <span className="checkbox-text">!math — calculator</span>
                 </label>
               </div>
-            </div>
-          </CollapsibleSection>
-
-          {/* Chat broadcasts */}
-          <CollapsibleSection id="chat-broadcasts" title="📢 Chat broadcasts">
-            <div className="setting-group">
+              <div className="setting-separator" style={{ margin: '1.5rem 0' }} />
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Auto-broadcasts</h4>
               <div className="broadcast-options-list">
                 <label className="checkbox-label-row broadcast-checkbox-item">
                   <input type="checkbox" checked={kickChatBroadcastStreamTitle} onChange={(e) => { setKickChatBroadcastStreamTitle(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastStreamTitle: e.target.checked } }); }} className="checkbox-input" />
@@ -1780,8 +1698,9 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="poll" title="🗳️ Poll & Rank">
+          <CollapsibleSection id="games" title="🎮 Chat games">
             <div className="setting-group">
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Poll & Rank</h4>
                   <div className="form-stack" style={{ maxWidth: 520 }}>
                     <label className="checkbox-label-row">
                           <input
@@ -2003,11 +1922,8 @@ export default function AdminPage() {
                       </>
                     )}
                   </div>
-                </div>
-          </CollapsibleSection>
-
-          <CollapsibleSection id="trivia" title="❓ Trivia">
-            <div className="setting-group">
+              <div className="setting-separator" style={{ margin: '1.5rem 0' }} />
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Trivia</h4>
               <p className="setting-hint" style={{ marginBottom: 12 }}>
                 First-to-answer trivia. When active, uses the same overlay slot as the poll (poll takes priority). Mods can use <strong>!trivia</strong> in chat to start a random question from the list below, or start a custom one here.
               </p>
@@ -2215,6 +2131,73 @@ export default function AdminPage() {
                           </button>
                         </div>
                       </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="gambling" title="🎰 Credits & blackjack">
+            <div className="setting-group">
+              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.gamblingEnabled !== false}
+                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
+                    className="checkbox-input"
+                  />
+                  <span className="checkbox-text">Enable Credits & blackjack</span>
+                </label>
+              </div>
+              {settings.gamblingEnabled !== false && (
+                <div className="checkbox-group" style={{ marginTop: '4px' }}>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.blackjackEnabled !== false}
+                      onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })}
+                      className="checkbox-input"
+                    />
+                    <span className="checkbox-text">Blackjack (!bj / !deal)</span>
+                  </label>
+                </div>
+              )}
+              {settings.gamblingEnabled !== false && (
+                <div className="setting-group" style={{ marginTop: 12 }}>
+                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Channel reward title</label>
+                  <input
+                    type="text"
+                    value={chipRewardTitleInput}
+                    onChange={(e) => handleChipRewardTitleChange(e.target.value)}
+                    placeholder="Buy Credits"
+                    className="setting-input"
+                    style={{ maxWidth: 240 }}
+                  />
+                  <p className="setting-hint" style={{ marginTop: 4, marginBottom: 8 }}>Create a Kick reward with this exact title; each redemption grants the credits below.</p>
+                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Credits per redemption</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={chipRewardChipsInput}
+                    onChange={(e) => handleChipRewardChipsChange(e.target.value)}
+                    className="setting-input"
+                    style={{ maxWidth: 100 }}
+                  />
+                </div>
+              )}
+              {settings.gamblingEnabled !== false && (
+                <div className="setting-group" style={{ marginTop: 16 }}>
+                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Ignored users</label>
+                  <textarea
+                    value={leaderboardExcludedBotsInput}
+                    onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
+                    placeholder="e.g. bot1, bot2"
+                    className="setting-input"
+                    rows={3}
+                    style={{ maxWidth: 360, resize: 'vertical' }}
+                  />
+                  <p className="setting-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won&apos;t earn Credits from sub/gift/kicks and won&apos;t appear on !leaderboard.</p>
+                </div>
+              )}
+            </div>
           </CollapsibleSection>
 
           <CollapsibleSection id="danger-zone" title="⚠️ Danger zone">

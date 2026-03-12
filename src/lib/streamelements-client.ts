@@ -107,6 +107,7 @@ function connect(): void {
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 30_000,
+    timeout: 60_000,
   });
 
   socket.on('connect', () => {

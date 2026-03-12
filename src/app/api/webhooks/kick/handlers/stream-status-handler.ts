@@ -20,7 +20,9 @@ export async function handleStreamStatus(payload: Record<string, unknown>, event
     void (async () => {
       try {
         const { subTarget: initialSubTarget } = await resetStreamGoalsOnStreamStart();
-        void updateKickTitleGoals(0, initialSubTarget).catch(() => {});
+        void updateKickTitleGoals(0, initialSubTarget).catch((e) => {
+          console.warn('[stream-status] Failed to update kick title goals on stream start:', e);
+        });
       } catch (e) {
         console.warn('Failed to reset stream session on stream start:', e);
       }

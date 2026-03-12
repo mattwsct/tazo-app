@@ -66,7 +66,7 @@ async function handlePOST(request: NextRequest) {
           const subTarget = (savedSettings.subGoalTarget as number) ?? 5;
           const kicksTarget = (savedSettings.kicksGoalTarget as number) ?? 5000;
           await updateKickTitleGoals(goals.subs, subTarget, goals.kicks, kicksTarget);
-        } catch { /* non-critical */ }
+        } catch (e) { console.warn('[save-settings] Failed to update kick title goals:', e); }
       })();
     }
     

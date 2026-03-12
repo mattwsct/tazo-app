@@ -48,7 +48,9 @@ export async function POST(request: NextRequest) {
     await setTriviaState(state);
     const token = await getValidAccessToken();
     if (token) {
-      sendKickChatMessage(token, `Trivia: ${state.question} — First correct answer wins ${state.points} Credits.`).catch(() => {});
+      sendKickChatMessage(token, `Trivia: ${state.question} — First correct answer wins ${state.points} Credits.`).catch((e) => {
+        console.warn('[trivia-start] Failed to send trivia announcement to chat:', e);
+      });
     }
     return NextResponse.json({ success: true, trivia: state });
   } catch {

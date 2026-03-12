@@ -76,8 +76,8 @@ export async function POST(request: NextRequest) {
 
   try {
     await sendKickChatMessage(accessToken, finalMessage);
-  } catch {
-    /* ignore - main webhook has logging */
+  } catch (e) {
+    console.warn('[kick-webhook] Failed to send chat message:', e);
   }
 
   return NextResponse.json({ received: true }, { status: 200 });

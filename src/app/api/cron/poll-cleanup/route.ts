@@ -51,7 +51,6 @@ export async function GET(request: NextRequest) {
   }
 
   if (
-    !stateAfter ||
     stateAfter.status !== 'winner' ||
     stateAfter.winnerDisplayUntil == null ||
     now < stateAfter.winnerDisplayUntil
