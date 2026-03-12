@@ -908,16 +908,6 @@ export default function AdminPage() {
     window.open('/overlay', '_blank');
   };
 
-  // Derived overlay block toggles for simpler UI
-  const wellnessBlockEnabled =
-    (settings.showSteps ?? true) ||
-    (settings.showDistance ?? true);
-
-  const travelBlockEnabled =
-    (settings.showWeather ?? false) ||
-    (settings.showAltitude ?? true) ||
-    (settings.showSpeed ?? true);
-
 
   // Show loading screen while checking authentication or loading settings
   if (!isAuthenticated || isLoading) return (
@@ -1175,96 +1165,32 @@ export default function AdminPage() {
             <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Overlay — what appears on stream</h4>
               <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-left (wellness)</h5>
-              <div className="checkbox-group" style={{ marginBottom: 8 }}>
+              <div className="checkbox-group" style={{ marginBottom: 12 }}>
                 <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={wellnessBlockEnabled}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      handleSettingsChange({
-                        showSteps: checked,
-                        showDistance: checked,
-                      });
-                    }}
-                    className="checkbox-input"
-                  />
-                  <span className="checkbox-text">Show wellness block (steps, distance)</span>
+                  <input type="checkbox" checked={settings.showSteps ?? true} onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Steps</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showDistance ?? true} onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Distance</span>
                 </label>
               </div>
-              <details className="admin-advanced-details" style={{ marginTop: 4, marginBottom: 12 }}>
-                <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.85rem' }}>
-                  Advanced wellness display (toggle individual metrics)
-                </summary>
-                <div className="checkbox-group" style={{ marginTop: 6 }}>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={settings.showSteps ?? true} onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Steps</span>
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={settings.showDistance ?? true} onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Distance</span>
-                  </label>
-                </div>
-              </details>
 
-              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-right (location)</h5>
-              <div className="checkbox-group" style={{ marginBottom: 8 }}>
+              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-right (travel)</h5>
+              <div className="checkbox-group" style={{ marginBottom: 12 }}>
                 <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={travelBlockEnabled}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      handleSettingsChange({
-                        showWeather: checked,
-                        showAltitude: checked,
-                        showSpeed: checked,
-                      });
-                    }}
-                    className="checkbox-input"
-                    disabled={settings.locationDisplay === 'hidden'}
-                  />
-                  <span className="checkbox-text">Show travel panel (weather, speed, altitude)</span>
+                  <input type="checkbox" checked={settings.showWeather ?? false} onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })} className="checkbox-input" disabled={settings.locationDisplay === 'hidden'} />
+                  <span className="checkbox-text">Weather</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showSpeed ?? true} onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })} className="checkbox-input" disabled={settings.locationDisplay === 'hidden'} />
+                  <span className="checkbox-text">Speed</span>
+                </label>
+                <label className="checkbox-label">
+                  <input type="checkbox" checked={settings.showAltitude ?? true} onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })} className="checkbox-input" disabled={settings.locationDisplay === 'hidden'} />
+                  <span className="checkbox-text">Altitude</span>
                 </label>
               </div>
-              <details className="admin-advanced-details" style={{ marginTop: 4, marginBottom: 12 }}>
-                <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.85rem' }}>
-                  Advanced travel display (toggle individual metrics)
-                </summary>
-                <div className="checkbox-group" style={{ marginTop: 6 }}>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.showWeather ?? false}
-                      onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })}
-                      className="checkbox-input"
-                      disabled={settings.locationDisplay === 'hidden'}
-                    />
-                    <span className="checkbox-text">Weather</span>
-                  </label>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.showAltitude ?? true}
-                      onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })}
-                      className="checkbox-input"
-                      disabled={settings.locationDisplay === 'hidden'}
-                    />
-                    <span className="checkbox-text">Altitude</span>
-                  </label>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.showSpeed ?? true}
-                      onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })}
-                      className="checkbox-input"
-                      disabled={settings.locationDisplay === 'hidden'}
-                    />
-                    <span className="checkbox-text">Speed</span>
-                  </label>
-                </div>
-              </details>
               <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Bottom-right &amp; alerts</h5>
               <div className="checkbox-group">
                 <label className="checkbox-label">
@@ -1273,12 +1199,12 @@ export default function AdminPage() {
                 </label>
                 <label className="checkbox-label" style={{ marginTop: 4 }}>
                   <input type="checkbox" checked={settings.showOverlayAlerts ?? true} onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
+                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks, tips)</span>
                 </label>
               </div>
               <div className="button-row" style={{ marginTop: 12 }}>
                 <span className="group-label" style={{ marginRight: 8 }}>Test alert:</span>
-                {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
+                {(['sub', 'resub', 'giftSub', 'kicks', 'donation'] as const).map((type) => (
                   <button
                     key={type}
                     type="button"
@@ -1301,6 +1227,7 @@ export default function AdminPage() {
                     {type === 'resub' && '💪 Resub'}
                     {type === 'giftSub' && '🎁 Gift'}
                     {type === 'kicks' && '💚 Kicks'}
+                    {type === 'donation' && '💰 Tip'}
                   </button>
                 ))}
               </div>
@@ -1309,6 +1236,7 @@ export default function AdminPage() {
 
           {/* Stream goals — common for IRL */}
           <CollapsibleSection id="stream-goals" title="🎯 Stream goals">
+            <p className="input-hint" style={{ marginBottom: 12, marginTop: 0 }}>Goals auto-increment when reached. Set a subtitle to keep the goal fixed instead.</p>
             <div className="setting-group">
               {/* Sub goal */}
               <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
@@ -1442,15 +1370,15 @@ export default function AdminPage() {
 
               {/* Donations goal */}
               <div>
-                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Donations</div>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Tips / Donations</div>
                 <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
-                  <label>Goal amount (USD)</label>
+                  <label>Goal step in USD (milestone interval)</label>
                   <input
                     type="number"
                     className="text-input"
                     value={donationsGoalTargetInput}
                     min={0}
-                    step="0.5"
+                    step="1"
                     onChange={(e) => handleDonationsGoalTargetChange(e.target.value)}
                   />
                 </div>
@@ -1512,7 +1440,7 @@ export default function AdminPage() {
                       onChange={(e) => handleSettingsChange({ showDonationsGoal: e.target.checked })}
                       className="checkbox-input"
                     />
-                    <span className="checkbox-text">Show donations goal on overlay</span>
+                    <span className="checkbox-text">Show progress on overlay</span>
                   </label>
                 </div>
                 <div className="admin-select-wrap" style={{ marginTop: 8 }}>
@@ -1772,11 +1700,7 @@ export default function AdminPage() {
                   <span className="radio-icon">🚶</span>
                   <span>Distance — at 1, 2, 5, 10 km…</span>
                 </label>
-                <details className="admin-advanced-details" style={{ marginTop: 12 }}>
-                  <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>
-                    Advanced options (heart rate, speed, altitude)
-                  </summary>
-                  <div style={{ marginTop: 12 }}>
+                <div style={{ marginTop: 8 }}>
                     <label className="checkbox-label-row broadcast-checkbox-item">
                       <input type="checkbox" checked={kickChatBroadcastHeartrate} onChange={(e) => { setKickChatBroadcastHeartrate(e.target.checked); saveKickMessages({ alertSettings: { chatBroadcastHeartrate: e.target.checked } }); }} className="checkbox-input" />
                       <span className="radio-icon" aria-hidden="true">❤️</span>
@@ -1851,8 +1775,7 @@ export default function AdminPage() {
                         Resets milestone checkpoints for chat broadcasts only. Health app totals for today are not cleared.
                       </p>
                     </div>
-                  </div>
-                </details>
+                </div>
               </div>
             </div>
           </CollapsibleSection>
@@ -1915,9 +1838,7 @@ export default function AdminPage() {
                             })()}
                           </select>
                         </div>
-                        <details className="admin-advanced-details" style={{ marginTop: 12 }}>
-                          <summary style={{ cursor: 'pointer', opacity: 0.9, fontSize: '0.9rem' }}>Advanced options</summary>
-                          <div style={{ marginTop: 12 }}>
+                        <div style={{ marginTop: 12 }}>
                         <div className="kick-group-options" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
                           <span className="kick-group-options-label">Who can start polls:</span>
                           <label className="checkbox-label-row">
@@ -2078,8 +1999,7 @@ export default function AdminPage() {
                           <strong>!poll</strong> Question? Option1, Option2 — defaults to Yes/No if no options given.<br />
                           <strong>!rank</strong> Option1, Option2, Option3 — viewers vote for their favorite.
                         </p>
-                          </div>
-                        </details>
+                        </div>
                       </>
                     )}
                   </div>
