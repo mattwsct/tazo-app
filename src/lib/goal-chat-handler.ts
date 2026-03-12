@@ -77,7 +77,7 @@ export async function handleGoalCommand(
 
   const settings = (await kv.get<Record<string, unknown>>(OVERLAY_SETTINGS_KEY)) ?? {};
   const subIncrement   = Math.max(1, (settings.subGoalIncrement  as number) || 5);
-  const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 100);
+  const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 5000);
 
   /** Touch overlay_settings_modified so the SSE stream pushes updates immediately. */
   const notifyOverlay = () => void kv.set('overlay_settings_modified', Date.now()).catch(() => {});

@@ -13,7 +13,7 @@ const handleSubGoalMilestone = async (count: number, settings: Record<string, un
   const goals = await getStreamGoals();
   const target = (settings?.subGoalTarget as number) ?? 5;
   const increment = (settings?.subGoalIncrement as number) ?? 5;
-  const kicksTarget = (settings?.kicksGoalTarget as number) ?? 100;
+  const kicksTarget = (settings?.kicksGoalTarget as number) ?? 5000;
   const hasSubtext = !!(settings?.subGoalSubtext as string | null | undefined);
   const showSubGoal = !!(settings?.showSubGoal);
   const prevSubs = goals.subs - count;
@@ -104,8 +104,8 @@ export async function handleAlertEvents(
       ]);
       didAlertOrLeaderboard = true;
       const goals = await getStreamGoals();
-      const target = (settings?.kicksGoalTarget as number) ?? 100;
-      const increment = (settings?.kicksGoalIncrement as number) ?? 100;
+      const target = (settings?.kicksGoalTarget as number) ?? 5000;
+      const increment = (settings?.kicksGoalIncrement as number) ?? 5000;
       const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
       const prevKicks = goals.kicks - amount;
       const showKicksGoal = !!(settings?.showKicksGoal);

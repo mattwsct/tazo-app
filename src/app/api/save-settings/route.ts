@@ -64,7 +64,7 @@ async function handlePOST(request: NextRequest) {
         try {
           const goals = await getStreamGoals();
           const subTarget = (savedSettings.subGoalTarget as number) ?? 5;
-          const kicksTarget = (savedSettings.kicksGoalTarget as number) ?? 100;
+          const kicksTarget = (savedSettings.kicksGoalTarget as number) ?? 5000;
           await updateKickTitleGoals(goals.subs, subTarget, goals.kicks, kicksTarget);
         } catch { /* non-critical */ }
       })();

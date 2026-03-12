@@ -109,7 +109,7 @@ export async function pushStreamTitleFromLocation(): Promise<void> {
         subInfo = { current: goals.subs, target: subTarget };
       }
       if (overlaySettings?.showKicksGoal) {
-        const kicksTarget = overlaySettings?.kicksGoalTarget ?? 100;
+        const kicksTarget = overlaySettings?.kicksGoalTarget ?? 5000;
         kicksInfo = { current: goals.kicks, target: kicksTarget };
       }
     }

@@ -454,7 +454,7 @@ export default function AdminPage() {
       ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
       : undefined;
     const kicksInfo = settings.showKicksGoal
-      ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 100 }
+      ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 5000 }
       : undefined;
     const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo, kicksInfo);
     try {
@@ -754,7 +754,7 @@ export default function AdminPage() {
   // Sync sub/kicks goal step inputs from settings (show the step/increment, not the snapped target)
   useEffect(() => {
     setSubGoalTargetInput(String(settings.subGoalIncrement ?? settings.subGoalTarget ?? 10));
-    setKicksGoalTargetInput(String(settings.kicksGoalIncrement ?? settings.kicksGoalTarget ?? 1000));
+    setKicksGoalTargetInput(String(settings.kicksGoalIncrement ?? settings.kicksGoalTarget ?? 5000));
   }, [settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalTarget, settings.kicksGoalTarget]);
 
   // Sync donations goal step input from settings (show the step/increment in USD, not the snapped target)
@@ -1569,7 +1569,7 @@ export default function AdminPage() {
                       ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
                       : undefined;
                     const kicksInfo = settings.showKicksGoal
-                      ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 100 }
+                      ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 5000 }
                       : undefined;
                     const loc = kickStreamTitleIncludeLocation ? kickStreamTitleLocation : '';
                     return loc || subInfo || kicksInfo
@@ -1595,7 +1595,7 @@ export default function AdminPage() {
                           ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
                           : undefined;
                         const kicksInfo = settings.showKicksGoal
-                          ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 100 }
+                          ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 5000 }
                           : undefined;
                         const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo, kicksInfo);
                         try {

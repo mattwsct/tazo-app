@@ -53,7 +53,7 @@ export default function BottomRightPanel({
   const showOverlayAlerts = settings.showOverlayAlerts !== false;
 
   const subTarget = Math.max(1, settings.subGoalTarget ?? 10);
-  const kicksTarget = Math.max(1, settings.kicksGoalTarget ?? 100);
+  const kicksTarget = Math.max(1, settings.kicksGoalTarget ?? 5000);
   const donationsTargetCents = Math.max(1, settings.donationsGoalTargetCents ?? 0);
   const showSubGoal = settings.showSubGoal && subTarget > 0;
   const showKicksGoal = settings.showKicksGoal && kicksTarget > 0;

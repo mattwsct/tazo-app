@@ -77,7 +77,7 @@ export async function handleStreamTitleCommand(
     ? { current: streamGoals.subs, target: overlaySettings.subGoalTarget ?? 5 }
     : undefined;
   const kicksInfo = overlaySettings?.showKicksGoal
-    ? { current: streamGoals.kicks, target: overlaySettings.kicksGoalTarget ?? 100 }
+    ? { current: streamGoals.kicks, target: overlaySettings.kicksGoalTarget ?? 5000 }
     : undefined;
 
   // No text provided: set title to location only, or error if location is disabled

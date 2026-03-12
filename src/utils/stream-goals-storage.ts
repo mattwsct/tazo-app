@@ -26,8 +26,8 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
   try {
     const settings = (await kv.get<Record<string, unknown>>('overlay_settings')) ?? {};
     const subIncrement = Math.max(1, (settings.subGoalIncrement as number) || 5);
-    const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 100);
-    const donationsIncrementCents = Math.max(0, (settings.donationsGoalIncrementCents as number) || 0);
+    const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 5000);
+    const donationsIncrementCents = Math.max(0, (settings.donationsGoalIncrementCents as number) || 5000);
     await Promise.all([
       kv.set(STREAM_GOALS_SUBS_KEY, 0),
       kv.set(STREAM_GOALS_KICKS_KEY, 0),
@@ -48,7 +48,7 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
     return { subTarget: subIncrement, kicksTarget: kicksIncrement };
   } catch (e) {
     console.warn('[StreamGoals] Failed to reset:', e);
-    return { subTarget: 5, kicksTarget: 100 };
+    return { subTarget: 5, kicksTarget: 5000 };
   }
 }
 
