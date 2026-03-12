@@ -16,7 +16,7 @@ import { getStreamTitleLocationPart, buildStreamTitle } from '@/utils/stream-tit
 import { getStreamGoals } from '@/utils/stream-goals-storage';
 
 import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
-import '@/lib/streamelements-client';
+import { pollStreamElementsTips } from '@/lib/streamelements-client';
 import { TRIVIA_STATE_KEY, type TriviaState } from '@/types/trivia';
 import { setTriviaState } from '@/lib/trivia-store';
 import { maybeBroadcastWeather, maybeBroadcastWellness, maybeBroadcastStats } from '@/lib/chat-broadcast-service';
@@ -184,6 +184,13 @@ export async function GET(request: NextRequest) {
   if (wellnessSent > 0) {
     sent += wellnessSent;
     console.log('[Cron HR] WELLNESS_MILESTONES', JSON.stringify({ sent: wellnessSent }));
+  }
+
+  // StreamElements tips: poll REST API for new donations (WebSocket not viable on serverless)
+  try {
+    await pollStreamElementsTips();
+  } catch {
+    // non-critical
   }
 
   // Trivia reminder + auto-close: if a trivia question is active and unanswered for a while,

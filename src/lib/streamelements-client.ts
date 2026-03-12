@@ -1,4 +1,13 @@
-import { io, Socket } from 'socket.io-client';
+/**
+ * StreamElements tips integration via REST API polling.
+ *
+ * Vercel serverless functions cannot maintain persistent WebSocket connections,
+ * so we poll the SE REST API from the cron job instead.
+ *
+ * Endpoint: GET https://api.streamelements.com/kappa/v2/tips/{channelId}
+ * Auth:     Bearer {JWT}
+ */
+
 import { Logger } from '@/lib/logger';
 import { kv } from '@/lib/kv';
 import { pushDonationAlert } from '@/utils/overlay-alerts-storage';
@@ -9,9 +18,8 @@ import type { StreamElementsTipEvent } from '@/types/streamelements';
 
 const seLogger = new Logger('STREAM-ELEMENTS');
 
-const SE_REALTIME_URL = 'https://realtime.streamelements.com';
-
-let socket: Socket | null = null;
+const SE_API_BASE = 'https://api.streamelements.com/kappa/v2';
+const LAST_TIP_TS_KEY = 'se_last_tip_timestamp';
 
 function getJwt(): string | null {
   const token = process.env.STREAMELEMENTS_JWT;
@@ -19,7 +27,18 @@ function getJwt(): string | null {
   return token.trim();
 }
 
-function handleTipEvent(event: StreamElementsTipEvent): void {
+function getChannelIdFromJwt(jwt: string): string | null {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+    return payload.channel ?? payload.channelId ?? payload.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleTipEvent(event: StreamElementsTipEvent): Promise<void> {
   const donation = event.donation;
   if (!donation) {
     seLogger.warn('Ignoring tip event with no donation payload', event);
@@ -40,106 +59,107 @@ function handleTipEvent(event: StreamElementsTipEvent): void {
 
   const amountCents = Math.round(amount * 100);
   if (amountCents > 0) {
-    void (async () => {
-      try {
-        await addStreamGoalDonations(amountCents);
-        const [goals, settings] = await Promise.all([
-          getStreamGoals(),
-          kv.get<Record<string, unknown>>('overlay_settings'),
-        ]);
-        const target = (settings?.donationsGoalTargetCents as number) ?? 0;
-        const increment = (settings?.donationsGoalIncrementCents as number) ?? 0;
-        const hasSubtext = !!(settings?.donationsGoalSubtext as string | null | undefined);
-        const showGoal = !!(settings?.showDonationsGoal);
-        if (showGoal && !hasSubtext && increment > 0 && target > 0 && goals.donationsCents >= target) {
-          await bumpGoalTarget('donations', target, increment, goals.donationsCents);
-          seLogger.info('Donations goal bumped', { prev: target, count: goals.donationsCents, increment });
-        }
-      } catch (err) {
-        seLogger.warn('Failed to process donation goal', err);
+    try {
+      await addStreamGoalDonations(amountCents);
+      const [goals, settings] = await Promise.all([
+        getStreamGoals(),
+        kv.get<Record<string, unknown>>('overlay_settings'),
+      ]);
+      const target = (settings?.donationsGoalTargetCents as number) ?? 0;
+      const increment = (settings?.donationsGoalIncrementCents as number) ?? 0;
+      const hasSubtext = !!(settings?.donationsGoalSubtext as string | null | undefined);
+      const showGoal = !!(settings?.showDonationsGoal);
+      if (showGoal && !hasSubtext && increment > 0 && target > 0 && goals.donationsCents >= target) {
+        await bumpGoalTarget('donations', target, increment, goals.donationsCents);
+        seLogger.info('Donations goal bumped', { prev: target, count: goals.donationsCents, increment });
       }
-    })();
+    } catch (err) {
+      seLogger.warn('Failed to process donation goal', err);
+    }
   }
 
-  void pushDonationAlert(username, amountLabel, message).catch((err) => {
+  await pushDonationAlert(username, amountLabel, message).catch((err) => {
     seLogger.warn('Failed to push donation alert', err);
   });
 
-  {
-    const shortMsg = message.length > 80 ? `${message.slice(0, 77)}...` : message;
-    const chatLine = shortMsg
-      ? `${username} tipped ${amountLabel} via StreamElements: "${shortMsg}"`
-      : `${username} tipped ${amountLabel} via StreamElements.`;
+  const shortMsg = message.length > 80 ? `${message.slice(0, 77)}...` : message;
+  const chatLine = shortMsg
+    ? `${username} tipped ${amountLabel} via StreamElements: "${shortMsg}"`
+    : `${username} tipped ${amountLabel} via StreamElements.`;
 
-    void (async () => {
-      try {
-        const token = await getValidAccessToken();
-        if (token) {
-          await sendKickChatMessage(token, chatLine);
-        }
-      } catch (err) {
-        seLogger.warn('Failed to send StreamElements tip to Kick chat', err);
-      }
-    })();
+  try {
+    const token = await getValidAccessToken();
+    if (token) {
+      await sendKickChatMessage(token, chatLine);
+    }
+  } catch (err) {
+    seLogger.warn('Failed to send StreamElements tip to Kick chat', err);
   }
 
-  seLogger.info('Received tip event', {
-    id: event._id,
-    username,
-    amount,
-    currency,
-  });
+  seLogger.info('Processed tip', { id: event._id, username, amount, currency });
 }
 
-function connect(): void {
-  if (socket?.connected) return;
-
+/**
+ * Poll StreamElements REST API for new tips since last check.
+ * Call from the cron job — safe for serverless.
+ */
+export async function pollStreamElementsTips(): Promise<void> {
   const jwt = getJwt();
-  if (!jwt) {
-    seLogger.warn('StreamElements client disabled: STREAMELEMENTS_JWT is not set');
+  if (!jwt) return;
+
+  const channelId = getChannelIdFromJwt(jwt);
+  if (!channelId) {
+    seLogger.warn('Could not extract channelId from JWT — check STREAMELEMENTS_JWT');
     return;
   }
 
-  seLogger.info('Connecting to StreamElements realtime...');
+  const lastTs = (await kv.get<string>(LAST_TIP_TS_KEY)) ?? null;
 
-  socket = io(SE_REALTIME_URL, {
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 30_000,
-    timeout: 60_000,
-  });
+  try {
+    const url = `${SE_API_BASE}/tips/${channelId}?sort=-createdAt&limit=10`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(8_000),
+    });
 
-  socket.on('connect', () => {
-    seLogger.info('Connected; authenticating with JWT...');
-    socket!.emit('authenticate', { method: 'jwt', token: jwt });
-  });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      seLogger.warn('SE tips API error', { status: res.status, body: body.slice(0, 200) });
+      return;
+    }
 
-  socket.on('authenticated', (data: unknown) => {
-    seLogger.info('StreamElements authenticated', data);
-  });
+    const data = await res.json() as { docs?: StreamElementsTipEvent[] } | StreamElementsTipEvent[];
+    const tips: StreamElementsTipEvent[] = Array.isArray(data) ? data : (data.docs ?? []);
 
-  socket.on('unauthorized', (err: unknown) => {
-    seLogger.error('StreamElements authentication failed — check STREAMELEMENTS_JWT', err);
-    socket?.disconnect();
-    socket = null;
-  });
+    if (tips.length === 0) return;
 
-  socket.on('tip', (data: StreamElementsTipEvent) => {
-    handleTipEvent(data);
-  });
+    const newTips = lastTs
+      ? tips.filter((t) => t.createdAt > lastTs)
+      : [];
 
-  socket.on('disconnect', (reason: string) => {
-    seLogger.warn('StreamElements disconnected', { reason });
-  });
+    if (lastTs === null) {
+      seLogger.info('First poll — storing baseline timestamp, no tips processed', {
+        latestTip: tips[0]?.createdAt,
+        channelId,
+      });
+      await kv.set(LAST_TIP_TS_KEY, tips[0].createdAt);
+      return;
+    }
 
-  socket.on('connect_error', (err: Error) => {
-    seLogger.error('StreamElements connection error', { message: err.message });
-  });
-}
+    if (newTips.length === 0) return;
 
-connect();
+    const sorted = newTips.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
 
-export function ensureStreamElementsClient(): void {
-  connect();
+    seLogger.info(`Processing ${sorted.length} new tip(s)`);
+
+    for (const tip of sorted) {
+      await handleTipEvent(tip);
+    }
+
+    await kv.set(LAST_TIP_TS_KEY, sorted[sorted.length - 1].createdAt);
+  } catch (err) {
+    seLogger.warn('Failed to poll SE tips', err);
+  }
 }
