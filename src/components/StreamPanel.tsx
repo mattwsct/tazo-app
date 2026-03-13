@@ -16,7 +16,7 @@ type OverlayAlert = { id: string; type: string; username: string; extra?: string
 const ALERT_LABELS: Record<string, string> = {
   sub: '🎉 New Sub',
   resub: '💪 Resub',
-  giftSub: '🎁 Gift Subs',
+  giftSub: '🎁 Gift Sub',
   kicks: '💚 Kicks',
 };
 
@@ -209,7 +209,9 @@ export default function StreamPanel({
     const alertBorder = isSubs ? 'rgba(168, 85, 247, 0.55)' : 'rgba(52, 211, 153, 0.55)';
 
     if (alert) {
-      const alertLabel = ALERT_LABELS[alert.type] ?? alert.type;
+      const alertLabel = alert.type === 'giftSub' && alert.extra !== '1 sub'
+        ? '🎁 Gift Subs'
+        : (ALERT_LABELS[alert.type] ?? alert.type);
       const username = alert.username.replace(/^@+/, '');
       const extra = alert.extra;
       return (

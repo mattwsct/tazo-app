@@ -21,6 +21,7 @@ import { setStreamGoals, getStreamGoals, STREAM_GOALS_MODIFIED_KEY } from '@/uti
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { setOverlayTimer } from '@/utils/overlay-timer-storage';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
@@ -79,8 +80,11 @@ export async function handleGoalCommand(
   const subIncrement   = Math.max(1, (settings.subGoalIncrement  as number) || 5);
   const kicksIncrement = Math.max(1, (settings.kicksGoalIncrement as number) || 5000);
 
-  /** Touch overlay_settings_modified so the SSE stream pushes updates immediately. */
-  const notifyOverlay = () => void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
+  /** Push updated settings to all connected SSE clients immediately. */
+  const notifyOverlay = () => {
+    void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
+    void broadcastChallenges().catch(() => {});
+  };
 
   /** Fire-and-forget title refresh. */
   const refreshTitle = (subTarget: number, kicksTarget: number) => {
@@ -259,9 +263,12 @@ export async function handleGoalCommand(
     let subTarget = (settings.subGoalTarget as number) ?? subIncrement;
     const kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
     const hasSubtext = !!(settings.subGoalSubtext as string | null | undefined);
-    // Auto-iterate if no label set and the new count crosses the goal threshold
-    if (subTarget > 0 && !hasSubtext && prevGoals.subs < subTarget && count >= subTarget) {
-      subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, count);
+    // Recalculate target whenever count moves (up or down) and no fixed label is set
+    if (subTarget > 0 && !hasSubtext) {
+      const correctTarget = (Math.floor(count / subIncrement) + 1) * subIncrement;
+      if (correctTarget !== subTarget) {
+        subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, count);
+      }
     }
     notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
@@ -282,9 +289,12 @@ export async function handleGoalCommand(
     const subTarget = (settings.subGoalTarget as number) ?? subIncrement;
     let kicksTarget = (settings.kicksGoalTarget as number) ?? kicksIncrement;
     const hasKicksSubtext = !!(settings.kicksGoalSubtext as string | null | undefined);
-    // Auto-iterate if no label set and the new count crosses the goal threshold
-    if (kicksTarget > 0 && !hasKicksSubtext && prevGoals.kicks < kicksTarget && count >= kicksTarget) {
-      kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, count);
+    // Recalculate target whenever count moves (up or down) and no fixed label is set
+    if (kicksTarget > 0 && !hasKicksSubtext) {
+      const correctTarget = (Math.floor(count / kicksIncrement) + 1) * kicksIncrement;
+      if (correctTarget !== kicksTarget) {
+        kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, count);
+      }
     }
     notifyOverlay();
     refreshTitle(subTarget, kicksTarget);

@@ -53,12 +53,20 @@ export async function PATCH(request: NextRequest) {
     const subIncrement = (settings?.subGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.subGoalIncrement!;
     let kicksTarget = (settings?.kicksGoalTarget as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalTarget!;
     const kicksIncrement = (settings?.kicksGoalIncrement as number) ?? DEFAULT_OVERLAY_SETTINGS.kicksGoalIncrement!;
-    // Bump targets immediately if admin set goals past the current target
-    if (body.subs !== undefined && goals.subs > 0 && goals.subs >= subTarget) {
-      subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, goals.subs);
+    // Recalculate targets if admin changed the count (handles both forward bumps and backward resets)
+    const hasSubSubtext = !!(settings?.subGoalSubtext as string | null | undefined);
+    const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
+    if (body.subs !== undefined && !hasSubSubtext) {
+      const correctSubTarget = (Math.floor(goals.subs / subIncrement) + 1) * subIncrement;
+      if (correctSubTarget !== subTarget) {
+        subTarget = await bumpGoalTarget('subs', subTarget, subIncrement, goals.subs);
+      }
     }
-    if (body.kicks !== undefined && goals.kicks > 0 && goals.kicks >= kicksTarget) {
-      kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, goals.kicks);
+    if (body.kicks !== undefined && !hasKicksSubtext) {
+      const correctKicksTarget = (Math.floor(goals.kicks / kicksIncrement) + 1) * kicksIncrement;
+      if (correctKicksTarget !== kicksTarget) {
+        kicksTarget = await bumpGoalTarget('kicks', kicksTarget, kicksIncrement, goals.kicks);
+      }
     }
 
     if (settings?.showSubGoal || settings?.showKicksGoal) {

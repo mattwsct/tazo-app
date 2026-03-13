@@ -82,10 +82,10 @@ html, body {
   width: fit-content;
   gap: 4px;
   padding: var(--gap-lg) var(--gap-xl) var(--gap-lg) var(--gap-xl);
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+  background: linear-gradient(160deg, rgba(10, 14, 28, 0.96) 0%, rgba(14, 18, 38, 0.93) 100%);
+  border-radius: 10px;
+  border: 1px solid rgba(99, 179, 237, 0.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   color: white;
   font-weight: 600;
   align-items: flex-start;
@@ -744,7 +744,8 @@ html, body {
 .time-value {
   font-size: var(--font-size-xl);
   font-weight: 800;
-  line-height: 1; /* Ensure consistent line height */
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .time-period {
@@ -864,6 +865,7 @@ html, body {
 .step-counter-value {
   font-weight: 800;
   letter-spacing: -0.02em;
+  color: #90cdf4;
 }
 
 .step-counter-label {
@@ -887,6 +889,7 @@ html, body {
   font-weight: 700;
   letter-spacing: var(--letter-spacing-compact);
   line-height: 1.05;
+  color: #68d391;
 }
 
 /* Line 2: country name + flag */
@@ -994,6 +997,8 @@ html, body {
   opacity: 0.85;
   line-height: 1;
 }
+
+.movement-data-line .weather-temperature { color: #90cdf4; }
 
 .weather-temperature {
   font-size: var(--font-size-sm);

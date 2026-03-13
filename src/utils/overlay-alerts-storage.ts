@@ -39,7 +39,7 @@ export async function pushResubAlert(subscriber: unknown, months?: number): Prom
 /** Push alert for gift subs. */
 export async function pushGiftSubAlert(gifter: unknown, count: number): Promise<void> {
   const username = getUsername(gifter);
-  const extra = count > 1 ? `${count} subs` : undefined;
+  const extra = count === 1 ? '1 sub' : `${count} subs`;
   await pushAlert({ type: 'giftSub', username, extra });
 }
 
