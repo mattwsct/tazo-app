@@ -5,8 +5,8 @@
  * 1. Flat: { steps, distanceKm, heightCm, weightKg, ... }
  * 2. Health Auto Export: { data: { metrics: [{ name, units, data: [{ qty, date, ... }] }] } }
  *
- * Health Auto Export should be configured to send TODAY'S CUMULATIVE TOTALS (not "Since last sync").
- * The server calculates deltas as (newTotal - lastKnown), recovering late Apple Watch data automatically.
+ * Health Auto Export should be configured for "Today" (not "Since last sync").
+ * HAE sends one data point per interval (hourly buckets); the server sums all entries to get the day total.
  *
  * Tracked metrics: step_count, walking_running_distance, height, body_mass (weight). Heart rate is from Pulsoid only (not stored in wellness).
  */
@@ -65,24 +65,35 @@ function parseHealthAutoExport(body: Record<string, unknown>): { updates: Partia
 
   const updates: Partial<WellnessData> = {};
 
-  // Use the last/most recent data point — HAE sends today's cumulative total; we replace, not add
+  // Sum all data points — HAE "Today" sends one entry per interval (hourly buckets etc.), not a running total.
+  // Body metrics (height, weight) are point-in-time so use the last value instead.
+  const sumQty = (m: HealthMetric | undefined): number | undefined => {
+    if (!m?.data?.length) return undefined;
+    let total = 0;
+    let hasValue = false;
+    for (const item of m.data) {
+      if (typeof item.qty === 'number') { total += item.qty; hasValue = true; }
+    }
+    return hasValue ? total : undefined;
+  };
+
   const lastQty = (m: HealthMetric | undefined): number | undefined => {
     if (!m?.data?.length) return undefined;
     const last = m.data[m.data.length - 1];
     return typeof last?.qty === 'number' ? last.qty : undefined;
   };
 
-  // step_count — last value is today's cumulative total (replaces existing)
+  // step_count — sum all interval entries to get today's running total
   const stepCount = byName.get('step_count');
   if (stepCount) {
-    const total = lastQty(stepCount);
+    const total = sumQty(stepCount);
     if (total != null && total >= 0) updates.steps = Math.round(total);
   }
 
-  // walking_running_distance — last value is today's cumulative total (replaces existing)
+  // walking_running_distance — sum all interval entries to get today's running total
   const walkingDist = byName.get('walking_running_distance');
   if (walkingDist) {
-    const raw = lastQty(walkingDist);
+    const raw = sumQty(walkingDist);
     if (raw != null && raw >= 0) {
       updates.distanceKm = Math.max(0, Math.round(distanceToKm(raw, walkingDist.units) * 1000) / 1000);
     }

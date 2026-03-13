@@ -1,6 +1,6 @@
 // === 🏃 WELLNESS STORAGE ===
 // Human health data from Health Auto Export (steps, calories, distance, body metrics).
-// Health Auto Export is configured to send TODAY'S CUMULATIVE TOTALS each push.
+// Health Auto Export is configured for "Today" — sends one entry per interval; server sums for daily total.
 // Data resets naturally at midnight — no stream-based session tracking needed.
 
 import { kv } from '@/lib/kv';
