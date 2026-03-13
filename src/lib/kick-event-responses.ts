@@ -92,8 +92,8 @@ export function getKicksGiftedResponse(
   const message = (gift.message ?? '').toString().trim();
   const kickDescription =
     rawName && rawName !== 'Kicks'
-      ? `${rawName} (${amount} kicks)`
-      : `${amount} kicks`;
+      ? `${rawName} (${amount} KICKs)`
+      : `${amount} KICKs`;
   const replacements: Record<string, string> = {
     sender,
     amount,

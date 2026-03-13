@@ -281,10 +281,10 @@ export async function handleGoalCommand(
     });
     notifyOverlay();
     refreshTitle(subTarget, activeTarget);
-    const bumped = activeTarget !== parsed.target ? ` (bumped to ${activeTarget} — already at ${goals.kicks} kicks)` : '';
+    const bumped = activeTarget !== parsed.target ? ` (bumped to ${activeTarget} — already at ${goals.kicks} KICKs)` : '';
     const reply = parsed.subtext
-      ? `✅ Kicks goal set: ${parsed.target} kicks — "${parsed.subtext}"`
-      : `✅ Kicks goal set: ${activeTarget} kicks${bumped}`;
+      ? `✅ KICKs goal set: ${parsed.target} KICKs — "${parsed.subtext}"`
+      : `✅ KICKs goal set: ${activeTarget} KICKs${bumped}`;
     return { handled: true, reply };
   }
 
@@ -335,7 +335,7 @@ export async function handleGoalCommand(
     }
     notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
-    return { handled: true, reply: `✅ Kicks count set to ${count}` }; 
+    return { handled: true, reply: `✅ KICKs count set to ${count}` };
   }
 
   return { handled: false };

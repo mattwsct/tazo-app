@@ -46,7 +46,7 @@ export async function pushGiftSubAlert(gifter: unknown, count: number): Promise<
 /** Push alert for kicks gifted. */
 export async function pushKicksAlert(sender: unknown, amount: number, giftName?: string): Promise<void> {
   const username = getUsername(sender);
-  const extra = giftName ? `${amount} (${giftName})` : `${amount} kicks`;
+  const extra = giftName ? `${amount} (${giftName})` : `${amount} KICKs`;
   await pushAlert({ type: 'kicks', username, extra });
 }
 

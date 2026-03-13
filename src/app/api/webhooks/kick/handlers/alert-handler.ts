@@ -50,7 +50,7 @@ export const handleKicksGoalMilestone = async (amount: number, settings: Record<
     const token = await getValidAccessToken();
     if (token) {
       try {
-        await sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`);
+        await sendKickChatMessage(token, `🎉 KICKs goal reached! ${goals.kicks}/${target} KICKs this stream!`);
       } catch (err) {
         console.error('[Webhook] Kicks milestone chat failed:', err instanceof Error ? err.message : String(err));
       }

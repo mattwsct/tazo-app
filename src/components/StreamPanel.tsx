@@ -17,7 +17,7 @@ const ALERT_LABELS: Record<string, string> = {
   sub: '🎉 New Sub',
   resub: '💪 Resub',
   giftSub: '🎁 Gift Sub',
-  kicks: '💚 Kicks',
+  kicks: '💚 KICKs',
 };
 
 function formatMs(ms: number): string {
@@ -372,10 +372,13 @@ export default function StreamPanel({
                   <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
                 ) : (
                   <>
-                    <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
-                    <span className="sp-subtext">
-                      {localAmount !== null ? `≈ ${localAmount.toLocaleString()} ${wallet!.localCurrency} • ` : ''}+$5/sub • +$1/100 kicks
+                    <span className="sp-wallet-value">
+                      {localAmount !== null && (
+                        <span className="sp-wallet-local">≈ {localAmount.toLocaleString()} {wallet!.localCurrency} · </span>
+                      )}
+                      {fmtUsd(wallet!.balance)} USD
                     </span>
+                    <span className="sp-subtext">+$5/sub • +$1/100 KICKs</span>
                   </>
                 )}
               </div>

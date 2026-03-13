@@ -1330,6 +1330,14 @@ html, body {
   position: relative;
 }
 
+.sp-wallet-local {
+  font-size: 0.72em;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.01em;
+  margin-left: 0.3em;
+}
+
 .sp-wallet-anim {
   font-size: 1.15em;
   font-weight: 900;
