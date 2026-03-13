@@ -383,13 +383,10 @@ export default function StreamPanel({
                   <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
                 ) : (
                   <>
-                    <span className="sp-wallet-value">
-                      {localAmount !== null && (
-                        <span className="sp-wallet-local">≈ {localAmount.toLocaleString()} {wallet!.localCurrency} • </span>
-                      )}
-                      {fmtUsd(wallet!.balance)} USD
-                    </span>
-                    <span className="sp-subtext">+$1/100 KICKs • +$5/sub</span>
+                    <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
+                    {localAmount !== null && (
+                      <span className="sp-subtext">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
+                    )}
                   </>
                 )}
               </div>
