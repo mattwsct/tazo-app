@@ -374,11 +374,11 @@ export default function StreamPanel({
                   <>
                     <span className="sp-wallet-value">
                       {localAmount !== null && (
-                        <span className="sp-wallet-local">≈ {localAmount.toLocaleString()} {wallet!.localCurrency} · </span>
+                        <span className="sp-wallet-local">≈ {localAmount.toLocaleString()} {wallet!.localCurrency} • </span>
                       )}
                       {fmtUsd(wallet!.balance)} USD
                     </span>
-                    <span className="sp-subtext">+$5/sub · +$1/100 KICKs</span>
+                    <span className="sp-subtext">+$5/sub • +$1/100 KICKs</span>
                   </>
                 )}
               </div>
