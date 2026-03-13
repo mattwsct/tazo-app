@@ -363,6 +363,14 @@ export default function StreamPanel({
             </div>
           )}
 
+          {/* Timer */}
+          {hasTimer && (
+            <div className={`sp-row sp-timer-row${isTimerCompletePhase ? ' sp-timer-done' : ''}`}>
+              <span className="sp-label">{timerLabel}</span>
+              <span className="sp-timer-value">{timerTimeStr}</span>
+            </div>
+          )}
+
           {/* Wallet */}
           {showWallet && (
             <div className="sp-row sp-wallet-row">
@@ -382,14 +390,6 @@ export default function StreamPanel({
                   </>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Timer */}
-          {hasTimer && (
-            <div className={`sp-row sp-timer-row${isTimerCompletePhase ? ' sp-timer-done' : ''}`}>
-              <span className="sp-label">{timerLabel}</span>
-              <span className="sp-timer-value">{timerTimeStr}</span>
             </div>
           )}
 
