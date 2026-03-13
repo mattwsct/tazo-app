@@ -15,7 +15,7 @@ export async function GET() {
     void (async () => {
       const localCtx = await getLocalCurrencyContext();
       if (localCtx) {
-        await setWalletBalance(state.balance, localCtx);
+        await setWalletBalance(state.balance, { localCurrency: localCtx.currency, localRate: localCtx.rate });
         void broadcastChallenges().catch(() => {});
       }
     })().catch(() => {});
