@@ -1,5 +1,6 @@
 import { kv } from '@/lib/kv';
 import type { ChallengeItem, ChallengesState, WalletState } from '@/types/challenges';
+import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 
 export const CHALLENGES_KEY = 'stream_challenges';
 export const WALLET_KEY = 'stream_wallet';
@@ -103,8 +104,12 @@ async function getChallengesState(): Promise<ChallengesState> {
       // Atomic claim: only one concurrent request deducts per challenge.
       const claimKey = `challenge_auto_deduct:${c.id}`;
       const claimed = await kv.set(claimKey, 1, { nx: true, ex: 7200 });
-      if (claimed !== null && c.bounty > 0) {
-        await deductFromWallet(c.bounty, undefined, 'CHALLENGE FAILED');
+      if (claimed !== null) {
+        if (c.bounty > 0) await deductFromWallet(c.bounty, undefined, 'CHALLENGE FAILED');
+        const bountyStr = c.bounty % 1 === 0 ? c.bounty.toFixed(0) : c.bounty.toFixed(2);
+        void getValidAccessToken().then((token) => {
+          if (token) return sendKickChatMessage(token, `⏰ Challenge timed out: $${bountyStr} — ${c.description}`);
+        }).catch(() => {});
       }
       toDelete.push(c.id);
     }
