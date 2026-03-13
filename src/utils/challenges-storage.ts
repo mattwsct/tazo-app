@@ -51,13 +51,15 @@ export async function addToWallet(
 
 export async function deductFromWallet(
   amountUsd: number,
-  localContext?: { currency: string; rate: number }
+  localContext?: { currency: string; rate: number },
+  source = 'SPENT'
 ): Promise<{ state: WalletState; deducted: number }> {
   const current = await getWallet();
   const deducted = Math.min(amountUsd, current.balance);
   const state = await setWalletBalance(current.balance - deducted, {
     lastChangeUsd: -deducted,
-    ...(localContext ?? {}),
+    lastChangeSource: source,
+    ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
   });
   return { state, deducted };
 }

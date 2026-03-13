@@ -73,11 +73,12 @@ export async function endOverduePollIfAny(): Promise<boolean> {
     return true; // State changed by concurrent process (e.g. new poll started); don't overwrite
   }
 
+  const totalVotes = state.options.reduce((s, o) => s + o.votes, 0);
   const winnerState: PollState = {
     ...state,
     status: 'winner',
     winnerMessage,
-    winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
+    winnerDisplayUntil: totalVotes === 0 ? now : now + settings.winnerDisplaySeconds * 1000,
   };
   await setPollState(winnerState);
   return true;

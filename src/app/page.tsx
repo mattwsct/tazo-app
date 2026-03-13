@@ -982,7 +982,7 @@ export default function AdminPage() {
             </div>
             
           {/* Setup: Kick connection — connect first before stream title, poll, messages */}
-          <CollapsibleSection id="connection" title="🔗 Kick connection">
+          <CollapsibleSection id="connection" title="🔗 Kick">
             <div className="setting-group">
                   {kickStatus?.connected ? (
                   <div className="kick-status connected">
@@ -1028,6 +1028,124 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+
+            {/* Stream title */}
+            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Stream title</h4>
+              <div className="form-stack">
+                <div>
+                  <label className="field-label">Custom title</label>
+                  <input
+                    type="text"
+                    className="text-input"
+                    value={kickStreamTitleCustom}
+                    onChange={(e) => setKickStreamTitleCustom(e.target.value)}
+                    placeholder="Add any title text..."
+                    style={{ width: '100%', minWidth: 200 }}
+                    maxLength={200}
+                    disabled={!kickStatus?.connected}
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="field-label">Location</label>
+                  <div
+                    className="stream-title-location-preview"
+                    style={{
+                      padding: '12px 16px',
+                      background: 'rgba(255,255,255,0.1)',
+                      borderRadius: 8,
+                      fontSize: '1.05rem',
+                      fontWeight: 600,
+                      minHeight: 48,
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: '#ffffff',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    {(() => {
+                      const subInfo = settings.showSubGoal
+                        ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
+                        : undefined;
+                      const kicksInfo = settings.showKicksGoal
+                        ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 5000 }
+                        : undefined;
+                      const loc = kickStreamTitleIncludeLocation ? kickStreamTitleLocation : '';
+                      return loc || subInfo || kicksInfo
+                        ? buildStreamTitle(kickStreamTitleCustom, loc, subInfo, kicksInfo)
+                        : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>;
+                    })()}
+                  </div>
+                  <label className="checkbox-label-row" style={{ marginTop: '12px' }}>
+                    <input
+                      type="checkbox"
+                      checked={kickStreamTitleIncludeLocation}
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        setKickStreamTitleIncludeLocation(checked);
+                        if (kickStatus?.connected) {
+                          const locationPart = getStreamTitleLocationPart(
+                            kickStreamTitleRawLocation,
+                            settings.locationDisplay,
+                            settings.customLocation ?? '',
+                            checked
+                          );
+                          const subInfo = settings.showSubGoal
+                            ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
+                            : undefined;
+                          const kicksInfo = settings.showKicksGoal
+                            ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 5000 }
+                            : undefined;
+                          const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo, kicksInfo);
+                          try {
+                            const r = await authenticatedFetch('/api/kick-channel', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                stream_title: fullTitle.trim(),
+                                settings: {
+                                  customTitle: kickStreamTitleCustom,
+                                  includeLocationInTitle: checked,
+                                },
+                              }),
+                            });
+                            if (r.ok) {
+                              setToast({ type: 'saved', message: checked ? 'Location added to title' : 'Location hidden from title' });
+                              setTimeout(() => setToast(null), 2500);
+                            }
+                          } catch {
+                            setKickStreamTitleIncludeLocation(!checked);
+                            setToast({ type: 'error', message: 'Failed to update' });
+                            setTimeout(() => setToast(null), 3000);
+                          }
+                        }
+                      }}
+                      className="checkbox-input"
+                    />
+                    Include location in stream title
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={fetchKickStreamTitle}
+                    disabled={!kickStatus?.connected || kickStreamTitleLoading}
+                  >
+                    {kickStreamTitleLoading ? 'Fetching…' : 'Fetch current'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-small"
+                    onClick={updateKickStreamTitle}
+                    disabled={!kickStatus?.connected || kickStreamTitleSaving}
+                  >
+                    {kickStreamTitleSaving ? 'Updating…' : 'Update'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </CollapsibleSection>
 
           {/* Location & map */}
@@ -1798,126 +1916,6 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          {/* Stream title */}
-          <CollapsibleSection id="stream-title" title="📺 Stream title">
-            <div className="setting-group">
-            <div className="form-stack">
-              <div>
-                <label className="field-label">Custom title</label>
-                <input
-                  type="text"
-                  className="text-input"
-                  value={kickStreamTitleCustom}
-                  onChange={(e) => setKickStreamTitleCustom(e.target.value)}
-                  placeholder="Add any title text..."
-                  style={{ width: '100%', minWidth: 200 }}
-                  maxLength={200}
-                  disabled={!kickStatus?.connected}
-                  dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="field-label">Location</label>
-                <div
-                  className="stream-title-location-preview"
-                  style={{
-                    padding: '12px 16px',
-                    background: 'rgba(255,255,255,0.1)',
-                    borderRadius: 8,
-                    fontSize: '1.05rem',
-                    fontWeight: 600,
-                    minHeight: 48,
-                    display: 'flex',
-                    alignItems: 'center',
-                    color: '#ffffff',
-                    marginBottom: '12px',
-                  }}
-                >
-                  {(() => {
-                    const subInfo = settings.showSubGoal
-                      ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
-                      : undefined;
-                    const kicksInfo = settings.showKicksGoal
-                      ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 5000 }
-                      : undefined;
-                    const loc = kickStreamTitleIncludeLocation ? kickStreamTitleLocation : '';
-                    return loc || subInfo || kicksInfo
-                      ? buildStreamTitle(kickStreamTitleCustom, loc, subInfo, kicksInfo)
-                      : kickStreamTitleCustom || <span style={{ opacity: 0.5 }}>No title yet</span>;
-                  })()}
-                </div>
-                <label className="checkbox-label-row" style={{ marginTop: '12px' }}>
-                  <input
-                    type="checkbox"
-                    checked={kickStreamTitleIncludeLocation}
-                    onChange={async (e) => {
-                      const checked = e.target.checked;
-                      setKickStreamTitleIncludeLocation(checked);
-                      if (kickStatus?.connected) {
-                        const locationPart = getStreamTitleLocationPart(
-                          kickStreamTitleRawLocation,
-                          settings.locationDisplay,
-                          settings.customLocation ?? '',
-                          checked
-                        );
-                        const subInfo = settings.showSubGoal
-                          ? { current: settings.streamGoals?.subs ?? 0, target: settings.subGoalTarget ?? 5 }
-                          : undefined;
-                        const kicksInfo = settings.showKicksGoal
-                          ? { current: settings.streamGoals?.kicks ?? 0, target: settings.kicksGoalTarget ?? 5000 }
-                          : undefined;
-                        const fullTitle = buildStreamTitle(kickStreamTitleCustom, locationPart, subInfo, kicksInfo);
-                        try {
-                          const r = await authenticatedFetch('/api/kick-channel', {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              stream_title: fullTitle.trim(),
-                              settings: {
-                                customTitle: kickStreamTitleCustom,
-                                includeLocationInTitle: checked,
-                              },
-                            }),
-                          });
-                          if (r.ok) {
-                            setToast({ type: 'saved', message: checked ? 'Location added to title' : 'Location hidden from title' });
-                            setTimeout(() => setToast(null), 2500);
-                          }
-                        } catch {
-                          setKickStreamTitleIncludeLocation(!checked);
-                          setToast({ type: 'error', message: 'Failed to update' });
-                          setTimeout(() => setToast(null), 3000);
-                        }
-                      }
-                    }}
-                    className="checkbox-input"
-                  />
-                  Include location in stream title
-                </label>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-small"
-                  onClick={fetchKickStreamTitle}
-                  disabled={!kickStatus?.connected || kickStreamTitleLoading}
-                >
-                  {kickStreamTitleLoading ? 'Fetching…' : 'Fetch current'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-small"
-                  onClick={updateKickStreamTitle}
-                  disabled={!kickStatus?.connected || kickStreamTitleSaving}
-                >
-                  {kickStreamTitleSaving ? 'Updating…' : 'Update'}
-                </button>
-              </div>
-              </div>
-            </div>
-            
-          </CollapsibleSection>
-
           {/* Chat — commands and auto-broadcasts */}
           <CollapsibleSection id="chat" title="💬 Chat">
             <div className="setting-group">
@@ -2096,7 +2094,7 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="games" title="🎮 Chat games">
+          <CollapsibleSection id="games" title="🎮 Games">
             <div className="setting-group">
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Poll & Rank</h4>
                   <div className="form-stack" style={{ maxWidth: 520 }}>
@@ -2440,10 +2438,9 @@ export default function AdminPage() {
                 />
               </div>
             </div>
-          </CollapsibleSection>
-
-          <CollapsibleSection id="gambling" title="🎰 Credits & blackjack">
-            <div className="setting-group">
+            {/* Credits & blackjack */}
+            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Credits & blackjack</h4>
               <div className="checkbox-group" style={{ marginBottom: '16px' }}>
                 <label className="checkbox-label">
                   <input
@@ -2455,7 +2452,7 @@ export default function AdminPage() {
                   <span className="checkbox-text">Blackjack (!bj / !deal)</span>
                 </label>
               </div>
-              <div className="setting-group" style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }}>
                 <p className="setting-hint" style={{ marginTop: 0, marginBottom: 10 }}>Create Kick channel rewards with these exact titles to grant Credits on redemption.</p>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Reward title — 50 Credits</label>
                 <input
@@ -2476,7 +2473,7 @@ export default function AdminPage() {
                   style={{ maxWidth: 260 }}
                 />
               </div>
-              <div className="setting-group" style={{ marginTop: 16 }}>
+              <div>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Ignored users</label>
                 <textarea
                   value={leaderboardExcludedBotsInput}

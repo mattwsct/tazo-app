@@ -439,11 +439,12 @@ export async function handleChatPoll(
     if (currentNow?.id !== initialState.id) {
       return { handled: true };
     }
+    const totalVotesAtEnd = initialState.options.reduce((s, o) => s + o.votes, 0);
     const winnerState: PollState = {
       ...initialState,
       status: 'winner',
       winnerMessage,
-      winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
+      winnerDisplayUntil: totalVotesAtEnd === 0 ? now : now + settings.winnerDisplaySeconds * 1000,
     };
     await setPollState(winnerState);
     return { handled: true };

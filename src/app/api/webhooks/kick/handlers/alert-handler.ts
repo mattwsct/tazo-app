@@ -11,7 +11,7 @@ import { broadcastChallenges } from '@/lib/challenges-broadcast';
 const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
 
 // Settings are fetched once per event and passed in to avoid a duplicate KV read.
-const handleSubGoalMilestone = async (count: number, settings: Record<string, unknown> | null) => {
+export const handleSubGoalMilestone = async (count: number, settings: Record<string, unknown> | null) => {
   const goals = await getStreamGoals();
   const target = (settings?.subGoalTarget as number) ?? 5;
   const increment = (settings?.subGoalIncrement as number) ?? 5;
@@ -95,7 +95,7 @@ export async function handleAlertEvents(
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       if (settings?.walletEnabled) void (async () => {
-        await addToWallet(5 * count, { source: 'GIFT SUB' });
+        await addToWallet(5 * count, { source: `${count} GIFT SUB` });
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;
@@ -117,7 +117,7 @@ export async function handleAlertEvents(
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       if (settings?.walletEnabled) void (async () => {
-        await addToWallet(amount / 100, { source: 'KICKS' });
+        await addToWallet(amount / 100, { source: `${amount} KICKS` });
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;

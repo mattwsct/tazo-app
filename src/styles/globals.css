@@ -1173,6 +1173,10 @@ html, body {
      .sp-goal-fill (absolute background fill for progress)
    ============================================================= */
 
+.sp-panel-secondary {
+  margin-top: 3px;
+}
+
 .stream-panel {
   min-width: 440px;
   max-width: 620px;

@@ -10,8 +10,7 @@ const CHALLENGE_TIMEOUT_GRACE_MS = 60_000;
 function fmtUsd(v: number): string {
   return v % 1 === 0 ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
 }
-const WALLET_ANIM_DURATION_MS = 2500;
-const ALERT_DISPLAY_MS = 10000;
+const ALERT_DISPLAY_MS = 6000;
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -99,8 +98,8 @@ export default function StreamPanel({
   const showSubGoal = !!(settings.showSubGoal);
   const showKicksGoal = !!(settings.showKicksGoal);
   const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0 };
-  const showSubsRow = showSubGoal || (!!subsAlert && !showSubGoal);
-  const showKicksRow = showKicksGoal || (!!kicksAlert && !showKicksGoal);
+  const showSubsRow = showSubGoal;
+  const showKicksRow = showKicksGoal;
   const hasGoalSection = showSubsRow || showKicksRow;
 
   // ── Timer ──────────────────────────────────────────────────────────────────
@@ -143,10 +142,10 @@ export default function StreamPanel({
     const sign = change > 0 ? '+' : '-';
     const absStr = fmtUsd(Math.abs(change));
     const source = wallet.lastChangeSource;
-    const label = source ? `${sign}${absStr} ${source}` : `${sign}${absStr}`;
+    const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
     setWalletAnim(label);
     if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
-    walletAnimTimerRef.current = setTimeout(() => setWalletAnim(null), WALLET_ANIM_DURATION_MS);
+    walletAnimTimerRef.current = setTimeout(() => setWalletAnim(null), ALERT_DISPLAY_MS);
   }, [wallet]);
 
   const localAmount =
@@ -163,10 +162,11 @@ export default function StreamPanel({
 
   // ── Poll ───────────────────────────────────────────────────────────────────
   const poll = settings.pollState ?? null;
+  const pollTotalVotes = poll ? poll.options.reduce((s, o) => s + o.votes, 0) : 0;
   const isPollActive =
     !!poll &&
     (poll.status === 'active' ||
-      (poll.status === 'winner' && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil));
+      (poll.status === 'winner' && poll.winnerDisplayUntil != null && now < poll.winnerDisplayUntil && pollTotalVotes > 0));
 
   // ── Trivia ─────────────────────────────────────────────────────────────────
   const trivia = settings.triviaState ?? null;
@@ -178,10 +178,8 @@ export default function StreamPanel({
   const hasPollOrTrivia = isPollActive || isTriviaActive;
 
   // ── Visibility ─────────────────────────────────────────────────────────────
-  const hasContent =
-    hasGoalSection || showWallet || hasTimer ||
-    activeChallenges.length > 0 || hasPollOrTrivia;
-  if (!hasContent) return null;
+  const hasMainContent = hasGoalSection || showWallet || hasTimer || activeChallenges.length > 0;
+  if (!hasMainContent && !hasPollOrTrivia) return null;
 
   // ── Render helpers ─────────────────────────────────────────────────────────
   const renderGoalRow = (type: 'subs' | 'kicks') => {
@@ -306,70 +304,89 @@ export default function StreamPanel({
   const timerLabel = timerState?.title || 'TIMER';
   const timerTimeStr = isTimerCompletePhase ? "Time's up!" : formatMs(timerRemainingMs);
 
-  return (
-    <div className="stream-panel">
-      {/* Goals / alerts */}
-      {hasGoalSection && (
-        <div className="sp-goals-section">
-          {showSubsRow && renderGoalRow('subs')}
-          {showKicksRow && renderGoalRow('kicks')}
+  const renderChallenges = () => (
+    activeChallenges.length > 0 ? (
+      <div className="sp-bottom-section">
+        <div className="sp-bottom-header sp-bottom-header--challenges">
+          <span className="sp-section-label">CHALLENGES</span>
         </div>
-      )}
-
-      {/* Wallet */}
-      {showWallet && (
-        <div className="sp-row sp-wallet-row">
-          <span className="sp-label">WALLET</span>
-          <div className="sp-right-stack">
-            {walletAnim ? (
-              <span className="sp-wallet-anim">{walletAnim}</span>
-            ) : (
-              <>
-                <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
-                {localAmount !== null && (
-                  <span className="sp-subtext">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Timer */}
-      {hasTimer && (
-        <div className={`sp-row sp-timer-row${isTimerCompletePhase ? ' sp-timer-done' : ''}`}>
-          <span className="sp-label">{timerLabel}</span>
-          <span className="sp-timer-value">{timerTimeStr}</span>
-        </div>
-      )}
-
-      {/* Bottom: poll, trivia, or challenges */}
-      {isPollActive ? renderPoll()
-        : isTriviaActive ? renderTrivia()
-        : activeChallenges.length > 0 ? (
-          <div className="sp-bottom-section">
-            <div className="sp-bottom-header sp-bottom-header--challenges">
-              <span className="sp-section-label">CHALLENGES</span>
+        {activeChallenges.map((c, i) => {
+          const isTimedOut = c.status === 'timedOut';
+          const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
+          const isUrgent = expiryMs !== null && expiryMs < 60_000;
+          return (
+            <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}${isTimedOut ? ' sp-challenge-item--timeout' : ''}`}>
+              <span className="sp-challenge-num">{i + 1}.</span>
+              <span className="sp-challenge-bounty">{fmtUsd(c.bounty)}</span>
+              <span className="sp-challenge-desc">{c.description}</span>
+              {expiryMs !== null && (
+                <span className={`sp-challenge-expiry${isUrgent ? ' sp-challenge-expiry--urgent' : ''}`}>
+                  {formatMs(expiryMs)}
+                </span>
+              )}
             </div>
-            {activeChallenges.map((c, i) => {
-              const isTimedOut = c.status === 'timedOut';
-              const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
-              const isUrgent = expiryMs !== null && expiryMs < 60_000;
-              return (
-                <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}${isTimedOut ? ' sp-challenge-item--timeout' : ''}`}>
-                  <span className="sp-challenge-num">{i + 1}.</span>
-                  <span className="sp-challenge-bounty">{fmtUsd(c.bounty)}</span>
-                  <span className="sp-challenge-desc">{c.description}</span>
-                  {expiryMs !== null && (
-                    <span className={`sp-challenge-expiry${isUrgent ? ' sp-challenge-expiry--urgent' : ''}`}>
-                      {formatMs(expiryMs)}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
-    </div>
+          );
+        })}
+      </div>
+    ) : null
+  );
+
+  return (
+    <>
+      {/* Main panel: goals, wallet, timer, challenges */}
+      {hasMainContent && (
+        <div className="stream-panel">
+          {/* Goals / alerts */}
+          {hasGoalSection && (
+            <div className="sp-goals-section">
+              {showSubsRow && renderGoalRow('subs')}
+              {showKicksRow && renderGoalRow('kicks')}
+            </div>
+          )}
+
+          {/* Wallet */}
+          {showWallet && (
+            <div className="sp-row sp-wallet-row">
+              <span className="sp-label">WALLET</span>
+              <div className="sp-right-stack">
+                {walletAnim ? (
+                  <span className="sp-wallet-anim">{walletAnim}</span>
+                ) : (
+                  <>
+                    <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
+                    {localAmount !== null && (
+                      <span className="sp-subtext">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Timer */}
+          {hasTimer && (
+            <div className={`sp-row sp-timer-row${isTimerCompletePhase ? ' sp-timer-done' : ''}`}>
+              <span className="sp-label">{timerLabel}</span>
+              <span className="sp-timer-value">{timerTimeStr}</span>
+            </div>
+          )}
+
+          {/* Challenges always shown here, not rotated */}
+          {renderChallenges()}
+        </div>
+      )}
+
+      {/* Poll/trivia — separate box below */}
+      {isPollActive && (
+        <div className="stream-panel sp-panel-secondary">
+          {renderPoll()}
+        </div>
+      )}
+      {isTriviaActive && (
+        <div className="stream-panel sp-panel-secondary">
+          {renderTrivia()}
+        </div>
+      )}
+    </>
   );
 }

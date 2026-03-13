@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pushTestAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
-import { addToWallet, getWallet } from '@/utils/challenges-storage';
+import { addToWallet } from '@/utils/challenges-storage';
+import { addStreamGoalSubs, addStreamGoalKicks } from '@/utils/stream-goals-storage';
+import { handleSubGoalMilestone } from '@/app/api/webhooks/kick/handlers/alert-handler';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { kv } from '@/lib/kv';
 import type { OverlayAlertType } from '@/utils/overlay-alerts-storage';
@@ -14,8 +16,8 @@ const VALID_TYPES: OverlayAlertType[] = ['sub', 'resub', 'giftSub', 'kicks'];
 const ALERT_WALLET: Record<OverlayAlertType, { amount: number; source: string }> = {
   sub:     { amount: 5,   source: 'SUB' },
   resub:   { amount: 5,   source: 'RESUB' },
-  giftSub: { amount: 25,  source: 'GIFT SUB' }, // 5 gifts × $5
-  kicks:   { amount: 5,   source: 'KICKS' },     // 500 kicks × $0.01
+  giftSub: { amount: 25,  source: '5 GIFT SUB' },
+  kicks:   { amount: 5,   source: '500 KICKS' },
 };
 
 export async function POST(request: NextRequest) {
@@ -34,8 +36,19 @@ export async function POST(request: NextRequest) {
 
     await pushTestAlert(type);
 
+    // Increment stream goals + fire milestone logic (mirrors what real events do)
+    const settings = await kv.get<Record<string, unknown>>('overlay_settings');
+    if (type === 'sub' || type === 'resub') {
+      await addStreamGoalSubs(1);
+      await handleSubGoalMilestone(1, settings);
+    } else if (type === 'giftSub') {
+      await addStreamGoalSubs(5);
+      await handleSubGoalMilestone(5, settings);
+    } else if (type === 'kicks') {
+      await addStreamGoalKicks(500);
+    }
+
     // Add to wallet if enabled (mirrors what real events do)
-    const settings = await kv.get<{ walletEnabled?: boolean }>('overlay_settings');
     if (settings?.walletEnabled) {
       const { amount, source } = ALERT_WALLET[type];
       await addToWallet(amount, { source });

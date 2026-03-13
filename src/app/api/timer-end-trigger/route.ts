@@ -10,8 +10,6 @@ import { kv } from '@/lib/kv';
 
 export const dynamic = 'force-dynamic';
 
-const OVERLAY_TIMER_ANNOUNCED_ENDS_AT_KEY = 'overlay_timer_announced_ends_at';
-
 export async function GET(): Promise<NextResponse> {
   try {
     const [timer, token] = await Promise.all([
@@ -28,8 +26,11 @@ export async function GET(): Promise<NextResponse> {
       return NextResponse.json({ ok: true, acted: false });
     }
 
-    const lastAnnounced = (await kv.get<number>(OVERLAY_TIMER_ANNOUNCED_ENDS_AT_KEY)) ?? 0;
-    if (lastAnnounced === timer.endsAt) {
+    // Atomic claim: only the first concurrent request wins (NX = set only if key absent).
+    // Key is scoped to this specific timer's endsAt so different timers get independent claims.
+    const claimKey = `overlay_timer_announced:${timer.endsAt}`;
+    const claimed = await kv.set(claimKey, 1, { nx: true, ex: 3600 });
+    if (claimed === null) {
       return NextResponse.json({ ok: true, acted: false });
     }
 
@@ -37,7 +38,6 @@ export async function GET(): Promise<NextResponse> {
     const message = label ? `⏱️ ${label} — Time's up!` : "⏱️ Time's up!";
 
     await sendKickChatMessage(token, message);
-    await kv.set(OVERLAY_TIMER_ANNOUNCED_ENDS_AT_KEY, timer.endsAt);
 
     return NextResponse.json({ ok: true, acted: true });
   } catch (err) {
