@@ -11,7 +11,7 @@ const ROTATION_TICK_MS = 10000;
 const GOALS_CYCLE_DURATION_MS = ROTATION_TICK_MS;
 const CROSSFADE_DURATION_MS = 500;
 
-type GoalSlide = 'subs' | 'kicks' | 'donations';
+type GoalSlide = 'subs' | 'kicks';
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -20,7 +20,6 @@ const ALERT_LABELS: Record<string, string> = {
   resub: '💪 Resub',
   giftSub: '🎁 Gift sub',
   kicks: '💚 Kicks',
-  donation: '💸 Tip',
 };
 
 export default function BottomRightPanel({
@@ -55,45 +54,17 @@ export default function BottomRightPanel({
 
   const subTarget = Math.max(1, settings.subGoalTarget ?? 10);
   const kicksTarget = Math.max(1, settings.kicksGoalTarget ?? 5000);
-  const donationsTargetCents = Math.max(1, settings.donationsGoalTargetCents ?? 0);
   const showSubGoal = settings.showSubGoal && subTarget > 0;
   const showKicksGoal = settings.showKicksGoal && kicksTarget > 0;
-  const showDonationsGoal = settings.showDonationsGoal && donationsTargetCents > 0;
-  const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0, donationsCents: 0 };
-
-  // Debug logging for tips goal behaviour
-  const lastDonationsCentsRef = useRef<number | null>(null);
-  useEffect(() => {
-    const current = streamGoals.donationsCents ?? 0;
-    const target = donationsTargetCents;
-    const prev = lastDonationsCentsRef.current;
-    if (prev === null || prev !== current) {
-      // Helpful console trace for debugging why tips jump between values
-      // (visible in both local dev and production browser console).
-      // Example: { from: 10000, to: 0, targetCents: 100000 }
-      // Amounts are in cents.
-      // eslint-disable-next-line no-console
-      console.log('[TIPS] donationsCents changed', {
-        from: prev,
-        to: current,
-        targetCents: target,
-      });
-      if (showDonationsGoal && prev !== null && prev > 0 && current === 0) {
-        // eslint-disable-next-line no-console
-        console.warn('[TIPS] donationsCents reset to 0 — another request likely overwrote the current total. Check recent PATCH /api/stream-goals calls and KV config.');
-      }
-      lastDonationsCentsRef.current = current;
-    }
-  }, [streamGoals.donationsCents, donationsTargetCents, showDonationsGoal]);
+  const streamGoals = settings.streamGoals ?? { subs: 0, kicks: 0 };
 
   // =============================================
   // SECTION 1: Goals rotation (subs / kicks)
   // =============================================
 
-  const goalSlides = (['subs', 'kicks', 'donations'] as GoalSlide[]).filter((s) => {
+  const goalSlides = (['subs', 'kicks'] as GoalSlide[]).filter((s) => {
     if (s === 'subs') return showSubGoal;
     if (s === 'kicks') return showKicksGoal;
-    if (s === 'donations') return showDonationsGoal;
     return false;
   });
   const goalSlidesRef = useRef<GoalSlide[]>(goalSlides);
@@ -288,36 +259,9 @@ export default function BottomRightPanel({
     </div>
   );
 
-  const renderDonationsGoal = () => {
-    const currentCents = streamGoals.donationsCents ?? 0;
-    const targetCents = donationsTargetCents;
-    const formatCurrency = (cents: number) => {
-      const value = cents / 100;
-      const isWhole = cents % 100 === 0;
-      const formattedNumber = value.toLocaleString(undefined, {
-        minimumFractionDigits: isWhole ? 0 : 2,
-        maximumFractionDigits: isWhole ? 0 : 2,
-      });
-      return `$${formattedNumber}`;
-    };
-    return (
-      <div className="goal-progress-stack">
-        <GoalProgressBar
-          label="TIPS"
-          current={currentCents}
-          target={targetCents}
-          formatValue={(n) => formatCurrency(Math.round(n))}
-          fillStyle="linear-gradient(90deg, rgba(234, 179, 8, 0.8) 0%, rgba(251, 191, 36, 1) 100%)"
-          subtext={settings.donationsGoalSubtext}
-        />
-      </div>
-    );
-  };
-
   const renderGoalSlide = (type: GoalSlide) => {
     if (type === 'subs') return renderSubsGoal();
     if (type === 'kicks') return renderKicksGoal();
-    if (type === 'donations') return renderDonationsGoal();
     return null;
   };
 

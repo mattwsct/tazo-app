@@ -7,11 +7,9 @@
  * !kicksgoal <target> <label>  — fixed kicks goal with label
  * !clearsubsgoal               — hide sub goal, reset to saved increment
  * !clearkicksgoal              — hide kicks goal, reset to saved increment
- * !cleartipsgoal               — hide tips goal, clear target/subtext
  * !cleargoals                  — hide both, reset both to saved increments
  * !subscount <count>           — manually override current subs count
  * !kickscount <count>          — manually override current kicks count
- * !tipscount <amount>          — manually override current tips total (USD)
  * !timer <minutes> [label]     — start/restart a countdown timer on the overlay
  * !cleartimer                  — clear the current countdown timer
  */
@@ -63,13 +61,10 @@ export async function handleGoalCommand(
     lower === '!cleargoals' ||
     lower === '!clearsubsgoal' ||
     lower === '!clearkicksgoal' ||
-    lower === '!cleartipsgoal' ||
     lower.startsWith('!subsgoal') ||
     lower.startsWith('!kicksgoal') ||
     lower === '!subscount' || lower.startsWith('!subscount ') ||
     lower === '!kickscount' || lower.startsWith('!kickscount ') ||
-    lower.startsWith('!tipsgoal') ||
-    lower === '!tipscount' || lower.startsWith('!tipscount ') ||
     lower.startsWith('!timer') ||
     lower === '!cleartimer';
 
@@ -144,19 +139,6 @@ export async function handleGoalCommand(
     notifyOverlay();
     refreshTitle(subIncrement, kicksIncrement);
     return { handled: true, reply: '✅ All goals cleared' };
-  }
-
-  // ── !cleartipsgoal ──────────────────────────────────────────────────────────
-  if (lower === '!cleartipsgoal') {
-    await kv.set(OVERLAY_SETTINGS_KEY, {
-      ...settings,
-      showDonationsGoal: false,
-      donationsGoalTargetCents: 0,
-      donationsGoalIncrementCents: 0,
-      donationsGoalSubtext: null,
-    });
-    notifyOverlay();
-    return { handled: true, reply: '✅ Tips goal cleared' };
   }
 
   // ── !timer <duration> [label] ───────────────────────────────────────────────
@@ -263,37 +245,6 @@ export async function handleGoalCommand(
     return { handled: true, reply };
   }
 
-  // ── !tipsgoal <amount> [label] ──────────────────────────────────────────────
-  if (lower.startsWith('!tipsgoal')) {
-    const args = trimmed.slice('!tipsgoal'.length).trim();
-    const parts = args.trim().split(/\s+/);
-    const amount = parseFloat(parts[0]);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return { handled: true, reply: 'Usage: !tipsgoal <amount> [label]  e.g. !tipsgoal 100  or  !tipsgoal 100 Charity stream' };
-    }
-    const subtext = parts.slice(1).join(' ').trim() || undefined;
-    const incrementCents = Math.round(amount * 100);
-    const goals = await getStreamGoals();
-    const snapped = goals.donationsCents >= incrementCents
-      ? (Math.floor(goals.donationsCents / incrementCents) + 1) * incrementCents
-      : incrementCents;
-    const activeTarget = subtext ? incrementCents : snapped;
-    await kv.set(OVERLAY_SETTINGS_KEY, {
-      ...settings,
-      showDonationsGoal: true,
-      donationsGoalTargetCents: activeTarget,
-      donationsGoalIncrementCents: incrementCents,
-      donationsGoalSubtext: subtext ?? null,
-    });
-    notifyOverlay();
-    const activeUsd = (activeTarget / 100).toFixed(2).replace(/\.00$/, '');
-    const bumped = activeTarget !== incrementCents ? ` (bumped to $${activeUsd} — already at $${(goals.donationsCents / 100).toFixed(2).replace(/\.00$/, '')})` : '';
-    const reply = subtext
-      ? `✅ Tips goal set: $${amount} — "${subtext}"`
-      : `✅ Tips goal set: $${activeUsd}${bumped}`;
-    return { handled: true, reply };
-  }
-
   // ── !subscount <count> ──────────────────────────────────────────────────────
   if (lower === '!subscount' || lower.startsWith('!subscount ')) {
     const arg = trimmed.slice('!subscount'.length).trim();
@@ -338,29 +289,6 @@ export async function handleGoalCommand(
     notifyOverlay();
     refreshTitle(subTarget, kicksTarget);
     return { handled: true, reply: `✅ Kicks count set to ${count}` }; 
-  }
-
-  // ── !tipscount <amount> ─────────────────────────────────────────────────────
-  if (lower === '!tipscount' || lower.startsWith('!tipscount ')) {
-    const arg = trimmed.slice('!tipscount'.length).trim();
-    const amount = parseFloat(arg);
-    if (!Number.isFinite(amount) || amount < 0) {
-      return { handled: true, reply: 'Usage: !tipscount <amount>  e.g. !tipscount 150.50' };
-    }
-    const cents = Math.round(amount * 100);
-    await setStreamGoals({ donationsCents: cents });
-    void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
-
-    const donationsTarget = (settings.donationsGoalTargetCents as number) ?? 0;
-    const donationsIncrement = (settings.donationsGoalIncrementCents as number) ?? 0;
-    const hasDonationsSubtext = !!(settings.donationsGoalSubtext as string | null | undefined);
-    const showDonationsGoal = !!(settings.showDonationsGoal);
-    if (showDonationsGoal && !hasDonationsSubtext && donationsIncrement > 0 && donationsTarget > 0 && cents >= donationsTarget) {
-      await bumpGoalTarget('donations', donationsTarget, donationsIncrement, cents);
-    }
-
-    notifyOverlay();
-    return { handled: true, reply: `✅ Tips total set to $${amount.toFixed(2)}` };
   }
 
   return { handled: false };

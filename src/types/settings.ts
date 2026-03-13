@@ -103,12 +103,6 @@ export interface OverlaySettings {
   kicksGoalIncrement?: number;
   /** Optional second line for kicks goal — when set, goal is fixed (no auto-iterate). */
   kicksGoalSubtext?: string;
-  /** Donations goal: show progress bar, target (in cents, runtime aggregated from tips). */
-  showDonationsGoal?: boolean;
-  donationsGoalTargetCents?: number;
-  /** Amount to add to donations goal when reached (auto-increment), in cents. */
-  donationsGoalIncrementCents?: number;
-  donationsGoalSubtext?: string;
   /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
   streamerTimezone?: string;
   /** @deprecated Phase 1: earned leaderboards removed. Kept for KV compat. */
@@ -123,11 +117,10 @@ export interface OverlaySettings {
   earnedLeaderboardWeekly?: { username: string; earned: number }[];
   earnedLeaderboardMonthly?: { username: string; earned: number }[];
   earnedLeaderboardLifetime?: { username: string; earned: number }[];
-  /** Runtime: subs, kicks, and donations since stream start (from get-settings). */
+  /** Runtime: subs and kicks since stream start (from get-settings). */
   streamGoals?: {
     subs: number;
     kicks: number;
-    donationsCents: number;
   };
 }
 
@@ -181,9 +174,6 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showKicksGoal: false,
   kicksGoalTarget: 5000,
   kicksGoalIncrement: 5000,
-  showDonationsGoal: false,
-  donationsGoalTargetCents: 5000,
-  donationsGoalIncrementCents: 5000,
   streamerTimezone: 'UTC',
   showWeeklyEarnedLb: true,
   showMonthlyEarnedLb: true,
@@ -244,10 +234,6 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalTarget: 'number',
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
-  showDonationsGoal: 'boolean',
-  donationsGoalTargetCents: 'number',
-  donationsGoalIncrementCents: 'number',
-  donationsGoalSubtext: 'string',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
   showMonthlyEarnedLb: 'boolean',
@@ -262,7 +248,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
 export interface OverlayRuntimeState {
   pollState?: import('@/types/poll').PollState | null;
   triviaState?: import('@/types/trivia').TriviaState | null;
-  streamGoals?: { subs: number; kicks: number; donationsCents: number };
+  streamGoals?: { subs: number; kicks: number };
   gamblingLeaderboardTop?: { username: string; chips: number }[];
   overlayAlerts?: { id: string; type: string; username: string; extra?: string; at: number }[];
   earnedLeaderboardWeekly?: { username: string; earned: number }[];

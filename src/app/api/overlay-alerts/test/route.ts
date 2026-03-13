@@ -6,7 +6,7 @@ import type { OverlayAlertType } from '@/utils/overlay-alerts-storage';
 
 export const dynamic = 'force-dynamic';
 
-const VALID_TYPES: OverlayAlertType[] = ['sub', 'resub', 'giftSub', 'kicks', 'donation'];
+const VALID_TYPES: OverlayAlertType[] = ['sub', 'resub', 'giftSub', 'kicks'];
 
 export async function POST(request: NextRequest) {
   if (!verifyRequestAuth(request)) {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const type = String(body.type ?? '').trim() as OverlayAlertType;
     if (!VALID_TYPES.includes(type)) {
       return NextResponse.json(
-        { error: 'Invalid type. Use: sub, resub, giftSub, kicks, donation' },
+        { error: 'Invalid type. Use: sub, resub, giftSub, kicks' },
         { status: 400 }
       );
     }

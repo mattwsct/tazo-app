@@ -9,7 +9,7 @@ const OVERLAY_ALERTS_KEY = 'kick_overlay_alerts';
 const MAX_ALERTS = 20;
 const ALERT_MAX_AGE_MS = 25_000; // Don't return alerts older than 25s (gives overlay time to poll and display)
 
-export type OverlayAlertType = 'sub' | 'resub' | 'giftSub' | 'kicks' | 'donation';
+export type OverlayAlertType = 'sub' | 'resub' | 'giftSub' | 'kicks';
 
 export interface OverlayAlert {
   id: string;
@@ -58,17 +58,8 @@ export async function pushTestAlert(type: OverlayAlertType): Promise<void> {
     resub: '3 months',
     giftSub: '5 subs',
     kicks: '500 kicks',
-    donation: '$5.00 — Test donation',
   };
   await pushAlert({ type, username, extra: extras[type] || undefined });
-}
-
-/** Push alert for a donation/tip (from StreamElements or other providers). */
-export async function pushDonationAlert(username: string, amountLabel: string, message?: string): Promise<void> {
-  const trimmedUser = username?.trim() || 'Someone';
-  const shortMessage = message ? (message.length > 80 ? `${message.slice(0, 77)}...` : message) : '';
-  const extra = shortMessage ? `${amountLabel} — ${shortMessage}` : amountLabel;
-  await pushAlert({ type: 'donation', username: trimmedUser, extra });
 }
 
 async function pushAlert(alert: Omit<OverlayAlert, 'id' | 'at'>): Promise<void> {

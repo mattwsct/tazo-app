@@ -113,7 +113,7 @@ export async function GET(request: NextRequest): Promise<Response> {
               getStreamGoals(),
               getRecentAlerts(),
             ]);
-            // Include all three goal dimensions so the overlay never drops donationsCents.
+            // Include stream goals for overlay.
             sendData.streamGoals = streamGoals;
             // Recent alerts — overlay uses them for the 8s full-width alert display
             sendData.overlayAlerts = overlayAlerts;

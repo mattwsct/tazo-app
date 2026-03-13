@@ -61,18 +61,14 @@ export default function AdminPage() {
   const leaderboardExcludedBotsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [subGoalSubtextInput, setSubGoalSubtextInput] = useState('');
   const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState('');
-  const [donationsGoalSubtextInput, setDonationsGoalSubtextInput] = useState('');
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
-  const [donationsGoalTargetInput, setDonationsGoalTargetInput] = useState<string>('0');
-  const [donationsCurrentInput, setDonationsCurrentInput] = useState<string>('0');
   const [chipRewardTitleInput, setChipRewardTitleInput] = useState<string>('Buy Credits');
   const [chipRewardChipsInput, setChipRewardChipsInput] = useState<string>('50');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const donationsGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chipRewardTitleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chipRewardChipsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -734,15 +730,6 @@ export default function AdminPage() {
     }, 1000);
   }, [handleSettingsChange]);
 
-  const handleDonationsGoalSubtextChange = useCallback((value: string) => {
-    setDonationsGoalSubtextInput(value);
-    if (donationsGoalSubtextTimeoutRef.current) clearTimeout(donationsGoalSubtextTimeoutRef.current);
-    donationsGoalSubtextTimeoutRef.current = setTimeout(() => {
-      donationsGoalSubtextTimeoutRef.current = null;
-      handleSettingsChange({ donationsGoalSubtext: value || undefined });
-    }, 1000);
-  }, [handleSettingsChange]);
-
   useEffect(() => {
     setLeaderboardExcludedBotsInput(settings.leaderboardExcludedBots ?? '');
   }, [settings.leaderboardExcludedBots]);
@@ -758,11 +745,6 @@ export default function AdminPage() {
     setSubGoalTargetInput(String(settings.subGoalIncrement ?? settings.subGoalTarget ?? 10));
     setKicksGoalTargetInput(String(settings.kicksGoalIncrement ?? settings.kicksGoalTarget ?? 5000));
   }, [settings.subGoalIncrement, settings.kicksGoalIncrement, settings.subGoalTarget, settings.kicksGoalTarget]);
-
-  // Sync donations goal step input from settings (show the step/increment in USD, not the snapped target)
-  useEffect(() => {
-    setDonationsGoalTargetInput(String((settings.donationsGoalIncrementCents ?? settings.donationsGoalTargetCents ?? 0) / 100));
-  }, [settings.donationsGoalIncrementCents, settings.donationsGoalTargetCents]);
 
   // Debounced handlers for number inputs (1s delay before saving)
   const handleSubGoalTargetChange = useCallback((value: string) => {
@@ -791,32 +773,15 @@ export default function AdminPage() {
     }, 1000);
   }, [handleSettingsChange, settings.streamGoals]);
 
-  const donationsGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const handleDonationsGoalTargetChange = useCallback((value: string) => {
-    setDonationsGoalTargetInput(value);
-    if (donationsGoalTargetTimeoutRef.current) clearTimeout(donationsGoalTargetTimeoutRef.current);
-    donationsGoalTargetTimeoutRef.current = setTimeout(() => {
-      donationsGoalTargetTimeoutRef.current = null;
-      const n = Math.max(0, parseFloat(value) || 0);
-      const nCents = Math.round(n * 100);
-      const countCents = settings.streamGoals?.donationsCents ?? 0;
-      const snapped = nCents > 0 && countCents >= nCents ? (Math.floor(countCents / nCents) + 1) * nCents : nCents;
-      handleSettingsChange({ donationsGoalTargetCents: snapped, donationsGoalIncrementCents: nCents });
-    }, 1000);
-  }, [handleSettingsChange, settings.streamGoals]);
-
   useEffect(() => {
     return () => {
       if (subGoalTargetTimeoutRef.current) clearTimeout(subGoalTargetTimeoutRef.current);
       if (kicksGoalTargetTimeoutRef.current) clearTimeout(kicksGoalTargetTimeoutRef.current);
       if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
       if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
-      if (donationsGoalSubtextTimeoutRef.current) clearTimeout(donationsGoalSubtextTimeoutRef.current);
       if (chipRewardTitleTimeoutRef.current) clearTimeout(chipRewardTitleTimeoutRef.current);
       if (chipRewardChipsTimeoutRef.current) clearTimeout(chipRewardChipsTimeoutRef.current);
       if (triviaRandomQuestionsTimeoutRef.current) clearTimeout(triviaRandomQuestionsTimeoutRef.current);
-      if (donationsGoalTargetTimeoutRef.current) clearTimeout(donationsGoalTargetTimeoutRef.current);
     };
   }, []);
 
@@ -828,15 +793,6 @@ export default function AdminPage() {
   useEffect(() => {
     setKicksGoalSubtextInput(settings.kicksGoalSubtext ?? '');
   }, [settings.kicksGoalSubtext]);
-
-  useEffect(() => {
-    setDonationsGoalSubtextInput(settings.donationsGoalSubtext ?? '');
-  }, [settings.donationsGoalSubtext]);
-
-  // Sync donations current total input from stream goals
-  useEffect(() => {
-    setDonationsCurrentInput(String((settings.streamGoals?.donationsCents ?? 0) / 100));
-  }, [settings.streamGoals?.donationsCents]);
 
   // Sync channel reward inputs from settings
   useEffect(() => {
@@ -1204,12 +1160,12 @@ export default function AdminPage() {
                 </label>
                 <label className="checkbox-label" style={{ marginTop: 4 }}>
                   <input type="checkbox" checked={settings.showOverlayAlerts ?? true} onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks, tips)</span>
+                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
                 </label>
               </div>
               <div className="button-row" style={{ marginTop: 12 }}>
                 <span className="group-label" style={{ marginRight: 8 }}>Test alert:</span>
-                {(['sub', 'resub', 'giftSub', 'kicks', 'donation'] as const).map((type) => (
+                {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
                   <button
                     key={type}
                     type="button"
@@ -1232,7 +1188,6 @@ export default function AdminPage() {
                     {type === 'resub' && '💪 Resub'}
                     {type === 'giftSub' && '🎁 Gift'}
                     {type === 'kicks' && '💚 Kicks'}
-                    {type === 'donation' && '💰 Tip'}
                   </button>
                 ))}
               </div>
@@ -1272,7 +1227,6 @@ export default function AdminPage() {
                               streamGoals: {
                                 subs: data.subs ?? 0,
                                 kicks: data.kicks ?? prev.streamGoals?.kicks ?? 0,
-                                donationsCents: data.donationsCents ?? prev.streamGoals?.donationsCents ?? 0,
                               },
                             }));
                             setToast({ type: 'saved', message: 'Subs updated' });
@@ -1337,7 +1291,6 @@ export default function AdminPage() {
                               streamGoals: {
                                 subs: data.subs ?? prev.streamGoals?.subs ?? 0,
                                 kicks: data.kicks ?? 0,
-                                donationsCents: data.donationsCents ?? prev.streamGoals?.donationsCents ?? 0,
                               },
                             }));
                             setToast({ type: 'saved', message: 'Kicks updated' });
@@ -1368,93 +1321,6 @@ export default function AdminPage() {
                     value={kicksGoalSubtextInput}
                     onChange={(e) => handleKicksGoalSubtextChange(e.target.value)}
                     placeholder='e.g. "PLANK", keeps goal fixed'
-                  />
-                </div>
-              </div>
-
-              {/* Donations goal */}
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Tips / Donations</div>
-                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
-                  <label>Goal step in USD (milestone interval)</label>
-                  <input
-                    type="number"
-                    className="text-input"
-                    value={donationsGoalTargetInput}
-                    min={0}
-                    step="1"
-                    onChange={(e) => handleDonationsGoalTargetChange(e.target.value)}
-                  />
-                </div>
-                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
-                  <label>Current total (USD)</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      key={`donations-${settings.streamGoals?.donationsCents ?? 0}`}
-                      type="number"
-                      className="text-input admin-number-input"
-                      value={donationsCurrentInput}
-                      onChange={(e) => setDonationsCurrentInput(e.target.value)}
-                      id="stream-goals-donations-input"
-                      min={0}
-                      step="0.5"
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-small"
-                      onClick={async () => {
-                        try {
-                          const raw = Math.max(0, parseFloat(donationsCurrentInput) || 0);
-                          const cents = Math.round(raw * 100);
-                          const r = await authenticatedFetch('/api/stream-goals', {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ donationsCents: cents }),
-                          });
-                          const data = await r.json();
-                          if (r.ok && data) {
-                            setSettings((prev) => ({
-                              ...prev,
-                              streamGoals: {
-                                subs: data.subs ?? prev.streamGoals?.subs ?? 0,
-                                kicks: data.kicks ?? prev.streamGoals?.kicks ?? 0,
-                                donationsCents: data.donationsCents ?? 0,
-                              },
-                            }));
-                            setToast({ type: 'saved', message: 'Donations updated' });
-                          } else {
-                            setToast({ type: 'error', message: 'Update failed' });
-                          }
-                        } catch {
-                          setToast({ type: 'error', message: 'Update failed' });
-                        }
-                        setTimeout(() => setToast(null), 2000);
-                      }}
-                    >
-                      Set
-                    </button>
-                  </div>
-                </div>
-                <div className="checkbox-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.showDonationsGoal ?? false}
-                      onChange={(e) => handleSettingsChange({ showDonationsGoal: e.target.checked })}
-                      className="checkbox-input"
-                    />
-                    <span className="checkbox-text">Show progress on overlay</span>
-                  </label>
-                </div>
-                <div className="admin-select-wrap" style={{ marginTop: 8 }}>
-                  <label>Subtitle (fixed goal label)</label>
-                  <input
-                    type="text"
-                    className="text-input"
-                    value={donationsGoalSubtextInput}
-                    onChange={(e) => handleDonationsGoalSubtextChange(e.target.value)}
-                    placeholder='e.g. "Charity drive", keeps goal fixed'
                   />
                 </div>
               </div>

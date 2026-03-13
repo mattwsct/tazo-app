@@ -6,12 +6,11 @@
 
 import { kv } from '@/lib/kv';
 
-export type GoalType = 'subs' | 'kicks' | 'donations';
+export type GoalType = 'subs' | 'kicks';
 
 const TARGET_KEY: Record<GoalType, string> = {
   subs: 'subGoalTarget',
   kicks: 'kicksGoalTarget',
-  donations: 'donationsGoalTargetCents',
 };
 
 /** Bump goal target. New target = next multiple of increment strictly above currentCount. */
