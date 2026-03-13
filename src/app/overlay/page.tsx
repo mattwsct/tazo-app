@@ -201,6 +201,7 @@ function OverlayPage() {
   const pollCountdownRef = useRef<{ pollId: string } | null>(null);
   const latestPollRef = useRef<typeof settings.pollState>(null);
   const lastPollIdRef = useRef<string | null>(null);
+  const endedPollIdsRef = useRef<Set<string>>(new Set());
   const pollShimmerPhaseRef = useRef<{ pollId: string; phase: number } | null>(null);
   if (settings.pollState?.status === 'active') latestPollRef.current = settings.pollState;
 
@@ -210,6 +211,10 @@ function OverlayPage() {
       pollCountdownRef.current = null;
       return;
     }
+    // If we already ended this poll client-side, ignore state updates that bring it back active
+    // (can happen when refreshSettings races with poll-end-trigger).
+    if (endedPollIdsRef.current.has(poll.id)) return;
+
     const endsAt = poll.startedAt + poll.durationSeconds * 1000;
     const remainingMs = Math.max(0, endsAt - Date.now());
     const winnerDisplaySeconds = 10;
@@ -218,30 +223,34 @@ function OverlayPage() {
     const runPollEnd = () => {
       pollCountdownRef.current = null;
       const current = latestPollRef.current;
-      const totalVotes = current?.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
+      if (!current) return;
+      // Guard: only end each poll once (prevents re-entry from refreshSettings race)
+      if (endedPollIdsRef.current.has(current.id)) return;
+      endedPollIdsRef.current.add(current.id);
 
-      // Update UI immediately (optimistic): show winner or clear, then sync with server when it responds
-      if (current) {
-        if (totalVotes > 0) {
-          setSettings((prev) => ({
-            ...prev,
-            pollState: {
-              ...current,
-              status: 'winner',
-              winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
-            },
-          }));
-          // After winner display, clear the slot and fetch server state (next poll or null)
-          setTimeout(() => {
-            lastPollIdRef.current = null;
-            setSettings((prev) => ({ ...prev, pollState: null }));
-            refreshSettings();
-          }, winnerDisplaySeconds * 1000);
-        } else {
+      const totalVotes = current.options?.reduce((s, o) => s + o.votes, 0) ?? 0;
+
+      if (totalVotes > 0) {
+        setSettings((prev) => ({
+          ...prev,
+          pollState: {
+            ...current,
+            status: 'winner',
+            winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
+          },
+        }));
+        // After winner display, clear the slot and fetch server state (next poll or null)
+        setTimeout(() => {
           lastPollIdRef.current = null;
           setSettings((prev) => ({ ...prev, pollState: null }));
           refreshSettings();
-        }
+        }, winnerDisplaySeconds * 1000);
+      } else {
+        // No votes: clear immediately. Delay refresh so poll-end-trigger finishes first,
+        // preventing refreshSettings from returning the still-active state and re-triggering runPollEnd.
+        lastPollIdRef.current = null;
+        setSettings((prev) => ({ ...prev, pollState: null }));
+        setTimeout(() => refreshSettings(), 2000);
       }
 
       // Fire-and-forget: tell server to end poll and post winner to chat; SSE/refresh will overwrite with authoritative state

@@ -94,6 +94,26 @@ async function getChallengesState(): Promise<ChallengesState> {
       anyExpired = true;
     }
   }
+
+  // Auto-deduct + delete timedOut challenges past the 60s grace period.
+  const GRACE_MS = 60_000;
+  const toDelete: number[] = [];
+  for (const c of raw.challenges) {
+    if (c.status === 'timedOut' && c.resolvedAt && now - c.resolvedAt >= GRACE_MS) {
+      // Atomic claim: only one concurrent request deducts per challenge.
+      const claimKey = `challenge_auto_deduct:${c.id}`;
+      const claimed = await kv.set(claimKey, 1, { nx: true, ex: 7200 });
+      if (claimed !== null && c.bounty > 0) {
+        await deductFromWallet(c.bounty, undefined, 'CHALLENGE FAILED');
+      }
+      toDelete.push(c.id);
+    }
+  }
+  if (toDelete.length > 0) {
+    raw.challenges = raw.challenges.filter((c) => !toDelete.includes(c.id));
+    anyExpired = true;
+  }
+
   if (anyExpired) {
     // Save without triggering a full modified broadcast — just persist the update.
     await kv.set(CHALLENGES_KEY, raw);
@@ -144,17 +164,21 @@ export async function updateChallengeStatus(
   status: 'completed' | 'failed'
 ): Promise<ChallengeItem | null> {
   const state = await getChallengesState();
-  const challenge = state.challenges.find((c) => c.id === id);
-  if (!challenge) return null;
-  const wasAlreadyCompleted = challenge.status === 'completed';
-  challenge.status = status;
-  challenge.resolvedAt = Date.now();
+  const idx = state.challenges.findIndex((c) => c.id === id);
+  if (idx === -1) return null;
+  const challenge = { ...state.challenges[idx] };
+  const prevStatus = challenge.status;
+  // Remove immediately — completed/failed challenges don't stay on the board
+  state.challenges.splice(idx, 1);
   await saveChallengesState(state);
-  // Add bounty to wallet when completing (only if not already completed)
-  if (status === 'completed' && !wasAlreadyCompleted && challenge.bounty > 0) {
+  // Wallet: credit on completion, deduct on failure (idempotent guard via prevStatus)
+  if (status === 'completed' && prevStatus !== 'completed' && challenge.bounty > 0) {
     await addToWallet(challenge.bounty, { source: 'CHALLENGE' });
   }
-  return challenge;
+  if (status === 'failed' && prevStatus !== 'failed' && challenge.bounty > 0) {
+    await deductFromWallet(challenge.bounty, undefined, 'CHALLENGE FAILED');
+  }
+  return { ...challenge, status, resolvedAt: Date.now() };
 }
 
 export async function removeChallenge(id: number): Promise<boolean> {

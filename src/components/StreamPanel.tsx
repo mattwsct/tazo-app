@@ -128,7 +128,7 @@ export default function StreamPanel({
   const wallet = settings.walletState;
   const showWallet = !!(settings.walletEnabled && wallet);
 
-  const [walletAnim, setWalletAnim] = useState<string | null>(null);
+  const [walletAnim, setWalletAnim] = useState<{ label: string; negative: boolean } | null>(null);
   const lastWalletUpdatedAtRef = useRef<number | null>(null);
   const walletAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -143,7 +143,7 @@ export default function StreamPanel({
     const absStr = fmtUsd(Math.abs(change));
     const source = wallet.lastChangeSource;
     const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
-    setWalletAnim(label);
+    setWalletAnim({ label, negative: change < 0 });
     if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
     walletAnimTimerRef.current = setTimeout(() => setWalletAnim(null), ALERT_DISPLAY_MS);
   }, [wallet]);
@@ -350,7 +350,7 @@ export default function StreamPanel({
               <span className="sp-label">WALLET</span>
               <div className="sp-right-stack">
                 {walletAnim ? (
-                  <span className="sp-wallet-anim">{walletAnim}</span>
+                  <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
                 ) : (
                   <>
                     <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
