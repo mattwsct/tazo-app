@@ -7,6 +7,7 @@ import { STREAM_GOALS_MODIFIED_KEY, getStreamGoals } from '@/utils/stream-goals-
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getOverlayTimer } from '@/utils/overlay-timer-storage';
 import { CHALLENGES_MODIFIED_KEY, getChallenges, getWallet } from '@/utils/challenges-storage';
+import { tickTrivia } from '@/lib/trivia-webhook-handler';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
 export async function GET(request: NextRequest): Promise<Response> {
@@ -77,6 +78,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       
       // Function to check for settings and poll updates
       const checkForUpdates = async () => {
+        // Fire-and-forget: expire trivia or send a reminder if due.
+        void tickTrivia().catch(() => {});
         try {
           const [settings, settingsModified, pollState, pollModified, triviaState, triviaModified, goalsModified, challengesModified] = await kv.mget([
             'overlay_settings',

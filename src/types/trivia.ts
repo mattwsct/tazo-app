@@ -14,6 +14,8 @@ export interface TriviaState {
   winnerAnswer?: string;
   winnerPoints?: number;
   winnerDisplayUntil?: number;
+  /** When the trivia auto-expires (ms since epoch). */
+  expiresAt?: number;
   /** Last time a reminder message was sent in chat (ms since epoch). */
   lastReminderAt?: number;
   /** How many reminder messages have been sent for this question. */

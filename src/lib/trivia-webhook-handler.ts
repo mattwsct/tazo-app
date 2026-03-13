@@ -17,6 +17,46 @@ export interface HandleTriviaResult {
   handled: boolean;
 }
 
+const TRIVIA_TIMEOUT_MS = 5 * 60 * 1000;    // auto-expire after 5 minutes
+const TRIVIA_REMINDER_INTERVAL_MS = 2 * 60 * 1000; // remind every 2 minutes
+
+/**
+ * Check if the active trivia needs a reminder or has expired.
+ * Safe to call frequently — exits immediately if no trivia is active.
+ */
+export async function tickTrivia(): Promise<void> {
+  const state = await getTriviaState();
+  if (!state || state.winnerDisplayUntil) return;
+
+  const now = Date.now();
+
+  // Auto-expire
+  if (state.expiresAt && now >= state.expiresAt) {
+    await setTriviaState(null);
+    const token = await getValidAccessToken();
+    if (token) {
+      const answers = state.acceptedAnswers.slice(0, 3).join(' / ');
+      await replyChat(token, `⏰ Trivia expired! The answer was: ${answers}`);
+    }
+    return;
+  }
+
+  // Reminder
+  const lastBase = state.lastReminderAt ?? state.startedAt;
+  if (now - lastBase >= TRIVIA_REMINDER_INTERVAL_MS) {
+    const updated: TriviaState = {
+      ...state,
+      lastReminderAt: now,
+      reminderCount: (state.reminderCount ?? 0) + 1,
+    };
+    await setTriviaState(updated);
+    const token = await getValidAccessToken();
+    if (token) {
+      await replyChat(token, `📢 Trivia: ${state.question} — First correct answer wins ${state.points} Credits.`);
+    }
+  }
+}
+
 function normalizeGuess(text: string): string {
   return text
     .trim()
@@ -98,13 +138,16 @@ export async function handleTrivia(
       await replyChat(token, 'No random quiz questions configured. Add some in the admin under Trivia.');
       return { handled: true };
     }
-    await setTriviaState(trivia);
+    await setTriviaState({ ...trivia, expiresAt: Date.now() + TRIVIA_TIMEOUT_MS });
     const token = await getValidAccessToken();
     await replyChat(token, `Trivia: ${trivia.question} — First correct answer wins ${trivia.points} Credits.`);
     return { handled: true };
   }
 
   // --- Guess check: any message when trivia is active ---
+  // Tick first — this expires or reminds if due, before attempting to match the guess.
+  await tickTrivia();
+
   // Retry getTriviaState once after a short delay if null, to handle race where the guess
   // webhook is processed before KV has the trivia state (e.g. right after !trivia).
   let state = await getTriviaState();
