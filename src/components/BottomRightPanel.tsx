@@ -312,14 +312,15 @@ export default function BottomRightPanel({
     const label = timerState.title || 'TIMER';
     const totalMs = timerState.endsAt - timerState.createdAt;
     const fillPct = totalMs > 0 ? Math.min(100, Math.round((remainingMs / totalMs) * 100)) : 100;
-    const fillStyle = 'linear-gradient(90deg, rgba(59, 130, 246, 0.75) 0%, rgba(34, 211, 238, 0.9) 100%)';
     return (
       <div className="goal-progress-stack">
         <div className="goal-progress-bar">
-          <div
-            className="goal-progress-fill"
-            style={{ width: `${fillPct}%`, background: fillStyle }}
-          />
+          <div className="timer-countdown-bar" aria-label="Time remaining">
+            <div
+              className="timer-countdown-bar-fill"
+              style={{ width: `${fillPct}%` }}
+            />
+          </div>
           <div className="goal-progress-text">
             <div className="goal-progress-lines">
               <span className="goal-progress-value">{timeStr}</span>

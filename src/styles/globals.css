@@ -241,6 +241,29 @@ html, body {
   transition: width 1s linear;
 }
 
+/* Timer countdown bar — teal fill, matches poll structure */
+.timer-countdown-bar {
+  width: 100%;
+  height: 4px;
+  min-height: 4px;
+  margin-bottom: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.timer-countdown-bar-fill {
+  height: 100%;
+  background: rgba(94, 234, 212, 0.55);
+  border-radius: 999px;
+  transition: width 1s linear;
+}
+
+/* Tighter spacing between timer bar and text */
+.goal-progress-bar:has(.timer-countdown-bar) .goal-progress-text {
+  padding-top: 6px;
+}
+
 .poll-options {
   display: flex;
   flex-direction: column;
