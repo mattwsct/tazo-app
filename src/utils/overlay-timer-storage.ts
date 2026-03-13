@@ -4,8 +4,10 @@ import type { OverlayTimerState } from '@/types/timer';
 const OVERLAY_TIMER_STATE_KEY = 'overlay_timer_state';
 const OVERLAY_SETTINGS_MODIFIED_KEY = 'overlay_settings_modified';
 
-/** Grace period after timer expiry before we auto-clear it from KV (ms). */
-const EXPIRED_GRACE_MS = 5 * 60_000;
+/** Grace period after timer expiry before we auto-clear it from KV (ms).
+ *  Must be longer than TIMER_COMPLETE_DISPLAY_MS (10s) so "Time's up!" stays visible,
+ *  but short enough that the slot is freed promptly. */
+const EXPIRED_GRACE_MS = 15_000;
 
 /** Returns all active (non-expired) timers. Handles migration from single-timer format. */
 export async function getOverlayTimers(): Promise<OverlayTimerState[]> {
