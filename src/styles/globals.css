@@ -1185,7 +1185,6 @@ html, body {
 .stream-panel {
   min-width: 440px;
   max-width: 620px;
-  width: 100%;
   background: linear-gradient(160deg, rgba(10, 14, 28, 0.96) 0%, rgba(14, 18, 38, 0.93) 100%);
   border: 1px solid rgba(99, 179, 237, 0.2);
   border-radius: 10px;
@@ -1193,7 +1192,7 @@ html, body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  font-size: 17px;
+  font-size: 20px;
   color: rgba(255, 255, 255, 0.88);
 }
 
@@ -1212,7 +1211,7 @@ html, body {
 
 /* Left label — same across ALL row types */
 .sp-label {
-  font-size: 0.72em;
+  font-size: 0.78em;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1233,7 +1232,7 @@ html, body {
 
 /* Right secondary line */
 .sp-subtext {
-  font-size: 0.68em;
+  font-size: 0.74em;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.35);
   letter-spacing: 0.01em;
@@ -1396,7 +1395,7 @@ html, body {
 }
 
 .sp-section-label {
-  font-size: 0.65em;
+  font-size: 0.72em;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1545,6 +1544,7 @@ html, body {
 .sp-challenge-desc {
   color: rgba(255, 255, 255, 0.85);
   flex: 1;
+  text-transform: uppercase;
 }
 
 .sp-challenge-expiry {

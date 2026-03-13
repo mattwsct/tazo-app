@@ -121,7 +121,7 @@ export async function handleAlertEvents(
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       if (settings?.walletEnabled) void (async () => {
-        await addToWallet(5 * count, { source: `${count} GIFT SUB` });
+        await addToWallet(5 * count, { source: count === 1 ? '1 GIFT SUB' : `${count} GIFT SUBS` });
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;

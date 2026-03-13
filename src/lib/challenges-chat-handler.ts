@@ -62,7 +62,7 @@ export async function handleChallengesCommand(
   const isChallenge = lower === '!challenge' || lower.startsWith('!challenge ');
   const isChallenges = lower === '!challenges hide' || lower === '!challenges show';
   const isWallet = lower === '!wallet' || lower.startsWith('!wallet ');
-  const isSpent = lower === '!spent' || lower.startsWith('!spent ');
+  const isSpent = lower === '!spent' || lower.startsWith('!spent ') || lower === '!spend' || lower.startsWith('!spend ');
 
   if (!isChallenge && !isChallenges && !isWallet && !isSpent) return { handled: false };
 
@@ -113,7 +113,7 @@ export async function handleChallengesCommand(
 
   // ── !spent <amount> ── deduct local currency, convert to USD ─────────────────
   if (isSpent) {
-    const arg = trimmed.slice('!spent'.length).trim();
+    const arg = trimmed.slice(lower.startsWith('!spend ') || lower === '!spend' ? '!spend'.length : '!spent'.length).trim();
     const amount = parseFloat(arg);
     if (!Number.isFinite(amount) || amount <= 0) {
       return { handled: true, reply: 'Usage: !spent <amount>  (uses your local currency)' };

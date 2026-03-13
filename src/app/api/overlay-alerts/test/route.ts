@@ -16,7 +16,7 @@ const VALID_TYPES: OverlayAlertType[] = ['sub', 'resub', 'giftSub', 'kicks'];
 const ALERT_WALLET: Record<OverlayAlertType, { amount: number; source: string }> = {
   sub:     { amount: 5,   source: 'SUB' },
   resub:   { amount: 5,   source: 'RESUB' },
-  giftSub: { amount: 25,  source: '5 GIFT SUB' },
+  giftSub: { amount: 25,  source: '5 GIFT SUBS' },
   kicks:   { amount: 5,   source: '500 KICKS' },
 };
 
