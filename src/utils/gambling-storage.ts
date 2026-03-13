@@ -176,7 +176,7 @@ export async function getCreditsLeaderboard(topN: number): Promise<{ username: s
   }
 }
 
-async function deductCredits(user: string, amount: number): Promise<{ ok: boolean; balance: number }> {
+export async function deductCredits(user: string, amount: number): Promise<{ ok: boolean; balance: number }> {
   const bal = await getCredits(user);
   if (bal < amount) return { ok: false, balance: bal };
   const newBal = bal - amount;

@@ -5,7 +5,7 @@ import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
 import { TRIVIA_STATE_KEY, TRIVIA_MODIFIED_KEY } from '@/types/trivia';
 import { STREAM_GOALS_MODIFIED_KEY, getStreamGoals } from '@/utils/stream-goals-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
-import { getOverlayTimer } from '@/utils/overlay-timer-storage';
+import { getOverlayTimers } from '@/utils/overlay-timer-storage';
 import { CHALLENGES_MODIFIED_KEY, getChallenges, getWallet } from '@/utils/challenges-storage';
 import { tickTrivia } from '@/lib/trivia-webhook-handler';
 
@@ -130,11 +130,11 @@ export async function GET(request: NextRequest): Promise<Response> {
           // Challenges & wallet — include on every update (lightweight reads)
           if (challengesChanged) lastChallengesModified = challengesTs;
           const [timerState, challengesState, walletState] = await Promise.all([
-            getOverlayTimer(),
+            getOverlayTimers(),
             getChallenges(),
             getWallet(),
           ]);
-          sendData.timerState = timerState ?? null;
+          sendData.timerState = timerState;
           sendData.challengesState = challengesState;
           sendData.walletState = walletState;
 

@@ -10,6 +10,7 @@ import {
 } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { addCredits } from '@/utils/gambling-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
       expiresAt = Date.now() + body.durationMs;
     }
     const item = await addChallenge(bounty, description, expiresAt);
+    if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
     void broadcastChallenges().catch(() => {});
     return NextResponse.json(item);
   } catch {
@@ -135,8 +137,11 @@ export async function DELETE(request: NextRequest) {
     if (!Number.isFinite(id)) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
-    const ok = await removeChallenge(id);
-    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const removed = await removeChallenge(id);
+    if (!removed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (removed.buyerUsername) {
+      void addCredits(removed.buyerUsername, 1000, { skipExclusions: true }).catch(() => {});
+    }
     void broadcastChallenges().catch(() => {});
     return NextResponse.json({ success: true });
   } catch {

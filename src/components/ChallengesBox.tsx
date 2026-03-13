@@ -156,7 +156,8 @@ export default function ChallengesBox({
   const hasGoalSection = hasGoalsContent || hasGoalAlertOnly;
 
   // ── Global timer ───────────────────────────────────────────────────────────
-  const timerState = settings.timerState ?? null;
+  const timerStateRaw = settings.timerState;
+  const timerState = Array.isArray(timerStateRaw) ? (timerStateRaw[0] ?? null) : (timerStateRaw ?? null);
   const timerRemainingMs = timerState ? Math.max(0, timerState.endsAt - now) : 0;
   const [timerCompleteUntil, setTimerCompleteUntil] = useState<number | null>(null);
   const timerCompletionStartedForRef = useRef<number | null>(null);
@@ -167,7 +168,7 @@ export default function ChallengesBox({
     if (timerCompletionStartedForRef.current === timerState.endsAt) return;
     timerCompletionStartedForRef.current = timerState.endsAt;
     setTimerCompleteUntil(Date.now() + TIMER_COMPLETE_DISPLAY_MS);
-    fetch('/api/timer-end-trigger', { cache: 'no-store' }).catch(() => {});
+    fetch(`/api/timer-end-trigger?endsAt=${timerState.endsAt}`, { cache: 'no-store' }).catch(() => {});
   }, [timerState, timerRemainingMs]);
 
   const isTimerCompletePhase =

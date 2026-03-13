@@ -144,12 +144,17 @@ export async function getChallenges(): Promise<ChallengesState> {
   return getChallengesState();
 }
 
+const MAX_ACTIVE_CHALLENGES = 5;
+
 export async function addChallenge(
   bounty: number,
   description: string,
-  expiresAt?: number
-): Promise<ChallengeItem> {
+  expiresAt?: number,
+  opts?: { buyerUsername?: string }
+): Promise<ChallengeItem | null> {
   const state = await getChallengesState();
+  const activeCount = state.challenges.filter((c) => c.status === 'active').length;
+  if (activeCount >= MAX_ACTIVE_CHALLENGES) return null;
   const item: ChallengeItem = {
     id: state.nextId,
     description,
@@ -157,6 +162,7 @@ export async function addChallenge(
     status: 'active',
     createdAt: Date.now(),
     ...(expiresAt ? { expiresAt } : {}),
+    ...(opts?.buyerUsername ? { buyerUsername: opts.buyerUsername } : {}),
   };
   state.challenges.push(item);
   state.nextId += 1;
@@ -186,13 +192,13 @@ export async function updateChallengeStatus(
   return { ...challenge, status, resolvedAt: Date.now() };
 }
 
-export async function removeChallenge(id: number): Promise<boolean> {
+export async function removeChallenge(id: number): Promise<ChallengeItem | null> {
   const state = await getChallengesState();
-  const before = state.challenges.length;
-  state.challenges = state.challenges.filter((c) => c.id !== id);
-  if (state.challenges.length === before) return false;
+  const idx = state.challenges.findIndex((c) => c.id === id);
+  if (idx === -1) return null;
+  const [removed] = state.challenges.splice(idx, 1);
   await saveChallengesState(state);
-  return true;
+  return removed;
 }
 
 export async function clearResolvedChallenges(): Promise<number> {

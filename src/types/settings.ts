@@ -273,8 +273,8 @@ export interface OverlayRuntimeState {
   earnedLeaderboardWeekly?: { username: string; earned: number }[];
   earnedLeaderboardMonthly?: { username: string; earned: number }[];
   earnedLeaderboardLifetime?: { username: string; earned: number }[];
-  /** Runtime-only overlay timer state (countdown). */
-  timerState?: OverlayTimerState | null;
+  /** Runtime-only overlay timer state (multiple countdowns). */
+  timerState?: OverlayTimerState[] | null;
   /** Runtime: current challenges list and wallet balance. */
   challengesState?: ChallengesState | null;
   walletState?: WalletState | null;

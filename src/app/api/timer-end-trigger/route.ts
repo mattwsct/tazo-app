@@ -1,42 +1,45 @@
 /**
  * Lightweight endpoint for overlay to trigger timer-end announcement when countdown reaches 0.
  * Posts "Time's up!" to chat once per timer. Idempotent: uses KV to avoid duplicate announcements.
+ * Accepts ?endsAt=<ms> to identify which timer ended.
  */
 
-import { NextResponse } from 'next/server';
-import { getOverlayTimer } from '@/utils/overlay-timer-storage';
+import { NextRequest, NextResponse } from 'next/server';
+import { getOverlayTimers } from '@/utils/overlay-timer-storage';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { kv } from '@/lib/kv';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const [timer, token] = await Promise.all([
-      getOverlayTimer(),
+    const url = new URL(request.url);
+    const endsAtParam = url.searchParams.get('endsAt');
+    const endsAt = endsAtParam ? parseInt(endsAtParam, 10) : null;
+
+    const [timers, token] = await Promise.all([
+      getOverlayTimers(),
       getValidAccessToken(),
     ]);
 
-    if (!timer || !token) {
-      return NextResponse.json({ ok: true, acted: false });
-    }
+    if (!token) return NextResponse.json({ ok: true, acted: false });
 
     const now = Date.now();
-    if (timer.endsAt > now) {
-      return NextResponse.json({ ok: true, acted: false });
-    }
+    // Match specific timer if endsAt provided, otherwise fall back to first expired
+    const expired = timers.filter((t) => t.endsAt <= now);
+    const timer = endsAt != null
+      ? expired.find((t) => t.endsAt === endsAt)
+      : expired[0];
 
-    // Atomic claim: only the first concurrent request wins (NX = set only if key absent).
-    // Key is scoped to this specific timer's endsAt so different timers get independent claims.
+    if (!timer) return NextResponse.json({ ok: true, acted: false });
+
+    // Atomic claim: only the first concurrent request wins.
     const claimKey = `overlay_timer_announced:${timer.endsAt}`;
     const claimed = await kv.set(claimKey, 1, { nx: true, ex: 3600 });
-    if (claimed === null) {
-      return NextResponse.json({ ok: true, acted: false });
-    }
+    if (claimed === null) return NextResponse.json({ ok: true, acted: false });
 
     const label = timer.title?.trim();
     const message = label ? `⏱️ ${label} — Time's up!` : "⏱️ Time's up!";
-
     await sendKickChatMessage(token, message);
 
     return NextResponse.json({ ok: true, acted: true });

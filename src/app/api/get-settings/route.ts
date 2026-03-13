@@ -8,7 +8,7 @@ import { POLL_STATE_KEY, type PollState } from '@/types/poll';
 import { TRIVIA_STATE_KEY, type TriviaState } from '@/types/trivia';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
-import { getOverlayTimer } from '@/utils/overlay-timer-storage';
+import { getOverlayTimers } from '@/utils/overlay-timer-storage';
 import { getChallenges, getWallet } from '@/utils/challenges-storage';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +26,7 @@ async function handleGET() {
     const [overlayAlerts, streamGoals, timerState, challengesState, walletState] = await Promise.all([
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       getStreamGoals(),
-      getOverlayTimer(),
+      getOverlayTimers(),
       getChallenges(),
       getWallet(),
     ]);

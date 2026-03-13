@@ -1,13 +1,16 @@
 /**
- * Challenges & Wallet chat commands — mods and broadcaster only (except !wallet balance check).
+ * Challenges & Wallet chat commands — mods and broadcaster only (except !wallet / !chatchallenge / !cc).
  *
  * !challenge <bounty> <description>  — add a challenge (e.g. !challenge 50 Do 20 pushups)
  * !challenge done <id>              — mark challenge #id as completed
  * !challenge fail <id>              — mark challenge #id as failed
- * !challenge remove <id>            — remove challenge #id entirely
+ * !challenge remove <id>            — remove challenge #id (refunds credits if viewer-purchased)
  * !challenge clear                  — remove all completed/failed challenges
  * !challenge list                   — list active challenges
  * !challenges hide / !challenges show — hide/show challenges section on overlay
+ * !ccon / !ccoff                    — enable/disable viewer !chatchallenge command
+ *
+ * !chatchallenge <desc> / !cc <desc> — viewers spend 1000 Credits for a $10 / 15-min challenge
  *
  * !wallet                           — show current wallet balance (public)
  * !wallet <amount>                  — add USD amount to wallet (mods only)
@@ -29,6 +32,7 @@ import {
   addToWallet,
   deductFromWallet,
 } from '@/utils/challenges-storage';
+import { deductCredits, addCredits } from '@/utils/gambling-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { COUNTRY_CURRENCY } from '@/utils/local-currency';
 
@@ -63,13 +67,54 @@ export async function handleChallengesCommand(
   const isChallenges = lower === '!challenges hide' || lower === '!challenges show';
   const isWallet = lower === '!wallet' || lower.startsWith('!wallet ');
   const isSpent = lower === '!spent' || lower.startsWith('!spent ') || lower === '!spend' || lower.startsWith('!spend ');
+  const isChatChallenge = lower.startsWith('!chatchallenge ') || lower === '!chatchallenge' || lower.startsWith('!cc ') || lower === '!cc';
+  const isCCToggle = lower === '!ccon' || lower === '!ccoff';
 
-  if (!isChallenge && !isChallenges && !isWallet && !isSpent) return { handled: false };
+  if (!isChallenge && !isChallenges && !isWallet && !isSpent && !isChatChallenge && !isCCToggle) return { handled: false };
 
   // !wallet (no args) — public, anyone can check balance
   if (lower === '!wallet') {
     const wallet = await getWallet();
     return { handled: true, reply: `💰 Wallet: ${formatUsd(wallet.balance)} — Each sub adds $5, 100 KICKs adds $1` };
+  }
+
+  const CC_ENABLED_KEY = 'chat_challenges_enabled';
+
+  // !chatchallenge <description> / !cc <description> — viewer spends 1000 Credits for a $10 / 15-min challenge
+  if (isChatChallenge) {
+    const cmdLen = lower.startsWith('!chatchallenge') ? '!chatchallenge'.length : '!cc'.length;
+    const description = trimmed.slice(cmdLen).trim();
+    if (!description) {
+      return { handled: true, reply: 'Usage: !chatchallenge <description>  Costs 1,000 Credits — adds a $10 challenge (15 min)' };
+    }
+    // Check enabled
+    const ccEnabled = await kv.get<boolean>(CC_ENABLED_KEY);
+    if (ccEnabled === false) {
+      return { handled: true, reply: '⚠️ Viewer challenges are currently disabled.' };
+    }
+    const user = sender.toLowerCase().replace(/^@+/, '');
+    // Check cap before deducting
+    const state = await getChallenges();
+    const activeCount = state.challenges.filter((c) => c.status === 'active').length;
+    if (activeCount >= 5) {
+      return { handled: true, reply: '⚠️ Challenge slots are full (max 5). Try again later!' };
+    }
+    const result = await deductCredits(user, 1000);
+    if (!result.ok) {
+      return { handled: true, reply: `❌ Not enough Credits — you need 1,000 (you have ${result.balance.toLocaleString()})` };
+    }
+    const expiresAt = Date.now() + 15 * 60_000;
+    const item = await addChallenge(10, description, expiresAt, { buyerUsername: user });
+    if (!item) {
+      // Race condition: cap hit between check and insert — refund
+      void addCredits(user, 1000, { skipExclusions: true }).catch(() => {});
+      return { handled: true, reply: '⚠️ Challenge slots are full (max 5). Your Credits were not charged.' };
+    }
+    void broadcastChallenges().catch(() => {});
+    return {
+      handled: true,
+      reply: `📋 @${sender} added a challenge: $10 — ${description} (15 min) — 1,000 Credits spent (${result.balance.toLocaleString()} remaining)`,
+    };
   }
 
   // All other commands require mod/broadcaster
@@ -80,6 +125,13 @@ export async function handleChallengesCommand(
 
   const OVERLAY_SETTINGS_KEY = 'overlay_settings';
   const notifyOverlay = () => void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
+
+  // ── !ccon / !ccoff ────────────────────────────────────────────────────────────
+  if (isCCToggle) {
+    const enable = lower === '!ccon';
+    await kv.set(CC_ENABLED_KEY, enable);
+    return { handled: true, reply: enable ? '✅ Viewer challenges enabled (!chatchallenge / !cc)' : '🔒 Viewer challenges disabled' };
+  }
 
   // ── !wallet hide / !wallet show ───────────────────────────────────────────────
   if (isWallet && (lower === '!wallet hide' || lower === '!wallet show')) {
@@ -222,10 +274,14 @@ export async function handleChallengesCommand(
     const { pos, target, error } = await getVisibleByPos(args.slice(6).trim());
     if (error) return { handled: true, reply: 'Usage: !challenge remove <number>' };
     if (!target) return { handled: true, reply: `No challenge at position ${pos}.` };
-    const ok = await removeChallenge(target.id);
-    if (!ok) return { handled: true, reply: `Challenge not found.` };
+    const removed = await removeChallenge(target.id);
+    if (!removed) return { handled: true, reply: `Challenge not found.` };
+    if (removed.buyerUsername) {
+      void addCredits(removed.buyerUsername, 1000, { skipExclusions: true }).catch(() => {});
+    }
     void broadcastChallenges().catch(() => {});
-    return { handled: true, reply: `🗑️ Challenge ${pos} removed` };
+    const refundNote = removed.buyerUsername ? ` (1,000 Credits refunded to @${removed.buyerUsername})` : '';
+    return { handled: true, reply: `🗑️ Challenge ${pos} removed${refundNote}` };
   }
 
   // !challenge <bounty> [<duration>] <description>
@@ -257,6 +313,7 @@ export async function handleChallengesCommand(
     return { handled: true, reply: 'Usage: !challenge <bounty> [time] <desc>  e.g. !challenge 50 10m Do 20 pushups' };
   }
   const item = await addChallenge(bounty, description, expiresAt);
+  if (!item) return { handled: true, reply: '⚠️ Max 5 active challenges reached. Complete or fail some first.' };
   void broadcastChallenges().catch(() => {});
   const timerSuffix = expiresAt ? ` (${parts[descStart - 1]} to complete)` : '';
   return {

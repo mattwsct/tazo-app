@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
+import type { OverlayTimerState } from '@/types/timer';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
 
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
@@ -27,6 +28,31 @@ function formatMs(ms: number): string {
   const s = totalSec % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '00')}`;
+}
+
+function TimerRow({ timer, now }: { timer: OverlayTimerState; now: number }) {
+  const remainingMs = Math.max(0, timer.endsAt - now);
+  const [completeUntil, setCompleteUntil] = useState<number | null>(null);
+  const startedForRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (remainingMs > 0) return;
+    if (startedForRef.current === timer.endsAt) return;
+    startedForRef.current = timer.endsAt;
+    if (Date.now() - timer.endsAt > TIMER_COMPLETE_DISPLAY_MS) return;
+    setCompleteUntil(Date.now() + TIMER_COMPLETE_DISPLAY_MS);
+    fetch(`/api/timer-end-trigger?endsAt=${timer.endsAt}`, { cache: 'no-store' }).catch(() => {});
+  }, [remainingMs, timer.endsAt]);
+
+  const isDone = remainingMs <= 0 && completeUntil != null && now < completeUntil;
+  if (!isDone && remainingMs <= 0) return null;
+
+  return (
+    <div className={`sp-row sp-timer-row${isDone ? ' sp-timer-done' : ''}`}>
+      <span className="sp-label">{timer.title ?? ''}</span>
+      <span className="sp-timer-value">{isDone ? "Time's up!" : formatMs(remainingMs)}</span>
+    </div>
+  );
 }
 
 // Poll option fill colours (cycles through options)
@@ -103,27 +129,10 @@ export default function StreamPanel({
   const showKicksRow = showKicksGoal;
   const hasGoalSection = showSubsRow || showKicksRow;
 
-  // ── Timer ──────────────────────────────────────────────────────────────────
-  const timerState = settings.timerState ?? null;
-  const timerRemainingMs = timerState ? Math.max(0, timerState.endsAt - now) : 0;
-  const [timerCompleteUntil, setTimerCompleteUntil] = useState<number | null>(null);
-  const timerCompletionStartedForRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!timerState) { timerCompletionStartedForRef.current = null; setTimerCompleteUntil(null); return; }
-    if (timerRemainingMs > 0) return;
-    if (timerCompletionStartedForRef.current === timerState.endsAt) return;
-    timerCompletionStartedForRef.current = timerState.endsAt;
-    // If the timer completed more than TIMER_COMPLETE_DISPLAY_MS ago (e.g. page reload after it already showed),
-    // skip the display phase entirely — don't replay "Time's up!" on reload.
-    if (Date.now() - timerState.endsAt > TIMER_COMPLETE_DISPLAY_MS) return;
-    setTimerCompleteUntil(Date.now() + TIMER_COMPLETE_DISPLAY_MS);
-    fetch('/api/timer-end-trigger', { cache: 'no-store' }).catch(() => {});
-  }, [timerState, timerRemainingMs]);
-
-  const isTimerCompletePhase =
-    !!timerState && timerRemainingMs <= 0 && timerCompleteUntil != null && now < timerCompleteUntil;
-  const hasTimer = !!timerState && (timerRemainingMs > 0 || isTimerCompletePhase);
+  // ── Timers ─────────────────────────────────────────────────────────────────
+  const timerStates: OverlayTimerState[] = Array.isArray(settings.timerState)
+    ? settings.timerState
+    : settings.timerState ? [settings.timerState] : [];
 
   // ── Wallet ─────────────────────────────────────────────────────────────────
   const wallet = settings.walletState;
@@ -195,7 +204,7 @@ export default function StreamPanel({
   const hasPollOrTrivia = isPollActive || isTriviaActive;
 
   // ── Visibility ─────────────────────────────────────────────────────────────
-  const hasMainContent = hasGoalSection || showWallet || hasTimer || activeChallenges.length > 0;
+  const hasMainContent = hasGoalSection || showWallet || timerStates.length > 0 || activeChallenges.length > 0;
   if (!hasMainContent && !hasPollOrTrivia) return null;
 
   // ── Render helpers ─────────────────────────────────────────────────────────
@@ -320,9 +329,6 @@ export default function StreamPanel({
     );
   };
 
-  const timerLabel = timerState?.title || 'TIMER';
-  const timerTimeStr = isTimerCompletePhase ? "Time's up!" : formatMs(timerRemainingMs);
-
   const renderChallenges = () => (
     activeChallenges.length > 0 ? (
       <div className="sp-bottom-section">
@@ -363,13 +369,10 @@ export default function StreamPanel({
             </div>
           )}
 
-          {/* Timer */}
-          {hasTimer && (
-            <div className={`sp-row sp-timer-row${isTimerCompletePhase ? ' sp-timer-done' : ''}`}>
-              <span className="sp-label">{timerLabel}</span>
-              <span className="sp-timer-value">{timerTimeStr}</span>
-            </div>
-          )}
+          {/* Timers */}
+          {timerStates.map((t) => (
+            <TimerRow key={t.createdAt} timer={t} now={now} />
+          ))}
 
           {/* Wallet */}
           {showWallet && (

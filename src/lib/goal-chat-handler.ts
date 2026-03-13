@@ -21,7 +21,7 @@ import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { setStreamGoals, getStreamGoals, STREAM_GOALS_MODIFIED_KEY, resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
-import { setOverlayTimer } from '@/utils/overlay-timer-storage';
+import { setOverlayTimer, addTimer, removeTimerByCreatedAt, getOverlayTimers } from '@/utils/overlay-timer-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
 import { resetWallet, resetChallenges } from '@/utils/challenges-storage';
@@ -75,7 +75,7 @@ export async function handleGoalCommand(
     lower === '!subscount' || lower.startsWith('!subscount ') ||
     lower === '!kickscount' || lower.startsWith('!kickscount ') ||
     lower.startsWith('!timer') ||
-    lower === '!cleartimer' ||
+    lower === '!cleartimer' || lower.startsWith('!cleartimer ') ||
     lower === '!resetstream';
 
   if (!isGoalCmd) return { handled: false };
@@ -133,11 +133,20 @@ export async function handleGoalCommand(
     })();
   };
 
-  // ── !cleartimer ───────────────────────────────────────────────────────────────
-  if (lower === '!cleartimer') {
-    await setOverlayTimer(null);
+  // ── !cleartimer [label] ───────────────────────────────────────────────────────
+  if (lower === '!cleartimer' || lower.startsWith('!cleartimer ')) {
+    const labelArg = trimmed.slice('!cleartimer'.length).trim();
+    if (!labelArg) {
+      await setOverlayTimer(null);
+      notifyOverlay();
+      return { handled: true, reply: '✅ All timers cleared' };
+    }
+    const timers = await getOverlayTimers();
+    const target = timers.find((t) => t.title?.toLowerCase().includes(labelArg.toLowerCase()));
+    if (!target) return { handled: true, reply: `No timer found matching "${labelArg}"` };
+    await removeTimerByCreatedAt(target.createdAt);
     notifyOverlay();
-    return { handled: true, reply: '✅ Timer cleared' };
+    return { handled: true, reply: `✅ Timer "${target.title}" cleared` };
   }
 
   // ── !clearsubsgoal ──────────────────────────────────────────────────────────
@@ -214,7 +223,8 @@ export async function handleGoalCommand(
     const label = parts.slice(1).join(' ').trim() || undefined;
     const now = Date.now();
     const endsAt = now + clampedMinutes * 60_000;
-    await setOverlayTimer({ createdAt: now, endsAt, title: label });
+    const added = await addTimer({ createdAt: now, endsAt, title: label });
+    if (!added) return { handled: true, reply: '⚠️ Max 3 timers already running. Use !cleartimer [label] to remove one.' };
     notifyOverlay();
     let durationStr: string;
     if (clampedMinutes >= 60) {

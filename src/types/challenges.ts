@@ -7,6 +7,8 @@ export interface ChallengeItem {
   resolvedAt?: number;
   /** If set, challenge auto-fails when Date.now() exceeds this. */
   expiresAt?: number;
+  /** Username of the viewer who purchased this via !chatchallenge (for credit refund on removal). */
+  buyerUsername?: string;
 }
 
 export interface ChallengesState {
