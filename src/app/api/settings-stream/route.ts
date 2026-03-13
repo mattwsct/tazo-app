@@ -5,6 +5,7 @@ import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
 import { TRIVIA_STATE_KEY, TRIVIA_MODIFIED_KEY } from '@/types/trivia';
 import { STREAM_GOALS_MODIFIED_KEY, getStreamGoals } from '@/utils/stream-goals-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
+import { getOverlayTimer } from '@/utils/overlay-timer-storage';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
 export async function GET(request: NextRequest): Promise<Response> {
@@ -117,6 +118,10 @@ export async function GET(request: NextRequest): Promise<Response> {
             // Recent alerts — overlay uses them for the 8s full-width alert display
             sendData.overlayAlerts = overlayAlerts;
           }
+
+          // Timer state is runtime-only; include latest value on every settings or goals update.
+          const timerState = await getOverlayTimer();
+          sendData.timerState = timerState ?? null;
 
           sendSSE(JSON.stringify(sendData));
         } catch (error) {

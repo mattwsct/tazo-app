@@ -134,6 +134,8 @@ export default function AdminPage() {
   const [triviaStartLoading, setTriviaStartLoading] = useState(false);
   const [activeTriviaState, setActiveTriviaState] = useState<TriviaState | null | undefined>(undefined);
   const triviaRandomQuestionsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [timerMinutesInput, setTimerMinutesInput] = useState<string>('');
+  const [timerTitleInput, setTimerTitleInput] = useState<string>('');
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
   
@@ -1454,6 +1456,87 @@ export default function AdminPage() {
                     onChange={(e) => handleDonationsGoalSubtextChange(e.target.value)}
                     placeholder='e.g. "Charity drive", keeps goal fixed'
                   />
+                </div>
+              </div>
+
+              {/* Timer */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Timer</div>
+                <p className="input-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+                  Starts a countdown timer on the overlay (same as using !timer in chat).
+                </p>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Duration (minutes)</label>
+                  <input
+                    type="number"
+                    className="text-input"
+                    value={timerMinutesInput}
+                    min={0}
+                    step="1"
+                    onChange={(e) => setTimerMinutesInput(e.target.value)}
+                  />
+                </div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Title (optional)</label>
+                  <input
+                    type="text"
+                    className="text-input"
+                    value={timerTitleInput}
+                    onChange={(e) => setTimerTitleInput(e.target.value)}
+                    placeholder='e.g. "Break time"'
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      const minutes = parseFloat(timerMinutesInput);
+                      if (!Number.isFinite(minutes) || minutes <= 0) {
+                        setToast({ type: 'error', message: 'Enter a positive number of minutes' });
+                        setTimeout(() => setToast(null), 2000);
+                        return;
+                      }
+                      try {
+                        const res = await authenticatedFetch('/api/timer', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ minutes, title: timerTitleInput }),
+                        });
+                        if (res.ok) {
+                          setToast({ type: 'saved', message: 'Timer started' });
+                        } else {
+                          setToast({ type: 'error', message: 'Failed to start timer' });
+                        }
+                      } catch {
+                        setToast({ type: 'error', message: 'Failed to start timer' });
+                      }
+                      setTimeout(() => setToast(null), 2000);
+                    }}
+                  >
+                    Start / Restart timer
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      try {
+                        const res = await authenticatedFetch('/api/timer', {
+                          method: 'DELETE',
+                        });
+                        if (res.ok) {
+                          setToast({ type: 'saved', message: 'Timer cleared' });
+                        } else {
+                          setToast({ type: 'error', message: 'Failed to clear timer' });
+                        }
+                      } catch {
+                        setToast({ type: 'error', message: 'Failed to clear timer' });
+                      }
+                      setTimeout(() => setToast(null), 2000);
+                    }}
+                  >
+                    Clear timer
+                  </button>
                 </div>
               </div>
             </div>

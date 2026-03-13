@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { OverlaySettings } from '@/types/settings';
+import type { OverlayState } from '@/types/settings';
 import GoalProgressBar from './GoalProgressBar';
 
 const ALERT_DISPLAY_MS = 10000;
@@ -26,7 +26,7 @@ export default function BottomRightPanel({
   settings,
   children,
 }: {
-  settings: OverlaySettings;
+  settings: OverlayState;
   refreshSettings?: () => Promise<void>;
   children: React.ReactNode;
 }) {
@@ -224,7 +224,11 @@ export default function BottomRightPanel({
   const hasPollContent = showPoll;
   const hasTriviaContent = showTrivia;
   const hasPollOrTriviaContent = hasPollContent || hasTriviaContent;
-  const hasContent = hasGoalsContent || hasGoalAlertContent || hasPollOrTriviaContent;
+  const timerState = settings.timerState ?? null;
+  const remainingMs = timerState ? Math.max(0, timerState.endsAt - now) : 0;
+  const hasTimerContent = !!timerState && remainingMs > 0;
+
+  const hasContent = hasGoalsContent || hasGoalAlertContent || hasPollOrTriviaContent || hasTimerContent;
 
   if (!hasContent) return null;
 
@@ -295,6 +299,38 @@ export default function BottomRightPanel({
     return null;
   };
 
+  const renderTimer = () => {
+    if (!timerState || remainingMs <= 0) return null;
+    const totalSeconds = Math.floor(remainingMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const hh = hours > 0 ? `${hours.toString().padStart(2, '0')}:` : '';
+    const mm = minutes.toString().padStart(2, '0');
+    const ss = seconds.toString().padStart(2, '0');
+    const timeStr = `${hh}${mm}:${ss}`;
+    const label = timerState.title || 'TIMER';
+    const totalMs = timerState.endsAt - timerState.createdAt;
+    const fillPct = totalMs > 0 ? Math.min(100, Math.round((remainingMs / totalMs) * 100)) : 100;
+    const fillStyle = 'linear-gradient(90deg, rgba(59, 130, 246, 0.75) 0%, rgba(34, 211, 238, 0.9) 100%)';
+    return (
+      <div className="goal-progress-stack">
+        <div className="goal-progress-bar">
+          <div
+            className="goal-progress-fill"
+            style={{ width: `${fillPct}%`, background: fillStyle }}
+          />
+          <div className="goal-progress-text">
+            <div className="goal-progress-lines">
+              <span className="goal-progress-value">{timeStr}</span>
+              <span className="goal-progress-subtext">{label}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bottom-right">
       {/* Top: Goals rotation (subs/kicks) */}
@@ -314,6 +350,8 @@ export default function BottomRightPanel({
           </div>
         </div>
       )}
+      {/* Timer */}
+      {hasTimerContent && renderTimer()}
       {/* Alert-only goals when rotation hidden */}
       {hasGoalAlertContent && (
         <div className="bottom-right-alert-only">

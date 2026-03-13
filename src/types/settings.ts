@@ -9,6 +9,7 @@ export type MinimapTheme = 'auto' | 'light' | 'dark';
 
 import type { PollState } from '@/types/poll';
 import type { TriviaState } from '@/types/trivia';
+import type { OverlayTimerState } from '@/types/timer';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
@@ -267,6 +268,8 @@ export interface OverlayRuntimeState {
   earnedLeaderboardWeekly?: { username: string; earned: number }[];
   earnedLeaderboardMonthly?: { username: string; earned: number }[];
   earnedLeaderboardLifetime?: { username: string; earned: number }[];
+  /** Runtime-only overlay timer state (countdown). */
+  timerState?: OverlayTimerState | null;
 }
 
 /**

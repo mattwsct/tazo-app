@@ -12,6 +12,8 @@
  * !subscount <count>           — manually override current subs count
  * !kickscount <count>          — manually override current kicks count
  * !tipscount <amount>          — manually override current tips total (USD)
+ * !timer <minutes> [label]     — start/restart a countdown timer on the overlay
+ * !cleartimer                  — clear the current countdown timer
  */
 
 import { kv } from '@/lib/kv';
@@ -20,6 +22,7 @@ import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { setStreamGoals, getStreamGoals, STREAM_GOALS_MODIFIED_KEY } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
+import { setOverlayTimer } from '@/utils/overlay-timer-storage';
 
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
@@ -66,7 +69,9 @@ export async function handleGoalCommand(
     lower === '!subscount' || lower.startsWith('!subscount ') ||
     lower === '!kickscount' || lower.startsWith('!kickscount ') ||
     lower.startsWith('!tipsgoal') ||
-    lower === '!tipscount' || lower.startsWith('!tipscount ');
+    lower === '!tipscount' || lower.startsWith('!tipscount ') ||
+    lower.startsWith('!timer') ||
+    lower === '!cleartimer';
 
   if (!isGoalCmd) return { handled: false };
 
@@ -89,6 +94,13 @@ export async function handleGoalCommand(
       void updateKickTitleGoals(goals.subs, subTarget, goals.kicks, kicksTarget).catch(() => {});
     })();
   };
+
+  // ── !cleartimer ───────────────────────────────────────────────────────────────
+  if (lower === '!cleartimer') {
+    await setOverlayTimer(null);
+    notifyOverlay();
+    return { handled: true, reply: '✅ Timer cleared' };
+  }
 
   // ── !clearsubsgoal ──────────────────────────────────────────────────────────
   if (lower === '!clearsubsgoal') {
@@ -145,6 +157,29 @@ export async function handleGoalCommand(
     });
     notifyOverlay();
     return { handled: true, reply: '✅ Tips goal cleared' };
+  }
+
+  // ── !timer <minutes> [label] ─────────────────────────────────────────────────
+  if (lower.startsWith('!timer')) {
+    const args = trimmed.slice('!timer'.length).trim();
+    if (!args) {
+      return { handled: true, reply: 'Usage: !timer <minutes> [label]  e.g. !timer 10 Break time' };
+    }
+    const parts = args.split(/\s+/);
+    const minutesRaw = parseFloat(parts[0]);
+    if (!Number.isFinite(minutesRaw) || minutesRaw <= 0) {
+      return { handled: true, reply: 'Usage: !timer <minutes> [label]  e.g. !timer 10 Break time' };
+    }
+    // Clamp to max 6 hours to prevent absurd durations.
+    const minutes = Math.min(minutesRaw, 6 * 60);
+    const label = parts.slice(1).join(' ').trim() || undefined;
+    const now = Date.now();
+    const endsAt = now + minutes * 60_000;
+    await setOverlayTimer({ createdAt: now, endsAt, title: label });
+    notifyOverlay();
+    const rounded = minutes % 1 === 0 ? `${minutes.toFixed(0)}` : `${minutes.toFixed(1)}`;
+    const suffix = label ? ` — "${label}"` : '';
+    return { handled: true, reply: `✅ Timer started: ${rounded} minutes${suffix}` };
   }
 
   // ── !subsgoal ───────────────────────────────────────────────────────────────

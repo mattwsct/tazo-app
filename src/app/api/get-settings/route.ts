@@ -8,6 +8,7 @@ import { POLL_STATE_KEY, type PollState } from '@/types/poll';
 import { TRIVIA_STATE_KEY, type TriviaState } from '@/types/trivia';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
+import { getOverlayTimer } from '@/utils/overlay-timer-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,15 +22,17 @@ async function handleGET() {
     const triviaState: TriviaState | null = rawTriviaState ?? null;
     const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState, triviaState });
 
-    const [overlayAlerts, streamGoals] = await Promise.all([
+    const [overlayAlerts, streamGoals, timerState] = await Promise.all([
       merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
       getStreamGoals(),
+      getOverlayTimer(),
     ]);
 
     const combinedSettings = {
       ...merged,
       overlayAlerts,
       streamGoals,
+      timerState,
     };
 
     // Log at most once per 30s in dev to avoid log spam (get-settings is polled frequently)
