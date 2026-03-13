@@ -3,7 +3,7 @@ import { pushTestAlert } from '@/utils/overlay-alerts-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { addToWallet } from '@/utils/challenges-storage';
 import { addStreamGoalSubs, addStreamGoalKicks } from '@/utils/stream-goals-storage';
-import { handleSubGoalMilestone } from '@/app/api/webhooks/kick/handlers/alert-handler';
+import { handleSubGoalMilestone, handleKicksGoalMilestone } from '@/app/api/webhooks/kick/handlers/alert-handler';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { kv } from '@/lib/kv';
 import type { OverlayAlertType } from '@/utils/overlay-alerts-storage';
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       await handleSubGoalMilestone(5, settings);
     } else if (type === 'kicks') {
       await addStreamGoalKicks(500);
+      await handleKicksGoalMilestone(500, settings);
     }
 
     // Add to wallet if enabled (mirrors what real events do)

@@ -37,6 +37,32 @@ export const handleSubGoalMilestone = async (count: number, settings: Record<str
   }
 };
 
+export const handleKicksGoalMilestone = async (amount: number, settings: Record<string, unknown> | null) => {
+  const goals = await getStreamGoals();
+  const target = (settings?.kicksGoalTarget as number) ?? 5000;
+  const increment = (settings?.kicksGoalIncrement as number) ?? 5000;
+  const subsTarget = (settings?.subGoalTarget as number) ?? 5;
+  const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
+  const showKicksGoal = !!(settings?.showKicksGoal);
+  const prevKicks = goals.kicks - amount;
+  if (showKicksGoal && target > 0 && prevKicks < target && goals.kicks >= target) {
+    const newTarget = hasKicksSubtext ? target : await bumpGoalTarget('kicks', target, increment, goals.kicks);
+    const token = await getValidAccessToken();
+    if (token) {
+      try {
+        await sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`);
+      } catch (err) {
+        console.error('[Webhook] Kicks milestone chat failed:', err instanceof Error ? err.message : String(err));
+      }
+      void updateKickTitleGoals(goals.subs, subsTarget, goals.kicks, newTarget).catch(() => {});
+    } else {
+      console.warn('[Webhook] Kicks milestone: no access token, chat message skipped');
+    }
+  } else {
+    void updateKickTitleGoals(goals.subs, subsTarget, goals.kicks, target).catch(() => {});
+  }
+};
+
 export async function handleAlertEvents(
   eventNorm: string,
   payload: Record<string, unknown>
@@ -121,25 +147,7 @@ export async function handleAlertEvents(
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;
-      const goals = await getStreamGoals();
-      const target = (settings?.kicksGoalTarget as number) ?? 5000;
-      const increment = (settings?.kicksGoalIncrement as number) ?? 5000;
-      const hasKicksSubtext = !!(settings?.kicksGoalSubtext as string | null | undefined);
-      const prevKicks = goals.kicks - amount;
-      const showKicksGoal = !!(settings?.showKicksGoal);
-      if (showKicksGoal && target > 0 && prevKicks < target && goals.kicks >= target) {
-        if (!hasKicksSubtext) await bumpGoalTarget('kicks', target, increment, goals.kicks);
-        const token = await getValidAccessToken();
-        if (token) {
-          try {
-            await sendKickChatMessage(token, `🎉 Kicks goal reached! ${goals.kicks}/${target} kicks this stream!`);
-          } catch (err) {
-            console.error('[Webhook] Kicks milestone chat failed:', err instanceof Error ? err.message : String(err));
-          }
-        } else {
-          console.warn('[Webhook] Kicks milestone: no access token, chat message skipped');
-        }
-      }
+      await handleKicksGoalMilestone(amount, settings);
     }
   }
 

@@ -69,7 +69,7 @@ export async function handleChallengesCommand(
   // !wallet (no args) — public, anyone can check balance
   if (lower === '!wallet') {
     const wallet = await getWallet();
-    return { handled: true, reply: `💰 Wallet: ${formatUsd(wallet.balance)}` };
+    return { handled: true, reply: `💰 Wallet: ${formatUsd(wallet.balance)} — Each sub adds $5, 100 Kicks adds $1` };
   }
 
   // All other commands require mod/broadcaster

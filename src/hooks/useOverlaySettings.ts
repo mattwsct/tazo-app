@@ -80,7 +80,7 @@ export function useOverlaySettings(): [
             setSettings((prev) => ({
               ...merged,
               pollState: resolvePollState(merged.pollState ?? null, prev.pollState ?? null),
-              triviaState: merged.triviaState ?? null,
+              triviaState: merged.triviaState ?? prev.triviaState ?? null,
               gamblingLeaderboardTop: Array.isArray(merged.gamblingLeaderboardTop) && merged.gamblingLeaderboardTop.length > 0 ? merged.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               earnedLeaderboardWeekly: merged.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
               earnedLeaderboardMonthly: merged.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,

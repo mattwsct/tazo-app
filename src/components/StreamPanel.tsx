@@ -5,12 +5,11 @@ import type { OverlayState } from '@/types/settings';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
 
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
-const CHALLENGE_TIMEOUT_GRACE_MS = 60_000;
 
 function fmtUsd(v: number): string {
   return v % 1 === 0 ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
 }
-const ALERT_DISPLAY_MS = 6000;
+const ALERT_DISPLAY_MS = 10000;
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
 
@@ -89,6 +88,8 @@ export default function StreamPanel({
     return () => {
       if (subsAlertClearRef.current) clearTimeout(subsAlertClearRef.current);
       if (kicksAlertClearRef.current) clearTimeout(kicksAlertClearRef.current);
+      if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
+      walletAnimQueueRef.current = [];
     };
   }, []);
 
@@ -131,6 +132,18 @@ export default function StreamPanel({
   const [walletAnim, setWalletAnim] = useState<{ label: string; negative: boolean } | null>(null);
   const lastWalletUpdatedAtRef = useRef<number | null>(null);
   const walletAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const walletAnimQueueRef = useRef<Array<{ label: string; negative: boolean }>>([]);
+  const advanceWalletAnimRef = useRef<() => void>(() => {});
+  advanceWalletAnimRef.current = () => {
+    const next = walletAnimQueueRef.current.shift();
+    if (next) {
+      setWalletAnim(next);
+      walletAnimTimerRef.current = setTimeout(advanceWalletAnimRef.current, ALERT_DISPLAY_MS);
+    } else {
+      setWalletAnim(null);
+      walletAnimTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (!wallet) return;
@@ -143,9 +156,13 @@ export default function StreamPanel({
     const absStr = fmtUsd(Math.abs(change));
     const source = wallet.lastChangeSource;
     const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
-    setWalletAnim({ label, negative: change < 0 });
-    if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
-    walletAnimTimerRef.current = setTimeout(() => setWalletAnim(null), ALERT_DISPLAY_MS);
+    const anim = { label, negative: change < 0 };
+    if (walletAnimTimerRef.current !== null) {
+      walletAnimQueueRef.current.push(anim);
+    } else {
+      setWalletAnim(anim);
+      walletAnimTimerRef.current = setTimeout(advanceWalletAnimRef.current, ALERT_DISPLAY_MS);
+    }
   }, [wallet]);
 
   const localAmount =
@@ -157,8 +174,7 @@ export default function StreamPanel({
   const challenges = settings.challengesState?.challenges ?? [];
   const challengesVisible = settings.challengesVisible !== false;
   const activeChallenges = challengesVisible ? challenges.filter((c) =>
-    c.status === 'active' ||
-    (c.status === 'timedOut' && c.resolvedAt != null && now - c.resolvedAt < CHALLENGE_TIMEOUT_GRACE_MS)
+    c.status === 'active' || c.status === 'timedOut'
   ) : [];
 
   // ── Poll ───────────────────────────────────────────────────────────────────
@@ -312,7 +328,7 @@ export default function StreamPanel({
           <span className="sp-section-label">CHALLENGES</span>
         </div>
         {activeChallenges.map((c, i) => {
-          const isTimedOut = c.status === 'timedOut';
+          const isTimedOut = c.status === 'timedOut' || (c.expiresAt != null && c.expiresAt <= now);
           const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
           const isUrgent = expiryMs !== null && expiryMs < 60_000;
           return (
@@ -355,9 +371,9 @@ export default function StreamPanel({
                 ) : (
                   <>
                     <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
-                    {localAmount !== null && (
-                      <span className="sp-subtext">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
-                    )}
+                    <span className="sp-subtext">
+                      {localAmount !== null ? `≈ ${localAmount.toLocaleString()} ${wallet!.localCurrency} • ` : ''}Sub +$5 • 100 Kicks +$1
+                    </span>
                   </>
                 )}
               </div>

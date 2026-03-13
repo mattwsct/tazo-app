@@ -1309,6 +1309,7 @@ html, body {
   font-weight: 700;
   color: rgba(255, 255, 255, 0.82);
   position: relative;
+  text-transform: uppercase;
 }
 
 /* ── Wallet row ── */

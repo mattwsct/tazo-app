@@ -13,12 +13,15 @@ import { getOverlayTimer } from '@/utils/overlay-timer-storage';
 import { getChallenges, getWallet } from '@/utils/challenges-storage';
 import { POLL_STATE_KEY } from '@/types/poll';
 import type { PollState } from '@/types/poll';
+import { TRIVIA_STATE_KEY } from '@/types/trivia';
+import type { TriviaState } from '@/types/trivia';
 
 export async function broadcastChallenges(): Promise<void> {
   try {
-    const [settings, rawPoll] = await kv.mget<[Record<string, unknown> | null, PollState | null]>(
+    const [settings, rawPoll, triviaState] = await kv.mget<[Record<string, unknown> | null, PollState | null, TriviaState | null]>(
       'overlay_settings',
-      POLL_STATE_KEY
+      POLL_STATE_KEY,
+      TRIVIA_STATE_KEY,
     );
     const merged = mergeSettingsWithDefaults({
       ...(settings && typeof settings === 'object' ? settings : {}),
@@ -36,6 +39,7 @@ export async function broadcastChallenges(): Promise<void> {
       overlayAlerts,
       streamGoals,
       timerState: timerState ?? null,
+      triviaState: triviaState ?? null,
       challengesState,
       walletState,
     };
