@@ -1,5 +1,5 @@
 /**
- * Challenges & Wallet chat commands — mods and broadcaster only (except !wallet / !chatchallenge / !cc).
+ * Challenges & Wallet chat commands — mods and broadcaster only (except !wallet / !buychallenge / !bc).
  *
  * !challenge <bounty> <description>  — add a challenge (e.g. !challenge 50 Do 20 pushups)
  * !challenge done <id>              — mark challenge #id as completed
@@ -8,9 +8,9 @@
  * !challenge clear                  — remove all completed/failed challenges
  * !challenge list                   — list active challenges
  * !challenges hide / !challenges show — hide/show challenges section on overlay
- * !ccon / !ccoff                    — enable/disable viewer !chatchallenge command
+ * !bcon / !bcoff                    — enable/disable viewer !buychallenge command
  *
- * !chatchallenge <desc> / !cc <desc> — viewers spend 1000 Credits for a $10 / 15-min challenge
+ * !buychallenge <desc> / !bc <desc> — viewers spend 1000 Credits for a $10 / 10-min challenge
  *
  * !wallet                           — show current wallet balance (public)
  * !wallet <amount>                  — add USD amount to wallet (mods only)
@@ -67,8 +67,8 @@ export async function handleChallengesCommand(
   const isChallenges = lower === '!challenges hide' || lower === '!challenges show';
   const isWallet = lower === '!wallet' || lower.startsWith('!wallet ');
   const isSpent = lower === '!spent' || lower.startsWith('!spent ') || lower === '!spend' || lower.startsWith('!spend ');
-  const isChatChallenge = lower.startsWith('!chatchallenge ') || lower === '!chatchallenge' || lower.startsWith('!cc ') || lower === '!cc';
-  const isCCToggle = lower === '!ccon' || lower === '!ccoff';
+  const isChatChallenge = lower.startsWith('!buychallenge ') || lower === '!buychallenge' || lower.startsWith('!bc ') || lower === '!bc';
+  const isCCToggle = lower === '!bcon' || lower === '!bcoff';
 
   if (!isChallenge && !isChallenges && !isWallet && !isSpent && !isChatChallenge && !isCCToggle) return { handled: false };
 
@@ -80,12 +80,12 @@ export async function handleChallengesCommand(
 
   const CC_ENABLED_KEY = 'chat_challenges_enabled';
 
-  // !chatchallenge <description> / !cc <description> — viewer spends 1000 Credits for a $10 / 15-min challenge
+  // !buychallenge <description> / !bc <description> — viewer spends 1000 Credits for a $10 / 15-min challenge
   if (isChatChallenge) {
-    const cmdLen = lower.startsWith('!chatchallenge') ? '!chatchallenge'.length : '!cc'.length;
+    const cmdLen = lower.startsWith('!buychallenge') ? '!buychallenge'.length : '!bc'.length;
     const description = trimmed.slice(cmdLen).trim();
     if (!description) {
-      return { handled: true, reply: 'Usage: !chatchallenge <description>  Costs 1,000 Credits — adds a $10 challenge (15 min)' };
+      return { handled: true, reply: 'Usage: !buychallenge <description>  Costs 1,000 Credits — adds a $10 challenge (10 min)' };
     }
     // Check enabled
     const ccEnabled = await kv.get<boolean>(CC_ENABLED_KEY);
@@ -103,7 +103,7 @@ export async function handleChallengesCommand(
     if (!result.ok) {
       return { handled: true, reply: `❌ Not enough Credits — you need 1,000 (you have ${result.balance.toLocaleString()})` };
     }
-    const expiresAt = Date.now() + 15 * 60_000;
+    const expiresAt = Date.now() + 10 * 60_000;
     const item = await addChallenge(10, description, expiresAt, { buyerUsername: user });
     if (!item) {
       // Race condition: cap hit between check and insert — refund
@@ -113,7 +113,7 @@ export async function handleChallengesCommand(
     void broadcastChallenges().catch(() => {});
     return {
       handled: true,
-      reply: `📋 @${sender} added a challenge: $10 — ${description} (15 min) — 1,000 Credits spent (${result.balance.toLocaleString()} remaining)`,
+      reply: `📋 @${sender} added a challenge: $10 — ${description} (10 min) — 1,000 Credits spent (${result.balance.toLocaleString()} remaining)`,
     };
   }
 
@@ -126,11 +126,11 @@ export async function handleChallengesCommand(
   const OVERLAY_SETTINGS_KEY = 'overlay_settings';
   const notifyOverlay = () => void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
 
-  // ── !ccon / !ccoff ────────────────────────────────────────────────────────────
+  // ── !bcon / !bcoff ────────────────────────────────────────────────────────────
   if (isCCToggle) {
-    const enable = lower === '!ccon';
+    const enable = lower === '!bcon';
     await kv.set(CC_ENABLED_KEY, enable);
-    return { handled: true, reply: enable ? '✅ Viewer challenges enabled (!chatchallenge / !cc)' : '🔒 Viewer challenges disabled' };
+    return { handled: true, reply: enable ? '✅ Viewer challenges enabled (!buychallenge / !bc)' : '🔒 Viewer challenges disabled' };
   }
 
   // ── !wallet hide / !wallet show ───────────────────────────────────────────────
