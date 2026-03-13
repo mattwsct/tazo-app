@@ -374,7 +374,7 @@ export default function StreamPanel({
                   <>
                     <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
                     <span className="sp-subtext">
-                      {localAmount !== null ? `≈ ${localAmount.toLocaleString()} ${wallet!.localCurrency} • ` : ''}Sub +$5 • 100 Kicks +$1
+                      {localAmount !== null ? `≈ ${localAmount.toLocaleString()} ${wallet!.localCurrency} • ` : ''}+$5/sub • +$1/100 kicks
                     </span>
                   </>
                 )}

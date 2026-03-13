@@ -12,16 +12,24 @@
  * !kickscount <count>          — manually override current kicks count
  * !timer <minutes> [label]     — start/restart a countdown timer on the overlay
  * !cleartimer                  — clear the current countdown timer
+ * !resetstream                 — broadcaster only: resets all per-stream state (same as Danger Zone button)
  */
 
 import { kv } from '@/lib/kv';
 import { isModOrBroadcaster } from '@/lib/kick-role-check';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
-import { setStreamGoals, getStreamGoals, STREAM_GOALS_MODIFIED_KEY } from '@/utils/stream-goals-storage';
+import { setStreamGoals, getStreamGoals, STREAM_GOALS_MODIFIED_KEY, resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { setOverlayTimer } from '@/utils/overlay-timer-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
+import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
+import { resetWallet, resetChallenges } from '@/utils/challenges-storage';
+import { POLL_STATE_KEY, POLL_QUEUE_KEY, LAST_POLL_ENDED_AT_KEY } from '@/types/poll';
+import { TRIVIA_STATE_KEY } from '@/types/trivia';
+
+const OVERLAY_ALERTS_KEY = 'kick_overlay_alerts';
+const OVERLAY_TIMER_ANNOUNCED_KEY = 'overlay_timer_announced_ends_at';
 
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
 
@@ -67,11 +75,42 @@ export async function handleGoalCommand(
     lower === '!subscount' || lower.startsWith('!subscount ') ||
     lower === '!kickscount' || lower.startsWith('!kickscount ') ||
     lower.startsWith('!timer') ||
-    lower === '!cleartimer';
+    lower === '!cleartimer' ||
+    lower === '!resetstream';
 
   if (!isGoalCmd) return { handled: false };
 
   const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+
+  // ── !resetstream — broadcaster only ─────────────────────────────────────────
+  if (lower === '!resetstream') {
+    const isBroadcaster = !!broadcasterSlug && sender.toLowerCase() === broadcasterSlug.toLowerCase();
+    if (!isBroadcaster) return { handled: true }; // silently ignore non-broadcasters
+
+    const storedSettings = await kv.get<{ walletStartingBalance?: number }>('overlay_settings');
+    const startingBalance = storedSettings?.walletStartingBalance ?? 15;
+
+    const [, { subTarget }] = await Promise.all([
+      onStreamStarted(),
+      resetStreamGoalsOnStreamStart(),
+      setStreamLive(true),
+      resetWallet(startingBalance),
+      resetChallenges(),
+      setOverlayTimer(null),
+      kv.del(POLL_STATE_KEY),
+      kv.del(POLL_QUEUE_KEY),
+      kv.del(LAST_POLL_ENDED_AT_KEY),
+      kv.del(TRIVIA_STATE_KEY),
+      kv.del(OVERLAY_ALERTS_KEY),
+      kv.del(OVERLAY_TIMER_ANNOUNCED_KEY),
+    ]);
+
+    void broadcastChallenges().catch(() => {});
+    void updateKickTitleGoals(0, subTarget).catch(() => {});
+
+    return { handled: true, reply: '✅ Stream session reset.' };
+  }
+
   if (!isModOrBroadcaster(senderPayload, sender, broadcasterSlug)) {
     return { handled: true }; // silently ignore non-mods
   }
