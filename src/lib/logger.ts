@@ -22,18 +22,39 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 // Production logging counter
 let productionLogCounter = 0;
 
+// Context styles — shared between formatMessage and getLogStyles
+const CONTEXT_STYLES: Record<string, { emoji: string; color: string }> = {
+  'API-LOCATIONIQ': { emoji: '🗺️', color: '#4A90E2' },
+  'API-OPENMETEO': { emoji: '🌤️', color: '#50E3C2' },
+  'OVERLAY':       { emoji: '📺', color: '#F5A623' },
+  'WEATHER':       { emoji: '🌦️', color: '#50E3C2' },
+  'LOCATION':      { emoji: '📍', color: '#4A90E2' },
+  'SETTINGS':      { emoji: '⚙️', color: '#9013FE' },
+  'HEART-RATE':    { emoji: '💓', color: '#D0021B' },
+  'BROADCAST':     { emoji: '📡', color: '#7ED321' },
+  'ERROR':         { emoji: '❌', color: '#D0021B' },
+  'WARNING':       { emoji: '⚠️', color: '#F5A623' },
+};
+
+const LEVEL_STYLES: Record<LogLevel, { emoji: string; color: string }> = {
+  debug: { emoji: '🔍', color: '#9B9B9B' },
+  info:  { emoji: 'ℹ️',  color: '#4A90E2' },
+  warn:  { emoji: '⚠️', color: '#F5A623' },
+  error: { emoji: '❌', color: '#D0021B' },
+};
+
 /**
  * Check if log level should be output
  */
 function shouldLog(level: LogLevel): boolean {
   const baseCheck = LOG_LEVELS[level] >= LOG_LEVELS[LOG_CONFIG.level];
-  
+
   // In production, reduce frequency of info/debug logs
   if (process.env.NODE_ENV === 'production' && level === 'info') {
     productionLogCounter++;
     return baseCheck && (productionLogCounter % LOG_CONFIG.productionLogInterval === 0);
   }
-  
+
   return baseCheck;
 }
 
@@ -42,63 +63,20 @@ function shouldLog(level: LogLevel): boolean {
  */
 function formatMessage(level: LogLevel, context: string, message: string): string {
   const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', '');
-  
-  // Enhanced emojis and colors for different contexts
-  const contextStyles = {
-    'API-LOCATIONIQ': { emoji: '🗺️', color: '#4A90E2' },
-    'API-OPENMETEO': { emoji: '🌤️', color: '#50E3C2' },
-    'OVERLAY': { emoji: '📺', color: '#F5A623' },
-    'WEATHER': { emoji: '🌦️', color: '#50E3C2' },
-    'LOCATION': { emoji: '📍', color: '#4A90E2' },
-    'SETTINGS': { emoji: '⚙️', color: '#9013FE' },
-    'HEART-RATE': { emoji: '💓', color: '#D0021B' },
-    'BROADCAST': { emoji: '📡', color: '#7ED321' },
-    'ERROR': { emoji: '❌', color: '#D0021B' },
-    'WARNING': { emoji: '⚠️', color: '#F5A623' },
-  };
-  
-  const contextStyle = contextStyles[context as keyof typeof contextStyles] || { emoji: '📝', color: '#9B9B9B' };
-  
-  // Create styled components
-  const timestampStr = `%c${timestamp}`;
-  const contextStr = `%c${contextStyle.emoji} ${context.toUpperCase()}`;
-  const messageStr = `%c${message}`;
-  
-  // Return formatted string with CSS styles
-  return `${timestampStr} ${contextStr} ${messageStr}`;
+  const contextStyle = CONTEXT_STYLES[context] || { emoji: '📝', color: '#9B9B9B' };
+  return `%c${timestamp} %c${contextStyle.emoji} ${context.toUpperCase()} %c${message}`;
 }
 
 /**
  * Get CSS styles for formatted log message
  */
 function getLogStyles(level: LogLevel, context: string): string[] {
-  const contextStyles = {
-    'API-LOCATIONIQ': { emoji: '🗺️', color: '#4A90E2' },
-    'API-OPENMETEO': { emoji: '🌤️', color: '#50E3C2' },
-    'OVERLAY': { emoji: '📺', color: '#F5A623' },
-    'WEATHER': { emoji: '🌦️', color: '#50E3C2' },
-    'LOCATION': { emoji: '📍', color: '#4A90E2' },
-    'SETTINGS': { emoji: '⚙️', color: '#9013FE' },
-    'HEART-RATE': { emoji: '💓', color: '#D0021B' },
-    'BROADCAST': { emoji: '📡', color: '#7ED321' },
-    'ERROR': { emoji: '❌', color: '#D0021B' },
-    'WARNING': { emoji: '⚠️', color: '#F5A623' },
-  };
-  
-  const levelStyles = {
-    debug: { emoji: '🔍', color: '#9B9B9B' },
-    info: { emoji: 'ℹ️', color: '#4A90E2' },
-    warn: { emoji: '⚠️', color: '#F5A623' },
-    error: { emoji: '❌', color: '#D0021B' },
-  };
-  
-  const contextStyle = contextStyles[context as keyof typeof contextStyles] || { emoji: '📝', color: '#9B9B9B' };
-  const levelStyle = levelStyles[level];
-  
+  const contextStyle = CONTEXT_STYLES[context] || { emoji: '📝', color: '#9B9B9B' };
+  const levelStyle = LEVEL_STYLES[level];
   return [
-    `color: #9B9B9B; font-size: 11px; font-weight: normal;`, // timestamp
+    `color: #9B9B9B; font-size: 11px; font-weight: normal;`,          // timestamp
     `color: ${contextStyle.color}; font-weight: bold; font-size: 12px;`, // context
-    `color: ${levelStyle.color}; font-weight: 500;`, // message
+    `color: ${levelStyle.color}; font-weight: 500;`,                   // message
   ];
 }
 
@@ -107,15 +85,10 @@ function getLogStyles(level: LogLevel, context: string): string[] {
  */
 function formatData(data: unknown): string {
   if (data === null || data === undefined) return '';
-  if (typeof data === 'string') {
-    // Don't show empty strings as data
-    return data.trim() === '' ? '' : data;
-  }
+  if (typeof data === 'string') return data.trim() === '' ? '' : data;
   if (typeof data === 'number' || typeof data === 'boolean') return String(data);
-  
   try {
     const json = JSON.stringify(data, null, 2);
-    // Don't show empty objects/arrays as data
     if (json === '{}' || json === '[]' || json === 'null') return '';
     return json;
   } catch {
@@ -133,148 +106,63 @@ export class Logger {
     this.context = context;
   }
 
-  debug(message: string, data?: unknown): void {
-    if (!shouldLog('debug') || !LOG_CONFIG.enableConsole) return;
-    const styles = getLogStyles('debug', this.context);
+  private _log(level: LogLevel, message: string, data?: unknown): void {
+    if (!shouldLog(level) || !LOG_CONFIG.enableConsole) return;
+    const styles = getLogStyles(level, this.context);
     const formattedData = data ? formatData(data) : '';
-    // Only include data if it's not empty
+    const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
     if (formattedData) {
-      console.log(formatMessage('debug', this.context, message), ...styles, formattedData);
+      consoleFn(formatMessage(level, this.context, message), ...styles, formattedData);
     } else {
-      console.log(formatMessage('debug', this.context, message), ...styles);
+      consoleFn(formatMessage(level, this.context, message), ...styles);
     }
   }
 
-  info(message: string, data?: unknown): void {
-    if (!shouldLog('info') || !LOG_CONFIG.enableConsole) return;
-    const styles = getLogStyles('info', this.context);
-    const formattedData = data ? formatData(data) : '';
-    // Only include data if it's not empty
-    if (formattedData) {
-      console.log(formatMessage('info', this.context, message), ...styles, formattedData);
-    } else {
-      console.log(formatMessage('info', this.context, message), ...styles);
-    }
-  }
-
-  warn(message: string, data?: unknown): void {
-    if (!shouldLog('warn') || !LOG_CONFIG.enableConsole) return;
-    const styles = getLogStyles('warn', this.context);
-    const formattedData = data ? formatData(data) : '';
-    // Only include data if it's not empty
-    if (formattedData) {
-      console.warn(formatMessage('warn', this.context, message), ...styles, formattedData);
-    } else {
-      console.warn(formatMessage('warn', this.context, message), ...styles);
-    }
-  }
-
-  error(message: string, error?: unknown): void {
-    if (!shouldLog('error') || !LOG_CONFIG.enableConsole) return;
-    const styles = getLogStyles('error', this.context);
-    const formattedData = error ? formatData(error) : '';
-    // Only include data if it's not empty
-    if (formattedData) {
-      console.error(formatMessage('error', this.context, message), ...styles, formattedData);
-    } else {
-      console.error(formatMessage('error', this.context, message), ...styles);
-    }
-  }
+  debug(message: string, data?: unknown): void { this._log('debug', message, data); }
+  info(message: string, data?: unknown): void  { this._log('info',  message, data); }
+  warn(message: string, data?: unknown): void  { this._log('warn',  message, data); }
+  error(message: string, error?: unknown): void { this._log('error', message, error); }
 }
 
 // === 🎯 SPECIALIZED LOGGERS ===
 
-/**
- * API-specific logger with standardized formatting
- */
 export const ApiLogger = {
-  info: (api: string, message: string, data?: unknown) => 
-    new Logger(`API-${api}`).info(message, data),
-  
-  error: (api: string, message: string, error?: unknown) => 
-    new Logger(`API-${api}`).error(message, error),
-  
-  warn: (api: string, message: string, data?: unknown) => 
-    new Logger(`API-${api}`).warn(message, data),
+  info:  (api: string, message: string, data?: unknown)  => new Logger(`API-${api}`).info(message, data),
+  error: (api: string, message: string, error?: unknown) => new Logger(`API-${api}`).error(message, error),
+  warn:  (api: string, message: string, data?: unknown)  => new Logger(`API-${api}`).warn(message, data),
 } as const;
 
-/**
- * Overlay-specific logger with emoji prefixes
- */
 export const OverlayLogger = {
-  overlay: (message: string, data?: unknown) => 
-    new Logger('OVERLAY').info(message, data),
-  
-  weather: (message: string, data?: unknown) => 
-    new Logger('WEATHER').info(message, data),
-  
-  location: (message: string, data?: unknown) => 
-    new Logger('LOCATION').info(message, data),
-  
-  settings: (message: string, data?: unknown) => 
-    new Logger('SETTINGS').info(message, data),
-  
-  error: (message: string, error?: unknown) => 
-    new Logger('ERROR').error(message, error),
-  
-  warn: (message: string, data?: unknown) => 
-    new Logger('WARNING').warn(message, data),
+  overlay:  (message: string, data?: unknown)  => new Logger('OVERLAY').info(message, data),
+  weather:  (message: string, data?: unknown)  => new Logger('WEATHER').info(message, data),
+  location: (message: string, data?: unknown)  => new Logger('LOCATION').info(message, data),
+  settings: (message: string, data?: unknown)  => new Logger('SETTINGS').info(message, data),
+  error:    (message: string, error?: unknown) => new Logger('ERROR').error(message, error),
+  warn:     (message: string, data?: unknown)  => new Logger('WARNING').warn(message, data),
 } as const;
 
-/**
- * Heart rate monitor logger
- */
 export const HeartRateLogger = {
-  info: (message: string, data?: unknown) => 
-    new Logger('HEART-RATE').info(message, data),
-  
-  error: (message: string, error?: unknown) => 
-    new Logger('HEART-RATE').error(message, error),
+  info:  (message: string, data?: unknown)  => new Logger('HEART-RATE').info(message, data),
+  error: (message: string, error?: unknown) => new Logger('HEART-RATE').error(message, error),
 } as const;
 
-/**
- * Broadcast system logger
- */
 export const BroadcastLogger = {
-  info: (message: string, data?: unknown) => 
-    new Logger('BROADCAST').info(message, data),
-  
-  warn: (message: string, data?: unknown) => 
-    new Logger('BROADCAST').warn(message, data),
-  
-  error: (message: string, error?: unknown) => 
-    new Logger('BROADCAST').error(message, error),
+  info:  (message: string, data?: unknown)  => new Logger('BROADCAST').info(message, data),
+  warn:  (message: string, data?: unknown)  => new Logger('BROADCAST').warn(message, data),
+  error: (message: string, error?: unknown) => new Logger('BROADCAST').error(message, error),
 } as const;
 
-/**
- * Visual separator for log sections
- */
 export const LogSeparator = {
   section: (title: string) => {
-    const styles = [
-      'color: #9013FE; font-weight: bold; font-size: 14px;',
-      'color: #9B9B9B; font-size: 11px;',
-    ];
-    console.log(`%c━━━ ${title} ━━━%c`, ...styles);
+    console.log(`%c━━━ ${title} ━━━%c`, 'color: #9013FE; font-weight: bold; font-size: 14px;', 'color: #9B9B9B; font-size: 11px;');
   },
-  
   divider: () => {
     console.log('%c─────────────────────────────────────────', 'color: #E0E0E0; font-size: 10px;');
   },
-  
   success: (message: string) => {
-    const styles = [
-      'color: #7ED321; font-weight: bold; font-size: 12px;',
-      'color: #7ED321; font-weight: 500;',
-    ];
-    console.log(`%c✅ %c${message}`, ...styles);
+    console.log(`%c✅ %c${message}`, 'color: #7ED321; font-weight: bold; font-size: 12px;', 'color: #7ED321; font-weight: 500;');
   },
-  
   highlight: (message: string) => {
-    const styles = [
-      'color: #F5A623; font-weight: bold; font-size: 12px;',
-      'color: #F5A623; font-weight: 500;',
-    ];
-    console.log(`%c🔆 %c${message}`, ...styles);
+    console.log(`%c🔆 %c${message}`, 'color: #F5A623; font-weight: bold; font-size: 12px;', 'color: #F5A623; font-weight: 500;');
   },
-} as const; 
+} as const;

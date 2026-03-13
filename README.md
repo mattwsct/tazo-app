@@ -12,6 +12,12 @@ A modern, real-time streaming overlay for IRL streams with GPS tracking, weather
 - **🗺️ Smart Location Display** - One setting for overlay, chat (!location), stream title, and map: city, state, or country with country flags
 - **✨ Smooth Animations** - Optimized value transitions for speed, altitude, and heart rate
 - **🎨 Clean UI** - Modern, responsive design optimized for OBS
+- **🤖 Kick Chat Bot** - Auto-responses for subs, gifts, follows, Kicks, and channel point redemptions
+- **📊 Chat Polls** - Broadcaster/mod-started polls with live overlay voting bar
+- **🧠 Trivia** - First-correct-answer trivia with auto-expiry, reminders, and Credits reward
+- **💰 Wallet** - On-stream USD wallet that earns from subs/Kicks, tracks spending in local currency
+- **🎯 Challenges** - Mod-managed viewer challenges with Credits bounties shown on overlay
+- **🏆 Credits & Blackjack** - Persistent viewer Credits; earn from subs/gifts/Kicks/trivia, spend on blackjack
 
 ## 🚀 Quick Start
 
@@ -343,7 +349,7 @@ Rate limiting and cooldowns are built-in to prevent quota issues.
 
 ## 🛠️ Tech Stack
 
-- **Next.js 16** - React framework with app router
+- **Next.js 15** - React framework with app router
 - **TypeScript** - Type safety
 - **CSS Modules** - Component-scoped styling
 - **MapLibre GL** - WebGL-based map rendering
@@ -712,7 +718,7 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
 
 5. **Customize messages**: Use the admin panel **Message templates** section to edit message templates and send test messages to kick.com/tazo.
 
-6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** when admin page is open (every 5 min) and via cron when location updates (runs every 2 min, updates title if live and location changed). Requires `channel:read` and `channel:write` scopes. The app uses Kick's `GET /channels` to fetch your channel (stream title, live status) and `broadcaster_user_id` for webhook subscription setup.
+6. **Stream title**: Two fields — (1) Custom title text, (2) Location with country flag emoji. Flag is the separator. **Fetch current** (when live) parses Kick's title. **Auto-push** runs every minute via cron whenever location changes — title stays current even when the stream is offline so it's ready before you go live. Requires `channel:read` and `channel:write` scopes.
 
 ### Events & Responses
 
@@ -732,9 +738,19 @@ Edit templates in the admin panel **Message templates** section. Use the toggles
 
 ### Chat commands
 
-Type `!ping` in Kick chat and the bot replies with Pong! `!uptime` shows how long the stream has been live. (use to verify webhooks). **Stream stats**: `!speed` — current and max speed (km/h). `!altitude` or `!elevation` — current, lowest, highest elevation (m). `!forecast` — 5-day weather forecast. `!map` — Google Maps link for current location. **`!title`** (broadcaster and mods only): set stream title with optional location. Example: `!title Walking around Austin` — updates the title and appends location (city/state/country) if "Include location in stream title" is on. `!heartrate` or `!hr` returns the highest and lowest BPM this stream and current if live. **Stream-session stats**: HR, altitude, speed, and distance use data from stream start until stream end. When `livestream.status.updated` fires with `is_live: true`, the app sets `stream_started_at`. All stat commands (`!heartrate`, `!speed`, `!altitude`, Fossabot `/api/chat/*`) filter by this session. **Wellness commands** (from Health Auto Export): `!steps`, `!distance`, `!wellness` (summary). Stream-session stats: `!heartrate`, `!speed`, `!altitude` (no unified !stats). Fossabot with `/api/chat/*` supports `!location`, `!weather`, `!time` as a fallback if Kick webhooks are unreliable.
+**General** (anyone): `!ping` → Pong (webhook connectivity check). `!uptime` → stream duration. `!location` → current location. `!weather` → current weather. `!time` → local time. `!map` → Google Maps link. `!forecast` → 5-day forecast. `!steps`, `!distance`, `!wellness` → wellness summary (from Health Auto Export). `!credits` / `!credits username` → Credits balance. `!lb` / `!leaderboard` → top Credits leaderboard.
 
-**Credits & blackjack**: Credits are persistent; new users start with 0. Earn via: Sub +100, Gift sub +100 (to gifter), Kicks +1 per kick, channel point redemption (configurable in admin), or `!addcredits user N` (broadcaster/mod). Spend on blackjack only. `!credits` or `!credits username` — check balance. `!lb` or `!leaderboard` — top N Credits leaderboard (configurable in admin). **Channel reward**: Create a Kick reward with the exact title set in admin (e.g. "Buy Credits"), set the point cost in Kick; each redemption grants the configured Credits per redemption. **Blackjack**: `!deal 5` or `!bj 5` — start a hand. `!hit` `!stand` `!double` `!split`. Min bet 25. Blackjack pays 1.5×. Shuffle is Fisher–Yates with a cryptographically secure RNG (unpredictable and unbiased). No other games; no poll rewards.
+**Stream stats**: `!speed` — current and max speed (km/h). `!altitude` / `!elevation` — current, lowest, highest elevation (m). `!heartrate` / `!hr` — highest and lowest BPM this stream and current if live. Stats use data from stream start; `stream_started_at` is set when Kick fires `is_live: true`.
+
+**Broadcaster/mods only**: `!title [text]` — set stream title (appends location if "Include location in title" is on). `!subscount <N>` — set sub count manually. `!kickscount <N>` — set Kicks count manually.
+
+**Credits & blackjack**: Credits are persistent; new users start with 0. Earn via: Sub +100, Gift sub +100 (to gifter), Kicks +1 per kick, channel point redemption (configurable in admin), trivia win (configurable per question), or `!addcredits user N` (broadcaster/mod). Spend on blackjack. `!deal <bet>` / `!bj <bet>` — start a hand. `!hit` `!stand` `!double` `!split`. Min bet 25. Blackjack pays 1.5×. **Channel reward**: Create a Kick reward with the exact title set in admin (e.g. "Buy Credits"); each redemption grants the configured Credits.
+
+**Trivia** (broadcaster/mods only): `!trivia` or `!quiz` — start a random question from admin Trivia list. First chatter to type the correct answer wins the Credits bounty. `!endtrivia` / `!endquiz` — cancel active trivia. Auto-expires after 5 minutes (reveals the answer in chat); sends a reminder every 2 minutes while unanswered. Winner is shown on overlay for 10 seconds. Configure questions and points in admin under **Trivia**.
+
+**Wallet** (mods only, unless noted): `!wallet` (anyone) — show current balance. `!wallet <amount>` — add USD to wallet. `!wallet hide` / `!wallet show` — hide/show wallet row on overlay. `!spent <amount>` / `!spend <amount>` — deduct in local currency (auto-converted to USD using GPS-detected country rate). Currency updates automatically as you cross borders during stream.
+
+**Challenges** (mods only): `!challenge <bounty> <description>` — add a challenge (e.g. `!challenge 50 Do 20 pushups`). `!complete <description>` — mark challenge complete (removes it and awards Credits to the challenger if applicable). `!remove <description>` — remove without awarding. `!challenges hide` / `!challenges show` — hide/show challenges section on overlay.
 
 ### Top overlay rotating displays
 
@@ -750,10 +766,39 @@ The bottom-right overlay area shows **sub goal** and **kicks goal** in a rotatin
 
 When enabled, broadcaster or mods can start a poll with `!poll Question? Option1, Option2, Option3` (comma-separated) or `!poll Food? Pizza burger chips` (space-separated when no commas). No options after `?` = Yes/No. Typing `!poll` with no question/options shows usage. Chatters vote by typing the option text (e.g. `pizza`, `yes`, `y`). Every message counts. Poll runs for a configurable duration (default 60s), then the winner is posted in chat and shown on the overlay (bottom-right) for 10 seconds. If a new `!poll` is sent while one is running, it queues and starts after the current poll and winner display. When a queued poll starts, the bot announces it in chat with how to vote. **Permissions:** Broadcaster can always start and end polls. Mods can start polls (if enabled in settings) and run `!endpoll` to end the current poll early (e.g. if offensive); the next queued poll starts immediately. `!endpoll` is restricted to mods and broadcaster only. Poll options and text on the overlay are displayed in lowercase; special characters and emojis are stripped; slurs and profanity are blocked (both at poll creation and on overlay display). Edit `src/lib/poll-content-filter.ts` to add or remove blocked terms. Admin settings: enable/disable, duration, toggles for Everyone/Mods/VIPs/OGs/Subs to start polls (broadcaster can always start), and max queued polls (1–20). Poll start and winner messages reply to the original `!poll` message to keep the thread together. When queue is full, the bot replies to the user. When a poll is queued, the bot replies with position and estimated start time. Winner message format: `Poll "Question" — Winner wins! (N votes). Top voter: username (M votes).` Requires Kick connected and chat webhooks.
 
+### Trivia
+
+Add questions in admin under **Trivia** (format: `Question ? Answer` or `Question ? Answer1 / Answer2` for multiple accepted answers). Configure default points per question.
+
+**How it works:**
+1. Mod/broadcaster types `!trivia` or `!quiz` → bot posts the question in chat.
+2. First viewer to type the exact answer (case-insensitive, punctuation-stripped) wins the Credits bounty. Winner shown on overlay for 10s.
+3. If nobody answers within **5 minutes**, trivia auto-expires and the answer is revealed in chat.
+4. A **reminder** is sent in chat every **2 minutes** while unanswered (up to 5 reminders via cron, then graceful close).
+5. `!endtrivia` / `!endquiz` cancels at any time (mod/broadcaster only).
+
+Multiple accepted spellings: separate with ` / ` in the answer field (e.g. `Tokyo / Tokio`).
+
+### Wallet & Challenges
+
+The **Wallet** tracks real money spent during the stream (e.g. food, drinks, transport). It's shown as a panel element on the stream overlay.
+
+- **Earns automatically**: Each new sub adds $5 USD, every 100 Kicks adds $1.
+- **`!wallet`** (anyone) — show current balance.
+- **`!wallet <amount>`** (mods) — manually add USD (e.g. `!wallet 20`).
+- **`!spent <amount>`** / **`!spend <amount>`** (mods) — deduct in **local currency** (auto-converts using GPS country). E.g. `!spent 1200` in Japan deducts ¥1200 converted to USD.
+- **`!wallet hide`** / **`!wallet show`** (mods) — hide/show wallet row on overlay.
+- Currency updates automatically every minute as you cross borders (uses GPS country code, not IP).
+
+**Challenges** are viewer-facing bounties shown on the stream overlay (e.g. "Do 20 pushups — 50 Credits").
+
+- **`!challenge <bounty> <description>`** (mods) — add a challenge.
+- **`!complete <description>`** (mods) — mark complete and award Credits.
+- **`!remove <description>`** (mods) — remove without awarding.
+- **`!challenges hide`** / **`!challenges show`** (mods) — hide/show the challenges section.
+
 ### Future ideas
 
-- **Stream title from location** — now implemented via cron when Auto-push is on
-- **More commands** — `!speed`, `!altitude`, `!forecast`, `!map`
 - **Top gifter (weekly/monthly)** — no dedicated webhook; would need leaderboard polling or Kick feature request
 - **Gift sub milestone** — special message when gift count ≥ threshold (e.g. "X gifted 10 subs!")
 - **Moderation banned** — subscribe to `moderation.banned`, add template

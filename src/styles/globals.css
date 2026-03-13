@@ -1565,7 +1565,7 @@ html, body {
   50%       { opacity: 0.45; }
 }
 
-/* === CHALLENGES BOX (legacy — no longer used) === */
+/* === CHALLENGES BOX === */
 .challenges-box {
   min-width: 360px;
   max-width: 560px;

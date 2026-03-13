@@ -256,7 +256,6 @@ export async function handleGoalCommand(
     if (!Number.isFinite(count) || count < 0) {
       return { handled: true, reply: 'Usage: !subscount <number>  e.g. !subscount 15' };
     }
-    const prevGoals = await getStreamGoals();
     await setStreamGoals({ subs: count });
     void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
 
@@ -282,7 +281,6 @@ export async function handleGoalCommand(
     if (!Number.isFinite(count) || count < 0) {
       return { handled: true, reply: 'Usage: !kickscount <number>  e.g. !kickscount 1500' };
     }
-    const prevGoals = await getStreamGoals();
     await setStreamGoals({ kicks: count });
     void kv.set(STREAM_GOALS_MODIFIED_KEY, Date.now()).catch(() => {});
 
