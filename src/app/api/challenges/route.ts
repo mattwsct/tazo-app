@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest) {
 
     // Update status (completed/failed/active)
     if (body.status !== undefined) {
-      if (!['active', 'completed', 'failed'].includes(body.status)) {
+      if (!['active', 'completed', 'failed', 'timedOut'].includes(body.status)) {
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
       }
       if (body.status === 'active') {

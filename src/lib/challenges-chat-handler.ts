@@ -28,7 +28,7 @@ import {
   deductFromWallet,
 } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
-import { COUNTRY_CURRENCY, getLocalCurrencyContext } from '@/utils/local-currency';
+import { COUNTRY_CURRENCY } from '@/utils/local-currency';
 
 export interface HandleChallengesCommandResult {
   handled: boolean;
@@ -94,14 +94,15 @@ export async function handleChallengesCommand(
     if (!Number.isFinite(amount) || amount <= 0) {
       return { handled: true, reply: 'Usage: !spent <amount>  (uses your local currency)' };
     }
-    const localCtx = await getLocalCurrencyContext();
-    const currency = localCtx?.currency ?? 'USD';
+    // Read stored currency from wallet state (set by wallet GET via Vercel IP header — works anywhere)
+    const walletState = await getWallet();
+    const currency = walletState.localCurrency ?? 'USD';
     const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
     let usd: number;
     let localContext: { currency: string; rate: number } | undefined;
-    if (localCtx && localCtx.currency !== 'USD') {
-      usd = Math.round((amount / localCtx.rate) * 100) / 100;
-      localContext = localCtx;
+    if (walletState.localCurrency && walletState.localCurrency !== 'USD' && walletState.localRate) {
+      usd = Math.round((amount / walletState.localRate) * 100) / 100;
+      localContext = { currency: walletState.localCurrency, rate: walletState.localRate };
     } else {
       // USD or unknown — treat amount as USD
       usd = amount;
@@ -132,9 +133,17 @@ export async function handleChallengesCommand(
   // !challenge list
   if (argsLower === 'list') {
     const state = await getChallenges();
-    const active = state.challenges.filter((c) => c.status === 'active');
-    if (active.length === 0) return { handled: true, reply: 'No active challenges.' };
-    const list = active.map((c, i) => `${i + 1}. $${c.bounty} — ${c.description}`).join(' | ');
+    const now = Date.now();
+    const visible = state.challenges.filter((c) =>
+      c.status === 'active' ||
+      (c.status === 'timedOut' && c.resolvedAt != null && now - c.resolvedAt < 60_000)
+    );
+    if (visible.length === 0) return { handled: true, reply: 'No active challenges.' };
+    const list = visible.map((c, i) => {
+      const bounty = c.bounty % 1 === 0 ? c.bounty.toFixed(0) : c.bounty.toFixed(2);
+      const tag = c.status === 'timedOut' ? ' [timed out]' : '';
+      return `${i + 1}. $${bounty} — ${c.description}${tag}`;
+    }).join(' | ');
     return { handled: true, reply: `📋 Challenges: ${list}` };
   }
 
@@ -145,37 +154,54 @@ export async function handleChallengesCommand(
     return { handled: true, reply: `✅ Cleared ${removed} resolved challenge${removed !== 1 ? 's' : ''}` };
   }
 
-  // !challenge done <id>
+  // Helper: get visible challenges (active + timedOut in grace period), looked up by 1-based position
+  const getVisibleByPos = async (posStr: string) => {
+    const pos = parseInt(posStr, 10);
+    if (!Number.isFinite(pos) || pos < 1) return { pos, target: null, error: true };
+    const state = await getChallenges();
+    const now = Date.now();
+    const visible = state.challenges.filter((c) =>
+      c.status === 'active' ||
+      (c.status === 'timedOut' && c.resolvedAt != null && now - c.resolvedAt < 60_000)
+    );
+    return { pos, target: visible[pos - 1] ?? null, error: false };
+  };
+
+  // !challenge done <n>
   if (argsLower.startsWith('done ') || argsLower === 'done') {
-    const idStr = args.slice(4).trim();
-    const id = parseInt(idStr, 10);
-    if (!Number.isFinite(id)) return { handled: true, reply: 'Usage: !challenge done <id>' };
-    const c = await updateChallengeStatus(id, 'completed');
-    if (!c) return { handled: true, reply: `Challenge #${id} not found.` };
+    const { pos, target, error } = await getVisibleByPos(args.slice(4).trim());
+    if (error) return { handled: true, reply: 'Usage: !challenge done <number>' };
+    if (!target) return { handled: true, reply: `No challenge at position ${pos}.` };
+    const c = await updateChallengeStatus(target.id, 'completed');
+    if (!c) return { handled: true, reply: `Challenge not found.` };
     void broadcastChallenges().catch(() => {});
-    return { handled: true, reply: `✅ Challenge #${id} completed! ($${c.bounty} — ${c.description})` };
+    const wallet = await getWallet();
+    const bountyStr = c.bounty % 1 === 0 ? c.bounty.toFixed(0) : c.bounty.toFixed(2);
+    const balStr = wallet.balance % 1 === 0 ? wallet.balance.toFixed(0) : wallet.balance.toFixed(2);
+    return { handled: true, reply: `✅ Challenge ${pos} done! +$${bountyStr} → Wallet: $${balStr}` };
   }
 
-  // !challenge fail <id>
+  // !challenge fail <n>
   if (argsLower.startsWith('fail ') || argsLower === 'fail') {
-    const idStr = args.slice(4).trim();
-    const id = parseInt(idStr, 10);
-    if (!Number.isFinite(id)) return { handled: true, reply: 'Usage: !challenge fail <id>' };
-    const c = await updateChallengeStatus(id, 'failed');
-    if (!c) return { handled: true, reply: `Challenge #${id} not found.` };
+    const { pos, target, error } = await getVisibleByPos(args.slice(4).trim());
+    if (error) return { handled: true, reply: 'Usage: !challenge fail <number>' };
+    if (!target) return { handled: true, reply: `No challenge at position ${pos}.` };
+    const c = await updateChallengeStatus(target.id, 'failed');
+    if (!c) return { handled: true, reply: `Challenge not found.` };
     void broadcastChallenges().catch(() => {});
-    return { handled: true, reply: `❌ Challenge #${id} failed ($${c.bounty} — ${c.description})` };
+    const bountyStr = c.bounty % 1 === 0 ? c.bounty.toFixed(0) : c.bounty.toFixed(2);
+    return { handled: true, reply: `❌ Challenge ${pos} failed ($${bountyStr} — ${c.description})` };
   }
 
-  // !challenge remove <id>
+  // !challenge remove <n>
   if (argsLower.startsWith('remove ') || argsLower === 'remove') {
-    const idStr = args.slice(6).trim();
-    const id = parseInt(idStr, 10);
-    if (!Number.isFinite(id)) return { handled: true, reply: 'Usage: !challenge remove <id>' };
-    const ok = await removeChallenge(id);
-    if (!ok) return { handled: true, reply: `Challenge #${id} not found.` };
+    const { pos, target, error } = await getVisibleByPos(args.slice(6).trim());
+    if (error) return { handled: true, reply: 'Usage: !challenge remove <number>' };
+    if (!target) return { handled: true, reply: `No challenge at position ${pos}.` };
+    const ok = await removeChallenge(target.id);
+    if (!ok) return { handled: true, reply: `Challenge not found.` };
     void broadcastChallenges().catch(() => {});
-    return { handled: true, reply: `🗑️ Challenge #${id} removed` };
+    return { handled: true, reply: `🗑️ Challenge ${pos} removed` };
   }
 
   // !challenge <bounty> [<duration>] <description>

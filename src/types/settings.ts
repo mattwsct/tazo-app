@@ -43,9 +43,11 @@ export interface OverlaySettings {
   gamblingEnabled?: boolean;
   /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   gamblingLeaderboardTopN?: number;
-  /** Channel reward: exact reward title that grants Credits (e.g. "Buy Credits"). */
+  /** Channel reward 1: exact reward title that grants 50 Credits (e.g. "Buy 50 Credits"). */
   chipRewardTitle?: string;
-  /** Channel reward: Credits granted per redemption when title matches. */
+  /** Channel reward 2: exact reward title that grants 500 Credits (e.g. "Buy 500 Credits"). */
+  chipRewardTitle2?: string;
+  /** @deprecated Credits per redemption now hardcoded (50 / 500). Kept for KV compat. */
   chipRewardChips?: number;
   /** @deprecated Phase 1: auto events removed. Kept for KV compat. */
   autoRaffleEnabled?: boolean;
@@ -150,7 +152,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   leaderboardExcludedBots: '',
   gamblingEnabled: true,
   gamblingLeaderboardTopN: 5,
-  chipRewardTitle: 'Buy Credits',
+  chipRewardTitle: 'Buy 50 Credits',
+  chipRewardTitle2: 'Buy 500 Credits',
   chipRewardChips: 50,
   showOverlayAlerts: true,
   autoRaffleEnabled: true,
@@ -211,6 +214,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   gamblingEnabled: 'boolean',
   gamblingLeaderboardTopN: 'number',
   chipRewardTitle: 'string',
+  chipRewardTitle2: 'string',
   chipRewardChips: 'number',
   autoRaffleEnabled: 'boolean',
   chipDropsEnabled: 'boolean',

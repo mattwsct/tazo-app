@@ -29,11 +29,14 @@ export async function handleRewardRedemption(payload: Record<string, unknown>): 
   const redeemerUsername = redeemer.trim();
 
   if (redeemerUsername && (status === 'accepted' || status === 'approved' || status === 'completed' || status === 'fulfilled')) {
-    const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardChips?: number }>('overlay_settings')) ?? {};
-    const matchTitle = (settings.chipRewardTitle ?? 'Buy Credits').trim().toLowerCase();
-    const credits = Math.max(0, Math.floor(settings.chipRewardChips ?? 50));
-    if (matchTitle && rewardTitle.toLowerCase() === matchTitle && credits > 0) {
-      void addCredits(redeemerUsername, credits, { skipExclusions: true });
+    const settings = (await kv.get<{ chipRewardTitle?: string; chipRewardTitle2?: string }>('overlay_settings')) ?? {};
+    const title1 = (settings.chipRewardTitle ?? 'Buy 50 Credits').trim().toLowerCase();
+    const title2 = (settings.chipRewardTitle2 ?? 'Buy 500 Credits').trim().toLowerCase();
+    const normalized = rewardTitle.toLowerCase();
+    if (title1 && normalized === title1) {
+      void addCredits(redeemerUsername, 50, { skipExclusions: true });
+    } else if (title2 && normalized === title2) {
+      void addCredits(redeemerUsername, 500, { skipExclusions: true });
     }
   }
 

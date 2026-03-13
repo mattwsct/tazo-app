@@ -5,6 +5,11 @@ import type { OverlayState } from '@/types/settings';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
 
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
+const CHALLENGE_TIMEOUT_GRACE_MS = 60_000;
+
+function fmtUsd(v: number): string {
+  return v % 1 === 0 ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
+}
 const WALLET_ANIM_DURATION_MS = 2500;
 const ALERT_DISPLAY_MS = 10000;
 
@@ -109,6 +114,9 @@ export default function StreamPanel({
     if (timerRemainingMs > 0) return;
     if (timerCompletionStartedForRef.current === timerState.endsAt) return;
     timerCompletionStartedForRef.current = timerState.endsAt;
+    // If the timer completed more than TIMER_COMPLETE_DISPLAY_MS ago (e.g. page reload after it already showed),
+    // skip the display phase entirely — don't replay "Time's up!" on reload.
+    if (Date.now() - timerState.endsAt > TIMER_COMPLETE_DISPLAY_MS) return;
     setTimerCompleteUntil(Date.now() + TIMER_COMPLETE_DISPLAY_MS);
     fetch('/api/timer-end-trigger', { cache: 'no-store' }).catch(() => {});
   }, [timerState, timerRemainingMs]);
@@ -132,7 +140,10 @@ export default function StreamPanel({
     if (prev === null || prev === wallet.updatedAt) return;
     const change = wallet.lastChangeUsd;
     if (change === undefined || change === 0) return;
-    const label = change > 0 ? `+$${change.toFixed(2)}` : `-$${Math.abs(change).toFixed(2)}`;
+    const sign = change > 0 ? '+' : '-';
+    const absStr = fmtUsd(Math.abs(change));
+    const source = wallet.lastChangeSource;
+    const label = source ? `${sign}${absStr} ${source}` : `${sign}${absStr}`;
     setWalletAnim(label);
     if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
     walletAnimTimerRef.current = setTimeout(() => setWalletAnim(null), WALLET_ANIM_DURATION_MS);
@@ -145,7 +156,10 @@ export default function StreamPanel({
 
   // ── Challenges ─────────────────────────────────────────────────────────────
   const challenges = settings.challengesState?.challenges ?? [];
-  const activeChallenges = challenges.filter((c) => c.status === 'active');
+  const activeChallenges = challenges.filter((c) =>
+    c.status === 'active' ||
+    (c.status === 'timedOut' && c.resolvedAt != null && now - c.resolvedAt < CHALLENGE_TIMEOUT_GRACE_MS)
+  );
 
   // ── Poll ───────────────────────────────────────────────────────────────────
   const poll = settings.pollState ?? null;
@@ -311,7 +325,7 @@ export default function StreamPanel({
               <span className="sp-wallet-anim">{walletAnim}</span>
             ) : (
               <>
-                <span className="sp-wallet-value">${wallet!.balance.toFixed(2)} USD</span>
+                <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
                 {localAmount !== null && (
                   <span className="sp-subtext">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
                 )}
@@ -338,14 +352,13 @@ export default function StreamPanel({
               <span className="sp-section-label">CHALLENGES</span>
             </div>
             {activeChallenges.map((c, i) => {
-              const expiryMs = c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
+              const isTimedOut = c.status === 'timedOut';
+              const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
               const isUrgent = expiryMs !== null && expiryMs < 60_000;
               return (
-                <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}`}>
+                <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}${isTimedOut ? ' sp-challenge-item--timeout' : ''}`}>
                   <span className="sp-challenge-num">{i + 1}.</span>
-                  <span className="sp-challenge-bounty">
-                    ${c.bounty % 1 === 0 ? c.bounty.toFixed(0) : c.bounty.toFixed(2)}
-                  </span>
+                  <span className="sp-challenge-bounty">{fmtUsd(c.bounty)}</span>
                   <span className="sp-challenge-desc">{c.description}</span>
                   {expiryMs !== null && (
                     <span className={`sp-challenge-expiry${isUrgent ? ' sp-challenge-expiry--urgent' : ''}`}>

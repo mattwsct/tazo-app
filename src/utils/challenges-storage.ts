@@ -19,13 +19,14 @@ export async function getWallet(): Promise<WalletState> {
 
 export async function setWalletBalance(
   balance: number,
-  opts?: { lastChangeUsd?: number; localCurrency?: string; localRate?: number }
+  opts?: { lastChangeUsd?: number; lastChangeSource?: string; localCurrency?: string; localRate?: number }
 ): Promise<WalletState> {
   const current = await getWallet();
   const state: WalletState = {
     balance: Math.round(Math.max(0, balance) * 100) / 100,
     updatedAt: Date.now(),
     ...(opts?.lastChangeUsd !== undefined ? { lastChangeUsd: opts.lastChangeUsd } : {}),
+    ...(opts?.lastChangeSource ? { lastChangeSource: opts.lastChangeSource } : {}),
     // Carry forward local currency info unless explicitly replaced
     localCurrency: opts?.localCurrency ?? current.localCurrency,
     localRate: opts?.localRate ?? current.localRate,
@@ -39,12 +40,12 @@ export async function setWalletBalance(
 
 export async function addToWallet(
   amountUsd: number,
-  localContext?: { currency: string; rate: number }
+  opts?: { source?: string }
 ): Promise<WalletState> {
   const current = await getWallet();
   return setWalletBalance(current.balance + amountUsd, {
     lastChangeUsd: amountUsd,
-    ...(localContext ?? {}),
+    ...(opts?.source ? { lastChangeSource: opts.source } : {}),
   });
 }
 
@@ -81,12 +82,12 @@ async function getChallengesState(): Promise<ChallengesState> {
     return { challenges: [], nextId: 1 };
   }
 
-  // Auto-fail any active challenges whose timer has expired.
+  // Auto-expire active challenges whose timer has run out → timedOut (60s grace period).
   const now = Date.now();
   let anyExpired = false;
   for (const c of raw.challenges) {
     if (c.status === 'active' && c.expiresAt && c.expiresAt < now) {
-      c.status = 'failed';
+      c.status = 'timedOut';
       c.resolvedAt = now;
       anyExpired = true;
     }
@@ -143,9 +144,14 @@ export async function updateChallengeStatus(
   const state = await getChallengesState();
   const challenge = state.challenges.find((c) => c.id === id);
   if (!challenge) return null;
+  const wasAlreadyCompleted = challenge.status === 'completed';
   challenge.status = status;
   challenge.resolvedAt = Date.now();
   await saveChallengesState(state);
+  // Add bounty to wallet when completing (only if not already completed)
+  if (status === 'completed' && !wasAlreadyCompleted && challenge.bounty > 0) {
+    await addToWallet(challenge.bounty, { source: 'CHALLENGE' });
+  }
   return challenge;
 }
 
@@ -161,7 +167,7 @@ export async function removeChallenge(id: number): Promise<boolean> {
 export async function clearResolvedChallenges(): Promise<number> {
   const state = await getChallengesState();
   const before = state.challenges.length;
-  state.challenges = state.challenges.filter((c) => c.status === 'active');
+  state.challenges = state.challenges.filter((c) => c.status === 'active' || c.status === 'timedOut');
   const removed = before - state.challenges.length;
   if (removed > 0) await saveChallengesState(state);
   return removed;

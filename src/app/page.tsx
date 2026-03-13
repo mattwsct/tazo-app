@@ -73,14 +73,14 @@ export default function AdminPage() {
   const [kicksGoalSubtextInput, setKicksGoalSubtextInput] = useState('');
   const [subGoalTargetInput, setSubGoalTargetInput] = useState<string>('10');
   const [kicksGoalTargetInput, setKicksGoalTargetInput] = useState<string>('1000');
-  const [chipRewardTitleInput, setChipRewardTitleInput] = useState<string>('Buy Credits');
-  const [chipRewardChipsInput, setChipRewardChipsInput] = useState<string>('50');
+  const [chipRewardTitleInput, setChipRewardTitleInput] = useState<string>('Buy 50 Credits');
+  const [chipRewardTitle2Input, setChipRewardTitle2Input] = useState<string>('Buy 500 Credits');
   const subGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalTargetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kicksGoalSubtextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const chipRewardTitleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const chipRewardChipsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const chipRewardTitle2TimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const kickMessagesRef = useRef<KickMessageTemplates>(DEFAULT_KICK_MESSAGES);
   const kickTemplateEnabledRef = useRef<KickMessageTemplateEnabled>({});
@@ -131,7 +131,6 @@ export default function AdminPage() {
   const [kickPollOgsCanStart, setKickPollOgsCanStart] = useState(false);
   const [kickPollSubsCanStart, setKickPollSubsCanStart] = useState(false);
   const [kickPollMaxQueued, setKickPollMaxQueued] = useState(5);
-  const [kickPollOneVotePerPerson, setKickPollOneVotePerPerson] = useState(false);
   const [triviaQuestion, setTriviaQuestion] = useState('');
   const [triviaAnswers, setTriviaAnswers] = useState('');
   const [triviaPoints, setTriviaPoints] = useState(50);
@@ -306,7 +305,6 @@ export default function AdminPage() {
         if (d?.ogsCanStart !== undefined) setKickPollOgsCanStart(d.ogsCanStart);
         if (d?.subsCanStart !== undefined) setKickPollSubsCanStart(d.subsCanStart);
         if (d?.maxQueuedPolls != null) setKickPollMaxQueued(d.maxQueuedPolls);
-        if (d?.oneVotePerPerson !== undefined) setKickPollOneVotePerPerson(d.oneVotePerPerson);
       })
       .catch(() => {});
     fetch('/api/trivia-settings', { credentials: 'include' })
@@ -821,7 +819,7 @@ export default function AdminPage() {
       if (subGoalSubtextTimeoutRef.current) clearTimeout(subGoalSubtextTimeoutRef.current);
       if (kicksGoalSubtextTimeoutRef.current) clearTimeout(kicksGoalSubtextTimeoutRef.current);
       if (chipRewardTitleTimeoutRef.current) clearTimeout(chipRewardTitleTimeoutRef.current);
-      if (chipRewardChipsTimeoutRef.current) clearTimeout(chipRewardChipsTimeoutRef.current);
+      if (chipRewardTitle2TimeoutRef.current) clearTimeout(chipRewardTitle2TimeoutRef.current);
       if (triviaRandomQuestionsTimeoutRef.current) clearTimeout(triviaRandomQuestionsTimeoutRef.current);
     };
   }, []);
@@ -837,28 +835,27 @@ export default function AdminPage() {
 
   // Sync channel reward inputs from settings
   useEffect(() => {
-    setChipRewardTitleInput(settings.chipRewardTitle ?? 'Buy Credits');
-    setChipRewardChipsInput(String(settings.chipRewardChips ?? 50));
-  }, [settings.chipRewardTitle, settings.chipRewardChips]);
+    setChipRewardTitleInput(settings.chipRewardTitle ?? 'Buy 50 Credits');
+    setChipRewardTitle2Input(settings.chipRewardTitle2 ?? 'Buy 500 Credits');
+  }, [settings.chipRewardTitle, settings.chipRewardTitle2]);
 
-  // Debounced channel reward title (1s delay before saving)
+  // Debounced channel reward title 1 (1s delay before saving)
   const handleChipRewardTitleChange = useCallback((value: string) => {
     setChipRewardTitleInput(value);
     if (chipRewardTitleTimeoutRef.current) clearTimeout(chipRewardTitleTimeoutRef.current);
     chipRewardTitleTimeoutRef.current = setTimeout(() => {
       chipRewardTitleTimeoutRef.current = null;
-      handleSettingsChange({ chipRewardTitle: value || 'Buy Credits' });
+      handleSettingsChange({ chipRewardTitle: value || 'Buy 50 Credits' });
     }, 1000);
   }, [handleSettingsChange]);
 
-  // Debounced credits per redemption (1s delay before saving)
-  const handleChipRewardChipsChange = useCallback((value: string) => {
-    setChipRewardChipsInput(value);
-    if (chipRewardChipsTimeoutRef.current) clearTimeout(chipRewardChipsTimeoutRef.current);
-    chipRewardChipsTimeoutRef.current = setTimeout(() => {
-      chipRewardChipsTimeoutRef.current = null;
-      const n = Math.max(1, Math.min(10000, parseInt(value, 10) || 50));
-      handleSettingsChange({ chipRewardChips: n });
+  // Debounced channel reward title 2 (1s delay before saving)
+  const handleChipRewardTitle2Change = useCallback((value: string) => {
+    setChipRewardTitle2Input(value);
+    if (chipRewardTitle2TimeoutRef.current) clearTimeout(chipRewardTitle2TimeoutRef.current);
+    chipRewardTitle2TimeoutRef.current = setTimeout(() => {
+      chipRewardTitle2TimeoutRef.current = null;
+      handleSettingsChange({ chipRewardTitle2: value || 'Buy 500 Credits' });
     }, 1000);
   }, [handleSettingsChange]);
 
@@ -1163,48 +1160,9 @@ export default function AdminPage() {
           </CollapsibleSection>
 
           {/* Overlay & goals — what shows on stream + goal tracking */}
-          <CollapsibleSection id="overlay" title="🖥️ Overlay &amp; goals">
+          <CollapsibleSection id="overlay" title="🖥️ Stream goals">
             <div className="setting-group">
-              <h4 className="subsection-label" style={{ marginBottom: 8 }}>What appears on stream</h4>
-              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-left (wellness)</h5>
-              <div className="checkbox-group" style={{ marginBottom: 12 }}>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.showSteps ?? true} onChange={(e) => handleSettingsChange({ showSteps: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Steps</span>
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.showDistance ?? true} onChange={(e) => handleSettingsChange({ showDistance: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Distance</span>
-                </label>
-              </div>
-
-              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Top-right (travel)</h5>
-              <div className="checkbox-group" style={{ marginBottom: 12 }}>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.showWeather ?? false} onChange={(e) => handleSettingsChange({ showWeather: e.target.checked })} className="checkbox-input" disabled={settings.locationDisplay === 'hidden'} />
-                  <span className="checkbox-text">Weather</span>
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.showSpeed ?? true} onChange={(e) => handleSettingsChange({ showSpeed: e.target.checked })} className="checkbox-input" disabled={settings.locationDisplay === 'hidden'} />
-                  <span className="checkbox-text">Speed</span>
-                </label>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.showAltitude ?? true} onChange={(e) => handleSettingsChange({ showAltitude: e.target.checked })} className="checkbox-input" disabled={settings.locationDisplay === 'hidden'} />
-                  <span className="checkbox-text">Altitude</span>
-                </label>
-              </div>
-              <h5 className="subsection-label" style={{ marginBottom: 6, fontSize: '0.9em', opacity: 0.9 }}>Bottom-right &amp; alerts</h5>
-              <div className="checkbox-group">
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.showGoalsRotation !== false} onChange={(e) => handleSettingsChange({ showGoalsRotation: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Show rotating section (goals, poll)</span>
-                </label>
-                <label className="checkbox-label" style={{ marginTop: 4 }}>
-                  <input type="checkbox" checked={settings.showOverlayAlerts ?? true} onChange={(e) => handleSettingsChange({ showOverlayAlerts: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">Show overlay alerts (subs, gifts, kicks)</span>
-                </label>
-              </div>
-              <div className="button-row" style={{ marginTop: 12 }}>
+              <div className="button-row" style={{ marginBottom: 16 }}>
                 <span className="group-label" style={{ marginRight: 8 }}>Test alert:</span>
                 {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
                   <button
@@ -1234,8 +1192,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Stream goals */}
-            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="setting-group" style={{ paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Stream goals</h4>
               <p className="input-hint" style={{ marginBottom: 12, marginTop: 0 }}>Goals auto-increment when reached. Set a subtitle to keep the goal fixed instead.</p>
               {/* Sub goal */}
@@ -1967,14 +1924,8 @@ export default function AdminPage() {
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Commands</h4>
               <div className="checkbox-group">
                 <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.convertEnabled !== false} onChange={(e) => handleSettingsChange({ convertEnabled: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">!convert — currency &amp; unit conversion</span>
-                </label>
-              </div>
-              <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                <label className="checkbox-label">
-                  <input type="checkbox" checked={settings.mathEnabled !== false} onChange={(e) => handleSettingsChange({ mathEnabled: e.target.checked })} className="checkbox-input" />
-                  <span className="checkbox-text">!math — calculator</span>
+                  <input type="checkbox" checked={settings.convertEnabled !== false && settings.mathEnabled !== false} onChange={(e) => handleSettingsChange({ convertEnabled: e.target.checked, mathEnabled: e.target.checked })} className="checkbox-input" />
+                  <span className="checkbox-text">Chat commands (!convert, !math)</span>
                 </label>
               </div>
               <div className="setting-separator" style={{ margin: '1.5rem 0' }} />
@@ -2077,6 +2028,71 @@ export default function AdminPage() {
                     </div>
                 </div>
               </div>
+            </div>
+
+            {/* Chat message templates */}
+            <div className="setting-group" style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Message templates</h4>
+                <div className="form-stack">
+                  {TEMPLATE_GROUP_CONFIG.map((group) => (
+                    <div key={group.toggleKey} className="kick-message-group kick-message-card">
+                      {group.toggleKey === 'kicksGifted' && (
+                        <div className="kick-group-options">
+                          {group.toggleKey === 'kicksGifted' && (
+                            <label className="kick-group-options-item">
+                              <span>Min kicks to alert:</span>
+                              <input
+                                type="number"
+                                className="text-input number-input kick-group-options-input"
+                                value={kickMinimumKicks}
+                                onChange={(e) => {
+                                  setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
+                                  scheduleKickMessagesSave();
+                                }}
+                                min={0}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      )}
+                      {group.templateKeys.map((key) => (
+                        <div
+                          key={key}
+                          className={`kick-message-row kick-message-template-row kick-message-row-with-toggle ${kickTemplateEnabled[key] === false ? 'kick-message-card-disabled' : ''}`}
+                        >
+                          <label className="checkbox-label-row kick-event-toggle">
+                            <input
+                              type="checkbox"
+                              checked={kickTemplateEnabled[key] !== false}
+                              onChange={(e) => handleKickTemplateToggleChange(key, e.target.checked)}
+                              className="checkbox-input"
+                            />
+                            <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
+                            <span className="kick-template-label">{KICK_MESSAGE_LABELS[key]}</span>
+                          </label>
+                          <input
+                            type="text"
+                            className="text-input"
+                            value={kickMessages[key]}
+                            onChange={(e) => handleKickMessageChange(key, e.target.value)}
+                            placeholder={DEFAULT_KICK_MESSAGES[key]}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="section-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setKickMessages(DEFAULT_KICK_MESSAGES);
+                      saveKickMessages({ messages: DEFAULT_KICK_MESSAGES, templateEnabled: kickTemplateEnabled });
+                    }}
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
             </div>
           </CollapsibleSection>
 
@@ -2248,30 +2264,6 @@ export default function AdminPage() {
                             <span>Subs</span>
                           </label>
                         </div>
-                        <label className="checkbox-label-row">
-                          <input
-                            type="checkbox"
-                            checked={kickPollOneVotePerPerson}
-                            onChange={async (e) => {
-                              const checked = e.target.checked;
-                              setKickPollOneVotePerPerson(checked);
-                              try {
-                                await authenticatedFetch('/api/kick-poll-settings', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ oneVotePerPerson: checked }),
-                                });
-                                setToast({ type: 'saved', message: 'Saved!' });
-                              } catch {
-                                setKickPollOneVotePerPerson(!checked);
-                                setToast({ type: 'error', message: 'Failed to save' });
-                              }
-                              setTimeout(() => setToast(null), 2000);
-                            }}
-                            className="checkbox-input"
-                          />
-                          <span>One vote per person</span>
-                        </label>
                         <div className="admin-select-wrap">
                           <label>Max queued polls</label>
                           <select
@@ -2450,135 +2442,52 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
-          <CollapsibleSection id="message-templates" title="📋 Chat message templates">
-            <div className="setting-group">
-                <div className="form-stack">
-                  {TEMPLATE_GROUP_CONFIG.map((group) => (
-                    <div key={group.toggleKey} className="kick-message-group kick-message-card">
-                      {group.toggleKey === 'kicksGifted' && (
-                        <div className="kick-group-options">
-                          {group.toggleKey === 'kicksGifted' && (
-                            <label className="kick-group-options-item">
-                              <span>Min kicks to alert:</span>
-                              <input
-                                type="number"
-                                className="text-input number-input kick-group-options-input"
-                                value={kickMinimumKicks}
-                                onChange={(e) => {
-                                  setKickMinimumKicks(Math.max(0, parseInt(e.target.value, 10) || 0));
-                                  scheduleKickMessagesSave();
-                                }}
-                                min={0}
-                              />
-                            </label>
-                          )}
-                        </div>
-                      )}
-                      {group.templateKeys.map((key) => (
-                        <div
-                          key={key}
-                          className={`kick-message-row kick-message-template-row kick-message-row-with-toggle ${kickTemplateEnabled[key] === false ? 'kick-message-card-disabled' : ''}`}
-                        >
-                          <label className="checkbox-label-row kick-event-toggle">
-                            <input
-                              type="checkbox"
-                              checked={kickTemplateEnabled[key] !== false}
-                              onChange={(e) => handleKickTemplateToggleChange(key, e.target.checked)}
-                              className="checkbox-input"
-                            />
-                            <span className="radio-icon" aria-hidden="true">{TEMPLATE_GROUP_ICONS[group.toggleKey]}</span>
-                            <span className="kick-template-label">{KICK_MESSAGE_LABELS[key]}</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="text-input"
-                            value={kickMessages[key]}
-                            onChange={(e) => handleKickMessageChange(key, e.target.value)}
-                            placeholder={DEFAULT_KICK_MESSAGES[key]}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-                <div className="section-actions">
-                          <button
-                    className="btn btn-secondary"
-                            onClick={() => {
-                      setKickMessages(DEFAULT_KICK_MESSAGES);
-                      saveKickMessages({ messages: DEFAULT_KICK_MESSAGES, templateEnabled: kickTemplateEnabled });
-                            }}
-                          >
-                    Reset to defaults
-                          </button>
-                        </div>
-                      </div>
-          </CollapsibleSection>
-
           <CollapsibleSection id="gambling" title="🎰 Credits & blackjack">
             <div className="setting-group">
-              <div className="checkbox-group" style={{ marginBottom: '12px' }}>
+              <div className="checkbox-group" style={{ marginBottom: '16px' }}>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={settings.gamblingEnabled !== false}
-                    onChange={(e) => handleSettingsChange({ gamblingEnabled: e.target.checked })}
+                    checked={settings.blackjackEnabled !== false}
+                    onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })}
                     className="checkbox-input"
                   />
-                  <span className="checkbox-text">Enable Credits & blackjack</span>
+                  <span className="checkbox-text">Blackjack (!bj / !deal)</span>
                 </label>
               </div>
-              {settings.gamblingEnabled !== false && (
-                <div className="checkbox-group" style={{ marginTop: '4px' }}>
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={settings.blackjackEnabled !== false}
-                      onChange={(e) => handleSettingsChange({ blackjackEnabled: e.target.checked })}
-                      className="checkbox-input"
-                    />
-                    <span className="checkbox-text">Blackjack (!bj / !deal)</span>
-                  </label>
-                </div>
-              )}
-              {settings.gamblingEnabled !== false && (
-                <div className="setting-group" style={{ marginTop: 12 }}>
-                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Channel reward title</label>
-                  <input
-                    type="text"
-                    value={chipRewardTitleInput}
-                    onChange={(e) => handleChipRewardTitleChange(e.target.value)}
-                    placeholder="Buy Credits"
-                    className="setting-input"
-                    style={{ maxWidth: 240 }}
-                  />
-                  <p className="setting-hint" style={{ marginTop: 4, marginBottom: 8 }}>Create a Kick reward with this exact title; each redemption grants the credits below.</p>
-                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Credits per redemption</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10000}
-                    value={chipRewardChipsInput}
-                    onChange={(e) => handleChipRewardChipsChange(e.target.value)}
-                    className="setting-input"
-                    style={{ maxWidth: 100 }}
-                  />
-                </div>
-              )}
-              {settings.gamblingEnabled !== false && (
-                <div className="setting-group" style={{ marginTop: 16 }}>
-                  <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Ignored users</label>
-                  <textarea
-                    value={leaderboardExcludedBotsInput}
-                    onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
-                    placeholder="e.g. bot1, bot2"
-                    className="setting-input"
-                    rows={3}
-                    style={{ maxWidth: 360, resize: 'vertical' }}
-                  />
-                  <p className="setting-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won&apos;t earn Credits from sub/gift/kicks and won&apos;t appear on !leaderboard.</p>
-                </div>
-              )}
+              <div className="setting-group" style={{ marginBottom: 16 }}>
+                <p className="setting-hint" style={{ marginTop: 0, marginBottom: 10 }}>Create Kick channel rewards with these exact titles to grant Credits on redemption.</p>
+                <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Reward title — 50 Credits</label>
+                <input
+                  type="text"
+                  value={chipRewardTitleInput}
+                  onChange={(e) => handleChipRewardTitleChange(e.target.value)}
+                  placeholder="Buy 50 Credits"
+                  className="setting-input"
+                  style={{ maxWidth: 260 }}
+                />
+                <label className="setting-label" style={{ display: 'block', marginBottom: 4, marginTop: 12 }}>Reward title — 500 Credits</label>
+                <input
+                  type="text"
+                  value={chipRewardTitle2Input}
+                  onChange={(e) => handleChipRewardTitle2Change(e.target.value)}
+                  placeholder="Buy 500 Credits"
+                  className="setting-input"
+                  style={{ maxWidth: 260 }}
+                />
+              </div>
+              <div className="setting-group" style={{ marginTop: 16 }}>
+                <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Ignored users</label>
+                <textarea
+                  value={leaderboardExcludedBotsInput}
+                  onChange={(e) => handleLeaderboardExcludedBotsChange(e.target.value)}
+                  placeholder="e.g. bot1, bot2"
+                  className="setting-input"
+                  rows={3}
+                  style={{ maxWidth: 360, resize: 'vertical' }}
+                />
+                <p className="setting-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won&apos;t earn Credits from sub/gift/kicks and won&apos;t appear on !leaderboard.</p>
+              </div>
             </div>
           </CollapsibleSection>
 
@@ -2607,7 +2516,7 @@ export default function AdminPage() {
                 type="button"
                 className="btn btn-danger btn-small"
                 onClick={async () => {
-                  if (!confirm('Reset entire stream session? Clears wellness, leaderboard, goals, milestones, and uptime.')) return;
+                  if (!confirm('Reset full stream session? Clears wallet, challenges, stream goals, timer, poll, trivia, and overlay alerts.')) return;
                   try {
                     const r = await authenticatedFetch('/api/reset-stream-session', { method: 'POST' });
                     const data = await r.json();

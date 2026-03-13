@@ -7,7 +7,6 @@ import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { addToWallet } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
-import { getLocalCurrencyContext } from '@/utils/local-currency';
 
 const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
 
@@ -59,8 +58,7 @@ export async function handleAlertEvents(
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       if (settings?.walletEnabled) void (async () => {
-        const localCtx = await getLocalCurrencyContext();
-        await addToWallet(5, localCtx);
+        await addToWallet(5, { source: 'SUB' });
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;
@@ -78,8 +76,7 @@ export async function handleAlertEvents(
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       if (settings?.walletEnabled) void (async () => {
-        const localCtx = await getLocalCurrencyContext();
-        await addToWallet(5, localCtx);
+        await addToWallet(5, { source: 'RESUB' });
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;
@@ -98,8 +95,7 @@ export async function handleAlertEvents(
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       if (settings?.walletEnabled) void (async () => {
-        const localCtx = await getLocalCurrencyContext();
-        await addToWallet(5 * count, localCtx);
+        await addToWallet(5 * count, { source: 'GIFT SUB' });
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;
@@ -121,8 +117,7 @@ export async function handleAlertEvents(
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
       if (settings?.walletEnabled) void (async () => {
-        const localCtx = await getLocalCurrencyContext();
-        await addToWallet(amount / 100, localCtx);
+        await addToWallet(amount / 100, { source: 'KICKS' });
         await broadcastChallenges();
       })().catch(() => {});
       didAlertOrLeaderboard = true;

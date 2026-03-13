@@ -7,19 +7,21 @@ import { getLocalCurrencyContext } from '@/utils/local-currency';
 export const dynamic = 'force-dynamic';
 
 /** GET /api/wallet — public read.
- *  If local currency hasn't been resolved yet, initialise it in the
- *  background so the overlay shows the AUD/JPY/etc equivalent. */
-export async function GET() {
+ *  Uses Vercel's x-vercel-ip-country header (always available, no RTIRL needed)
+ *  to detect the streamer's current country and keep local currency up to date
+ *  when travelling. Runs as a background task so response is instant. */
+export async function GET(request: NextRequest) {
   const state = await getWallet();
-  if (!state.localCurrency) {
-    void (async () => {
-      const localCtx = await getLocalCurrencyContext();
-      if (localCtx) {
-        await setWalletBalance(state.balance, { localCurrency: localCtx.currency, localRate: localCtx.rate });
-        void broadcastChallenges().catch(() => {});
-      }
-    })().catch(() => {});
-  }
+  // Vercel sets this header on every request — reliable even without RTIRL
+  const ipCountry = request.headers.get('x-vercel-ip-country')?.toUpperCase() ?? undefined;
+  void (async () => {
+    const localCtx = await getLocalCurrencyContext(ipCountry);
+    // Update whenever currency is missing OR the detected currency has changed (e.g. travelling)
+    if (localCtx && (localCtx.currency !== state.localCurrency || !state.localRate)) {
+      await setWalletBalance(state.balance, { localCurrency: localCtx.currency, localRate: localCtx.rate });
+      void broadcastChallenges().catch(() => {});
+    }
+  })().catch(() => {});
   return NextResponse.json(state);
 }
 

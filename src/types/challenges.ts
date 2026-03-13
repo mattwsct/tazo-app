@@ -2,7 +2,7 @@ export interface ChallengeItem {
   id: number;
   description: string;
   bounty: number; // USD
-  status: 'active' | 'completed' | 'failed';
+  status: 'active' | 'completed' | 'failed' | 'timedOut';
   createdAt: number;
   resolvedAt?: number;
   /** If set, challenge auto-fails when Date.now() exceeds this. */
@@ -19,6 +19,8 @@ export interface WalletState {
   updatedAt: number;
   /** Last change amount in USD (positive = added, negative = deducted). Used for overlay animation. */
   lastChangeUsd?: number;
+  /** Source label for overlay animation, e.g. "SUB", "KICKS", "CHALLENGE". */
+  lastChangeSource?: string;
   /** ISO 4217 local currency code (e.g. "JPY") when available from location. */
   localCurrency?: string;
   /** Exchange rate: 1 USD = localRate × localCurrency. Fetched when location is known. */
