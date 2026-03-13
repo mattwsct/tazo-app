@@ -76,17 +76,23 @@ export async function GET(request: NextRequest): Promise<Response> {
         }
       };
       
-      // Function to check for settings and poll updates
+      // Throttle trivia ticks to once every 5s (called from 1s poll loop).
+      let lastTriviaTickAt = 0;
+
+      // Function to check for settings and poll updates.
+      // Two-phase: phase 1 reads only modification timestamps (1 cheap KV command).
+      // Phase 2 (full data fetch) runs only when something actually changed.
       const checkForUpdates = async () => {
-        // Fire-and-forget: expire trivia or send a reminder if due.
-        void tickTrivia().catch(() => {});
+        const now = Date.now();
+        if (now - lastTriviaTickAt >= 5000) {
+          lastTriviaTickAt = now;
+          void tickTrivia().catch(() => {});
+        }
         try {
-          const [settings, settingsModified, pollState, pollModified, triviaState, triviaModified, goalsModified, challengesModified] = await kv.mget([
-            'overlay_settings',
+          // Phase 1: cheap — only 5 small timestamp values, 1 KV command.
+          const [settingsModified, pollModified, triviaModified, goalsModified, challengesModified] = await kv.mget([
             'overlay_settings_modified',
-            POLL_STATE_KEY,
             POLL_MODIFIED_KEY,
-            TRIVIA_STATE_KEY,
             TRIVIA_MODIFIED_KEY,
             STREAM_GOALS_MODIFIED_KEY,
             CHALLENGES_MODIFIED_KEY,
@@ -104,6 +110,13 @@ export async function GET(request: NextRequest): Promise<Response> {
 
           if (!settingsChanged && !goalsChanged && !challengesChanged) return;
 
+          // Phase 2: something changed — fetch full data.
+          const [settings, pollState, triviaState] = await kv.mget([
+            'overlay_settings',
+            POLL_STATE_KEY,
+            TRIVIA_STATE_KEY,
+          ]);
+
           const sendData: Record<string, unknown> = {
             ...(settings && typeof settings === 'object' ? settings : {}),
             pollState: pollState ?? null,
@@ -114,20 +127,16 @@ export async function GET(request: NextRequest): Promise<Response> {
 
           if (settingsChanged) lastModified = maxTs;
 
-          // When goals have changed, push live counts and recent alerts instantly.
           if (goalsChanged) {
             lastGoalsModified = goalsTs;
             const [streamGoals, overlayAlerts] = await Promise.all([
               getStreamGoals(),
               getRecentAlerts(),
             ]);
-            // Include stream goals for overlay.
             sendData.streamGoals = streamGoals;
-            // Recent alerts — overlay uses them for the 8s full-width alert display
             sendData.overlayAlerts = overlayAlerts;
           }
 
-          // Challenges & wallet — include on every update (lightweight reads)
           if (challengesChanged) lastChallengesModified = challengesTs;
           const [timerState, challengesState, walletState] = await Promise.all([
             getOverlayTimers(),
@@ -152,9 +161,11 @@ export async function GET(request: NextRequest): Promise<Response> {
         checkForUpdates();
       }, 100);
       
-      // Check every 15s as a safety net — explicit broadcastSettings() calls handle real-time
-      // updates immediately, so this poll only catches cases where a broadcast fails.
-      const checkInterval = setInterval(checkForUpdates, 15000);
+      // Poll every 1s. On Vercel, each request runs in its own serverless instance so
+      // broadcastSettings() from a webhook handler can't reach this connection's in-memory
+      // controller. This 1s poll is the reliable path — it costs 1 KV command per tick
+      // (just timestamp keys) and only fetches full data when something changed.
+      const checkInterval = setInterval(checkForUpdates, 1000);
       
       // Heartbeat every 8s — must arrive before the 15s polling-fallback threshold
       const heartbeatInterval = setInterval(() => {

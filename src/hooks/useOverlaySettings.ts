@@ -71,7 +71,11 @@ export function useOverlaySettings(): [
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          lastSseUpdateRef.current = Date.now();
+          // Only count actual settings updates as "fresh" — not heartbeats.
+          // Heartbeats keep the connection alive but don't mean settings are up to date.
+          if (data.type === 'settings_update') {
+            lastSseUpdateRef.current = Date.now();
+          }
           if (data.type === 'settings_update') {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- type/timestamp excluded from settingsData
             const { type: _t, timestamp: _ts, ...settingsData } = data;
