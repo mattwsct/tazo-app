@@ -378,7 +378,7 @@ export default function StreamPanel({
                       )}
                       {fmtUsd(wallet!.balance)} USD
                     </span>
-                    <span className="sp-subtext">+$5/sub • +$1/100 KICKs</span>
+                    <span className="sp-subtext">+$1/100 KICKs • +$5/sub</span>
                   </>
                 )}
               </div>
