@@ -381,6 +381,7 @@ html, body {
 .trivia-box-winner .trivia-winner-line {
   font-size: var(--font-size-sm);
   font-weight: 800;
+  text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
   color: #fff;
   text-shadow: var(--text-shadow);
@@ -1498,6 +1499,7 @@ html, body {
   font-size: 1em;
   font-weight: 800;
   color: #68d391;
+  text-transform: uppercase;
 }
 
 .sp-trivia-winner-answer {
