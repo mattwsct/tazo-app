@@ -758,7 +758,7 @@ html, body {
 
 .date,
 .date-line {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: var(--letter-spacing-uppercase);
@@ -1234,7 +1234,7 @@ html, body {
 .sp-subtext {
   font-size: 0.74em;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.50);
   letter-spacing: 0.01em;
   position: relative;
 }
@@ -1465,7 +1465,7 @@ html, body {
 .sp-poll-option-votes {
   font-size: 0.78em;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.62);
   position: relative;
   font-variant-numeric: tabular-nums;
 }
