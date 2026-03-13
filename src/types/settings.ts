@@ -184,7 +184,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   subGoalTarget: 5,
   subGoalIncrement: 5,
   showKicksGoal: false,
-  walletEnabled: false,
+  walletEnabled: true,
   walletStartingBalance: 15,
   kicksGoalTarget: 5000,
   kicksGoalIncrement: 5000,
