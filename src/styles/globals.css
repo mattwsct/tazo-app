@@ -359,7 +359,6 @@ html, body {
 .trivia-question {
   font-size: var(--font-size-sm);
   font-weight: 800;
-  text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
   line-height: 1.25;
   white-space: normal;
@@ -382,7 +381,6 @@ html, body {
 .trivia-box-winner .trivia-winner-line {
   font-size: var(--font-size-sm);
   font-weight: 800;
-  text-transform: uppercase;
   letter-spacing: var(--letter-spacing-compact);
   color: #fff;
   text-shadow: var(--text-shadow);
