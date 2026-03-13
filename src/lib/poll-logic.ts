@@ -179,25 +179,8 @@ export function canStartPoll(
   return false;
 }
 
-/** Find top voter across winning options (only meaningful when count > 1, e.g. not one-vote-per-person). */
-function findTopVoter(
-  state: PollState,
-  winnerLabels: Set<string>
-): { username: string; count: number } | undefined {
-  let top: { username: string; count: number } | undefined;
-  for (const opt of state.options) {
-    if (!winnerLabels.has(opt.label) || !opt.voters) continue;
-    for (const [username, count] of Object.entries(opt.voters)) {
-      if (count > 0 && (!top || count > top.count)) {
-        top = { username, count };
-      }
-    }
-  }
-  return top && top.count > 1 ? top : undefined;
-}
-
 /** Build winner message for chat. */
-export function computePollResult(state: PollState): { winnerMessage: string; topVoter?: { username: string; count: number } } {
+export function computePollResult(state: PollState): { winnerMessage: string } {
   if (state.options.length === 0) return { winnerMessage: '' };
 
   let maxVotes = 0;
@@ -213,22 +196,13 @@ export function computePollResult(state: PollState): { winnerMessage: string; to
     }
   }
 
-  const winnerLabels = new Set(winners);
-  const topVoter = findTopVoter(state, winnerLabels);
   const countStr = maxVotes === 1 ? '1 vote' : `${maxVotes} votes`;
   const winnerLabel = winners.length === 1 ? winners[0] : winners.join(' and ');
-  let winnerMessage: string;
-  if (winners.length === 0) {
-    winnerMessage = `Poll "${state.question}" ended with no votes.`;
-  } else {
-    winnerMessage = `Poll "${state.question}" — ${winnerLabel} wins! (${countStr})`;
-    if (topVoter) {
-      const voterStr = topVoter.count === 1 ? '1 vote' : `${topVoter.count} votes`;
-      winnerMessage += ` Top voter: ${topVoter.username} (${voterStr}).`;
-    }
-  }
+  const winnerMessage = winners.length === 0
+    ? `Poll "${state.question}" ended with no votes.`
+    : `Poll "${state.question}" — ${winnerLabel} wins! (${countStr})`;
 
-  return { winnerMessage, topVoter };
+  return { winnerMessage };
 }
 
 /** Compact overlay winner text with vote count. */

@@ -244,7 +244,7 @@ export async function handleChatPoll(
     }
     const totalVotes = initialState.options?.reduce((s, o) => s + (o?.votes ?? 0), 0) ?? 0;
     if (totalVotes > 0) {
-      const { winnerMessage, topVoter } = computePollResult(initialState);
+      const { winnerMessage } = computePollResult(initialState);
       const now = Date.now();
       const winnerDisplaySeconds = Math.max(1, Math.min(60, settings.winnerDisplaySeconds ?? 10));
       const winnerState: PollState = {
@@ -252,7 +252,6 @@ export async function handleChatPoll(
         status: 'winner',
         winnerMessage,
         winnerDisplayUntil: now + winnerDisplaySeconds * 1000,
-        topVoter,
       };
       await setPollState(winnerState);
       await replyChat(token, winnerMessage, messageId);
@@ -429,7 +428,7 @@ export async function handleChatPoll(
     if (process.env.NODE_ENV === 'development') {
       console.log('[poll] webhook: ending poll (vote/msg triggered)', { elapsed, duration: initialState.durationSeconds });
     }
-    const { winnerMessage, topVoter } = computePollResult(initialState);
+    const { winnerMessage } = computePollResult(initialState);
     await replyChat(token, winnerMessage, initialState.startMessageId);
     const queued = await popPollQueue();
     if (queued) {
@@ -445,7 +444,6 @@ export async function handleChatPoll(
       status: 'winner',
       winnerMessage,
       winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
-      topVoter,
     };
     await setPollState(winnerState);
     return { handled: true };
@@ -453,7 +451,7 @@ export async function handleChatPoll(
 
   const vote = parseVote(contentTrimmed, initialState.options);
   if (vote) {
-    applyVote(initialState, vote.optionIndex, senderUsername, settings.oneVotePerPerson ?? true);
+    applyVote(initialState, vote.optionIndex, senderUsername, true);
     void setLeaderboardDisplayName(senderUsername.toLowerCase(), senderUsername);
     const stateNow = await getPollState();
     if (stateNow?.id !== initialState.id) return { handled: true };

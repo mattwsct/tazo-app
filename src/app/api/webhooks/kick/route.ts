@@ -18,7 +18,7 @@ import {
 } from '@/types/kick-messages';
 import type { KickMessageTemplates, KickEventToggleKey, KickMessageTemplateEnabled } from '@/types/kick-messages';
 import { isToggleDisabled } from '@/types/kick-messages';
-import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { handleStreamStatus } from './handlers/stream-status-handler';
 import { handleChatMessage } from './handlers/chat-handler';
 import { handleRewardRedemption } from './handlers/reward-handler';
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
   const { didAlertOrLeaderboard } = await handleAlertEvents(eventNorm, payload);
 
   if (didAlertOrLeaderboard) {
-    void broadcastAlertsAndLeaderboard();
+    void broadcastChallenges();
   }
 
   if (isToggleDisabled(toggleKey, toggleValue)) {

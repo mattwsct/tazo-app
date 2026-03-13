@@ -17,10 +17,18 @@ export async function getWallet(): Promise<WalletState> {
   return raw;
 }
 
-export async function setWalletBalance(balance: number): Promise<WalletState> {
+export async function setWalletBalance(
+  balance: number,
+  opts?: { lastChangeUsd?: number; localCurrency?: string; localRate?: number }
+): Promise<WalletState> {
+  const current = await getWallet();
   const state: WalletState = {
     balance: Math.round(Math.max(0, balance) * 100) / 100,
     updatedAt: Date.now(),
+    ...(opts?.lastChangeUsd !== undefined ? { lastChangeUsd: opts.lastChangeUsd } : {}),
+    // Carry forward local currency info unless explicitly replaced
+    localCurrency: opts?.localCurrency ?? current.localCurrency,
+    localRate: opts?.localRate ?? current.localRate,
   };
   await Promise.all([
     kv.set(WALLET_KEY, state),
@@ -29,20 +37,40 @@ export async function setWalletBalance(balance: number): Promise<WalletState> {
   return state;
 }
 
-export async function addToWallet(amountUsd: number): Promise<WalletState> {
+export async function addToWallet(
+  amountUsd: number,
+  localContext?: { currency: string; rate: number }
+): Promise<WalletState> {
   const current = await getWallet();
-  return setWalletBalance(current.balance + amountUsd);
+  return setWalletBalance(current.balance + amountUsd, {
+    lastChangeUsd: amountUsd,
+    ...(localContext ?? {}),
+  });
 }
 
-export async function deductFromWallet(amountUsd: number): Promise<{ state: WalletState; deducted: number }> {
+export async function deductFromWallet(
+  amountUsd: number,
+  localContext?: { currency: string; rate: number }
+): Promise<{ state: WalletState; deducted: number }> {
   const current = await getWallet();
   const deducted = Math.min(amountUsd, current.balance);
-  const state = await setWalletBalance(current.balance - deducted);
+  const state = await setWalletBalance(current.balance - deducted, {
+    lastChangeUsd: -deducted,
+    ...(localContext ?? {}),
+  });
   return { state, deducted };
 }
 
 export async function resetWallet(startingBalance?: number): Promise<WalletState> {
-  return setWalletBalance(startingBalance ?? DEFAULT_WALLET_BALANCE);
+  const current = await getWallet();
+  const state: WalletState = {
+    balance: Math.round(Math.max(0, startingBalance ?? DEFAULT_WALLET_BALANCE) * 100) / 100,
+    updatedAt: Date.now(),
+    localCurrency: current.localCurrency,
+    localRate: current.localRate,
+  };
+  await Promise.all([kv.set(WALLET_KEY, state), kv.set(CHALLENGES_MODIFIED_KEY, Date.now())]);
+  return state;
 }
 
 // ── Challenges ────────────────────────────────────────────────────────────────
@@ -52,6 +80,23 @@ async function getChallengesState(): Promise<ChallengesState> {
   if (!raw || !Array.isArray(raw.challenges)) {
     return { challenges: [], nextId: 1 };
   }
+
+  // Auto-fail any active challenges whose timer has expired.
+  const now = Date.now();
+  let anyExpired = false;
+  for (const c of raw.challenges) {
+    if (c.status === 'active' && c.expiresAt && c.expiresAt < now) {
+      c.status = 'failed';
+      c.resolvedAt = now;
+      anyExpired = true;
+    }
+  }
+  if (anyExpired) {
+    // Save without triggering a full modified broadcast — just persist the update.
+    await kv.set(CHALLENGES_KEY, raw);
+    await kv.set(CHALLENGES_MODIFIED_KEY, now);
+  }
+
   return raw;
 }
 
@@ -62,7 +107,7 @@ async function saveChallengesState(state: ChallengesState): Promise<void> {
   ]);
 }
 
-/** Public alias for API route edits (status/desc/bounty). */
+/** Public alias for API route edits (status/desc/bounty/expiresAt). */
 export async function setChallengesState(state: ChallengesState): Promise<void> {
   return saveChallengesState(state);
 }
@@ -71,7 +116,11 @@ export async function getChallenges(): Promise<ChallengesState> {
   return getChallengesState();
 }
 
-export async function addChallenge(bounty: number, description: string): Promise<ChallengeItem> {
+export async function addChallenge(
+  bounty: number,
+  description: string,
+  expiresAt?: number
+): Promise<ChallengeItem> {
   const state = await getChallengesState();
   const item: ChallengeItem = {
     id: state.nextId,
@@ -79,6 +128,7 @@ export async function addChallenge(bounty: number, description: string): Promise
     bounty: Math.round(Math.max(0, bounty) * 100) / 100,
     status: 'active',
     createdAt: Date.now(),
+    ...(expiresAt ? { expiresAt } : {}),
   };
   state.challenges.push(item);
   state.nextId += 1;

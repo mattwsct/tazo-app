@@ -17,6 +17,16 @@ import { formatLocation, type LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 import CollapsibleSection, { collapseAllSections } from '@/components/CollapsibleSection';
 
+function parseDurationToMs(input: string): number | undefined {
+  const m = input.trim().match(/^([\d.]+)(s|sec|secs|m|min|mins|h|hr|hrs)$/i);
+  if (!m) return undefined;
+  const num = parseFloat(m[1]);
+  const unit = m[2].toLowerCase();
+  if (unit.startsWith('h')) return Math.round(num * 3_600_000);
+  if (unit.startsWith('m')) return Math.round(num * 60_000);
+  return Math.round(num * 1_000);
+}
+
 function formatLocationAge(ms: number): string {
   const seconds = Math.floor((Date.now() - ms) / 1000);
   if (seconds < 60) return 'just now';
@@ -133,10 +143,11 @@ export default function AdminPage() {
   const [timerMinutesInput, setTimerMinutesInput] = useState<string>('');
   const [timerTitleInput, setTimerTitleInput] = useState<string>('');
   // Challenges & wallet
-  const [challengesList, setChallengesList] = useState<{ id: number; description: string; bounty: number; status: string }[]>([]);
+  const [challengesList, setChallengesList] = useState<{ id: number; description: string; bounty: number; status: string; expiresAt?: number }[]>([]);
   const [challengeBountyInput, setChallengeBountyInput] = useState<string>('');
   const [challengeDescInput, setChallengeDescInput] = useState<string>('');
-  const [editingChallenge, setEditingChallenge] = useState<{ id: number; description: string; bounty: string } | null>(null);
+  const [challengeDurationInput, setChallengeDurationInput] = useState<string>(''); // e.g. "10m", "30s", "1h"
+  const [editingChallenge, setEditingChallenge] = useState<{ id: number; description: string; bounty: string; durationMs?: number } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(15);
   const [walletAdjustInput, setWalletAdjustInput] = useState<string>('');
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
@@ -1538,24 +1549,35 @@ export default function AdminPage() {
               <div style={{ marginTop: 24 }}>
                 <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Challenges</div>
                 <p className="input-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                  Chat commands: !challenge 50 Do 20 pushups &nbsp;|&nbsp; !challenge done/fail/remove &lt;id&gt; &nbsp;|&nbsp; !challenge clear
+                  Chat: !challenge 50 [10m] Do 20 pushups &nbsp;|&nbsp; done/fail/remove &lt;id&gt; &nbsp;|&nbsp; clear
                 </p>
 
                 {/* Add new challenge */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
                   <div className="admin-select-wrap" style={{ marginBottom: 0 }}>
-                    <label>Bounty (USD)</label>
+                    <label>Bounty ($)</label>
                     <input
                       type="number"
                       className="text-input"
-                      placeholder="e.g. 50"
+                      placeholder="50"
                       min={0}
                       value={challengeBountyInput}
                       onChange={(e) => setChallengeBountyInput(e.target.value)}
-                      style={{ width: 90 }}
+                      style={{ width: 72 }}
                     />
                   </div>
-                  <div className="admin-select-wrap" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
+                  <div className="admin-select-wrap" style={{ marginBottom: 0 }}>
+                    <label>Timer (optional)</label>
+                    <input
+                      type="text"
+                      className="text-input"
+                      placeholder="e.g. 10m"
+                      value={challengeDurationInput}
+                      onChange={(e) => setChallengeDurationInput(e.target.value)}
+                      style={{ width: 80 }}
+                    />
+                  </div>
+                  <div className="admin-select-wrap" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
                     <label>Description</label>
                     <input
                       type="text"
@@ -1568,16 +1590,18 @@ export default function AdminPage() {
                         const bounty = parseFloat(challengeBountyInput);
                         const desc = challengeDescInput.trim();
                         if (!Number.isFinite(bounty) || !desc) return;
+                        const durationMs = parseDurationToMs(challengeDurationInput);
                         try {
                           const res = await authenticatedFetch('/api/challenges', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bounty, description: desc }),
+                            body: JSON.stringify({ bounty, description: desc, ...(durationMs ? { durationMs } : {}) }),
                           });
                           if (res.ok) {
                             await loadChallengesAndWallet();
                             setChallengeBountyInput('');
                             setChallengeDescInput('');
+                            setChallengeDurationInput('');
                           }
                         } catch { /* ignore */ }
                       }}
@@ -1599,16 +1623,18 @@ export default function AdminPage() {
                         setTimeout(() => setToast(null), 2000);
                         return;
                       }
+                      const durationMs = parseDurationToMs(challengeDurationInput);
                       try {
                         const res = await authenticatedFetch('/api/challenges', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ bounty, description: desc }),
+                          body: JSON.stringify({ bounty, description: desc, ...(durationMs ? { durationMs } : {}) }),
                         });
                         if (res.ok) {
                           await loadChallengesAndWallet();
                           setChallengeBountyInput('');
                           setChallengeDescInput('');
+                          setChallengeDurationInput('');
                           setToast({ type: 'saved', message: 'Challenge added' });
                         }
                       } catch { /* ignore */ }
@@ -1703,6 +1729,11 @@ export default function AdminPage() {
                             </span>
                             <span style={{ fontWeight: 700, minWidth: 48 }}>${c.bounty % 1 === 0 ? c.bounty.toFixed(0) : c.bounty.toFixed(2)}</span>
                             <span style={{ flex: 1 }}>{c.description}</span>
+                            {c.expiresAt && c.status === 'active' && (
+                              <span style={{ fontSize: '0.75em', opacity: 0.6, flexShrink: 0 }}>
+                                ⏱ {c.expiresAt > Date.now() ? `${Math.ceil((c.expiresAt - Date.now()) / 60000)}m left` : 'expired'}
+                              </span>
+                            )}
                             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                               {c.status !== 'completed' && (
                                 <button

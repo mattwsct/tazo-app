@@ -27,25 +27,13 @@ import {
   addToWallet,
   deductFromWallet,
 } from '@/utils/challenges-storage';
-import { getPersistentLocation } from '@/utils/location-cache';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
+import { COUNTRY_CURRENCY, getLocalCurrencyContext } from '@/utils/local-currency';
 
 export interface HandleChallengesCommandResult {
   handled: boolean;
   reply?: string;
 }
-
-// ISO 3166-1 alpha-2 country code → ISO 4217 currency code
-const COUNTRY_CURRENCY: Record<string, string> = {
-  AU: 'AUD', AT: 'EUR', BE: 'EUR', BR: 'BRL', CA: 'CAD', CN: 'CNY',
-  CZ: 'CZK', DK: 'DKK', FI: 'EUR', FR: 'EUR', DE: 'EUR', GR: 'EUR',
-  HK: 'HKD', HU: 'HUF', IN: 'INR', ID: 'IDR', IE: 'EUR', IL: 'ILS',
-  IT: 'EUR', JP: 'JPY', KR: 'KRW', MX: 'MXN', NL: 'EUR', NZ: 'NZD',
-  NO: 'NOK', PL: 'PLN', PT: 'EUR', RO: 'RON', RU: 'RUB', SA: 'SAR',
-  SG: 'SGD', ZA: 'ZAR', ES: 'EUR', SE: 'SEK', CH: 'CHF', TH: 'THB',
-  TR: 'TRY', UA: 'UAH', GB: 'GBP', US: 'USD', AE: 'AED', AR: 'ARS',
-  CL: 'CLP', CO: 'COP', EG: 'EGP', MY: 'MYR', PH: 'PHP', PK: 'PKR',
-  TW: 'TWD', VN: 'VND', NG: 'NGN', KE: 'KES', GH: 'GHS',
-};
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   AUD: 'A$', EUR: '€', BRL: 'R$', CAD: 'C$', CNY: '¥', DKK: 'kr',
@@ -56,30 +44,6 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   TWD: 'NT$', VND: '₫', PHP: '₱', MYR: 'RM',
 };
 
-async function getLocalCurrencyCode(): Promise<string> {
-  try {
-    const loc = await getPersistentLocation();
-    const countryCode = loc?.location?.countryCode?.toUpperCase();
-    if (countryCode && COUNTRY_CURRENCY[countryCode]) {
-      return COUNTRY_CURRENCY[countryCode];
-    }
-  } catch { /* fallback to USD */ }
-  return 'USD';
-}
-
-async function convertToUsd(amount: number, fromCurrency: string): Promise<number | null> {
-  if (fromCurrency === 'USD') return amount;
-  try {
-    const res = await fetch(`https://open.er-api.com/v6/latest/USD`, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    const data = await res.json() as { rates?: Record<string, number> };
-    const rate = data.rates?.[fromCurrency];
-    if (!rate || rate === 0) return null;
-    return Math.round((amount / rate) * 100) / 100;
-  } catch {
-    return null;
-  }
-}
 
 function formatUsd(amount: number): string {
   return `$${amount.toFixed(2)} USD`;
@@ -119,6 +83,7 @@ export async function handleChallengesCommand(
       return { handled: true, reply: 'Usage: !wallet <amount>  e.g. !wallet 20' };
     }
     const state = await addToWallet(amount);
+    void broadcastChallenges().catch(() => {});
     return { handled: true, reply: `💰 Added ${formatUsd(amount)} to wallet → Balance: ${formatUsd(state.balance)}` };
   }
 
@@ -129,13 +94,24 @@ export async function handleChallengesCommand(
     if (!Number.isFinite(amount) || amount <= 0) {
       return { handled: true, reply: 'Usage: !spent <amount>  (uses your local currency)' };
     }
-    const currency = await getLocalCurrencyCode();
-    const usd = await convertToUsd(amount, currency);
-    if (usd === null) {
-      return { handled: true, reply: `⚠️ Could not fetch exchange rate for ${currency}. Try !wallet <usd_amount> instead.` };
-    }
+    const localCtx = await getLocalCurrencyContext();
+    const currency = localCtx?.currency ?? 'USD';
     const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
-    const { state, deducted } = await deductFromWallet(usd);
+    let usd: number;
+    let localContext: { currency: string; rate: number } | undefined;
+    if (localCtx && localCtx.currency !== 'USD') {
+      usd = Math.round((amount / localCtx.rate) * 100) / 100;
+      localContext = localCtx;
+    } else {
+      // USD or unknown — treat amount as USD
+      usd = amount;
+      localContext = undefined;
+    }
+    if (!Number.isFinite(usd) || usd <= 0) {
+      return { handled: true, reply: `⚠️ Could not convert ${currency} to USD. Try !wallet <usd_amount> instead.` };
+    }
+    const { state, deducted } = await deductFromWallet(usd, localContext);
+    void broadcastChallenges().catch(() => {});
     return {
       handled: true,
       reply: `💸 Spent ${symbol}${amount} ${currency} = ${formatUsd(deducted)} → Wallet: ${formatUsd(state.balance)}`,
@@ -165,6 +141,7 @@ export async function handleChallengesCommand(
   // !challenge clear
   if (argsLower === 'clear') {
     const removed = await clearResolvedChallenges();
+    void broadcastChallenges().catch(() => {});
     return { handled: true, reply: `✅ Cleared ${removed} resolved challenge${removed !== 1 ? 's' : ''}` };
   }
 
@@ -175,6 +152,7 @@ export async function handleChallengesCommand(
     if (!Number.isFinite(id)) return { handled: true, reply: 'Usage: !challenge done <id>' };
     const c = await updateChallengeStatus(id, 'completed');
     if (!c) return { handled: true, reply: `Challenge #${id} not found.` };
+    void broadcastChallenges().catch(() => {});
     return { handled: true, reply: `✅ Challenge #${id} completed! ($${c.bounty} — ${c.description})` };
   }
 
@@ -185,6 +163,7 @@ export async function handleChallengesCommand(
     if (!Number.isFinite(id)) return { handled: true, reply: 'Usage: !challenge fail <id>' };
     const c = await updateChallengeStatus(id, 'failed');
     if (!c) return { handled: true, reply: `Challenge #${id} not found.` };
+    void broadcastChallenges().catch(() => {});
     return { handled: true, reply: `❌ Challenge #${id} failed ($${c.bounty} — ${c.description})` };
   }
 
@@ -195,22 +174,43 @@ export async function handleChallengesCommand(
     if (!Number.isFinite(id)) return { handled: true, reply: 'Usage: !challenge remove <id>' };
     const ok = await removeChallenge(id);
     if (!ok) return { handled: true, reply: `Challenge #${id} not found.` };
+    void broadcastChallenges().catch(() => {});
     return { handled: true, reply: `🗑️ Challenge #${id} removed` };
   }
 
-  // !challenge <bounty> <description>
+  // !challenge <bounty> [<duration>] <description>
+  // Duration is optional: e.g. 10m, 30s, 1h — must come before description
   const parts = args.split(/\s+/);
   const bounty = parseFloat(parts[0]);
   if (!Number.isFinite(bounty) || bounty < 0) {
-    return { handled: true, reply: 'Usage: !challenge <bounty> <description>  e.g. !challenge 50 Do 20 pushups' };
+    return { handled: true, reply: 'Usage: !challenge <bounty> [time] <desc>  e.g. !challenge 50 10m Do 20 pushups' };
   }
-  const description = parts.slice(1).join(' ').trim();
+
+  let expiresAt: number | undefined;
+  let descStart = 1;
+  if (parts.length > 2) {
+    const durationMatch = parts[1].match(/^([\d.]+)(s|sec|secs|m|min|mins|h|hr|hrs)$/i);
+    if (durationMatch) {
+      const num = parseFloat(durationMatch[1]);
+      const unit = durationMatch[2].toLowerCase();
+      let ms: number;
+      if (unit.startsWith('h')) ms = num * 3_600_000;
+      else if (unit.startsWith('m')) ms = num * 60_000;
+      else ms = num * 1_000;
+      expiresAt = Date.now() + Math.round(ms);
+      descStart = 2;
+    }
+  }
+
+  const description = parts.slice(descStart).join(' ').trim();
   if (!description) {
-    return { handled: true, reply: 'Usage: !challenge <bounty> <description>  e.g. !challenge 50 Do 20 pushups' };
+    return { handled: true, reply: 'Usage: !challenge <bounty> [time] <desc>  e.g. !challenge 50 10m Do 20 pushups' };
   }
-  const item = await addChallenge(bounty, description);
+  const item = await addChallenge(bounty, description, expiresAt);
+  void broadcastChallenges().catch(() => {});
+  const timerSuffix = expiresAt ? ` (${parts[descStart - 1]} to complete)` : '';
   return {
     handled: true,
-    reply: `📋 Challenge #${item.id} added: $${item.bounty} — ${item.description}`,
+    reply: `📋 Challenge #${item.id} added: $${item.bounty} — ${item.description}${timerSuffix}`,
   };
 }

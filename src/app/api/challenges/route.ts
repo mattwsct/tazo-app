@@ -8,6 +8,7 @@ import {
   clearResolvedChallenges,
   setChallengesState,
 } from '@/utils/challenges-storage';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const body = await request.json() as { bounty?: unknown; description?: unknown };
+    const body = await request.json() as { bounty?: unknown; description?: unknown; expiresAt?: unknown; durationMs?: unknown };
     const bounty = typeof body.bounty === 'number' ? body.bounty : parseFloat(String(body.bounty ?? ''));
     const description = typeof body.description === 'string' ? body.description.trim() : '';
     if (!Number.isFinite(bounty) || bounty < 0) {
@@ -32,7 +33,15 @@ export async function POST(request: NextRequest) {
     if (!description) {
       return NextResponse.json({ error: 'Description required' }, { status: 400 });
     }
-    const item = await addChallenge(bounty, description);
+    // expiresAt: absolute timestamp, OR durationMs: relative ms from now
+    let expiresAt: number | undefined;
+    if (typeof body.expiresAt === 'number' && body.expiresAt > 0) {
+      expiresAt = body.expiresAt;
+    } else if (typeof body.durationMs === 'number' && body.durationMs > 0) {
+      expiresAt = Date.now() + body.durationMs;
+    }
+    const item = await addChallenge(bounty, description, expiresAt);
+    void broadcastChallenges().catch(() => {});
     return NextResponse.json(item);
   } catch {
     return NextResponse.json({ error: 'Failed to add challenge' }, { status: 500 });
@@ -56,6 +65,7 @@ export async function PATCH(request: NextRequest) {
     // Clear all resolved challenges
     if (body.action === 'clear') {
       const removed = await clearResolvedChallenges();
+      void broadcastChallenges().catch(() => {});
       return NextResponse.json({ removed });
     }
 
@@ -77,10 +87,12 @@ export async function PATCH(request: NextRequest) {
         c.status = 'active';
         delete c.resolvedAt;
         await setChallengesState(state);
+        void broadcastChallenges().catch(() => {});
         return NextResponse.json(c);
       }
       const updated = await updateChallengeStatus(id, body.status as 'completed' | 'failed');
       if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      void broadcastChallenges().catch(() => {});
       return NextResponse.json(updated);
     }
 
@@ -95,6 +107,7 @@ export async function PATCH(request: NextRequest) {
         if (Number.isFinite(b) && b >= 0) c.bounty = Math.round(b * 100) / 100;
       }
       await setChallengesState(state);
+      void broadcastChallenges().catch(() => {});
       return NextResponse.json(c);
     }
 
@@ -117,6 +130,7 @@ export async function DELETE(request: NextRequest) {
     }
     const ok = await removeChallenge(id);
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    void broadcastChallenges().catch(() => {});
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: 'Delete failed' }, { status: 500 });

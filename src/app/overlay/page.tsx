@@ -1208,10 +1208,13 @@ function OverlayPage() {
           )}
         </div>
 
-        {/* Bottom Right: Poll, Trivia, Alerts */}
-        {settings.pollState ||
+        {/* Bottom Right: StreamPanel (goals, wallet, timer, challenges, poll, trivia, alerts) */}
+        {(settings.pollState ||
         settings.triviaState ||
-        settings.showOverlayAlerts !== false ? (
+        settings.showOverlayAlerts !== false ||
+        settings.showSubGoal ||
+        settings.showKicksGoal ||
+        settings.walletEnabled) ? (
           <BottomRightPanel settings={settings} refreshSettings={refreshSettings}>
             {(() => {
               const poll = settings.pollState;
@@ -1241,11 +1244,7 @@ function OverlayPage() {
                         />
                       </div>
                     )}
-                    {showWinner && poll.topVoter && poll.topVoter.count > 1 && (
-                      <div className="poll-top-voter">
-                        Top voter: {filterTextForDisplay(poll.topVoter.username)} ({poll.topVoter.count} votes)
-                      </div>
-                    )}
+
                     <div className="poll-options">
                       {(() => {
                         const maxVotes = Math.max(0, ...poll.options.map((o) => o.votes));

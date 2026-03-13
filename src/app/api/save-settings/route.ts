@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import { validateAndSanitizeSettings, detectMaliciousKeys } from '@/lib/settings-validator';
 import { verifyAuth, logKVUsage } from '@/lib/api-auth';
-import { broadcastSettings } from '@/lib/settings-broadcast';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { OverlayLogger } from '@/lib/logger';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { getStreamGoals } from '@/utils/stream-goals-storage';
@@ -52,9 +52,12 @@ async function handlePOST(request: NextRequest) {
       })
     ]);
     
-    // SSE broadcast handles real-time updates
+    // SSE broadcast — use broadcastChallenges so runtime state
+    // (timerState, challengesState, walletState, streamGoals, overlayAlerts)
+    // is included alongside the new settings. Without this, toggling any
+    // setting would briefly clear challenges/timer/wallet on the overlay.
     const broadcastResult = await Promise.allSettled([
-      broadcastSettings(settings)
+      broadcastChallenges()
     ]);
 
     // If either goal is shown in title, refresh title with latest counts + new targets
@@ -70,8 +73,7 @@ async function handlePOST(request: NextRequest) {
       })();
     }
     
-    const broadcastSuccess = broadcastResult[0].status === 'fulfilled' && 
-                            broadcastResult[0].value?.success;
+    const broadcastSuccess = broadcastResult[0].status === 'fulfilled';
     
     const saveTime = Date.now() - startTime;
     

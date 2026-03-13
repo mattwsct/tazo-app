@@ -33,7 +33,7 @@ export async function endOverduePollIfAny(): Promise<boolean> {
     getPollSettings(),
     getValidAccessToken(),
   ]);
-  const { winnerMessage, topVoter } = computePollResult(state);
+  const { winnerMessage } = computePollResult(state);
 
   // Always post winner to chat when we have a token (poll was run in chat; viewers expect the result).
   // Don't require isStreamLive() — e.g. overlay trigger or cron can end the poll when stream state is stale.
@@ -78,7 +78,6 @@ export async function endOverduePollIfAny(): Promise<boolean> {
     status: 'winner',
     winnerMessage,
     winnerDisplayUntil: now + settings.winnerDisplaySeconds * 1000,
-    topVoter,
   };
   await setPollState(winnerState);
   return true;

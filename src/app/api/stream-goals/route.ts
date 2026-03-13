@@ -8,7 +8,7 @@ import { kv } from '@/lib/kv';
 import { getStreamGoals, setStreamGoals } from '@/utils/stream-goals-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
-import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { Logger } from '@/lib/logger';
@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Provide subs and/or kicks' }, { status: 400 });
     }
     await setStreamGoals(body);
-    void broadcastAlertsAndLeaderboard();
+    void broadcastChallenges();
     const goals = await getStreamGoals();
 
     const settings = await kv.get<Record<string, unknown>>('overlay_settings');

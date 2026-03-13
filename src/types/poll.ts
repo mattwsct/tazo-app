@@ -5,7 +5,7 @@
 export interface PollOption {
   label: string;
   votes: number;
-  /** Username -> vote count for top voter display */
+  /** Username -> 1 (tracks who voted here so votes can be moved when user changes answer) */
   voters?: Record<string, number>;
 }
 
@@ -22,8 +22,6 @@ export interface PollState {
   winnerDisplayUntil?: number;
   /** Parsed winner message for chat */
   winnerMessage?: string;
-  /** Username who voted most, if notable */
-  topVoter?: { username: string; count: number };
   /** Our poll-start message ID (for threading winner reply) */
   startMessageId?: string;
 }

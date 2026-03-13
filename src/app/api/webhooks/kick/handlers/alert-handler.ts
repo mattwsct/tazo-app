@@ -6,6 +6,8 @@ import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { addToWallet } from '@/utils/challenges-storage';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
+import { getLocalCurrencyContext } from '@/utils/local-currency';
 
 const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
 
@@ -56,7 +58,11 @@ export async function handleAlertEvents(
         pushSubAlert(subscriber),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      if (settings?.walletEnabled) void addToWallet(5).catch(() => {});
+      if (settings?.walletEnabled) void (async () => {
+        const localCtx = await getLocalCurrencyContext();
+        await addToWallet(5, localCtx);
+        await broadcastChallenges();
+      })().catch(() => {});
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(1, settings);
     }
@@ -71,7 +77,11 @@ export async function handleAlertEvents(
         pushResubAlert(subscriber, duration > 0 ? duration : undefined),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      if (settings?.walletEnabled) void addToWallet(5).catch(() => {});
+      if (settings?.walletEnabled) void (async () => {
+        const localCtx = await getLocalCurrencyContext();
+        await addToWallet(5, localCtx);
+        await broadcastChallenges();
+      })().catch(() => {});
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(1, settings);
     }
@@ -87,7 +97,11 @@ export async function handleAlertEvents(
         pushGiftSubAlert(gifter, count),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      if (settings?.walletEnabled) void addToWallet(5 * count).catch(() => {});
+      if (settings?.walletEnabled) void (async () => {
+        const localCtx = await getLocalCurrencyContext();
+        await addToWallet(5 * count, localCtx);
+        await broadcastChallenges();
+      })().catch(() => {});
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(count, settings);
     }
@@ -106,7 +120,11 @@ export async function handleAlertEvents(
         pushKicksAlert(sender, amount, giftName),
         kv.get<Record<string, unknown>>('overlay_settings'),
       ]);
-      if (settings?.walletEnabled) void addToWallet(amount / 100).catch(() => {});
+      if (settings?.walletEnabled) void (async () => {
+        const localCtx = await getLocalCurrencyContext();
+        await addToWallet(amount / 100, localCtx);
+        await broadcastChallenges();
+      })().catch(() => {});
       didAlertOrLeaderboard = true;
       const goals = await getStreamGoals();
       const target = (settings?.kicksGoalTarget as number) ?? 5000;

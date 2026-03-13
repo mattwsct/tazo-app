@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pushTestAlert } from '@/utils/overlay-alerts-storage';
-import { broadcastAlertsAndLeaderboard } from '@/lib/alerts-broadcast';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import type { OverlayAlertType } from '@/utils/overlay-alerts-storage';
 
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
     await pushTestAlert(type);
-    void broadcastAlertsAndLeaderboard();
+    void broadcastChallenges();
     return NextResponse.json({ ok: true, type });
   } catch (e) {
     console.warn('[OverlayAlerts Test]', e);

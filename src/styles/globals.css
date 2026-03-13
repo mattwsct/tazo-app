@@ -1163,61 +1163,590 @@ html, body {
   margin-top: 0.5rem;
 }
 
-/* === CHALLENGES BOX === */
-.challenges-box {
-  min-width: 360px;
-  max-width: 560px;
-  background: linear-gradient(145deg, rgba(15, 20, 35, 0.93) 0%, rgba(20, 25, 45, 0.9) 100%);
-  border: 1px solid rgba(99, 179, 237, 0.25);
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+/* =============================================================
+   STREAM PANEL  — consistent flat-row design
+   All rows share the same anatomy:
+     .sp-label  (left, dimmed uppercase)
+     .sp-value  (right, bright)
+     .sp-subtext (right secondary, tiny)
+     .sp-right-stack (column wrapper for value + subtext)
+     .sp-goal-fill (absolute background fill for progress)
+   ============================================================= */
+
+.stream-panel {
+  min-width: 380px;
+  max-width: 580px;
+  width: 100%;
+  background: linear-gradient(160deg, rgba(10, 14, 28, 0.96) 0%, rgba(14, 18, 38, 0.93) 100%);
+  border: 1px solid rgba(99, 179, 237, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.88);
 }
 
-.challenges-wallet {
+/* ── Shared atoms ── */
+
+/* Every non-goal row uses this as its container */
+.sp-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px 6px;
-  border-bottom: 1px solid rgba(99, 179, 237, 0.15);
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  min-height: 44px;
 }
 
-.challenges-wallet-label {
+/* Left label — same across ALL row types */
+.sp-label {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Right primary value — same across ALL row types */
+.sp-value {
+  font-size: 1.1em;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  position: relative;
+}
+
+/* Right secondary line */
+.sp-subtext {
+  font-size: 0.68em;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.01em;
+  position: relative;
+}
+
+/* Column-stack for value + subtext on right side */
+.sp-right-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  position: relative;
+}
+
+/* Background fill (progress bar behind row content) */
+.sp-goal-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  transition: width 0.9s ease;
+}
+
+/* ── Goal value + subtext (larger than generic sp-value) ── */
+
+.sp-goal-value {
+  font-size: 1.35em;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  position: relative;
+}
+
+.sp-goal-subtext {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.01em;
+  position: relative;
+}
+
+/* ── Goal rows (with fill bar) ── */
+
+.sp-goals-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-goal-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  min-height: 44px;
+}
+
+/* Alert state: coloured left border + tinted background (inline style) */
+.sp-goal-row--alert {
+  border-left-width: 3px;
+  border-left-style: solid;
+  padding-left: 13px;
+  animation: sp-alert-in 0.3s ease both;
+}
+
+@keyframes sp-alert-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.sp-goal-alert-username {
+  font-size: 0.9em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+  position: relative;
+}
+
+/* ── Wallet row ── */
+
+.sp-wallet-row {
+  background: rgba(104, 211, 145, 0.04);
+}
+
+.sp-wallet-value {
+  font-size: 1.1em;
+  font-weight: 800;
+  color: #68d391;
+  letter-spacing: 0.02em;
+  position: relative;
+}
+
+.sp-wallet-anim {
+  font-size: 1.15em;
+  font-weight: 900;
+  color: #68d391;
+  position: relative;
+  animation: sp-wallet-pop 0.25s ease-out both;
+}
+
+@keyframes sp-wallet-pop {
+  0%   { transform: scale(0.8) translateY(4px); opacity: 0; }
+  60%  { transform: scale(1.08) translateY(-1px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* ── Timer row ── */
+
+.sp-timer-row {
+  background: rgba(99, 179, 237, 0.04);
+}
+
+.sp-timer-done {
+  background: rgba(251, 191, 36, 0.06);
+}
+
+.sp-timer-value {
+  font-size: 1.25em;
+  font-weight: 900;
+  color: #90cdf4;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  position: relative;
+}
+
+.sp-timer-done .sp-timer-value {
+  color: #fbbf24;
+}
+
+/* ── Bottom section (challenges / poll / trivia) ── */
+
+.sp-bottom-section {
+  display: flex;
+  flex-direction: column;
+  animation: sp-section-in 0.3s ease both;
+}
+
+@keyframes sp-section-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Section header row: label on left, question/title on right */
+.sp-bottom-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 16px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sp-bottom-header--challenges {
+  padding-bottom: 4px;
+}
+
+.sp-section-label {
+  font-size: 0.65em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+.sp-bottom-question {
+  font-size: 0.92em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.3;
+  flex: 1;
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Poll ── */
+
+.sp-poll-timer {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.sp-poll-timer-fill {
+  height: 100%;
+  background: rgba(251, 191, 36, 0.7);
+  transition: width 1s linear;
+}
+
+.sp-poll-options {
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  min-height: 40px;
+}
+
+.sp-poll-option:last-child {
+  border-bottom: none;
+}
+
+.sp-poll-option--winner .sp-poll-option-label {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 800;
+}
+
+.sp-poll-option-label {
+  font-size: 0.88em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  position: relative;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sp-poll-option-votes {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Trivia ── */
+
+.sp-trivia-reward {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.42);
+  padding: 6px 16px 10px;
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sp-trivia-winner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 6px 16px 10px;
+  gap: 2px;
+}
+
+.sp-trivia-winner-name {
+  font-size: 1em;
+  font-weight: 800;
+  color: #68d391;
+}
+
+.sp-trivia-winner-answer {
+  font-size: 0.78em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Challenges ── */
+
+.sp-challenge-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.88em;
+  line-height: 1.45;
+  padding: 5px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.sp-challenge-item:last-child {
+  border-bottom: none;
+  padding-bottom: 10px;
+}
+
+.sp-challenge-item--urgent { color: #f87171; }
+
+.sp-challenge-num {
+  opacity: 0.38;
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 16px;
+  text-align: right;
+}
+
+.sp-challenge-bounty {
+  font-weight: 800;
+  color: #fbbf24;
+  flex-shrink: 0;
+  min-width: 34px;
+}
+
+.sp-challenge-item--urgent .sp-challenge-bounty { color: #fca5a5; }
+
+.sp-challenge-desc {
+  color: rgba(255, 255, 255, 0.85);
+  flex: 1;
+}
+
+.sp-challenge-expiry {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: rgba(144, 205, 244, 0.75);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-challenge-expiry--urgent {
+  color: #f87171;
+  animation: sp-expiry-pulse 1s ease-in-out infinite;
+}
+
+@keyframes sp-expiry-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+/* === CHALLENGES BOX (legacy — no longer used) === */
+.challenges-box {
+  min-width: 360px;
+  max-width: 560px;
+  background: linear-gradient(145deg, rgba(10, 14, 28, 0.95) 0%, rgba(15, 20, 40, 0.92) 100%);
+  border: 1px solid rgba(99, 179, 237, 0.22);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Goals section (top of box, above wallet) */
+.challenges-goals-section {
+  border-bottom: 1px solid rgba(99, 179, 237, 0.1);
+}
+
+.challenges-goal-slide {
+  animation: challenges-goal-fadein 0.35s ease both;
+}
+
+@keyframes challenges-goal-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.challenges-goal-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  overflow: hidden;
+}
+
+.challenges-goal-row--alert {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 14px 10px;
+}
+
+.challenges-goal-fill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: width 0.8s ease;
+}
+
+.challenges-goal-label {
   font-size: 0.7em;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  opacity: 0.6;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.55);
+  position: relative;
+  flex-shrink: 0;
 }
 
-.challenges-wallet-balance {
-  font-size: 1.05em;
+.challenges-goal-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  position: relative;
+}
+
+.challenges-goal-value {
+  font-size: 1em;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.challenges-goal-subtext {
+  font-size: 0.65em;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.02em;
+}
+
+.challenges-goal-alert-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.challenges-goal-alert-label {
+  font-size: 0.82em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.challenges-goal-alert-username {
+  font-size: 0.75em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Wallet / general header row */
+.challenges-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px 7px;
+  border-bottom: 1px solid rgba(99, 179, 237, 0.12);
+}
+
+.challenges-header-label {
+  font-size: 0.68em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.challenges-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.challenges-header-value {
+  font-size: 1.1em;
   font-weight: 800;
   color: #68d391;
   letter-spacing: 0.02em;
 }
 
-.challenges-box .goal-progress-stack {
-  padding: 0;
-  margin: 0;
+.challenges-header-local {
+  font-size: 0.72em;
+  font-weight: 600;
+  color: rgba(104, 211, 145, 0.6);
+  letter-spacing: 0.02em;
 }
 
-.challenges-box .goal-progress-bar {
-  min-width: unset;
-  max-width: unset;
-  width: 100%;
-  border-radius: 0;
-  border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  filter: none;
+/* Wallet change animation (+$5.00 / -$3.00) */
+.challenges-wallet-anim {
+  font-size: 1.15em;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #68d391;
+  animation: wallet-anim-pop 0.25s ease-out both;
 }
 
+@keyframes wallet-anim-pop {
+  0%   { transform: scale(0.8) translateY(4px); opacity: 0; }
+  60%  { transform: scale(1.08) translateY(-1px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Global timer row (matches box style, no fill bar) */
+.challenges-timer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(99, 179, 237, 0.1);
+  background: rgba(99, 179, 237, 0.06);
+}
+
+.challenges-timer-row.challenges-timer-done {
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.challenges-timer-label {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  flex: 1;
+  padding-right: 10px;
+}
+
+.challenges-timer-value {
+  font-size: 1.25em;
+  font-weight: 900;
+  color: #90cdf4;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.challenges-timer-done .challenges-timer-value {
+  color: #fbbf24;
+}
+
+/* Challenges list section */
 .challenges-list {
-  padding: 8px 14px 10px;
+  padding: 4px 14px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1228,21 +1757,24 @@ html, body {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  opacity: 0.5;
-  color: #fff;
-  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 5px;
 }
 
 .challenge-item {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 0.82em;
-  line-height: 1.4;
+  font-size: 0.83em;
+  line-height: 1.45;
+}
+
+.challenge-item--urgent {
+  color: #f87171;
 }
 
 .challenge-num {
-  opacity: 0.5;
+  opacity: 0.45;
   font-weight: 600;
   flex-shrink: 0;
   min-width: 18px;
@@ -1253,10 +1785,33 @@ html, body {
   font-weight: 800;
   color: #fbbf24;
   flex-shrink: 0;
-  min-width: 36px;
+  min-width: 34px;
+}
+
+.challenge-item--urgent .challenge-bounty {
+  color: #fca5a5;
 }
 
 .challenge-desc {
   color: rgba(255, 255, 255, 0.88);
   flex: 1;
+}
+
+.challenge-expiry {
+  font-size: 0.88em;
+  font-weight: 700;
+  color: rgba(144, 205, 244, 0.8);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.challenge-expiry--urgent {
+  color: #f87171;
+  animation: challenge-expiry-pulse 1s ease-in-out infinite;
+}
+
+@keyframes challenge-expiry-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
