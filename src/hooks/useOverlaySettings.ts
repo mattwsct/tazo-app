@@ -6,8 +6,18 @@ import { createSettingsHash } from '@/utils/overlay-helpers';
 import { NO_CACHE_FETCH_OPTIONS } from '@/utils/overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
 import type { OverlaySettings } from '@/types/settings';
+import type { PollState } from '@/types/poll';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
+
+/** Guard: while we're showing a winner, don't overwrite with stale active or null (prevents flicker). */
+function resolvePollState(incoming: PollState | null, prev: PollState | null): PollState | null {
+  const now = Date.now();
+  const isShowingWinner = prev?.status === 'winner' && prev.winnerDisplayUntil != null && now < prev.winnerDisplayUntil;
+  if (!isShowingWinner) return incoming ?? null;
+  if (incoming == null || incoming.status === 'active') return prev;
+  return incoming;
+}
 
 /**
  * Loads overlay settings, sets up SSE for real-time updates, and polls as fallback.
@@ -69,7 +79,7 @@ export function useOverlaySettings(): [
             OverlayLogger.settings('Settings updated via SSE', { locationDisplay: merged.locationDisplay, showWeather: merged.showWeather, showMinimap: merged.showMinimap });
             setSettings((prev) => ({
               ...merged,
-              pollState: merged.pollState ?? null,
+              pollState: resolvePollState(merged.pollState ?? null, prev.pollState ?? null),
               triviaState: merged.triviaState ?? null,
               gamblingLeaderboardTop: Array.isArray(merged.gamblingLeaderboardTop) && merged.gamblingLeaderboardTop.length > 0 ? merged.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
               earnedLeaderboardWeekly: merged.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
@@ -140,8 +150,10 @@ export function useOverlaySettings(): [
       };
       setSettings((prev) => {
         const base: OverlaySettings = replace ? merged : { ...prev, ...merged };
+        const pollState = resolvePollState(merged.pollState ?? null, prev.pollState ?? null);
         return {
           ...base,
+          pollState,
           gamblingLeaderboardTop: patch.gamblingLeaderboardTop ?? prev.gamblingLeaderboardTop ?? [],
           earnedLeaderboardWeekly: patch.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
           earnedLeaderboardMonthly: patch.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,

@@ -38,20 +38,9 @@ export async function getWellnessData(): Promise<WellnessData | null> {
   }
 }
 
-/** Get wellness data for display: when stream has ended, session metrics (steps, distance) are frozen from snapshot. */
+/** Get wellness data for overlay display. Always returns current steps/distance (no snapshot freeze). */
 export async function getWellnessDataForDisplay(): Promise<WellnessData | null> {
-  const { isStreamLive } = await import('@/utils/stats-storage');
-  const live = await isStreamLive();
-  const data = await getWellnessData();
-  if (live || !data) return data;
-  const snapshot = await kv.get<WellnessSnapshotAtStreamEnd>(WELLNESS_SNAPSHOT_AT_STREAM_END_KEY);
-  if (!snapshot) return data;
-  return {
-    ...data,
-    steps: snapshot.steps ?? data.steps,
-    distanceKm: snapshot.distanceKm ?? data.distanceKm,
-    updatedAt: data.updatedAt,
-  };
+  return getWellnessData();
 }
 
 /** Set snapshot of session metrics at stream end. Call when stream ends. */

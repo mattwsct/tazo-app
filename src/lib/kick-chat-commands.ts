@@ -252,12 +252,12 @@ export async function handleKickChatCommand(
     const parts = list.map((e, i) => `${i + 1}. ${e.username}: ${e.credits.toLocaleString()}`);
     return `Credits — ${parts.join(' | ')}`;
   }
-  // Stats and location commands: only when stream is live
-  const streamSessionOrLocationCommands: KickChatCommand[] = [
+  // Stats and location commands: require stream live
+  const streamLiveOnlyCommands: KickChatCommand[] = [
     'heartrate', 'steps', 'distance', 'wellness',
     'speed', 'altitude', 'forecast', 'map', 'uv', 'aqi',
   ];
-  if (streamSessionOrLocationCommands.includes(cmd)) {
+  if (streamLiveOnlyCommands.includes(cmd)) {
     if (!(await isStreamLive())) return STREAM_OFFLINE_MSG;
   }
   if (cmd === 'heartrate') {

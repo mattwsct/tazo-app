@@ -65,28 +65,27 @@ function parseHealthAutoExport(body: Record<string, unknown>): { updates: Partia
 
   const updates: Partial<WellnessData> = {};
 
-  // Sum all data points — Health Auto Export sends today's cumulative total each push
-  const sumQty = (m: HealthMetric | undefined): number => {
-    if (!m?.data || !Array.isArray(m.data)) return 0;
-    return m.data.reduce((s, d) => s + (typeof d.qty === 'number' ? d.qty : 0), 0);
-  };
+  // Use the last/most recent data point — HAE sends today's cumulative total; we replace, not add
   const lastQty = (m: HealthMetric | undefined): number | undefined => {
     if (!m?.data?.length) return undefined;
     const last = m.data[m.data.length - 1];
     return typeof last?.qty === 'number' ? last.qty : undefined;
   };
 
-  // step_count
+  // step_count — last value is today's cumulative total (replaces existing)
   const stepCount = byName.get('step_count');
   if (stepCount) {
-    const total = Math.round(sumQty(stepCount));
-    if (total >= 0) updates.steps = total;
+    const total = lastQty(stepCount);
+    if (total != null && total >= 0) updates.steps = Math.round(total);
   }
 
-  // walking_running_distance
+  // walking_running_distance — last value is today's cumulative total (replaces existing)
   const walkingDist = byName.get('walking_running_distance');
   if (walkingDist) {
-    updates.distanceKm = Math.max(0, Math.round(distanceToKm(sumQty(walkingDist), walkingDist.units) * 1000) / 1000);
+    const raw = lastQty(walkingDist);
+    if (raw != null && raw >= 0) {
+      updates.distanceKm = Math.max(0, Math.round(distanceToKm(raw, walkingDist.units) * 1000) / 1000);
+    }
   }
 
   // Body metrics: height, weight only

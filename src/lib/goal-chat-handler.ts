@@ -159,27 +159,50 @@ export async function handleGoalCommand(
     return { handled: true, reply: '✅ Tips goal cleared' };
   }
 
-  // ── !timer <minutes> [label] ─────────────────────────────────────────────────
+  // ── !timer <duration> [label] ───────────────────────────────────────────────
+  // Bare number = minutes. Suffixes: s/sec = seconds, m/min = minutes, h/hr = hours.
+  // e.g. !timer 5 Break | !timer 90s | !timer 1h Lunch | !timer 30sec
   if (lower.startsWith('!timer')) {
     const args = trimmed.slice('!timer'.length).trim();
     if (!args) {
-      return { handled: true, reply: 'Usage: !timer <minutes> [label]  e.g. !timer 10 Break time' };
+      return { handled: true, reply: 'Usage: !timer <duration> [label]  e.g. !timer 5 Break  or  !timer 90s  or  !timer 1h Lunch' };
     }
     const parts = args.split(/\s+/);
-    const minutesRaw = parseFloat(parts[0]);
-    if (!Number.isFinite(minutesRaw) || minutesRaw <= 0) {
-      return { handled: true, reply: 'Usage: !timer <minutes> [label]  e.g. !timer 10 Break time' };
+    const first = String(parts[0])
+      .replace(/[０-９]/g, (c) => String('０１２３４５６７８９'.indexOf(c)))
+      .trim();
+    const match = first.match(/^([\d.]+)\s*(s|sec|secs|m|min|mins|h|hr|hrs)?$/i);
+    if (!match) {
+      return { handled: true, reply: 'Usage: !timer <duration> [label]  e.g. !timer 5  or  !timer 90s  or  !timer 1h Lunch' };
     }
-    // Clamp to max 6 hours to prevent absurd durations.
-    const minutes = Math.min(minutesRaw, 6 * 60);
+    const num = parseFloat(match[1]);
+    const unitRaw = (match[2] || 'm').toLowerCase();
+    const unit = unitRaw.startsWith('h') ? 'h' : unitRaw.startsWith('s') ? 's' : 'm';
+    if (!Number.isFinite(num) || num <= 0) {
+      return { handled: true, reply: 'Usage: !timer <duration> [label]  e.g. !timer 5  or  !timer 90s  or  !timer 1h' };
+    }
+    let minutes: number;
+    if (unit === 's') minutes = num / 60;
+    else if (unit === 'h') minutes = num * 60;
+    else minutes = num;
+    const clampedMinutes = Math.min(Math.max(minutes, 1 / 60), 6 * 60); // min 1 sec, max 6 hours
     const label = parts.slice(1).join(' ').trim() || undefined;
     const now = Date.now();
-    const endsAt = now + minutes * 60_000;
+    const endsAt = now + clampedMinutes * 60_000;
     await setOverlayTimer({ createdAt: now, endsAt, title: label });
     notifyOverlay();
-    const rounded = minutes % 1 === 0 ? `${minutes.toFixed(0)}` : `${minutes.toFixed(1)}`;
+    let durationStr: string;
+    if (clampedMinutes >= 60) {
+      const hrs = clampedMinutes / 60;
+      durationStr = hrs % 1 === 0 ? `${hrs} hour${hrs !== 1 ? 's' : ''}` : `${hrs.toFixed(1)} hours`;
+    } else if (clampedMinutes < 1) {
+      const secs = Math.round(clampedMinutes * 60);
+      durationStr = `${secs} second${secs !== 1 ? 's' : ''}`;
+    } else {
+      durationStr = clampedMinutes % 1 === 0 ? `${clampedMinutes} minute${clampedMinutes !== 1 ? 's' : ''}` : `${clampedMinutes.toFixed(1)} minutes`;
+    }
     const suffix = label ? ` — "${label}"` : '';
-    return { handled: true, reply: `✅ Timer started: ${rounded} minutes${suffix}` };
+    return { handled: true, reply: `✅ Timer started: ${durationStr}${suffix}` };
   }
 
   // ── !subsgoal ───────────────────────────────────────────────────────────────
