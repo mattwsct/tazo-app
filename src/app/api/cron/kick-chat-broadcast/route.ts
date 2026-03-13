@@ -19,6 +19,9 @@ import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sen
 import { TRIVIA_STATE_KEY, type TriviaState } from '@/types/trivia';
 import { setTriviaState } from '@/lib/trivia-store';
 import { maybeBroadcastWeather, maybeBroadcastWellness, maybeBroadcastStats } from '@/lib/chat-broadcast-service';
+import { getLocalCurrencyContext } from '@/utils/local-currency';
+import { getWallet, setWalletBalance } from '@/utils/challenges-storage';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 const KICK_BROADCAST_LAST_LOCATION_KEY = 'kick_chat_broadcast_last_location';
 const KICK_BROADCAST_LAST_LOCATION_MSG_KEY = 'kick_chat_broadcast_last_location_msg';
 const OVERLAY_SETTINGS_KEY = 'overlay_settings';
@@ -114,7 +117,7 @@ export async function GET(request: NextRequest) {
   // Update title whenever location/title changed (no interval gating) so title stays in sync with overlay.
   const autoUpdateLocation = streamTitleSettings?.autoUpdateLocation !== false;
 
-  if (autoUpdateLocation && isLive) {
+  if (autoUpdateLocation) {
     // Use freshly geocoded location if available, fall back to persistent storage
     const freshLocationData = sharedLocationData?.location?.rawLocationData;
     const persistent = freshLocationData ? null : await getPersistentLocation();
@@ -171,6 +174,21 @@ export async function GET(request: NextRequest) {
       }
     }
   }
+
+  // Currency auto-update: keep wallet local currency in sync with GPS location.
+  // Uses countryCode from geocoded location (more reliable than IP for IRL streamers).
+  try {
+    const countryCode = sharedLocationData?.location?.countryCode
+      ?? (await getPersistentLocation())?.location?.countryCode;
+    if (countryCode) {
+      const localCtx = await getLocalCurrencyContext(countryCode);
+      const wallet = await getWallet();
+      if (localCtx && (localCtx.currency !== wallet.localCurrency || !wallet.localRate)) {
+        await setWalletBalance(wallet.balance, { localCurrency: localCtx.currency, localRate: localCtx.rate });
+        void broadcastChallenges().catch(() => {});
+      }
+    }
+  } catch { /* non-critical */ }
 
   // HR/speed/altitude broadcasts (shared with stats ingestion for immediate sends)
   sent += await maybeBroadcastStats({}, 'cron');

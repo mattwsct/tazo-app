@@ -173,7 +173,7 @@ export async function handleTrivia(
   // Use the winner's actual reply for display (questions can have multiple correct answers)
   const answerDisplay = trimmed.length > 100 ? trimmed.slice(0, 97) + '...' : trimmed;
 
-  const winnerDisplayMs = 8 * 1000;
+  const winnerDisplayMs = 10 * 1000;
   const winnerState: TriviaState = {
     ...current,
     winnerUsername: senderUsername,
