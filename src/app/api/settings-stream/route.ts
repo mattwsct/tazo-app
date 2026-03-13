@@ -6,6 +6,7 @@ import { TRIVIA_STATE_KEY, TRIVIA_MODIFIED_KEY } from '@/types/trivia';
 import { STREAM_GOALS_MODIFIED_KEY, getStreamGoals } from '@/utils/stream-goals-storage';
 import { getRecentAlerts } from '@/utils/overlay-alerts-storage';
 import { getOverlayTimer } from '@/utils/overlay-timer-storage';
+import { CHALLENGES_MODIFIED_KEY, getChallenges, getWallet } from '@/utils/challenges-storage';
 
 // === 📡 SERVER-SENT EVENTS STREAM ===
 export async function GET(request: NextRequest): Promise<Response> {
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     start(controller) {
       let lastModified = 0;
       let lastGoalsModified = 0;
+      let lastChallengesModified = 0;
       const connectionId = `sse_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
       
       if (process.env.NODE_ENV === 'development') {
@@ -76,7 +78,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Function to check for settings and poll updates
       const checkForUpdates = async () => {
         try {
-          const [settings, settingsModified, pollState, pollModified, triviaState, triviaModified, goalsModified] = await kv.mget([
+          const [settings, settingsModified, pollState, pollModified, triviaState, triviaModified, goalsModified, challengesModified] = await kv.mget([
             'overlay_settings',
             'overlay_settings_modified',
             POLL_STATE_KEY,
@@ -84,17 +86,20 @@ export async function GET(request: NextRequest): Promise<Response> {
             TRIVIA_STATE_KEY,
             TRIVIA_MODIFIED_KEY,
             STREAM_GOALS_MODIFIED_KEY,
+            CHALLENGES_MODIFIED_KEY,
           ]);
           const settingsTs = (settingsModified as number) ?? 0;
           const pollTs = (pollModified as number) ?? 0;
           const triviaTs = (triviaModified as number) ?? 0;
           const goalsTs = (goalsModified as number) ?? 0;
+          const challengesTs = (challengesModified as number) ?? 0;
           const maxTs = Math.max(settingsTs, pollTs, triviaTs);
 
           const settingsChanged = lastModified === 0 || maxTs > lastModified;
           const goalsChanged = goalsTs > lastGoalsModified;
+          const challengesChanged = challengesTs > lastChallengesModified;
 
-          if (!settingsChanged && !goalsChanged) return;
+          if (!settingsChanged && !goalsChanged && !challengesChanged) return;
 
           const sendData: Record<string, unknown> = {
             ...(settings && typeof settings === 'object' ? settings : {}),
@@ -119,9 +124,16 @@ export async function GET(request: NextRequest): Promise<Response> {
             sendData.overlayAlerts = overlayAlerts;
           }
 
-          // Timer state is runtime-only; include latest value on every settings or goals update.
-          const timerState = await getOverlayTimer();
+          // Challenges & wallet — include on every update (lightweight reads)
+          if (challengesChanged) lastChallengesModified = challengesTs;
+          const [timerState, challengesState, walletState] = await Promise.all([
+            getOverlayTimer(),
+            getChallenges(),
+            getWallet(),
+          ]);
           sendData.timerState = timerState ?? null;
+          sendData.challengesState = challengesState;
+          sendData.walletState = walletState;
 
           sendSSE(JSON.stringify(sendData));
         } catch (error) {

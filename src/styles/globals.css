@@ -1162,3 +1162,101 @@ html, body {
   overflow-x: auto;
   margin-top: 0.5rem;
 }
+
+/* === CHALLENGES BOX === */
+.challenges-box {
+  min-width: 360px;
+  max-width: 560px;
+  background: linear-gradient(145deg, rgba(15, 20, 35, 0.93) 0%, rgba(20, 25, 45, 0.9) 100%);
+  border: 1px solid rgba(99, 179, 237, 0.25);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.challenges-wallet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 6px;
+  border-bottom: 1px solid rgba(99, 179, 237, 0.15);
+}
+
+.challenges-wallet-label {
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  color: #fff;
+}
+
+.challenges-wallet-balance {
+  font-size: 1.05em;
+  font-weight: 800;
+  color: #68d391;
+  letter-spacing: 0.02em;
+}
+
+.challenges-box .goal-progress-stack {
+  padding: 0;
+  margin: 0;
+}
+
+.challenges-box .goal-progress-bar {
+  min-width: unset;
+  max-width: unset;
+  width: 100%;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  filter: none;
+}
+
+.challenges-list {
+  padding: 8px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.challenges-list-header {
+  font-size: 0.65em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.challenge-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.82em;
+  line-height: 1.4;
+}
+
+.challenge-num {
+  opacity: 0.5;
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 18px;
+  text-align: right;
+}
+
+.challenge-bounty {
+  font-weight: 800;
+  color: #fbbf24;
+  flex-shrink: 0;
+  min-width: 36px;
+}
+
+.challenge-desc {
+  color: rgba(255, 255, 255, 0.88);
+  flex: 1;
+}

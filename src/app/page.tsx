@@ -132,6 +132,13 @@ export default function AdminPage() {
   const triviaRandomQuestionsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [timerMinutesInput, setTimerMinutesInput] = useState<string>('');
   const [timerTitleInput, setTimerTitleInput] = useState<string>('');
+  // Challenges & wallet
+  const [challengesList, setChallengesList] = useState<{ id: number; description: string; bounty: number; status: string }[]>([]);
+  const [challengeBountyInput, setChallengeBountyInput] = useState<string>('');
+  const [challengeDescInput, setChallengeDescInput] = useState<string>('');
+  const [editingChallenge, setEditingChallenge] = useState<{ id: number; description: string; bounty: string } | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(15);
+  const [walletAdjustInput, setWalletAdjustInput] = useState<string>('');
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
   
@@ -405,6 +412,29 @@ export default function AdminPage() {
     const interval = setInterval(fetchLocationData, 30_000);
     return () => clearInterval(interval);
   }, [isAuthenticated, fetchLocationData]);
+
+  // Load challenges and wallet on mount and after resets
+  const loadChallengesAndWallet = useCallback(async () => {
+    try {
+      const [cRes, wRes] = await Promise.all([
+        fetch('/api/challenges', { credentials: 'include' }),
+        fetch('/api/wallet', { credentials: 'include' }),
+      ]);
+      if (cRes.ok) {
+        const d = await cRes.json() as { challenges?: { id: number; description: string; bounty: number; status: string }[] };
+        setChallengesList(d.challenges ?? []);
+      }
+      if (wRes.ok) {
+        const d = await wRes.json() as { balance?: number };
+        if (typeof d.balance === 'number') setWalletBalance(d.balance);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    loadChallengesAndWallet();
+  }, [isAuthenticated, loadChallengesAndWallet]);
 
   useEffect(() => {
     const loc = getLocationForStreamTitle(kickStreamTitleRawLocation, settings.locationDisplay, settings.customLocation ?? '');
@@ -1404,6 +1434,378 @@ export default function AdminPage() {
                     Clear timer
                   </button>
                 </div>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* Challenges & Wallet */}
+          <CollapsibleSection id="challenges" title="🎯 Challenges &amp; wallet">
+            <div className="setting-group">
+              {/* Wallet */}
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Wallet</div>
+                <div className="checkbox-group" style={{ marginBottom: 8 }}>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.walletEnabled ?? false}
+                      onChange={(e) => handleSettingsChange({ walletEnabled: e.target.checked })}
+                      className="checkbox-input"
+                    />
+                    <span className="checkbox-text">Show wallet on overlay &amp; auto-increment on subs/kicks</span>
+                  </label>
+                </div>
+                <div className="admin-select-wrap" style={{ marginBottom: 8 }}>
+                  <label>Starting balance (USD, resets each stream)</label>
+                  <input
+                    type="number"
+                    className="text-input"
+                    min={0}
+                    step={1}
+                    value={settings.walletStartingBalance ?? 15}
+                    onChange={(e) => handleSettingsChange({ walletStartingBalance: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <p className="input-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+                  Current balance: <strong>${walletBalance.toFixed(2)} USD</strong>
+                  {' — '}Subs/gift subs add $5, kicks add $1 per 100.
+                  Use !spent &lt;amount&gt; in chat (auto-converts local currency to USD).
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div className="admin-select-wrap" style={{ marginBottom: 0 }}>
+                    <label>Adjust (USD)</label>
+                    <input
+                      type="number"
+                      className="text-input"
+                      placeholder="e.g. 20"
+                      value={walletAdjustInput}
+                      onChange={(e) => setWalletAdjustInput(e.target.value)}
+                      style={{ width: 100 }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      const amount = parseFloat(walletAdjustInput);
+                      if (!Number.isFinite(amount)) return;
+                      try {
+                        const res = await authenticatedFetch('/api/wallet', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'add', amount }),
+                        });
+                        if (res.ok) {
+                          const d = await res.json() as { balance?: number };
+                          if (typeof d.balance === 'number') setWalletBalance(d.balance);
+                          setWalletAdjustInput('');
+                          setToast({ type: 'saved', message: `Added $${amount.toFixed(2)}` });
+                        }
+                      } catch { /* ignore */ }
+                      setTimeout(() => setToast(null), 2000);
+                    }}
+                  >
+                    Add to wallet
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      const amount = parseFloat(walletAdjustInput);
+                      if (!Number.isFinite(amount)) return;
+                      try {
+                        const res = await authenticatedFetch('/api/wallet', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'set', amount }),
+                        });
+                        if (res.ok) {
+                          const d = await res.json() as { balance?: number };
+                          if (typeof d.balance === 'number') setWalletBalance(d.balance);
+                          setWalletAdjustInput('');
+                          setToast({ type: 'saved', message: `Balance set to $${amount.toFixed(2)}` });
+                        }
+                      } catch { /* ignore */ }
+                      setTimeout(() => setToast(null), 2000);
+                    }}
+                  >
+                    Set balance
+                  </button>
+                </div>
+              </div>
+
+              {/* Challenges */}
+              <div style={{ marginTop: 24 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Challenges</div>
+                <p className="input-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+                  Chat commands: !challenge 50 Do 20 pushups &nbsp;|&nbsp; !challenge done/fail/remove &lt;id&gt; &nbsp;|&nbsp; !challenge clear
+                </p>
+
+                {/* Add new challenge */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+                  <div className="admin-select-wrap" style={{ marginBottom: 0 }}>
+                    <label>Bounty (USD)</label>
+                    <input
+                      type="number"
+                      className="text-input"
+                      placeholder="e.g. 50"
+                      min={0}
+                      value={challengeBountyInput}
+                      onChange={(e) => setChallengeBountyInput(e.target.value)}
+                      style={{ width: 90 }}
+                    />
+                  </div>
+                  <div className="admin-select-wrap" style={{ marginBottom: 0, flex: 1, minWidth: 160 }}>
+                    <label>Description</label>
+                    <input
+                      type="text"
+                      className="text-input"
+                      placeholder="e.g. Do 20 pushups"
+                      value={challengeDescInput}
+                      onChange={(e) => setChallengeDescInput(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key !== 'Enter') return;
+                        const bounty = parseFloat(challengeBountyInput);
+                        const desc = challengeDescInput.trim();
+                        if (!Number.isFinite(bounty) || !desc) return;
+                        try {
+                          const res = await authenticatedFetch('/api/challenges', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ bounty, description: desc }),
+                          });
+                          if (res.ok) {
+                            await loadChallengesAndWallet();
+                            setChallengeBountyInput('');
+                            setChallengeDescInput('');
+                          }
+                        } catch { /* ignore */ }
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={async () => {
+                      const bounty = parseFloat(challengeBountyInput);
+                      const desc = challengeDescInput.trim();
+                      if (!Number.isFinite(bounty) || bounty < 0) {
+                        setToast({ type: 'error', message: 'Enter a valid bounty amount' });
+                        setTimeout(() => setToast(null), 2000);
+                        return;
+                      }
+                      if (!desc) {
+                        setToast({ type: 'error', message: 'Enter a description' });
+                        setTimeout(() => setToast(null), 2000);
+                        return;
+                      }
+                      try {
+                        const res = await authenticatedFetch('/api/challenges', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ bounty, description: desc }),
+                        });
+                        if (res.ok) {
+                          await loadChallengesAndWallet();
+                          setChallengeBountyInput('');
+                          setChallengeDescInput('');
+                          setToast({ type: 'saved', message: 'Challenge added' });
+                        }
+                      } catch { /* ignore */ }
+                      setTimeout(() => setToast(null), 2000);
+                    }}
+                  >
+                    Add challenge
+                  </button>
+                </div>
+
+                {/* Challenge list */}
+                {challengesList.length === 0 ? (
+                  <p className="input-hint">No challenges yet.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {challengesList.map((c) => (
+                      <div
+                        key={c.id}
+                        style={{
+                          background: 'rgba(255,255,255,0.07)',
+                          borderRadius: 8,
+                          padding: '10px 12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        {editingChallenge?.id === c.id ? (
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                            <div className="admin-select-wrap" style={{ marginBottom: 0 }}>
+                              <label>Bounty ($)</label>
+                              <input
+                                type="number"
+                                className="text-input"
+                                value={editingChallenge.bounty}
+                                min={0}
+                                onChange={(e) => setEditingChallenge({ ...editingChallenge, bounty: e.target.value })}
+                                style={{ width: 80 }}
+                              />
+                            </div>
+                            <div className="admin-select-wrap" style={{ marginBottom: 0, flex: 1 }}>
+                              <label>Description</label>
+                              <input
+                                type="text"
+                                className="text-input"
+                                value={editingChallenge.description}
+                                onChange={(e) => setEditingChallenge({ ...editingChallenge, description: e.target.value })}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-small"
+                              onClick={async () => {
+                                if (!editingChallenge) return;
+                                const bounty = parseFloat(editingChallenge.bounty);
+                                try {
+                                  await authenticatedFetch('/api/challenges', {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      id: editingChallenge.id,
+                                      description: editingChallenge.description,
+                                      bounty: Number.isFinite(bounty) ? bounty : undefined,
+                                    }),
+                                  });
+                                  await loadChallengesAndWallet();
+                                  setEditingChallenge(null);
+                                } catch { /* ignore */ }
+                              }}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-small"
+                              onClick={() => setEditingChallenge(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontSize: '0.75em',
+                              padding: '2px 7px',
+                              borderRadius: 4,
+                              background: c.status === 'active' ? 'rgba(52,211,153,0.2)' : c.status === 'completed' ? 'rgba(139,92,246,0.25)' : 'rgba(239,68,68,0.2)',
+                              color: c.status === 'active' ? '#34d399' : c.status === 'completed' ? '#a78bfa' : '#f87171',
+                              fontWeight: 600,
+                            }}>
+                              {c.status}
+                            </span>
+                            <span style={{ fontWeight: 700, minWidth: 48 }}>${c.bounty % 1 === 0 ? c.bounty.toFixed(0) : c.bounty.toFixed(2)}</span>
+                            <span style={{ flex: 1 }}>{c.description}</span>
+                            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                              {c.status !== 'completed' && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-small"
+                                  title="Mark completed"
+                                  onClick={async () => {
+                                    await authenticatedFetch('/api/challenges', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: c.id, status: 'completed' }),
+                                    });
+                                    await loadChallengesAndWallet();
+                                  }}
+                                >
+                                  ✅
+                                </button>
+                              )}
+                              {c.status !== 'failed' && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-small"
+                                  title="Mark failed"
+                                  onClick={async () => {
+                                    await authenticatedFetch('/api/challenges', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: c.id, status: 'failed' }),
+                                    });
+                                    await loadChallengesAndWallet();
+                                  }}
+                                >
+                                  ❌
+                                </button>
+                              )}
+                              {c.status !== 'active' && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-small"
+                                  title="Reactivate"
+                                  onClick={async () => {
+                                    await authenticatedFetch('/api/challenges', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: c.id, status: 'active' }),
+                                    });
+                                    await loadChallengesAndWallet();
+                                  }}
+                                >
+                                  ↩️
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-small"
+                                title="Edit"
+                                onClick={() => setEditingChallenge({ id: c.id, description: c.description, bounty: String(c.bounty) })}
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-small"
+                                title="Remove"
+                                onClick={async () => {
+                                  await authenticatedFetch(`/api/challenges?id=${c.id}`, { method: 'DELETE' });
+                                  await loadChallengesAndWallet();
+                                }}
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={async () => {
+                          await authenticatedFetch('/api/challenges', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'clear' }),
+                          });
+                          await loadChallengesAndWallet();
+                          setToast({ type: 'saved', message: 'Resolved challenges cleared' });
+                          setTimeout(() => setToast(null), 2000);
+                        }}
+                      >
+                        Clear resolved
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        onClick={loadChallengesAndWallet}
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CollapsibleSection>

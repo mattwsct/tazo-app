@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
 import GoalProgressBar from './GoalProgressBar';
+import ChallengesBox from './ChallengesBox';
 
 const ALERT_DISPLAY_MS = 10000;
-const TIMER_COMPLETE_DISPLAY_MS = 10000;
 // All rotations snap to multiples of this tick so transitions are wall-clock aligned
 const ROTATION_TICK_MS = 10000;
 const GOALS_CYCLE_DURATION_MS = ROTATION_TICK_MS;
@@ -188,40 +188,22 @@ export default function BottomRightPanel({
   }, []);
 
   // =============================================
-  // Timer completion — show "Time's up!" for 10s when countdown hits 0
-  // =============================================
-  const timerState = settings.timerState ?? null;
-  const remainingMs = timerState ? Math.max(0, timerState.endsAt - now) : 0;
-  const [timerCompleteUntil, setTimerCompleteUntil] = useState<number | null>(null);
-  const timerCompletionStartedForRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!timerState) {
-      timerCompletionStartedForRef.current = null;
-      setTimerCompleteUntil(null);
-      return;
-    }
-    if (remainingMs > 0) return;
-    if (timerCompletionStartedForRef.current === timerState.endsAt) return;
-    timerCompletionStartedForRef.current = timerState.endsAt;
-    setTimerCompleteUntil(Date.now() + TIMER_COMPLETE_DISPLAY_MS);
-    fetch('/api/timer-end-trigger', { cache: 'no-store' }).catch(() => {});
-  }, [timerState, remainingMs]);
-
-  const isTimerCompletePhase = !!timerState && remainingMs <= 0 && timerCompleteUntil != null && now < timerCompleteUntil;
-
-  // =============================================
   // Visibility
   // =============================================
 
+  const timerState = settings.timerState ?? null;
   const hasGoalsContent = showGoalsRotation && goalSlides.length > 0;
   const hasGoalAlertContent = !hasGoalsContent && (subsAlert != null || kicksAlert != null);
   const hasPollContent = showPoll;
   const hasTriviaContent = showTrivia;
   const hasPollOrTriviaContent = hasPollContent || hasTriviaContent;
-  const hasTimerContent = !!timerState && (remainingMs > 0 || isTimerCompletePhase);
 
-  const hasContent = hasGoalsContent || hasGoalAlertContent || hasPollOrTriviaContent || hasTimerContent;
+  // ChallengesBox handles timer + challenges + wallet; detect if it would render
+  const activeChallenges = (settings.challengesState?.challenges ?? []).filter((c) => c.status === 'active');
+  const hasChallengesBoxContent =
+    !!timerState || activeChallenges.length > 0 || (settings.walletEnabled && settings.walletState != null);
+
+  const hasContent = hasGoalsContent || hasGoalAlertContent || hasPollOrTriviaContent || hasChallengesBoxContent;
 
   if (!hasContent) return null;
 
@@ -265,56 +247,6 @@ export default function BottomRightPanel({
     return null;
   };
 
-  const renderTimer = () => {
-    if (!timerState) return null;
-    const label = timerState.title || 'TIMER';
-    if (isTimerCompletePhase) {
-      return (
-        <div className="goal-progress-stack">
-          <div className="goal-progress-bar">
-            <div className="timer-countdown-bar" aria-label="Timer complete">
-              <div className="timer-countdown-bar-fill" style={{ width: '0%' }} />
-            </div>
-            <div className="goal-progress-text">
-              <div className="goal-progress-lines">
-                <span className="goal-progress-value">Time&apos;s up!</span>
-                <span className="goal-progress-subtext">{label}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    const totalSeconds = Math.floor(remainingMs / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    const hh = hours > 0 ? `${hours.toString().padStart(2, '0')}:` : '';
-    const mm = minutes.toString().padStart(2, '0');
-    const ss = seconds.toString().padStart(2, '0');
-    const timeStr = `${hh}${mm}:${ss}`;
-    const totalMs = timerState.endsAt - timerState.createdAt;
-    const fillPct = totalMs > 0 ? Math.min(100, Math.round((remainingMs / totalMs) * 100)) : 100;
-    return (
-      <div className="goal-progress-stack">
-        <div className="goal-progress-bar">
-          <div className="timer-countdown-bar" aria-label="Time remaining">
-            <div
-              className="timer-countdown-bar-fill"
-              style={{ width: `${fillPct}%` }}
-            />
-          </div>
-          <div className="goal-progress-text">
-            <div className="goal-progress-lines">
-              <span className="goal-progress-value">{timeStr}</span>
-              <span className="goal-progress-subtext">{label}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="bottom-right">
       {/* Top: Goals rotation (subs/kicks) */}
@@ -334,8 +266,8 @@ export default function BottomRightPanel({
           </div>
         </div>
       )}
-      {/* Timer */}
-      {hasTimerContent && renderTimer()}
+      {/* Challenges box: contains timer, wallet, and challenges list */}
+      {hasChallengesBoxContent && <ChallengesBox settings={settings} now={now} />}
       {/* Alert-only goals when rotation hidden */}
       {hasGoalAlertContent && (
         <div className="bottom-right-alert-only">

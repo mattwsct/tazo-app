@@ -3,6 +3,8 @@ import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
+import { resetWallet, resetChallenges } from '@/utils/challenges-storage';
+import { kv } from '@/lib/kv';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,10 +20,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const settings = await kv.get<{ walletStartingBalance?: number }>('overlay_settings');
+    const startingBalance = settings?.walletStartingBalance ?? 15;
+
     const [, { subTarget }] = await Promise.all([
       onStreamStarted(),
       resetStreamGoalsOnStreamStart(),
       setStreamLive(true),
+      resetWallet(startingBalance),
+      resetChallenges(),
     ]);
 
     void updateKickTitleGoals(0, subTarget).catch(() => {});

@@ -5,6 +5,7 @@ import { handleChatPoll } from '@/lib/poll-webhook-handler';
 import { handleTrivia } from '@/lib/trivia-webhook-handler';
 import { handleStreamTitleCommand } from '@/lib/stream-title-chat-handler';
 import { handleGoalCommand } from '@/lib/goal-chat-handler';
+import { handleChallengesCommand } from '@/lib/challenges-chat-handler';
 import { handleAddCreditsCommand } from '@/lib/addcredits-chat-handler';
 import { handleCategoryCommand } from '@/lib/category-chat-handler';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
@@ -73,6 +74,12 @@ export async function handleChatMessage(payload: Record<string, unknown>): Promi
   const goalResult = await handleGoalCommand(content, sender, payload);
   if (goalResult.handled) {
     if (goalResult.reply) await sendReply(goalResult.reply);
+    return true;
+  }
+
+  const challengesResult = await handleChallengesCommand(content, sender, payload);
+  if (challengesResult.handled) {
+    if (challengesResult.reply) await sendReply(challengesResult.reply);
     return true;
   }
 

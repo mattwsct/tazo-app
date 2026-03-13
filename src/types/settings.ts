@@ -10,6 +10,7 @@ export type MinimapTheme = 'auto' | 'light' | 'dark';
 import type { PollState } from '@/types/poll';
 import type { TriviaState } from '@/types/trivia';
 import type { OverlayTimerState } from '@/types/timer';
+import type { ChallengesState, WalletState } from '@/types/challenges';
 
 export interface OverlaySettings {
   locationDisplay: LocationDisplayMode;
@@ -122,6 +123,10 @@ export interface OverlaySettings {
     subs: number;
     kicks: number;
   };
+  /** Wallet: show balance on overlay and auto-increment on subs/kicks. */
+  walletEnabled?: boolean;
+  /** Starting wallet balance when stream resets (USD). Default: 15. */
+  walletStartingBalance?: number;
 }
 
 // Default settings (single source of truth)
@@ -172,6 +177,8 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   subGoalTarget: 5,
   subGoalIncrement: 5,
   showKicksGoal: false,
+  walletEnabled: false,
+  walletStartingBalance: 15,
   kicksGoalTarget: 5000,
   kicksGoalIncrement: 5000,
   streamerTimezone: 'UTC',
@@ -234,6 +241,8 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalTarget: 'number',
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
+  walletEnabled: 'boolean',
+  walletStartingBalance: 'number',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
   showMonthlyEarnedLb: 'boolean',
@@ -256,6 +265,9 @@ export interface OverlayRuntimeState {
   earnedLeaderboardLifetime?: { username: string; earned: number }[];
   /** Runtime-only overlay timer state (countdown). */
   timerState?: OverlayTimerState | null;
+  /** Runtime: current challenges list and wallet balance. */
+  challengesState?: ChallengesState | null;
+  walletState?: WalletState | null;
 }
 
 /**
