@@ -314,18 +314,7 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
     // wind.speed is in m/s, convert to km/h
     const windKmh = data.wind?.speed ? Math.round(data.wind.speed * 3.6) : undefined;
     
-    if (data.main && typeof data.main.feels_like === 'number' && data.weather && data.weather[0]) {
-      weather = {
-        temp: Math.round(data.main.feels_like), // Use "feels like" temperature
-        desc: condenseWeatherDescription(data.weather[0].description || 'unknown'),
-        windKmh: windKmh,
-        humidity: data.main.humidity || undefined,
-        visibility: data.visibility ? (data.visibility / 1000) : null,
-      };
-      
-      ApiLogger.info('openweathermap', 'Weather data received', weather);
-    } else if (data.main && typeof data.main.temp === 'number' && data.weather && data.weather[0]) {
-      // Fallback to regular temp if feels_like is not available
+    if (data.main && typeof data.main.temp === 'number' && data.weather && data.weather[0]) {
       weather = {
         temp: Math.round(data.main.temp),
         desc: condenseWeatherDescription(data.weather[0].description || 'unknown'),
@@ -333,8 +322,8 @@ export async function fetchWeatherAndTimezoneFromOpenWeatherMap(
         humidity: data.main.humidity || undefined,
         visibility: data.visibility ? (data.visibility / 1000) : null,
       };
-      
-      ApiLogger.info('openweathermap', 'Weather data received (using regular temp as feels_like unavailable)', weather);
+
+      ApiLogger.info('openweathermap', 'Weather data received', weather);
     }
     
     // Extract timezone data
