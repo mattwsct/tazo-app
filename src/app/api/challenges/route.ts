@@ -9,6 +9,7 @@ import {
   setChallengesState,
 } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
+import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +94,12 @@ export async function PATCH(request: NextRequest) {
       const updated = await updateChallengeStatus(id, body.status as 'completed' | 'failed');
       if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       void broadcastChallenges().catch(() => {});
+      if (body.status === 'failed') {
+        const bountyStr = updated.bounty % 1 === 0 ? updated.bounty.toFixed(0) : updated.bounty.toFixed(2);
+        void getValidAccessToken().then((token) => {
+          if (token) return sendKickChatMessage(token, `❌ Challenge failed: $${bountyStr} — ${updated.description}`);
+        }).catch(() => {});
+      }
       return NextResponse.json(updated);
     }
 
