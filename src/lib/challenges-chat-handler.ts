@@ -7,9 +7,11 @@
  * !challenge remove <id>            — remove challenge #id entirely
  * !challenge clear                  — remove all completed/failed challenges
  * !challenge list                   — list active challenges
+ * !challenges hide / !challenges show — hide/show challenges section on overlay
  *
  * !wallet                           — show current wallet balance (public)
  * !wallet <amount>                  — add USD amount to wallet (mods only)
+ * !wallet hide / !wallet show       — hide/show wallet row on overlay (accumulation continues)
  *
  * !spent <amount>                   — deduct amount (in local currency, auto-converted to USD) from wallet (mods only)
  */
@@ -58,10 +60,11 @@ export async function handleChallengesCommand(
   const lower = trimmed.toLowerCase();
 
   const isChallenge = lower === '!challenge' || lower.startsWith('!challenge ');
+  const isChallenges = lower === '!challenges hide' || lower === '!challenges show';
   const isWallet = lower === '!wallet' || lower.startsWith('!wallet ');
   const isSpent = lower === '!spent' || lower.startsWith('!spent ');
 
-  if (!isChallenge && !isWallet && !isSpent) return { handled: false };
+  if (!isChallenge && !isChallenges && !isWallet && !isSpent) return { handled: false };
 
   // !wallet (no args) — public, anyone can check balance
   if (lower === '!wallet') {
@@ -73,6 +76,27 @@ export async function handleChallengesCommand(
   const broadcasterSlug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
   if (!isModOrBroadcaster(senderPayload, sender, broadcasterSlug)) {
     return { handled: true }; // silently ignore non-mods
+  }
+
+  const OVERLAY_SETTINGS_KEY = 'overlay_settings';
+  const notifyOverlay = () => void kv.set('overlay_settings_modified', Date.now()).catch(() => {});
+
+  // ── !wallet hide / !wallet show ───────────────────────────────────────────────
+  if (isWallet && (lower === '!wallet hide' || lower === '!wallet show')) {
+    const visible = lower === '!wallet show';
+    const stored = (await kv.get<Record<string, unknown>>(OVERLAY_SETTINGS_KEY)) ?? {};
+    await kv.set(OVERLAY_SETTINGS_KEY, { ...stored, walletVisible: visible });
+    notifyOverlay();
+    return { handled: true, reply: visible ? '💰 Wallet shown on overlay' : '💰 Wallet hidden from overlay (still accumulating)' };
+  }
+
+  // ── !challenges hide / !challenges show ───────────────────────────────────────
+  if (isChallenges) {
+    const visible = lower === '!challenges show';
+    const stored = (await kv.get<Record<string, unknown>>(OVERLAY_SETTINGS_KEY)) ?? {};
+    await kv.set(OVERLAY_SETTINGS_KEY, { ...stored, challengesVisible: visible });
+    notifyOverlay();
+    return { handled: true, reply: visible ? '📋 Challenges shown on overlay' : '📋 Challenges hidden from overlay' };
   }
 
   // ── !wallet <amount> ── add to wallet ────────────────────────────────────────

@@ -126,7 +126,7 @@ export default function StreamPanel({
 
   // ── Wallet ─────────────────────────────────────────────────────────────────
   const wallet = settings.walletState;
-  const showWallet = !!(settings.walletEnabled && wallet);
+  const showWallet = !!(settings.walletEnabled && (settings.walletVisible !== false) && wallet);
 
   const [walletAnim, setWalletAnim] = useState<{ label: string; negative: boolean } | null>(null);
   const lastWalletUpdatedAtRef = useRef<number | null>(null);
@@ -155,10 +155,11 @@ export default function StreamPanel({
 
   // ── Challenges ─────────────────────────────────────────────────────────────
   const challenges = settings.challengesState?.challenges ?? [];
-  const activeChallenges = challenges.filter((c) =>
+  const challengesVisible = settings.challengesVisible !== false;
+  const activeChallenges = challengesVisible ? challenges.filter((c) =>
     c.status === 'active' ||
     (c.status === 'timedOut' && c.resolvedAt != null && now - c.resolvedAt < CHALLENGE_TIMEOUT_GRACE_MS)
-  );
+  ) : [];
 
   // ── Poll ───────────────────────────────────────────────────────────────────
   const poll = settings.pollState ?? null;
