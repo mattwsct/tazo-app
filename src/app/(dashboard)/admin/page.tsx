@@ -2507,67 +2507,131 @@ export default function AdminPage() {
           <CollapsibleSection id="links" title="🔗 Links">
             <div className="setting-group">
               <p className="setting-hint" style={{ marginBottom: 16 }}>
-                Manage the links shown on the homepage. Toggle <strong>Show on homepage</strong> to control visibility. Edit titles and URLs, then click Save.
+                Manage links shown on the homepage. Toggle visibility, edit titles, URLs, button labels, and button colors. Click Save when done.
               </p>
               {linksLoading ? (
                 <p className="setting-hint">Loading links…</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {linksData.map((link, idx) => (
-                    <div
-                      key={link.id}
-                      style={{
-                        padding: '14px 16px',
-                        background: 'rgba(255,255,255,0.05)',
-                        borderRadius: 8,
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 8,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 60 }}>
-                          {link.category}
-                        </span>
-                        <label className="checkbox-label-row" style={{ marginLeft: 'auto' }}>
-                          <input
-                            type="checkbox"
-                            className="checkbox-input"
-                            checked={link.showOnHomepage}
-                            onChange={(e) => {
-                              const updated = [...linksData];
-                              updated[idx] = { ...updated[idx], showOnHomepage: e.target.checked };
-                              setLinksData(updated);
-                            }}
-                          />
-                          <span className="checkbox-text">Show on homepage</span>
-                        </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {linksData.map((link, idx) => {
+                    // Extract hex colors from bg string e.g. "from-[#53fc18] to-[#2f8f0b]"
+                    const hexMatches = link.bg.match(/#[0-9a-fA-F]{3,6}/g) ?? [];
+                    const fromColor = hexMatches[0] ?? '#71717a';
+                    const toColor = hexMatches[hexMatches.length - 1] ?? fromColor;
+                    const gradientStyle = { background: `linear-gradient(to right, ${fromColor}, ${toColor})` };
+                    return (
+                      <div
+                        key={link.id}
+                        style={{
+                          borderRadius: 8,
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {/* Color bar + header row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)' }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 6, flexShrink: 0, ...gradientStyle }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#e4e4e7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {link.button || link.title}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{link.category}</div>
+                          </div>
+                          <label className="checkbox-label-row" style={{ flexShrink: 0 }}>
+                            <input
+                              type="checkbox"
+                              className="checkbox-input"
+                              checked={link.showOnHomepage}
+                              onChange={(e) => {
+                                const updated = [...linksData];
+                                updated[idx] = { ...updated[idx], showOnHomepage: e.target.checked };
+                                setLinksData(updated);
+                              }}
+                            />
+                            <span className="checkbox-text" style={{ fontSize: '0.8rem' }}>Show</span>
+                          </label>
+                        </div>
+                        {/* Fields */}
+                        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: 'rgba(255,255,255,0.02)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>Button label</label>
+                              <input
+                                type="text"
+                                className="setting-input"
+                                value={link.button}
+                                placeholder="Button label"
+                                onChange={(e) => {
+                                  const updated = [...linksData];
+                                  updated[idx] = { ...updated[idx], button: e.target.value };
+                                  setLinksData(updated);
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>Title</label>
+                              <input
+                                type="text"
+                                className="setting-input"
+                                value={link.title}
+                                placeholder="Title"
+                                onChange={(e) => {
+                                  const updated = [...linksData];
+                                  updated[idx] = { ...updated[idx], title: e.target.value };
+                                  setLinksData(updated);
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>URL</label>
+                            <input
+                              type="url"
+                              className="setting-input"
+                              value={link.url}
+                              placeholder="https://..."
+                              onChange={(e) => {
+                                const updated = [...linksData];
+                                updated[idx] = { ...updated[idx], url: e.target.value };
+                                setLinksData(updated);
+                              }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <label style={{ fontSize: '0.7rem', color: '#71717a' }}>From</label>
+                              <input
+                                type="color"
+                                value={fromColor}
+                                onChange={(e) => {
+                                  const updated = [...linksData];
+                                  const newBg = `from-[${e.target.value}] to-[${toColor}]`;
+                                  updated[idx] = { ...updated[idx], bg: newBg };
+                                  setLinksData(updated);
+                                }}
+                                style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <label style={{ fontSize: '0.7rem', color: '#71717a' }}>To</label>
+                              <input
+                                type="color"
+                                value={toColor}
+                                onChange={(e) => {
+                                  const updated = [...linksData];
+                                  const newBg = `from-[${fromColor}] to-[${e.target.value}]`;
+                                  updated[idx] = { ...updated[idx], bg: newBg };
+                                  setLinksData(updated);
+                                }}
+                                style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
+                              />
+                            </div>
+                            <div style={{ flex: 1, height: 28, borderRadius: 4, ...gradientStyle }} />
+                          </div>
+                        </div>
                       </div>
-                      <input
-                        type="text"
-                        className="setting-input"
-                        value={link.title}
-                        placeholder="Title"
-                        onChange={(e) => {
-                          const updated = [...linksData];
-                          updated[idx] = { ...updated[idx], title: e.target.value };
-                          setLinksData(updated);
-                        }}
-                      />
-                      <input
-                        type="url"
-                        className="setting-input"
-                        value={link.url}
-                        placeholder="URL"
-                        onChange={(e) => {
-                          const updated = [...linksData];
-                          updated[idx] = { ...updated[idx], url: e.target.value };
-                          setLinksData(updated);
-                        }}
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                   <button
                     type="button"
                     className="btn btn-primary"
