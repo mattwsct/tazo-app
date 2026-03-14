@@ -44,3 +44,4 @@ next-env.d.ts
 # iCloud sync issues
 *.icloud
 *.icloud-sync-*
+.env

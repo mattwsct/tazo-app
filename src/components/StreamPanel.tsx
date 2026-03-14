@@ -162,7 +162,11 @@ export default function StreamPanel({
     const change = wallet.lastChangeUsd;
     if (change === undefined || change === 0) return;
     const sign = change > 0 ? '+' : '-';
-    const absStr = fmtUsd(Math.abs(change));
+    const localRate = wallet.localRate;
+    const localCurrency = wallet.localCurrency;
+    const absStr = localRate && localCurrency
+      ? `${Math.round(Math.abs(change) * localRate).toLocaleString()} ${localCurrency}`
+      : fmtUsd(Math.abs(change));
     const source = wallet.lastChangeSource;
     const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
     const anim = { label, negative: change < 0 };
@@ -339,10 +343,13 @@ export default function StreamPanel({
           const isTimedOut = c.status === 'timedOut' || (c.expiresAt != null && c.expiresAt <= now);
           const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
           const isUrgent = expiryMs !== null && expiryMs < 60_000;
+          const bountyDisplay = wallet?.localRate && wallet?.localCurrency
+            ? `${Math.round(c.bounty * wallet.localRate).toLocaleString()} ${wallet.localCurrency}`
+            : fmtUsd(c.bounty);
           return (
             <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}${isTimedOut ? ' sp-challenge-item--timeout' : ''}`}>
               <span className="sp-challenge-num">{i + 1}.</span>
-              <span className="sp-challenge-bounty">{fmtUsd(c.bounty)}</span>
+              <span className="sp-challenge-bounty">{bountyDisplay}</span>
               <span className="sp-challenge-desc">{c.description}</span>
               {expiryMs !== null && (
                 <span className={`sp-challenge-expiry${isUrgent ? ' sp-challenge-expiry--urgent' : ''}`}>
@@ -383,9 +390,13 @@ export default function StreamPanel({
                   <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
                 ) : (
                   <>
-                    <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
-                    {localAmount !== null && (
-                      <span className="sp-subtext">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
+                    {localAmount !== null ? (
+                      <>
+                        <span className="sp-wallet-value">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
+                        <span className="sp-subtext">{fmtUsd(wallet!.balance)} USD</span>
+                      </>
+                    ) : (
+                      <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
                     )}
                   </>
                 )}
