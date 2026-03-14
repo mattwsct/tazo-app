@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
+import type { LinkItem } from '@/data/links';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
@@ -149,6 +150,10 @@ export default function AdminPage() {
   const [editingChallenge, setEditingChallenge] = useState<{ id: number; description: string; bounty: string; durationMs?: number } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(15);
   const [walletAdjustInput, setWalletAdjustInput] = useState<string>('');
+  // Links section state
+  const [linksData, setLinksData] = useState<LinkItem[]>([]);
+  const [linksLoading, setLinksLoading] = useState(false);
+  const [linksSaving, setLinksSaving] = useState(false);
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
   
@@ -444,6 +449,17 @@ export default function AdminPage() {
     if (!isAuthenticated) return;
     loadChallengesAndWallet();
   }, [isAuthenticated, loadChallengesAndWallet]);
+
+  // Load links on mount
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    setLinksLoading(true);
+    fetch('/api/admin/links', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d: { links?: LinkItem[] }) => { if (d.links) setLinksData(d.links); })
+      .catch(() => {})
+      .finally(() => setLinksLoading(false));
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const loc = getLocationForStreamTitle(kickStreamTitleRawLocation, settings.locationDisplay, settings.customLocation ?? '');
@@ -2485,6 +2501,103 @@ export default function AdminPage() {
                 />
                 <p className="setting-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won&apos;t earn Credits from sub/gift/kicks and won&apos;t appear on !leaderboard.</p>
               </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="links" title="🔗 Links">
+            <div className="setting-group">
+              <p className="setting-hint" style={{ marginBottom: 16 }}>
+                Manage the links shown on the homepage. Toggle <strong>Show on homepage</strong> to control visibility. Edit titles and URLs, then click Save.
+              </p>
+              {linksLoading ? (
+                <p className="setting-hint">Loading links…</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {linksData.map((link, idx) => (
+                    <div
+                      key={link.id}
+                      style={{
+                        padding: '14px 16px',
+                        background: 'rgba(255,255,255,0.05)',
+                        borderRadius: 8,
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 60 }}>
+                          {link.category}
+                        </span>
+                        <label className="checkbox-label-row" style={{ marginLeft: 'auto' }}>
+                          <input
+                            type="checkbox"
+                            className="checkbox-input"
+                            checked={link.showOnHomepage}
+                            onChange={(e) => {
+                              const updated = [...linksData];
+                              updated[idx] = { ...updated[idx], showOnHomepage: e.target.checked };
+                              setLinksData(updated);
+                            }}
+                          />
+                          <span className="checkbox-text">Show on homepage</span>
+                        </label>
+                      </div>
+                      <input
+                        type="text"
+                        className="setting-input"
+                        value={link.title}
+                        placeholder="Title"
+                        onChange={(e) => {
+                          const updated = [...linksData];
+                          updated[idx] = { ...updated[idx], title: e.target.value };
+                          setLinksData(updated);
+                        }}
+                      />
+                      <input
+                        type="url"
+                        className="setting-input"
+                        value={link.url}
+                        placeholder="URL"
+                        onChange={(e) => {
+                          const updated = [...linksData];
+                          updated[idx] = { ...updated[idx], url: e.target.value };
+                          setLinksData(updated);
+                        }}
+                      />
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={linksSaving}
+                    onClick={async () => {
+                      setLinksSaving(true);
+                      try {
+                        const r = await authenticatedFetch('/api/admin/links', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ links: linksData }),
+                        });
+                        if (r.ok) {
+                          setToast({ type: 'saved', message: 'Links saved!' });
+                        } else {
+                          const d = await r.json().catch(() => ({}));
+                          throw new Error((d as { error?: string }).error ?? 'Failed to save');
+                        }
+                      } catch (err) {
+                        setToast({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save links' });
+                      }
+                      setLinksSaving(false);
+                      setTimeout(() => setToast(null), 3000);
+                    }}
+                    style={{ alignSelf: 'flex-start', marginTop: 8 }}
+                  >
+                    {linksSaving ? 'Saving…' : 'Save links'}
+                  </button>
+                </div>
+              )}
             </div>
           </CollapsibleSection>
 

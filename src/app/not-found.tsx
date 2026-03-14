@@ -28,7 +28,7 @@ export default function NotFound() {
           }}>
             Home
           </Link>
-          <Link href="/app" style={{
+          <Link href="/admin" style={{
             padding: '0.6rem 1.4rem',
             background: 'rgba(255,255,255,0.1)',
             color: '#fff',
