@@ -1,20 +1,21 @@
 /**
  * Wise webhook receiver.
- * Listens for `balances#debit` events (card spending) and deducts from the stream wallet.
+ * Listens for `balances#update` events and deducts from the stream wallet on card spend.
  *
  * Setup:
- * 1. Add WISE_API_TOKEN to env (Wise settings → Developer → API tokens).
- * 2. Register webhook via Wise API:
- *    POST https://api.transferwise.com/v3/profiles/{profileId}/subscriptions
- *    Body: { "name": "tazo-wallet", "trigger_on": "balances#debit", "delivery": { "version": "2.0.0", "url": "https://your-domain/api/webhooks/wise" } }
- * 3. Wise signs payloads with their RSA private key; we verify using their public key.
+ * 1. Add WISE_API_TOKEN to env (Wise settings → Developer → API tokens, Full Access).
+ * 2. Register webhook (run once after deploying):
+ *    curl -X POST "https://api.transferwise.com/v3/profiles/{profileId}/subscriptions" \
+ *      -H "Authorization: Bearer $WISE_API_TOKEN" \
+ *      -H "Content-Type: application/json" \
+ *      -d '{"name":"tazo-wallet","trigger_on":"balances#update","delivery":{"version":"3.0.0","url":"https://app.tazo.wtf/api/webhooks/wise"}}'
+ * 3. Wise verifies the URL on registration by sending a POST — this handler responds 200 to all valid signed requests.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getWallet, deductFromWallet } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
-import { isStreamLive } from '@/utils/stats-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +60,9 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get('x-signature-sha256');
 
   if (!signature) {
-    return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
+    // Wise sends an unsigned verification ping when registering the webhook — respond 200
+    console.log('[Wise Webhook] Verification ping (no signature)');
+    return NextResponse.json({ ok: true });
   }
 
   // Verify signature
@@ -86,12 +89,20 @@ export async function POST(request: NextRequest) {
   const eventType = payload.event_type as string;
   console.log('[Wise Webhook] EVENT', JSON.stringify({ eventType }));
 
-  if (eventType !== 'balances#debit') {
-    // Acknowledge but ignore other event types
+  // Acknowledge pings and non-debit events immediately
+  if (eventType !== 'balances#update') {
     return NextResponse.json({ ok: true });
   }
 
   const data = payload.data as Record<string, unknown> | undefined;
+
+  // Only act on debits (card spending), ignore credits (money coming in)
+  const transactionType = data?.transaction_type as string | undefined;
+  if (transactionType !== 'debit') {
+    console.log('[Wise Webhook] Skipping non-debit update', JSON.stringify({ transactionType }));
+    return NextResponse.json({ ok: true, skipped: 'not_debit' });
+  }
+
   const amount = data?.amount as number | undefined;
   const currency = (data?.currency as string | undefined)?.toUpperCase();
 
@@ -114,20 +125,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'currency_mismatch' });
   }
 
-  // Convert local currency spend to USD
+  // Convert local currency spend to USD using stored rate
   const amountUsd = amount / localRate;
+  const channelName = (data?.channel_name as string | undefined) ?? 'WISE';
 
-  const { state, deducted } = await deductFromWallet(amountUsd, { currency: localCurrency, rate: localRate }, 'WISE');
+  const { state, deducted } = await deductFromWallet(amountUsd, { currency: localCurrency, rate: localRate }, channelName.toUpperCase());
   void broadcastChallenges().catch(() => {});
 
-  const isLive = await isStreamLive();
   console.log('[Wise Webhook] DEDUCTED', JSON.stringify({
     localAmount: amount,
     currency,
+    channelName,
     amountUsd: amountUsd.toFixed(2),
     deducted: deducted.toFixed(2),
     newBalance: state.balance,
-    isLive,
   }));
 
   return NextResponse.json({ ok: true, deducted });
