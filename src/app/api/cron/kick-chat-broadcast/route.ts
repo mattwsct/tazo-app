@@ -107,11 +107,9 @@ export async function GET(request: NextRequest) {
   // When GPS has moved >300m since last geocode (cache was invalidated), this triggers fresh
   // geocoding via LocationIQ + RTIRL, keeping the stream title in sync with the overlay.
   let sharedLocationData: Awaited<ReturnType<typeof getLocationData>> = null;
-  if (isLive) {
-    try {
-      sharedLocationData = await getLocationData(false);
-    } catch { /* non-critical */ }
-  }
+  try {
+    sharedLocationData = await getLocationData(false);
+  } catch { /* non-critical */ }
 
   // Unified location: silently update stream title only — no chat announcements for auto-updates.
   // Update title whenever location/title changed (no interval gating) so title stays in sync with overlay.
