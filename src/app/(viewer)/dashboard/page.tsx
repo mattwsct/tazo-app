@@ -10,6 +10,7 @@ interface ViewerData {
 
 interface AuthenticatedViewerData {
   authenticated: true;
+  viewerUuid?: string;
   kickUsername?: string;
   discordUsername?: string;
   balance: number;
@@ -141,7 +142,7 @@ function DashboardContent() {
           {/* Profile hero */}
           <div className="rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10 backdrop-blur p-8">
             <h1 className="text-3xl font-bold text-white mb-4">
-              Hey, {authData.kickUsername ?? 'there'}! 👋
+              Hey, {authData.kickUsername ?? authData.discordUsername ?? 'there'}! 👋
             </h1>
             <div className="flex flex-wrap gap-2">
               {authData.kickUsername && (
@@ -216,6 +217,18 @@ function DashboardContent() {
             >
               <DiscordIcon size={16} />
               Also connect Discord to link your identity
+            </a>
+          )}
+
+          {/* Connect Kick prompt if not connected */}
+          {!authData.kickUsername && (
+            // eslint-disable-next-line @next/next/no-html-link-for-pages
+            <a
+              href="/api/viewer/kick-connect"
+              className="flex items-center justify-center gap-2.5 w-full px-5 py-3.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-300 text-sm font-medium transition-all"
+            >
+              <KickIcon size={16} />
+              Also connect Kick to track your credits
             </a>
           )}
 

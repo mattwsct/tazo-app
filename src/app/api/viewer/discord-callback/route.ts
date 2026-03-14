@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createViewerToken, verifyViewerToken, VIEWER_COOKIE_NAME, VIEWER_SESSION_TTL_MS } from '@/lib/viewer-auth';
 
@@ -66,11 +67,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       return NextResponse.redirect(new URL('/dashboard?error=failed_to_fetch_user', request.url));
     }
 
-    // Merge with existing Kick session if already connected
+    // Merge with existing Kick session if already connected, preserve viewerUuid
     const existingSession = verifyViewerToken(request.cookies.get(VIEWER_COOKIE_NAME)?.value ?? '');
+    const viewerUuid = existingSession?.viewerUuid ?? randomUUID();
     const exp = Date.now() + VIEWER_SESSION_TTL_MS;
 
     const tokenPayload = createViewerToken({
+      viewerUuid,
       kickId: existingSession?.kickId,
       kickUsername: existingSession?.kickUsername,
       discordId,
@@ -88,6 +91,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
     // Clear the state cookie
     response.cookies.set('viewer_discord_state', '', { maxAge: 0, path: '/' });
+
+    // Fire-and-forget: persist viewer identity to Supabase
+    void (async () => {
+      try {
+        const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
+        if (!isSupabaseConfigured()) return;
+        const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
+        if (!creator) return;
+        await supabase.from('viewer_profiles').upsert(
+          { creator_id: creator.id, platform: 'discord', platform_id: discordId, username: discordUsername, viewer_uuid: viewerUuid },
+          { onConflict: 'creator_id,platform,platform_id' }
+        );
+        // If kick also connected, link it too
+        if (existingSession?.kickId) {
+          await supabase.from('viewer_profiles').upsert(
+            { creator_id: creator.id, platform: 'kick', platform_id: existingSession.kickId, username: existingSession.kickUsername ?? '', viewer_uuid: viewerUuid },
+            { onConflict: 'creator_id,platform,platform_id' }
+          );
+        }
+      } catch (e) { console.error('[discord-callback] supabase sync:', e); }
+    })();
 
     return response;
   } catch (error) {

@@ -15,6 +15,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({
       authenticated: true,
+      viewerUuid: session.viewerUuid,
       kickUsername: session.kickUsername,
       discordUsername: session.discordUsername,
       balance: 0,
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (!creator) {
       return NextResponse.json({
         authenticated: true,
+        viewerUuid: session.viewerUuid,
         kickUsername: session.kickUsername,
         discordUsername: session.discordUsername,
         balance: 0,
@@ -43,26 +45,44 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const creatorId = creator.id;
-    // platform_id is stored as username.toLowerCase()
-    const platformId = session.kickId ? session.kickId.toLowerCase() : null;
+
+    // Get all platform_ids linked to this viewer via viewerUuid
+    let platformIds: string[] = [];
+
+    if (session.viewerUuid) {
+      const { data: profiles } = await supabase
+        .from('viewer_profiles')
+        .select('platform_id, platform, username')
+        .eq('viewer_uuid', session.viewerUuid)
+        .eq('creator_id', creatorId);
+
+      platformIds = profiles?.map((p: { platform_id: string }) => p.platform_id) ?? [];
+    }
+
+    // Also include direct IDs from token as fallback
+    if (session.kickId && !platformIds.includes(session.kickId)) platformIds.push(session.kickId);
+    if (session.kickId && !platformIds.includes(session.kickId.toLowerCase())) platformIds.push(session.kickId.toLowerCase());
+    if (session.kickUsername && !platformIds.includes(session.kickUsername.toLowerCase())) platformIds.push(session.kickUsername.toLowerCase());
+    if (session.discordId && !platformIds.includes(session.discordId)) platformIds.push(session.discordId);
 
     let balance = 0;
     let rank: number | null = null;
 
-    if (platformId) {
-      // Get the viewer's balance — sum of all delta entries for this platform_id
-      const { data: ledgerData } = await supabase
+    if (platformIds.length > 0) {
+      // Sum credits across all linked platform_ids
+      const { data: ledger } = await supabase
         .from('point_ledger')
         .select('delta')
         .eq('creator_id', creatorId)
-        .eq('platform_id', platformId);
+        .in('platform_id', platformIds);
 
-      if (ledgerData && ledgerData.length > 0) {
-        balance = ledgerData.reduce((sum: number, row: { delta: number }) => sum + (row.delta ?? 0), 0);
+      if (ledger && ledger.length > 0) {
+        balance = (ledger as Array<{ delta: number }>).reduce((sum, row) => sum + (row.delta ?? 0), 0);
       } else {
         // No ledger entries yet — balance is 0, return helpful message
         return NextResponse.json({
           authenticated: true,
+          viewerUuid: session.viewerUuid,
           kickUsername: session.kickUsername,
           discordUsername: session.discordUsername,
           balance: 0,
@@ -85,10 +105,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           balanceMap.set(row.platform_id, (balanceMap.get(row.platform_id) ?? 0) + (row.delta ?? 0));
         }
 
-        // Count viewers with a strictly higher balance
+        // Count viewers with a strictly higher balance (excluding our own platform_ids)
         let above = 0;
         for (const [pid, bal] of balanceMap) {
-          if (pid !== platformId && bal > balance) above++;
+          if (!platformIds.includes(pid) && bal > balance) above++;
         }
         rank = above + 1;
       }
@@ -96,6 +116,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({
       authenticated: true,
+      viewerUuid: session.viewerUuid,
       kickUsername: session.kickUsername,
       discordUsername: session.discordUsername,
       balance,
@@ -105,6 +126,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     console.error('[viewer/me] error:', error);
     return NextResponse.json({
       authenticated: true,
+      viewerUuid: session.viewerUuid,
       kickUsername: session.kickUsername,
       discordUsername: session.discordUsername,
       balance: 0,
