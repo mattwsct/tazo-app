@@ -181,6 +181,32 @@ export async function deductCredits(user: string, amount: number): Promise<{ ok:
   if (bal < amount) return { ok: false, balance: bal };
   const newBal = bal - amount;
   await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
+  // Fire-and-forget sync to Supabase point_ledger
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
+      if (!isSupabaseConfigured()) return;
+      const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
+      if (!creator) return;
+      const { data: viewer } = await supabase.from('viewer_profiles')
+        .upsert(
+          { creator_id: creator.id, platform: 'kick', platform_id: user.toLowerCase(), username: user },
+          { onConflict: 'creator_id,platform,platform_id', ignoreDuplicates: false }
+        )
+        .select('id')
+        .single();
+      await supabase.from('point_ledger').insert({
+        creator_id: creator.id,
+        viewer_id: viewer?.id ?? null,
+        platform_id: user.toLowerCase(),
+        username: user,
+        delta: -amount,
+        reason: 'spend',
+      });
+    } catch (e) {
+      console.error('[gambling-storage] supabase sync error:', e);
+    }
+  })();
   return { ok: true, balance: newBal };
 }
 
@@ -197,6 +223,32 @@ export async function addCredits(username: string, amount: number, options?: { s
   const newBal = bal + amount;
   await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
   if (username?.trim()) await setLeaderboardDisplayName(user, username.trim());
+  // Fire-and-forget sync to Supabase point_ledger
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
+      if (!isSupabaseConfigured()) return;
+      const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
+      if (!creator) return;
+      const { data: viewer } = await supabase.from('viewer_profiles')
+        .upsert(
+          { creator_id: creator.id, platform: 'kick', platform_id: user.toLowerCase(), username: username.trim() || user },
+          { onConflict: 'creator_id,platform,platform_id', ignoreDuplicates: false }
+        )
+        .select('id')
+        .single();
+      await supabase.from('point_ledger').insert({
+        creator_id: creator.id,
+        viewer_id: viewer?.id ?? null,
+        platform_id: user.toLowerCase(),
+        username: username.trim() || user,
+        delta: amount,
+        reason: 'earn',
+      });
+    } catch (e) {
+      console.error('[gambling-storage] supabase sync error:', e);
+    }
+  })();
   return newBal;
 }
 
@@ -238,6 +290,32 @@ async function placeBet(user: string, requestedBet: number): Promise<{ ok: false
   const bet = Math.min(Math.floor(Math.max(MIN_BET, requestedBet)), bal);
   const newBal = bal - bet;
   await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
+  // Fire-and-forget sync to Supabase point_ledger
+  void (async () => {
+    try {
+      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
+      if (!isSupabaseConfigured()) return;
+      const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
+      if (!creator) return;
+      const { data: viewer } = await supabase.from('viewer_profiles')
+        .upsert(
+          { creator_id: creator.id, platform: 'kick', platform_id: user.toLowerCase(), username: user },
+          { onConflict: 'creator_id,platform,platform_id', ignoreDuplicates: false }
+        )
+        .select('id')
+        .single();
+      await supabase.from('point_ledger').insert({
+        creator_id: creator.id,
+        viewer_id: viewer?.id ?? null,
+        platform_id: user.toLowerCase(),
+        username: user,
+        delta: -bet,
+        reason: 'blackjack_bet',
+      });
+    } catch (e) {
+      console.error('[gambling-storage] supabase sync error:', e);
+    }
+  })();
   return { ok: true, bet, balance: newBal };
 }
 

@@ -9,6 +9,7 @@ import type { OverlaySettings } from '@/types/settings';
 import type { PollState } from '@/types/poll';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
+import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 /** Guard: while we're showing a winner, don't overwrite with stale active or null (prevents flicker). */
 function resolvePollState(incoming: PollState | null, prev: PollState | null): PollState | null {
@@ -246,6 +247,26 @@ export function useOverlaySettings(): [
     timeoutId = setTimeout(poll, TIMERS.POLL_VOTE_UPDATE_INTERVAL);
     return () => clearTimeout(timeoutId);
   }, [settings.pollState?.status, setSettings]);
+
+  // Supabase Realtime — instant push when creator_settings changes (third mechanism alongside SSE + polling)
+  useEffect(() => {
+    const sb = getSupabaseBrowser();
+    if (!sb) return;
+
+    const channel = sb
+      .channel('overlay-settings-realtime')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'creator_settings',
+      }, () => {
+        // Trigger immediate settings refresh
+        void loadSettingsRef.current();
+      })
+      .subscribe();
+
+    return () => { void sb.removeChannel(channel); };
+  }, []);
 
   const refreshSettings = async () => {
     await loadSettingsRef.current();

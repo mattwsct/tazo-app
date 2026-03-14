@@ -60,6 +60,22 @@ async function handlePOST(request: NextRequest) {
       broadcastChallenges()
     ]);
 
+    // After the KV write succeeds, fire-and-forget Supabase sync
+    void (async () => {
+      try {
+        const { supabase: sb, isSupabaseConfigured } = await import('@/lib/supabase');
+        if (!isSupabaseConfigured()) return;
+        const { data: creator } = await sb.from('creators').select('id').eq('slug', 'tazo').single();
+        if (!creator) return;
+        await sb.from('creator_settings').upsert(
+          { creator_id: creator.id, overlay: settings, updated_at: new Date().toISOString() },
+          { onConflict: 'creator_id' }
+        );
+      } catch (e) {
+        console.error('[save-settings] supabase sync error:', e);
+      }
+    })();
+
     // If either goal is shown in title, refresh title with latest counts + new targets
     const savedSettings = settings as unknown as Record<string, unknown>;
     if (savedSettings.showSubGoal || savedSettings.showKicksGoal) {

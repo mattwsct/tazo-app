@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getViewerSession } from '@/lib/viewer-auth';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +9,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (!session || (!session.kickId && !session.discordId)) {
     return NextResponse.json({ authenticated: false });
+  }
+
+  // If Supabase is not configured, return a helpful response
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({
+      authenticated: true,
+      kickUsername: session.kickUsername,
+      discordUsername: session.discordUsername,
+      balance: 0,
+      rank: null,
+      message: 'Leaderboard data not yet available.',
+    });
   }
 
   try {
@@ -26,17 +38,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         discordUsername: session.discordUsername,
         balance: 0,
         rank: null,
+        message: 'Creator not found.',
       });
     }
 
     const creatorId = creator.id;
-    const platformId = session.kickId;
+    // platform_id is stored as username.toLowerCase()
+    const platformId = session.kickId ? session.kickId.toLowerCase() : null;
 
     let balance = 0;
     let rank: number | null = null;
 
     if (platformId) {
-      // Get the viewer's balance
+      // Get the viewer's balance — sum of all delta entries for this platform_id
       const { data: ledgerData } = await supabase
         .from('point_ledger')
         .select('delta')
@@ -45,10 +59,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       if (ledgerData && ledgerData.length > 0) {
         balance = ledgerData.reduce((sum: number, row: { delta: number }) => sum + (row.delta ?? 0), 0);
+      } else {
+        // No ledger entries yet — balance is 0, return helpful message
+        return NextResponse.json({
+          authenticated: true,
+          kickUsername: session.kickUsername,
+          discordUsername: session.discordUsername,
+          balance: 0,
+          rank: null,
+          message: 'No credit history yet. Earn credits by watching the stream!',
+        });
       }
 
-      // Get rank: count viewers with a higher balance
-      // We need to compute balances for all viewers and count those above ours
+      // Compute rank efficiently: fetch all deltas for this creator, aggregate by platform_id,
+      // then count how many viewers have a strictly higher balance than ours.
       const { data: allLedger } = await supabase
         .from('point_ledger')
         .select('platform_id, delta')
