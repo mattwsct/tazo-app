@@ -19,11 +19,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL('/dashboard?error=no_code', request.url));
   }
 
+  const codeVerifier = request.cookies.get('viewer_kick_verifier')?.value ?? '';
   const appUrl = (process.env.APP_URL ?? process.env.KICK_APP_URL ?? 'https://tazo.wtf').replace(/\/+$/, '');
   const redirectUri = `${appUrl}/api/viewer/kick-callback`;
 
   try {
-    // Exchange code for access token
+    // Exchange code for access token — Kick requires PKCE code_verifier
     const tokenRes = await fetch('https://id.kick.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         redirect_uri: redirectUri,
         client_id: process.env.KICK_CLIENT_ID ?? '',
         client_secret: process.env.KICK_CLIENT_SECRET ?? '',
+        code_verifier: codeVerifier,
       }),
     });
 
@@ -160,6 +162,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
     // Clear the state cookie
     response.cookies.set('viewer_kick_state', '', { maxAge: 0, path: '/' });
+    response.cookies.set('viewer_kick_verifier', '', { maxAge: 0, path: '/' });
 
     // Fire-and-forget: persist viewer identity to Supabase
     void (async () => {
