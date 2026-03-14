@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const startingBalance = (settings?.walletStartingBalance as number) ?? 15;
 
     // Reset wallet to on-but-hidden so it accumulates from the first event but isn't visible until shown
-    await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: true, walletVisible: false });
+    await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: true, walletVisible: true });
 
     const [, { subTarget }] = await Promise.all([
       onStreamStarted(),

@@ -41,7 +41,7 @@ export async function handleStreamStatus(payload: Record<string, unknown>, event
         const startingBalance = (settings?.walletStartingBalance as number) ?? 15;
 
         // Reset wallet to on-but-hidden: accumulates from first event, not visible until !wallet show
-        await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: true, walletVisible: false });
+        await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: true, walletVisible: true });
 
         const [{ subTarget: initialSubTarget }] = await Promise.all([
           resetStreamGoalsOnStreamStart(),

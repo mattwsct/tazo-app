@@ -11,6 +11,8 @@ export interface ChallengeItem {
   buyerUsername?: string;
   /** If set, challenge auto-completes when step count reaches this value. */
   stepsTarget?: number;
+  /** If set, challenge auto-completes when distance (km) reaches this value. */
+  distanceTarget?: number;
 }
 
 export interface ChallengesState {

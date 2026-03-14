@@ -182,9 +182,9 @@ export async function POST(request: NextRequest) {
     await kv.set(dedupKey, 1, { ex: IMPORT_DEDUP_TTL_SEC });
 
     await updateWellnessData(updates);
-    // Auto-complete any steps challenges if target reached
-    if (updates.steps != null) {
-      void checkAndCompleteStepsChallenges(updates.steps).then(() => {
+    // Auto-complete any steps/distance challenges if target reached
+    if (updates.steps != null || updates.distanceKm != null) {
+      void checkAndCompleteStepsChallenges(updates.steps ?? 0, updates.distanceKm).then(() => {
         void broadcastChallenges().catch(() => {});
       });
     }

@@ -150,7 +150,7 @@ export async function addChallenge(
   bounty: number,
   description: string,
   expiresAt?: number,
-  opts?: { buyerUsername?: string; stepsTarget?: number }
+  opts?: { buyerUsername?: string; stepsTarget?: number; distanceTarget?: number }
 ): Promise<ChallengeItem | null> {
   const state = await getChallengesState();
   const activeCount = state.challenges.filter((c) => c.status === 'active').length;
@@ -164,6 +164,7 @@ export async function addChallenge(
     ...(expiresAt ? { expiresAt } : {}),
     ...(opts?.buyerUsername ? { buyerUsername: opts.buyerUsername } : {}),
     ...(opts?.stepsTarget != null ? { stepsTarget: opts.stepsTarget } : {}),
+    ...(opts?.distanceTarget != null ? { distanceTarget: opts.distanceTarget } : {}),
   };
   state.challenges.push(item);
   state.nextId += 1;
@@ -171,21 +172,67 @@ export async function addChallenge(
   return item;
 }
 
-/** Add the two default per-stream challenges (steps + pushups). Called on stream start and manual reset. */
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomPick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Generate a random steps or distance challenge for the stream. */
+function makeMovementChallenge(): { description: string; bounty: number; opts: { stepsTarget?: number; distanceTarget?: number } } {
+  if (Math.random() < 0.5) {
+    // Steps: 8,000–12,000 in 1,000-step increments
+    const steps = randomInt(8, 12) * 1_000;
+    return {
+      description: `${steps.toLocaleString()} steps`,
+      bounty: 20,
+      opts: { stepsTarget: steps },
+    };
+  } else {
+    // Distance: 6–10 km
+    const km = randomInt(6, 10);
+    return {
+      description: `${km} km`,
+      bounty: 20,
+      opts: { distanceTarget: km },
+    };
+  }
+}
+
+/** Generate a random fitness challenge for the stream. */
+function makeFitnessChallenge(): { description: string; bounty: number } {
+  const options = [
+    () => `${randomInt(10, 30)} pushups`,
+    () => `${randomInt(20, 50)} squats`,
+    () => `${randomInt(30, 120)}s plank`,
+    () => `${randomInt(15, 40)} sit-ups`,
+    () => `${randomInt(10, 25)} burpees`,
+  ];
+  return { description: randomPick(options)(), bounty: 10 };
+}
+
+/** Add randomised default challenges on stream start/reset. */
 export async function addDefaultChallenges(): Promise<void> {
-  await addChallenge(20, '10,000 steps', undefined, { stepsTarget: 10_000 });
-  await addChallenge(10, '20 pushups');
+  const movement = makeMovementChallenge();
+  const fitness = makeFitnessChallenge();
+  await addChallenge(movement.bounty, movement.description, undefined, movement.opts);
+  await addChallenge(fitness.bounty, fitness.description);
 }
 
 /**
- * Check active challenges with a stepsTarget and auto-complete any where currentSteps >= target.
- * Called after each wellness import. Adds bounty to wallet and removes the challenge.
+ * Check active challenges with a stepsTarget or distanceTarget and auto-complete when reached.
+ * Called after each wellness import.
  */
-export async function checkAndCompleteStepsChallenges(currentSteps: number): Promise<void> {
+export async function checkAndCompleteStepsChallenges(currentSteps: number, currentDistanceKm?: number): Promise<void> {
   const state = await getChallengesState();
-  const toComplete = state.challenges.filter(
-    (c) => c.status === 'active' && c.stepsTarget != null && currentSteps >= c.stepsTarget
-  );
+  const toComplete = state.challenges.filter((c) => {
+    if (c.status !== 'active') return false;
+    if (c.stepsTarget != null && currentSteps >= c.stepsTarget) return true;
+    if (c.distanceTarget != null && currentDistanceKm != null && currentDistanceKm >= c.distanceTarget) return true;
+    return false;
+  });
   for (const c of toComplete) {
     await updateChallengeStatus(c.id, 'completed');
   }
