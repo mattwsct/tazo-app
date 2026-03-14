@@ -4,6 +4,7 @@
  */
 
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { kv } from '@/lib/kv';
 import { isStreamLive } from '@/utils/stats-storage';
 import {
   getWellnessDataForDisplay,
@@ -79,6 +80,10 @@ export async function checkWellnessMilestonesAndSendChat(): Promise<number> {
     const crossed = milestones.filter((m) => current >= m && (lastSent == null || m > lastSent));
     const highest = crossed.length > 0 ? Math.max(...crossed) : null;
     if (highest != null) {
+      // Atomic claim: only one concurrent instance sends this milestone
+      const claimKey = `wellness_milestone_claim:${metric}:${highest}`;
+      const claimed = await kv.set(claimKey, 1, { nx: true, ex: 300 });
+      if (claimed === null) return; // another instance already claimed it
       const msg = `${emoji} ${label}: ${fmtDisplay(current)}`;
       try {
         await sendKickChatMessage(token, msg);
