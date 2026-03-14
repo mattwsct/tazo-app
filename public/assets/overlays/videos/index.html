@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BRB Live Background</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+
+  #player-container {
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 120%;
+    height: 120%;
+    filter: blur(7px);
+    transform: scale(1.1);
+    opacity: 0;
+    transition: opacity 1s ease;
+    pointer-events: none;
+  }
+
+  #player-container.show {
+    opacity: 1;
+  }
+
+  /* Vignette overlay */
+  #vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 0%, transparent 40%, rgba(0,0,0,0.4) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Color overlay */
+  #color-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(139, 92, 246, 0.08);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+<div id="player-container"></div>
+<div id="vignette"></div>
+<div id="color-overlay"></div>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+const IDS = ["_k-5U7IeK8g", "DBWgFXSMr-8", "6dp-bvQ7RWo"];
+const RETRY_DELAY = 5000; // Wait 5 seconds before retrying same video
+const MAX_RETRIES_PER_VIDEO = 3; // Try each video 3 times before moving to next
+
+let currentIndex = 0;
+let player = null;
+let apiReady = false;
+let retries = 0;
+let loadTimer = null;
+
+function onYouTubeIframeAPIReady() {
+  apiReady = true;
+  loadVideo();
+}
+
+function loadVideo() {
+  if (!apiReady || !IDS.length) return;
+  
+  clearTimeout(loadTimer);
+  const videoId = IDS[currentIndex];
+  console.log(`Loading video ${currentIndex + 1}/${IDS.length}: ${videoId} (attempt ${retries + 1}/${MAX_RETRIES_PER_VIDEO})`);
+  
+  // Clear container
+  const container = document.getElementById('player-container');
+  container.innerHTML = '';
+  container.classList.remove('show');
+  
+  // Destroy old player if exists
+  if (player && player.destroy) {
+    try { player.destroy(); } catch (e) {}
+  }
+  
+  // Create new player
+  player = new YT.Player('player-container', {
+    videoId: videoId,
+    playerVars: {
+      autoplay: 1,
+      mute: 1,
+      controls: 0,
+      rel: 0,
+      modestbranding: 1,
+      playsinline: 1,
+      iv_load_policy: 3,
+      disablekb: 1,
+      fs: 0,
+      enablejsapi: 1,
+      loop: 1,
+      playlist: videoId // Required for loop to work
+    },
+    events: {
+      onReady: onPlayerReady,
+      onStateChange: onPlayerStateChange,
+      onError: onPlayerError
+    }
+  });
+  
+  // Watchdog: if not playing within 15 seconds, handle as failure
+  loadTimer = setTimeout(() => {
+    console.warn('Video load timeout');
+    handleVideoFailure();
+  }, 15000);
+}
+
+function onPlayerReady(event) {
+  console.log('Player ready');
+  event.target.playVideo();
+}
+
+function onPlayerStateChange(event) {
+  if (event.data === YT.PlayerState.PLAYING) {
+    clearTimeout(loadTimer);
+    console.log('Video playing successfully');
+    
+    // Show the video
+    document.getElementById('player-container').classList.add('show');
+    
+    // Reset retry counter on successful play
+    retries = 0;
+    
+  } else if (event.data === YT.PlayerState.UNSTARTED) {
+    // Video hasn't started - watchdog will handle if it takes too long
+    
+  } else if (event.data === YT.PlayerState.ENDED) {
+    // Shouldn't happen with loop=1, but handle it
+    console.log('Video ended unexpectedly, restarting');
+    try {
+      player.playVideo();
+    } catch (e) {
+      console.error('Error restarting video:', e);
+      handleVideoFailure();
+    }
+  }
+}
+
+function onPlayerError(event) {
+  console.error(`Video error: code ${event.data}`);
+  handleVideoFailure();
+}
+
+function handleVideoFailure() {
+  clearTimeout(loadTimer);
+  retries++;
+  
+  if (retries < MAX_RETRIES_PER_VIDEO) {
+    // Retry same video
+    console.log(`Retrying same video in ${RETRY_DELAY / 1000} seconds...`);
+    loadTimer = setTimeout(() => {
+      loadVideo();
+    }, RETRY_DELAY);
+  } else {
+    // Move to next video
+    retries = 0;
+    currentIndex++;
+    
+    if (currentIndex >= IDS.length) {
+      // All videos failed, show black screen
+      console.error('All videos failed. Showing black screen.');
+      document.getElementById('player-container').classList.remove('show');
+      
+      // Retry from beginning after 1 minute
+      console.log('Will retry from beginning in 60 seconds...');
+      loadTimer = setTimeout(() => {
+        currentIndex = 0;
+        loadVideo();
+      }, 60000);
+    } else {
+      // Try next video
+      console.log(`Moving to next video in ${RETRY_DELAY / 1000} seconds...`);
+      loadTimer = setTimeout(() => {
+        loadVideo();
+      }, RETRY_DELAY);
+    }
+  }
+}
+
+// Start if API is already loaded
+if (window.YT && window.YT.Player) {
+  apiReady = true;
+  loadVideo();
+}
+</script>
+</body>
+</html>
