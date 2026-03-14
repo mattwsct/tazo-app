@@ -190,22 +190,26 @@ export async function GET(request: NextRequest) {
     }
   } catch { /* non-critical */ }
 
-  // HR/speed/altitude broadcasts (shared with stats ingestion for immediate sends)
-  sent += await maybeBroadcastStats({}, 'cron');
+  // All chat broadcasts are skipped when offline — use isLive from Kick API (authoritative)
+  // rather than KV, which may be stale if the heal above hasn't completed yet.
+  if (isLive) {
+    // HR/speed/altitude broadcasts (shared with stats ingestion for immediate sends)
+    sent += await maybeBroadcastStats({}, 'cron');
 
-  // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
-  sent += await maybeBroadcastWeather();
+    // Weather broadcast: notable condition changes only (rain, snow, storm, fog, high UV, poor AQI). Not when clearing.
+    sent += await maybeBroadcastWeather();
 
-  // Wellness milestones: steps, distance (shared with import route for immediate send)
-  const wellnessSent = await maybeBroadcastWellness();
-  if (wellnessSent > 0) {
-    sent += wellnessSent;
-    console.log('[Cron HR] WELLNESS_MILESTONES', JSON.stringify({ sent: wellnessSent }));
+    // Wellness milestones: steps, distance (shared with import route for immediate send)
+    const wellnessSent = await maybeBroadcastWellness();
+    if (wellnessSent > 0) {
+      sent += wellnessSent;
+      console.log('[Cron HR] WELLNESS_MILESTONES', JSON.stringify({ sent: wellnessSent }));
+    }
   }
 
   // Trivia reminder + auto-close: if a trivia question is active and unanswered for a while,
   // periodically remind chat of the question and eventually close it if nobody answers.
-  try {
+  if (isLive) try {
     const trivia = await kv.get<TriviaState>(TRIVIA_STATE_KEY);
     if (trivia && !trivia.winnerDisplayUntil) {
       const REMINDER_INTERVAL_MS = 90_000; // 90s between reminders
