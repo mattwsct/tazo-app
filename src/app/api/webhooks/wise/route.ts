@@ -67,9 +67,21 @@ export async function POST(request: NextRequest) {
   const rawBody = Buffer.from(await request.arrayBuffer());
   const signature = request.headers.get('x-signature-sha256');
 
-  // TODO: re-enable signature verification once webhook registration is confirmed working
-  // if (!signature) { ... }
-  // if (!verifySignature(...)) { return 401 }
+  // Verify signature — Wise signs all delivery events with their RSA private key
+  if (signature) {
+    try {
+      const publicKey = await getWisePublicKey();
+      if (!verifySignature(rawBody, signature, publicKey)) {
+        console.warn('[Wise Webhook] Signature verification failed — rejecting');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    } catch (err) {
+      console.error('[Wise Webhook] Could not verify signature:', err);
+      return NextResponse.json({ error: 'Could not verify signature' }, { status: 500 });
+    }
+  } else {
+    console.log('[Wise Webhook] No signature header — treating as ping');
+  }
 
   let payload: Record<string, unknown>;
   try {
