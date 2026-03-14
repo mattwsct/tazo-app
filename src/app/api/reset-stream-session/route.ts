@@ -27,8 +27,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const settings = await kv.get<{ walletStartingBalance?: number }>('overlay_settings');
-    const startingBalance = settings?.walletStartingBalance ?? 15;
+    const settings = await kv.get<Record<string, unknown>>('overlay_settings');
+    const startingBalance = (settings?.walletStartingBalance as number) ?? 15;
+
+    // Reset wallet to on-but-hidden so it accumulates from the first event but isn't visible until shown
+    await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: true, walletVisible: false });
 
     const [, { subTarget }] = await Promise.all([
       onStreamStarted(),

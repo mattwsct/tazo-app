@@ -87,8 +87,11 @@ export async function handleGoalCommand(
     const isBroadcaster = !!broadcasterSlug && sender.toLowerCase() === broadcasterSlug.toLowerCase();
     if (!isBroadcaster) return { handled: true }; // silently ignore non-broadcasters
 
-    const storedSettings = await kv.get<{ walletStartingBalance?: number }>('overlay_settings');
-    const startingBalance = storedSettings?.walletStartingBalance ?? 15;
+    const storedSettings = await kv.get<Record<string, unknown>>('overlay_settings');
+    const startingBalance = (storedSettings?.walletStartingBalance as number) ?? 15;
+
+    // Reset wallet to on-but-hidden so it accumulates from the first event but isn't visible until shown
+    await kv.set(OVERLAY_SETTINGS_KEY, { ...(storedSettings ?? {}), walletEnabled: true, walletVisible: false });
 
     const [, { subTarget }] = await Promise.all([
       onStreamStarted(),
