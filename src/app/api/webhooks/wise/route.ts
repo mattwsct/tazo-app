@@ -19,6 +19,14 @@ import { broadcastChallenges } from '@/lib/challenges-broadcast';
 
 export const dynamic = 'force-dynamic';
 
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
+export async function HEAD() {
+  return new NextResponse(null, { status: 200 });
+}
+
 const WISE_PUBLIC_KEY_URL = 'https://api.transferwise.com/v1/subscriptions/webhooks/public-key';
 
 // Cache the public key in memory — it changes extremely rarely
