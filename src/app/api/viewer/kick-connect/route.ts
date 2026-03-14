@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(): Promise<NextResponse> {
   const state = randomBytes(16).toString('hex');
   const clientId = process.env.KICK_CLIENT_ID ?? '';
-  const appUrl = process.env.APP_URL ?? process.env.KICK_APP_URL ?? 'https://tazo.wtf';
+  const appUrl = (process.env.APP_URL ?? process.env.KICK_APP_URL ?? 'https://tazo.wtf').replace(/\/+$/, '');
   const redirectUri = `${appUrl}/api/viewer/kick-callback`;
 
   const params = new URLSearchParams({

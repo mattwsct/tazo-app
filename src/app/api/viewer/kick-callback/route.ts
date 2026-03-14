@@ -18,7 +18,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL('/dashboard?error=no_code', request.url));
   }
 
-  const appUrl = process.env.APP_URL ?? process.env.KICK_APP_URL ?? 'https://tazo.wtf';
+  const appUrl = (process.env.APP_URL ?? process.env.KICK_APP_URL ?? 'https://tazo.wtf').replace(/\/+$/, '');
   const redirectUri = `${appUrl}/api/viewer/kick-callback`;
 
   try {
