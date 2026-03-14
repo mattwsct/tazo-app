@@ -35,7 +35,6 @@ import {
 } from '@/utils/challenges-storage';
 import { deductCredits, addCredits } from '@/utils/gambling-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
-import { COUNTRY_CURRENCY } from '@/utils/local-currency';
 
 export interface HandleChallengesCommandResult {
   handled: boolean;

@@ -26,7 +26,7 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        router.push('/');
+        router.push('/app');
       } else {
         setError('Invalid password');
       }

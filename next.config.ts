@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
   // Performance optimizations
   experimental: {
     // Optimize package imports to reduce bundle size
-    optimizePackageImports: ['@vercel/kv'],
+    optimizePackageImports: ['@upstash/redis'],
     // Note: maplibre-gl excluded - already dynamically imported
     // Disable Turbopack filesystem cache for builds to avoid local persistence directory issues
     turbopackFileSystemCacheForBuild: false,
@@ -50,6 +50,37 @@ const nextConfig: NextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
+          },
+        ],
+      },
+      {
+        source: '/overlay/:path*',
+        headers: [
+          // Allow embedding the overlay (e.g., OBS) via CSP frame-ancestors
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors *; default-src 'self' blob: data: https:; img-src 'self' https: data:; script-src 'self' https://cdn.jsdelivr.net https://*.firebaseio.com https://www.googletagmanager.com https://static.cloudflareinsights.com 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https: wss:; style-src 'self' 'unsafe-inline' https:; worker-src 'self' blob:;",
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'geolocation=()'
+          },
+          // Force no caching for OBS browser sources
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate, max-age=0',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
+          {
+            key: 'ETag',
+            value: '',
           },
         ],
       },

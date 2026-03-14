@@ -40,7 +40,7 @@ function TimerRow({ timer, now }: { timer: OverlayTimerState; now: number }) {
     if (startedForRef.current === timer.endsAt) return;
     startedForRef.current = timer.endsAt;
     if (Date.now() - timer.endsAt > TIMER_COMPLETE_DISPLAY_MS) return;
-    setCompleteUntil(Date.now() + TIMER_COMPLETE_DISPLAY_MS);
+    queueMicrotask(() => setCompleteUntil(Date.now() + TIMER_COMPLETE_DISPLAY_MS));
     fetch(`/api/timer-end-trigger?endsAt=${timer.endsAt}`, { cache: 'no-store' }).catch(() => {});
   }, [remainingMs, timer.endsAt]);
 
@@ -147,6 +147,7 @@ export default function StreamPanel({
     const next = walletAnimQueueRef.current.shift();
     if (next) {
       setWalletAnim(next);
+      // eslint-disable-next-line react-hooks/immutability
       walletAnimTimerRef.current = setTimeout(advanceWalletAnimRef.current, ALERT_DISPLAY_MS);
     } else {
       setWalletAnim(null);
@@ -174,6 +175,7 @@ export default function StreamPanel({
       walletAnimQueueRef.current.push(anim);
     } else {
       setWalletAnim(anim);
+      // eslint-disable-next-line react-hooks/immutability
       walletAnimTimerRef.current = setTimeout(advanceWalletAnimRef.current, ALERT_DISPLAY_MS);
     }
   }, [wallet]);

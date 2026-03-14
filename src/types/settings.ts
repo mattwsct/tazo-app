@@ -30,6 +30,9 @@ export interface OverlaySettings {
   pollState?: PollState | null;
   /** Trivia (first-to-answer) state. Not persisted in overlay_settings. */
   triviaState?: TriviaState | null;
+  // TODO: Remove all @deprecated fields below once KV migration to Supabase is complete and
+  // old keys are no longer present in production. Fields are retained for backwards-compatible
+  // deserialization of existing KV data — removing them would silently drop stored values.
   /** @deprecated Phase 1: leaderboards removed. Kept for KV compat. */
   showLeaderboard?: boolean;
   /** When false, hide the rotating carousel — alerts still pop up in goal bars when they fire. */

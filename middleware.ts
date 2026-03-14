@@ -3,9 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
-  // Add version parameter to overlay URL to prevent OBS browser source caching.
-  // Done server-side so the version is present before OBS caches the initial load.
-  if (pathname === '/overlay' && !searchParams.has('v')) {
+  // Add version parameter to overlay URLs to prevent OBS browser source caching.
+  // Matches /overlay and /overlay/[creator]
+  const isOverlay = pathname === '/overlay' || pathname.startsWith('/overlay/');
+  if (isOverlay && !searchParams.has('v')) {
     const url = request.nextUrl.clone();
     url.searchParams.set('v', process.env.NEXT_PUBLIC_BUILD_VERSION || Date.now().toString());
     return NextResponse.rewrite(url);
@@ -15,5 +16,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/overlay'],
+  matcher: ['/overlay', '/overlay/:path*'],
 };

@@ -1,3 +1,12 @@
+/**
+ * LEGACY / REDUNDANT: This endpoint duplicates a subset of the logic in
+ * /api/webhooks/kick/route.ts (the canonical Kick webhook handler).
+ * The full handler handles chat commands, reward redemptions, alert events,
+ * stream status, and debug logging — this file does none of those.
+ *
+ * If the Kick dashboard webhook URL points here, migrate it to /api/webhooks/kick.
+ * Once confirmed unused, this file can be deleted.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import {

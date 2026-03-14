@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/* Bebas Neue font class */
+.font-bebas {
+  font-family: var(--font-bebas-neue), sans-serif;
+  font-display: swap;
+}
+
+/* Hero background gradient animation */
+.hero-bg {
+  background: linear-gradient(135deg, #00f0ff, #d946ef);
+  background-size: 200% 200%;
+  animation: gradientShift 16s ease infinite;
+}
+
+.hero-glow {
+  box-shadow: 0 0 24px rgba(0, 195, 255, 0.35), 0 0 12px rgba(217, 70, 239, 0.25);
+}
+
+.tazo-name:hover {
+  animation: pulseText 1s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes pulseText {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+.link-button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.link-button:hover {
+  transform: translateY(-2px);
+}
+
+.link-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+#particle-canvas {
+  z-index: 0;
+}
+
+html.fonts-loaded {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}

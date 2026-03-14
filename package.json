@@ -21,25 +21,28 @@
   },
   "dependencies": {
     "@fontsource/montserrat": "^5.2.8",
+    "@supabase/supabase-js": "^2.99.1",
+    "@tailwindcss/postcss": "^4.2.1",
     "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.36.2",
-    "maplibre-gl": "^5.7.1",
+    "@upstash/redis": "^1.37.0",
+    "maplibre-gl": "^5.20.1",
     "next": "^16.1.6",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.1"
   },
   "overrides": {
     "minimatch": ">=10.2.1"
   },
   "devDependencies": {
-    "@types/node": "^25.2.2",
+    "@types/node": "^25.5.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "cross-env": "^10.1.0",
-    "eslint": "^9.39.2",
+    "eslint": "^9.39.4",
     "eslint-config-next": "^16.1.6",
     "typescript": "^5",
     "vite-tsconfig-paths": "^6.1.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.0"
   }
 }

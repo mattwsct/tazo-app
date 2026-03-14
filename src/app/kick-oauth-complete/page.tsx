@@ -16,7 +16,7 @@ function KickOAuthComplete() {
       );
       window.close();
     } else {
-      window.location.href = error ? `/?kick_oauth=error&error=${error}` : '/?kick_oauth=success';
+      window.location.href = error ? `/app?kick_oauth=error&error=${error}` : '/app?kick_oauth=success';
     }
   }, [error]);
 
