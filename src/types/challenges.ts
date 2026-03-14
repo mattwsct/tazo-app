@@ -9,6 +9,8 @@ export interface ChallengeItem {
   expiresAt?: number;
   /** Username of the viewer who purchased this via !chatchallenge (for credit refund on removal). */
   buyerUsername?: string;
+  /** If set, challenge auto-completes when step count reaches this value. */
+  stepsTarget?: number;
 }
 
 export interface ChallengesState {

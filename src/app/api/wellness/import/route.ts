@@ -17,6 +17,8 @@ import { kv } from '@/lib/kv';
 import { updateWellnessData } from '@/utils/wellness-storage';
 import type { WellnessData } from '@/utils/wellness-storage';
 import { checkWellnessMilestonesAndSendChat } from '@/lib/wellness-milestone-chat';
+import { checkAndCompleteStepsChallenges } from '@/utils/challenges-storage';
+import { broadcastChallenges } from '@/lib/challenges-broadcast';
 
 const IMPORT_DEDUP_TTL_SEC = 30; // seconds — reject identical payloads within this window
 
@@ -180,6 +182,12 @@ export async function POST(request: NextRequest) {
     await kv.set(dedupKey, 1, { ex: IMPORT_DEDUP_TTL_SEC });
 
     await updateWellnessData(updates);
+    // Auto-complete any steps challenges if target reached
+    if (updates.steps != null) {
+      void checkAndCompleteStepsChallenges(updates.steps).then(() => {
+        void broadcastChallenges().catch(() => {});
+      });
+    }
     // When stream is live, check milestones immediately and post chat messages if any crossed
     void checkWellnessMilestonesAndSendChat().then((n) => {
       if (n > 0) console.log(`[Wellness] Milestone chat sent=${n} after import`);

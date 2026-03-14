@@ -150,7 +150,7 @@ export async function addChallenge(
   bounty: number,
   description: string,
   expiresAt?: number,
-  opts?: { buyerUsername?: string }
+  opts?: { buyerUsername?: string; stepsTarget?: number }
 ): Promise<ChallengeItem | null> {
   const state = await getChallengesState();
   const activeCount = state.challenges.filter((c) => c.status === 'active').length;
@@ -163,11 +163,32 @@ export async function addChallenge(
     createdAt: Date.now(),
     ...(expiresAt ? { expiresAt } : {}),
     ...(opts?.buyerUsername ? { buyerUsername: opts.buyerUsername } : {}),
+    ...(opts?.stepsTarget != null ? { stepsTarget: opts.stepsTarget } : {}),
   };
   state.challenges.push(item);
   state.nextId += 1;
   await saveChallengesState(state);
   return item;
+}
+
+/** Add the two default per-stream challenges (steps + pushups). Called on stream start and manual reset. */
+export async function addDefaultChallenges(): Promise<void> {
+  await addChallenge(20, '10,000 steps', undefined, { stepsTarget: 10_000 });
+  await addChallenge(10, '20 pushups');
+}
+
+/**
+ * Check active challenges with a stepsTarget and auto-complete any where currentSteps >= target.
+ * Called after each wellness import. Adds bounty to wallet and removes the challenge.
+ */
+export async function checkAndCompleteStepsChallenges(currentSteps: number): Promise<void> {
+  const state = await getChallengesState();
+  const toComplete = state.challenges.filter(
+    (c) => c.status === 'active' && c.stepsTarget != null && currentSteps >= c.stepsTarget
+  );
+  for (const c of toComplete) {
+    await updateChallengeStatus(c.id, 'completed');
+  }
 }
 
 export async function updateChallengeStatus(

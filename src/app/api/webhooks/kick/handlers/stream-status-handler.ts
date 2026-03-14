@@ -3,7 +3,7 @@ import { clearBlackjackStateOnStreamStart, isGamblingEnabled } from '@/utils/gam
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals, resetStreamTitleToLocationOnly } from '@/lib/stream-title-updater';
 import { setChannelCategoryToIRL } from '@/lib/category-chat-handler';
-import { resetWallet, resetChallenges } from '@/utils/challenges-storage';
+import { resetWallet, resetChallenges, addDefaultChallenges } from '@/utils/challenges-storage';
 import { setOverlayTimer } from '@/utils/overlay-timer-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { POLL_STATE_KEY, POLL_QUEUE_KEY, LAST_POLL_ENDED_AT_KEY } from '@/types/poll';
@@ -56,6 +56,7 @@ export async function handleStreamStatus(payload: Record<string, unknown>, event
           kv.del(OVERLAY_TIMER_ANNOUNCED_KEY),
         ]);
 
+        await addDefaultChallenges();
         void broadcastChallenges().catch(() => {});
         void updateKickTitleGoals(0, initialSubTarget).catch((e) => {
           console.warn('[stream-status] Failed to update kick title goals on stream start:', e);
