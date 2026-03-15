@@ -155,6 +155,7 @@ export default function AdminPage() {
   const [linksData, setLinksData] = useState<LinkItem[]>(LINKS);
   const [linksLoading, setLinksLoading] = useState(false);
   const [linksSaving, setLinksSaving] = useState(false);
+  const [linksAdvancedOpen, setLinksAdvancedOpen] = useState<Set<string>>(new Set());
   // Integrations / API keys
   type ApiKeyStatus = { configured: boolean; masked: string | null; source: 'db' | 'env' | null };
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, ApiKeyStatus>>({});
@@ -2622,33 +2623,54 @@ export default function AdminPage() {
           <CollapsibleSection id="links" title="🔗 Links">
             <div className="setting-group">
               <p className="input-hint" style={{ marginBottom: 16 }}>
-                Manage links shown on the homepage. Toggle visibility, edit titles, URLs, button labels, and button colors. Click Save when done.
+                Manage links shown on the homepage. Use ↑↓ to reorder, toggle visibility, and click Save when done.
               </p>
               {linksLoading ? (
                 <p className="input-hint">Loading links…</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {linksData.map((link, idx) => {
-                    // Extract hex colors from bg string e.g. "from-[#53fc18] to-[#2f8f0b]"
                     const hexMatches = link.bg.match(/#[0-9a-fA-F]{3,6}/g) ?? [];
                     const fromColor = hexMatches[0] ?? '#71717a';
                     const toColor = hexMatches[hexMatches.length - 1] ?? fromColor;
                     const gradientStyle = { background: `linear-gradient(to right, ${fromColor}, ${toColor})` };
+                    const advOpen = linksAdvancedOpen.has(link.id);
                     return (
                       <div
                         key={link.id}
-                        style={{
-                          borderRadius: 8,
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          overflow: 'hidden',
-                        }}
+                        style={{ borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}
                       >
-                        {/* Color bar + header row */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)' }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 6, flexShrink: 0, ...gradientStyle }} />
+                        {/* Header row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(255,255,255,0.04)' }}>
+                          {/* Reorder buttons */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => {
+                                const updated = [...linksData];
+                                [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
+                                setLinksData(updated);
+                              }}
+                              style={{ background: 'none', border: 'none', color: idx === 0 ? '#3f3f46' : '#71717a', cursor: idx === 0 ? 'default' : 'pointer', padding: '0 2px', lineHeight: 1, fontSize: 12 }}
+                              title="Move up"
+                            >▲</button>
+                            <button
+                              type="button"
+                              disabled={idx === linksData.length - 1}
+                              onClick={() => {
+                                const updated = [...linksData];
+                                [updated[idx], updated[idx + 1]] = [updated[idx + 1], updated[idx]];
+                                setLinksData(updated);
+                              }}
+                              style={{ background: 'none', border: 'none', color: idx === linksData.length - 1 ? '#3f3f46' : '#71717a', cursor: idx === linksData.length - 1 ? 'default' : 'pointer', padding: '0 2px', lineHeight: 1, fontSize: 12 }}
+                              title="Move down"
+                            >▼</button>
+                          </div>
+                          <div style={{ width: 32, height: 32, borderRadius: 6, flexShrink: 0, ...gradientStyle }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#e4e4e7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {link.button || link.title}
+                              {link.button || link.title || 'New link'}
                             </div>
                             <div style={{ fontSize: '0.7rem', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{link.category}</div>
                           </div>
@@ -2665,17 +2687,26 @@ export default function AdminPage() {
                             />
                             <span className="checkbox-text" style={{ fontSize: '0.8rem' }}>Show</span>
                           </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!confirm(`Remove "${link.button || link.title || 'this link'}"?`)) return;
+                              setLinksData(linksData.filter((_, i) => i !== idx));
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#71717a', cursor: 'pointer', fontSize: 16, padding: '0 2px', flexShrink: 0 }}
+                            title="Remove link"
+                          >✕</button>
                         </div>
                         {/* Fields */}
                         <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: 'rgba(255,255,255,0.02)' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
-                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>Button label</label>
+                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>Title</label>
                               <input
                                 type="text"
                                 className="setting-input"
                                 value={link.button}
-                                placeholder="Button label"
+                                placeholder="Title"
                                 onChange={(e) => {
                                   const updated = [...linksData];
                                   updated[idx] = { ...updated[idx], button: e.target.value, title: e.target.value };
@@ -2715,41 +2746,77 @@ export default function AdminPage() {
                               }}
                             />
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <label style={{ fontSize: '0.7rem', color: '#71717a' }}>From</label>
-                              <input
-                                type="color"
-                                value={fromColor}
-                                onChange={(e) => {
-                                  const updated = [...linksData];
-                                  const newBg = `from-[${e.target.value}] to-[${toColor}]`;
-                                  updated[idx] = { ...updated[idx], bg: newBg };
-                                  setLinksData(updated);
-                                }}
-                                style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
-                              />
+                          {/* Advanced: colour pickers */}
+                          <button
+                            type="button"
+                            onClick={() => setLinksAdvancedOpen((prev) => {
+                              const next = new Set(prev);
+                              advOpen ? next.delete(link.id) : next.add(link.id);
+                              return next;
+                            })}
+                            style={{ background: 'none', border: 'none', color: '#71717a', cursor: 'pointer', fontSize: '0.7rem', textAlign: 'left', padding: 0 }}
+                          >
+                            {advOpen ? '▾ Hide colours' : '▸ Button colour'}
+                          </button>
+                          {advOpen && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <label style={{ fontSize: '0.7rem', color: '#71717a' }}>From</label>
+                                <input
+                                  type="color"
+                                  value={fromColor}
+                                  onChange={(e) => {
+                                    const updated = [...linksData];
+                                    updated[idx] = { ...updated[idx], bg: `from-[${e.target.value}] to-[${toColor}]` };
+                                    setLinksData(updated);
+                                  }}
+                                  style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
+                                />
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <label style={{ fontSize: '0.7rem', color: '#71717a' }}>To</label>
+                                <input
+                                  type="color"
+                                  value={toColor}
+                                  onChange={(e) => {
+                                    const updated = [...linksData];
+                                    updated[idx] = { ...updated[idx], bg: `from-[${fromColor}] to-[${e.target.value}]` };
+                                    setLinksData(updated);
+                                  }}
+                                  style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
+                                />
+                              </div>
+                              <div style={{ flex: 1, height: 28, borderRadius: 4, ...gradientStyle }} />
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <label style={{ fontSize: '0.7rem', color: '#71717a' }}>To</label>
-                              <input
-                                type="color"
-                                value={toColor}
-                                onChange={(e) => {
-                                  const updated = [...linksData];
-                                  const newBg = `from-[${fromColor}] to-[${e.target.value}]`;
-                                  updated[idx] = { ...updated[idx], bg: newBg };
-                                  setLinksData(updated);
-                                }}
-                                style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
-                              />
-                            </div>
-                            <div style={{ flex: 1, height: 28, borderRadius: 4, ...gradientStyle }} />
-                          </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
+                  {/* Add new link */}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={() => {
+                      const newId = `link_${Date.now().toString(36)}`;
+                      setLinksData([...linksData, {
+                        id: newId,
+                        url: '',
+                        title: '',
+                        button: '',
+                        description: '',
+                        icon: null,
+                        showOnHomepage: true,
+                        featured: false,
+                        category: 'other',
+                        bg: 'from-zinc-600 to-zinc-800',
+                      }]);
+                      setLinksAdvancedOpen((prev) => new Set(prev));
+                    }}
+                    style={{ alignSelf: 'flex-start' }}
+                  >
+                    + Add link
+                  </button>
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -2759,7 +2826,6 @@ export default function AdminPage() {
                       try {
                         const r = await authenticatedFetch('/api/admin/links', {
                           method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ links: linksData }),
                         });
                         if (r.ok) {
@@ -2774,7 +2840,7 @@ export default function AdminPage() {
                       setLinksSaving(false);
                       setTimeout(() => setToast(null), 3000);
                     }}
-                    style={{ alignSelf: 'flex-start', marginTop: 8 }}
+                    style={{ alignSelf: 'flex-start', marginTop: 4 }}
                   >
                     {linksSaving ? 'Saving…' : 'Save links'}
                   </button>
