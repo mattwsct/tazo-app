@@ -2601,24 +2601,27 @@ export default function AdminPage() {
                                 placeholder="Button label"
                                 onChange={(e) => {
                                   const updated = [...linksData];
-                                  updated[idx] = { ...updated[idx], button: e.target.value };
+                                  updated[idx] = { ...updated[idx], button: e.target.value, title: e.target.value };
                                   setLinksData(updated);
                                 }}
                               />
                             </div>
                             <div>
-                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>Title</label>
-                              <input
-                                type="text"
+                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>Category</label>
+                              <select
                                 className="setting-input"
-                                value={link.title}
-                                placeholder="Title"
+                                value={link.category}
                                 onChange={(e) => {
                                   const updated = [...linksData];
-                                  updated[idx] = { ...updated[idx], title: e.target.value };
+                                  updated[idx] = { ...updated[idx], category: e.target.value as LinkItem['category'] };
                                   setLinksData(updated);
                                 }}
-                              />
+                              >
+                                <option value="streaming">Streaming</option>
+                                <option value="social">Social</option>
+                                <option value="support">Support</option>
+                                <option value="other">Other</option>
+                              </select>
                             </div>
                           </div>
                           <div>
