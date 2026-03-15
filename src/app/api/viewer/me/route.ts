@@ -69,48 +69,40 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let rank: number | null = null;
 
     if (platformIds.length > 0) {
-      // Sum credits across all linked platform_ids
-      const { data: ledger } = await supabase
-        .from('point_ledger')
-        .select('delta')
-        .eq('creator_id', creatorId)
-        .in('platform_id', platformIds);
+      // viewer_balances uses kick platform_id (username, lowercase) — collect kick-specific ids
+      const kickIds = platformIds.filter((id) => {
+        // numeric IDs are Kick user IDs; strings are usernames
+        return id !== session.discordId;
+      });
 
-      if (ledger && ledger.length > 0) {
-        balance = (ledger as Array<{ delta: number }>).reduce((sum, row) => sum + (row.delta ?? 0), 0);
-      } else {
-        // No ledger entries yet — balance is 0, return helpful message
-        return NextResponse.json({
-          authenticated: true,
-          viewerUuid: session.viewerUuid,
-          kickUsername: session.kickUsername,
-          discordUsername: session.discordUsername,
-          balance: 0,
-          rank: null,
-          message: 'No credit history yet. Earn credits by watching the stream!',
-        });
-      }
+      if (kickIds.length > 0) {
+        // Sum balance across all linked kick platform_ids (handles merged accounts)
+        const { data: rows } = await supabase
+          .from('viewer_balances')
+          .select('balance')
+          .eq('creator_id', creatorId)
+          .eq('platform', 'kick')
+          .in('platform_id', kickIds);
 
-      // Compute rank efficiently: fetch all deltas for this creator, aggregate by platform_id,
-      // then count how many viewers have a strictly higher balance than ours.
-      const { data: allLedger } = await supabase
-        .from('point_ledger')
-        .select('platform_id, delta')
-        .eq('creator_id', creatorId);
-
-      if (allLedger) {
-        // Aggregate balances by platform_id
-        const balanceMap = new Map<string, number>();
-        for (const row of allLedger as Array<{ platform_id: string; delta: number }>) {
-          balanceMap.set(row.platform_id, (balanceMap.get(row.platform_id) ?? 0) + (row.delta ?? 0));
+        if (rows && rows.length > 0) {
+          balance = (rows as Array<{ balance: number }>).reduce((sum, row) => sum + (row.balance ?? 0), 0);
         }
 
-        // Count viewers with a strictly higher balance (excluding our own platform_ids)
-        let above = 0;
-        for (const [pid, bal] of balanceMap) {
-          if (!platformIds.includes(pid) && bal > balance) above++;
+        // Rank: count how many distinct viewers have a strictly higher balance
+        const { data: allRows } = await supabase
+          .from('viewer_balances')
+          .select('platform_id, balance')
+          .eq('creator_id', creatorId)
+          .eq('platform', 'kick')
+          .gt('balance', 0);
+
+        if (allRows) {
+          let above = 0;
+          for (const row of allRows as Array<{ platform_id: string; balance: number }>) {
+            if (!kickIds.includes(row.platform_id) && row.balance > balance) above++;
+          }
+          rank = above + 1;
         }
-        rank = above + 1;
       }
     }
 
