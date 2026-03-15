@@ -238,8 +238,8 @@ function DashboardContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
                 { label: 'Subscribe', value: '+100 credits' },
-                { label: 'Resub', value: '+50 credits' },
-                { label: 'Gift a sub', value: '+75 per sub' },
+                { label: 'Resub', value: '+100 credits' },
+                { label: 'Gift a sub', value: '+100 credits' },
                 { label: 'Channel rewards', value: 'Varies' },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.03] border border-white/5">
@@ -337,8 +337,8 @@ function DashboardContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               { icon: '⭐', label: 'Subscribe', value: '+100 credits', desc: 'New subscription' },
-              { icon: '🔄', label: 'Resub', value: '+50 credits', desc: 'Monthly renewal' },
-              { icon: '🎁', label: 'Gift a Sub', value: '+75 per sub', desc: 'Gift subscriptions' },
+              { icon: '🔄', label: 'Resub', value: '+100 credits', desc: 'Monthly renewal' },
+              { icon: '🎁', label: 'Gift a Sub', value: '+100 credits', desc: 'Gift subscriptions' },
               { icon: '🏆', label: 'Rewards', value: 'Varies', desc: 'Channel point rewards' },
             ].map((item) => (
               <div key={item.label} className="flex flex-col gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-colors">

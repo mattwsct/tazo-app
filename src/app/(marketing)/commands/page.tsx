@@ -196,8 +196,8 @@ export default function CommandsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { event: 'New subscription', credits: '+100 credits' },
-                  { event: 'Resub', credits: '+50 credits' },
-                  { event: 'Gift a sub', credits: '+75 credits per sub' },
+                  { event: 'Resub', credits: '+100 credits' },
+                  { event: 'Gift a sub', credits: '+100 credits' },
                   { event: 'Kicks gifted', credits: 'Credits vary by amount' },
                   { event: 'Channel rewards', credits: 'Top up via reward redemptions' },
                 ].map((row) => (
