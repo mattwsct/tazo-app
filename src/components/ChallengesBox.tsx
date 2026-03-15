@@ -3,6 +3,29 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
 
+const CB_CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',   AUD: 'A$',  CAD: 'C$',  NZD: 'NZ$', SGD: 'S$',  HKD: 'HK$',
+  EUR: '€',   GBP: '£',   JPY: '¥',   CNY: '¥',   KRW: '₩',   INR: '₹',
+  BRL: 'R$',  CHF: 'Fr',  THB: '฿',   PHP: '₱',   IDR: 'Rp',  MYR: 'RM',
+  VND: '₫',   TWD: 'NT$', ZAR: 'R',   TRY: '₺',   PLN: 'zł',  ILS: '₪',
+  AED: 'د.إ', RUB: '₽',   UAH: '₴',   NGN: '₦',   KES: 'KSh', EGP: 'E£',
+  PKR: '₨',   GHS: 'GH₵',
+};
+const CB_AMBIGUOUS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR']);
+
+function cbFmtLocal(amountUsd: number, currency: string, rate: number): string {
+  const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
+  const local = Math.round(amountUsd * rate * 10) / 10;
+  const str = local % 1 === 0 ? local.toLocaleString() : local.toFixed(1);
+  return sym ? `${sym}${str}` : `${str} ${currency}`;
+}
+
+function cbFmtLocalExact(amount: number, currency: string): string {
+  const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
+  const str = amount % 1 === 0 ? amount.toLocaleString() : amount.toFixed(2);
+  return sym ? `${sym}${str}` : `${str} ${currency}`;
+}
+
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
 const WALLET_ANIM_DURATION_MS = 2500;
 const ALERT_DISPLAY_MS = 10000;
@@ -195,11 +218,10 @@ export default function ChallengesBox({
     const exactLocal = wallet.lastChangeLocalAmount;
     const localRate = wallet.localRate;
     const localCurrency = wallet.localCurrency;
-    const sym = localCurrency ? (CURRENCY_SYMBOLS[localCurrency] ?? '') : '';
     const absStr = localRate && localCurrency
       ? exactLocal != null
-        ? `${sym}${Math.abs(exactLocal) % 1 === 0 ? Math.abs(exactLocal).toLocaleString() : Math.abs(exactLocal).toFixed(2)} ${localCurrency}`
-        : `${sym}${Math.round(Math.abs(change) * localRate).toLocaleString()} ${localCurrency}`
+        ? cbFmtLocalExact(Math.abs(exactLocal), localCurrency)
+        : cbFmtLocal(Math.abs(change), localCurrency, localRate)
       : `$${Math.abs(change).toFixed(2)}`;
     const source = wallet.lastChangeSource;
     const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
@@ -208,19 +230,9 @@ export default function ChallengesBox({
     walletAnimTimerRef.current = setTimeout(() => setWalletAnim(null), WALLET_ANIM_DURATION_MS);
   }, [wallet]);
 
-  const CURRENCY_SYMBOLS: Record<string, string> = {
-    USD: '$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', SGD: 'S$', HKD: 'HK$',
-    EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', KRW: '₩', INR: '₹',
-    BRL: 'R$', MXN: '$', CHF: 'Fr', SEK: 'kr', NOK: 'kr', DKK: 'kr',
-    THB: '฿', PHP: '₱', IDR: 'Rp', MYR: 'RM', VND: '₫', TWD: 'NT$',
-    ZAR: 'R', TRY: '₺', PLN: 'zł', CZK: 'Kč', HUF: 'Ft', RON: 'lei',
-    ILS: '₪', AED: 'د.إ', SAR: '﷼', RUB: '₽', UAH: '₴', NGN: '₦',
-    KES: 'KSh', GHS: 'GH₵', ARS: '$', CLP: '$', COP: '$', EGP: 'E£', PKR: '₨',
-  };
-  const localCurrencySymbol = wallet?.localCurrency ? (CURRENCY_SYMBOLS[wallet.localCurrency] ?? '') : '';
   const localAmount =
     wallet?.localCurrency && wallet?.localRate
-      ? Math.round(wallet.balance * wallet.localRate)
+      ? Math.round(wallet.balance * wallet.localRate * 10) / 10
       : null;
 
   // ── Challenges ─────────────────────────────────────────────────────────────
@@ -309,11 +321,11 @@ export default function ChallengesBox({
               <span className="challenges-wallet-anim">{walletAnim}</span>
             ) : localAmount !== null ? (
               <>
-                <span className="challenges-header-value">{localCurrencySymbol}{localAmount.toLocaleString()} {wallet!.localCurrency}</span>
-                <span className="challenges-header-local">≈ ${wallet!.balance.toFixed(2)} USD</span>
+                <span className="challenges-header-value">{cbFmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}</span>
+                <span className="challenges-header-local">≈ {wallet!.balance % 1 === 0 ? `$${wallet!.balance.toFixed(0)}` : `$${wallet!.balance.toFixed(2)}`}</span>
               </>
             ) : (
-              <span className="challenges-header-value">${wallet!.balance.toFixed(2)} USD</span>
+              <span className="challenges-header-value">{wallet!.balance % 1 === 0 ? `$${wallet!.balance.toFixed(0)}` : `$${wallet!.balance.toFixed(2)}`}</span>
             )}
           </div>
         </div>
