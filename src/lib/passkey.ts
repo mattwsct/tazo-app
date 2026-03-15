@@ -5,7 +5,7 @@
  */
 
 export function getRpSettings(): { rpName: string; rpID: string; origin: string } {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
   const url = new URL(appUrl);
   return {
     rpName: 'tazo.wtf',

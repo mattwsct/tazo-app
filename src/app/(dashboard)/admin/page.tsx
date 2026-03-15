@@ -960,7 +960,10 @@ export default function AdminPage() {
     setToast({ type: 'saving', message: 'Starting passkey registration…' });
     try {
       const optRes = await authenticatedFetch('/api/passkey/register/options', { method: 'POST' });
-      if (!optRes.ok) throw new Error('Failed to get registration options');
+      if (!optRes.ok) {
+        const d = await optRes.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? `Options request failed (${optRes.status})`);
+      }
       const options = await optRes.json();
 
       const regResponse = await startRegistration({ optionsJSON: options });
@@ -979,14 +982,15 @@ export default function AdminPage() {
         setToast({ type: 'error', message: d.error ?? 'Registration failed' });
       }
     } catch (e) {
-      if (e instanceof Error && e.name !== 'NotAllowedError') {
-        setToast({ type: 'error', message: 'Passkey registration failed' });
+      if (e instanceof Error && e.name === 'NotAllowedError') {
+        setToast(null); // user cancelled
       } else {
-        setToast(null);
+        const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+        setToast({ type: 'error', message: msg });
       }
     } finally {
       setPasskeyRegistering(false);
-      setTimeout(() => setToast(null), 4000);
+      setTimeout(() => setToast(null), 8000);
     }
   };
 
