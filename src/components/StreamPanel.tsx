@@ -26,18 +26,25 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 // Currencies with ambiguous symbols — show ISO code as the identifier instead
 const AMBIGUOUS_SYMBOLS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR', 'GHS']);
 
-/** Format a local-currency balance estimate, rounded to nearest 0.10. No code suffix. */
+// Currencies with no meaningful decimal subdivision
+const NO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF']);
+
+/** Format an estimated local-currency amount converted from USD. Shows cents where applicable. */
 function fmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
-  const local = Math.round(amountUsd * rate * 10) / 10;
-  const str = local % 1 === 0 ? local.toLocaleString() : local.toFixed(1);
+  const local = amountUsd * rate;
+  const str = NO_DECIMAL_CURRENCIES.has(currency)
+    ? Math.round(local).toLocaleString()
+    : local.toFixed(2);
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 
-/** Format an exact local-currency amount (e.g. from a card transaction). No code suffix. */
+/** Format an exact local-currency amount (e.g. Wise card transaction). Shows cents where applicable. */
 function fmtLocalExact(amount: number, currency: string): string {
   const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
-  const str = amount % 1 === 0 ? amount.toLocaleString() : amount.toFixed(2);
+  const str = NO_DECIMAL_CURRENCIES.has(currency)
+    ? Math.round(amount).toLocaleString()
+    : amount.toFixed(2);
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 const ALERT_DISPLAY_MS = 10000;
@@ -425,8 +432,8 @@ export default function StreamPanel({
                   <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
                 ) : localAmount !== null ? (
                   <>
-                    <span className="sp-wallet-value">{fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}</span>
-                    <span className="sp-wallet-usd">≈ {fmtUsd(wallet!.balance)}</span>
+                    <span className="sp-wallet-value">≈ {fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}</span>
+                    <span className="sp-wallet-usd">{fmtUsd(wallet!.balance)}</span>
                   </>
                 ) : (
                   <span className="sp-wallet-value">{fmtUsd(wallet!.balance)}</span>

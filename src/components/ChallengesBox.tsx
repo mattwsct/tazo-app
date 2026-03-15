@@ -13,16 +13,18 @@ const CB_CURRENCY_SYMBOLS: Record<string, string> = {
 };
 const CB_AMBIGUOUS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR']);
 
+const CB_NO_DECIMAL = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF']);
+
 function cbFmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
-  const local = Math.round(amountUsd * rate * 10) / 10;
-  const str = local % 1 === 0 ? local.toLocaleString() : local.toFixed(1);
+  const local = amountUsd * rate;
+  const str = CB_NO_DECIMAL.has(currency) ? Math.round(local).toLocaleString() : local.toFixed(2);
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 
 function cbFmtLocalExact(amount: number, currency: string): string {
   const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
-  const str = amount % 1 === 0 ? amount.toLocaleString() : amount.toFixed(2);
+  const str = CB_NO_DECIMAL.has(currency) ? Math.round(amount).toLocaleString() : amount.toFixed(2);
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 
@@ -321,8 +323,8 @@ export default function ChallengesBox({
               <span className="challenges-wallet-anim">{walletAnim}</span>
             ) : localAmount !== null ? (
               <>
-                <span className="challenges-header-value">{cbFmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}</span>
-                <span className="challenges-header-local">≈ {wallet!.balance % 1 === 0 ? `$${wallet!.balance.toFixed(0)}` : `$${wallet!.balance.toFixed(2)}`}</span>
+                <span className="challenges-header-value">≈ {cbFmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}</span>
+                <span className="challenges-header-local">{wallet!.balance % 1 === 0 ? `$${wallet!.balance.toFixed(0)}` : `$${wallet!.balance.toFixed(2)}`}</span>
               </>
             ) : (
               <span className="challenges-header-value">{wallet!.balance % 1 === 0 ? `$${wallet!.balance.toFixed(0)}` : `$${wallet!.balance.toFixed(2)}`}</span>
