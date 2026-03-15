@@ -8,8 +8,40 @@ export interface LinkItem {
   showOnHomepage: boolean;
   featured: boolean;
   category: 'streaming' | 'social' | 'support' | 'other';
-  bg: string;
+  bg: string;        // kept for legacy / manual overrides; prefer getBrandBg()
   aliases?: string[];
+}
+
+/** Brand gradient per simpleicons slug. Used as the button background. */
+export const PLATFORM_BRAND_BG: Record<string, string> = {
+  kick:        'from-[#53fc18] to-[#2f8f0b]',
+  twitch:      'from-[#9146FF] to-[#6441A5]',
+  youtube:     'from-[#FF0000] to-[#991b1b]',
+  tiktok:      'from-[#25F4EE] to-[#FE2C55]',
+  instagram:   'from-[#f09433] via-[#e6683c] to-[#dc2743]',
+  x:           'from-[#000000] to-[#27272a]',
+  discord:     'from-[#5865F2] to-[#404EED]',
+  facebook:    'from-[#1877F2] to-[#0C4A9E]',
+  onlyfans:    'from-[#00AFF0] to-[#005C80]',
+  kofi:        'from-[#FF5E5B] to-[#FF8FA3]',
+  paypal:      'from-[#003087] to-[#009CDE]',
+  patreon:     'from-[#F96854] to-[#e44a3b]',
+  rumble:      'from-[#85C742] to-[#4CAF50]',
+  spotify:     'from-[#1DB954] to-[#158a3e]',
+  snapchat:    'from-[#FFFC00] to-[#F7C948]',
+  reddit:      'from-[#FF4500] to-[#cc3700]',
+  linkedin:    'from-[#0077B5] to-[#005582]',
+  github:      'from-[#24292e] to-[#1a1f24]',
+  steam:       'from-[#1b2838] to-[#2a475e]',
+  twitch2:     'from-[#9146FF] to-[#6441A5]',
+  kit:         'from-zinc-600 to-zinc-800',
+};
+
+export const DEFAULT_LINK_BG = 'from-zinc-600 to-zinc-800';
+
+/** Returns the brand gradient for a known icon slug, or the default. */
+export function getBrandBg(icon: string | null | undefined): string {
+  return (icon && PLATFORM_BRAND_BG[icon]) ?? DEFAULT_LINK_BG;
 }
 
 export const LINKS: LinkItem[] = [

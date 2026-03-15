@@ -10,6 +10,8 @@ interface LocationInfo {
 }
 
 interface KickProfile {
+  username: string | null;
+  bio: string | null;
   profilePic: string | null;
   instagram: string | null;
   twitter: string | null;
@@ -55,7 +57,7 @@ function setProfileCache(data: KickProfile) {
 }
 
 // Map Kick social handles to full URLs
-function socialUrl(platform: keyof Omit<KickProfile, 'profilePic'>, handle: string): string {
+function socialUrl(platform: keyof Omit<KickProfile, 'profilePic' | 'username' | 'bio'>, handle: string): string {
   if (handle.startsWith('http')) return handle;
   switch (platform) {
     case 'instagram': return `https://instagram.com/${handle}`;
@@ -68,7 +70,7 @@ function socialUrl(platform: keyof Omit<KickProfile, 'profilePic'>, handle: stri
   }
 }
 
-const SOCIAL_ICONS: Record<keyof Omit<KickProfile, 'profilePic'>, { label: string; icon: string }> = {
+const SOCIAL_ICONS: Record<keyof Omit<KickProfile, 'profilePic' | 'username' | 'bio'>, { label: string; icon: string }> = {
   twitter:   { label: 'X / Twitter', icon: 'x' },
   instagram: { label: 'Instagram',   icon: 'instagram' },
   youtube:   { label: 'YouTube',     icon: 'youtube' },
@@ -148,7 +150,7 @@ export default function HeroSection() {
     : isLive ? 'LIVE now' : 'Streaming IRL adventures';
 
   const socials = profile
-    ? (Object.keys(SOCIAL_ICONS) as (keyof Omit<KickProfile, 'profilePic'>)[]).filter((k) => profile[k])
+    ? (Object.keys(SOCIAL_ICONS) as (keyof Omit<KickProfile, 'profilePic' | 'username' | 'bio'>)[]).filter((k) => profile[k])
     : [];
 
   return (
@@ -165,7 +167,7 @@ export default function HeroSection() {
           >
             <Image
               src={imgSrc}
-              alt="Tazo - IRL Streamer from Australia, based in Japan"
+              alt={profile?.username ?? 'Creator profile'}
               width={112}
               height={112}
               priority
@@ -175,10 +177,14 @@ export default function HeroSection() {
             />
           </Link>
         )}
-        <h1 className="text-4xl sm:text-5xl uppercase mt-3 drop-shadow-md tazo-name font-bebas text-white">
-          Tazo
-        </h1>
-        <p className="text-zinc-300 text-sm sm:text-base">IRL Streamer from Australia, based in Japan</p>
+        {profile?.username && (
+          <h1 className="text-4xl sm:text-5xl uppercase mt-3 drop-shadow-md tazo-name font-bebas text-white">
+            {profile.username}
+          </h1>
+        )}
+        {profile?.bio && (
+          <p className="text-zinc-300 text-sm sm:text-base">{profile.bio}</p>
+        )}
         <p className="text-zinc-400 text-sm mt-1.5 max-w-md" aria-live="polite">
           {statusText}
           {info?.weather && <span className="ml-2">{info.weather}</span>}

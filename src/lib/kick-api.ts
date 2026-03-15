@@ -412,6 +412,8 @@ export async function getKickChannelStats(): Promise<KickChannelStats> {
 }
 
 export interface KickChannelProfile {
+  username: string | null;
+  bio: string | null;
   profilePic: string | null;
   instagram: string | null;
   twitter: string | null;
@@ -430,7 +432,7 @@ function strOrNull(v: unknown): string | null {
  * TTL: 1 hour. Falls back to cached data on error.
  */
 export async function getChannelProfile(slug = 'tazo'): Promise<KickChannelProfile> {
-  const empty: KickChannelProfile = { profilePic: null, instagram: null, twitter: null, youtube: null, discord: null, tiktok: null, facebook: null };
+  const empty: KickChannelProfile = { username: null, bio: null, profilePic: null, instagram: null, twitter: null, youtube: null, discord: null, tiktok: null, facebook: null };
   const cacheKey = `${KICK_CHANNEL_PROFILE_KEY}:${slug}`;
 
   try {
@@ -453,8 +455,12 @@ export async function getChannelProfile(slug = 'tazo'): Promise<KickChannelProfi
 
     // Kick v2 API: profile pic is under user.profilepic (sometimes profile_pic)
     const profilePic = strOrNull(user.profilepic) ?? strOrNull(user.profile_pic) ?? strOrNull(user.profile_image);
+    const username = strOrNull(user.username) ?? strOrNull(user.name) ?? strOrNull(data.slug);
+    const bio = strOrNull(user.bio);
 
     const profile: KickChannelProfile = {
+      username,
+      bio,
       profilePic,
       instagram: strOrNull(user.instagram),
       twitter:   strOrNull(user.twitter),

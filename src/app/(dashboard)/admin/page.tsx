@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import { LINKS, type LinkItem } from '@/data/links';
+import { LINKS, getBrandBg, type LinkItem } from '@/data/links';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
@@ -155,7 +155,9 @@ export default function AdminPage() {
   const [linksData, setLinksData] = useState<LinkItem[]>(LINKS);
   const [linksLoading, setLinksLoading] = useState(false);
   const [linksSaving, setLinksSaving] = useState(false);
-  const [linksAdvancedOpen, setLinksAdvancedOpen] = useState<Set<string>>(new Set());
+  // Bio override
+  const [bioInput, setBioInput] = useState('');
+  const [bioSaving, setBioSaving] = useState(false);
   // Integrations / API keys
   type ApiKeyStatus = { configured: boolean; masked: string | null; source: 'db' | 'env' | null };
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, ApiKeyStatus>>({});
@@ -463,7 +465,7 @@ export default function AdminPage() {
     loadChallengesAndWallet();
   }, [isAuthenticated, loadChallengesAndWallet]);
 
-  // Load links on mount
+  // Load links and bio on mount
   useEffect(() => {
     if (!isAuthenticated) return;
     setLinksLoading(true);
@@ -472,6 +474,10 @@ export default function AdminPage() {
       .then((d: { links?: LinkItem[] }) => { if (Array.isArray(d.links) && d.links.length > 0) setLinksData(d.links); })
       .catch((e) => { console.warn('[admin/links] fetch failed:', e); })
       .finally(() => setLinksLoading(false));
+    authenticatedFetch('/api/admin/creator-profile')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { bio?: string | null } | null) => { if (d?.bio) setBioInput(d.bio); })
+      .catch(() => {});
   }, [isAuthenticated]);
 
   // Load API key status on mount
@@ -2637,6 +2643,43 @@ export default function AdminPage() {
           </CollapsibleSection>
 
           <CollapsibleSection id="links" title="🔗 Links">
+            <div className="setting-group" style={{ paddingBottom: 20, marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <h4 className="subsection-label" style={{ marginBottom: 8 }}>Profile bio</h4>
+              <p className="input-hint" style={{ marginBottom: 10 }}>
+                Shown on the homepage below your name. Leave blank to use whatever is set in your Kick profile bio.
+              </p>
+              <textarea
+                className="setting-input"
+                rows={3}
+                placeholder="e.g. IRL Streamer from Australia, based in Japan"
+                value={bioInput}
+                onChange={(e) => setBioInput(e.target.value)}
+                style={{ resize: 'vertical', fontFamily: 'inherit' }}
+              />
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={bioSaving}
+                onClick={async () => {
+                  setBioSaving(true);
+                  try {
+                    const r = await authenticatedFetch('/api/admin/creator-profile', {
+                      method: 'POST',
+                      body: JSON.stringify({ bio: bioInput }),
+                    });
+                    if (r.ok) setToast({ type: 'saved', message: 'Bio saved!' });
+                    else setToast({ type: 'error', message: 'Failed to save bio' });
+                  } catch {
+                    setToast({ type: 'error', message: 'Failed to save bio' });
+                  }
+                  setBioSaving(false);
+                  setTimeout(() => setToast(null), 3000);
+                }}
+                style={{ marginTop: 8 }}
+              >
+                {bioSaving ? 'Saving…' : 'Save bio'}
+              </button>
+            </div>
             <div className="setting-group">
               <p className="input-hint" style={{ marginBottom: 16 }}>
                 Manage links shown on the homepage. Use ↑↓ to reorder, toggle visibility, and click Save when done.
@@ -2646,11 +2689,11 @@ export default function AdminPage() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {linksData.map((link, idx) => {
-                    const hexMatches = link.bg.match(/#[0-9a-fA-F]{3,6}/g) ?? [];
+                    const brandBg = getBrandBg(link.icon);
+                    const hexMatches = brandBg.match(/#[0-9a-fA-F]{3,6}/g) ?? [];
                     const fromColor = hexMatches[0] ?? '#71717a';
                     const toColor = hexMatches[hexMatches.length - 1] ?? fromColor;
                     const gradientStyle = { background: `linear-gradient(to right, ${fromColor}, ${toColor})` };
-                    const advOpen = linksAdvancedOpen.has(link.id);
                     return (
                       <div
                         key={link.id}
@@ -2762,49 +2805,42 @@ export default function AdminPage() {
                               }}
                             />
                           </div>
-                          {/* Advanced: colour pickers */}
-                          <button
-                            type="button"
-                            onClick={() => setLinksAdvancedOpen((prev) => {
-                              const next = new Set(prev);
-                              advOpen ? next.delete(link.id) : next.add(link.id);
-                              return next;
-                            })}
-                            style={{ background: 'none', border: 'none', color: '#71717a', cursor: 'pointer', fontSize: '0.7rem', textAlign: 'left', padding: 0 }}
-                          >
-                            {advOpen ? '▾ Hide colours' : '▸ Button colour'}
-                          </button>
-                          {advOpen && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <label style={{ fontSize: '0.7rem', color: '#71717a' }}>From</label>
-                                <input
-                                  type="color"
-                                  value={fromColor}
-                                  onChange={(e) => {
-                                    const updated = [...linksData];
-                                    updated[idx] = { ...updated[idx], bg: `from-[${e.target.value}] to-[${toColor}]` };
-                                    setLinksData(updated);
-                                  }}
-                                  style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
-                                />
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <label style={{ fontSize: '0.7rem', color: '#71717a' }}>To</label>
-                                <input
-                                  type="color"
-                                  value={toColor}
-                                  onChange={(e) => {
-                                    const updated = [...linksData];
-                                    updated[idx] = { ...updated[idx], bg: `from-[${fromColor}] to-[${e.target.value}]` };
-                                    setLinksData(updated);
-                                  }}
-                                  style={{ width: 32, height: 28, padding: 2, borderRadius: 4, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', cursor: 'pointer' }}
-                                />
-                              </div>
-                              <div style={{ flex: 1, height: 28, borderRadius: 4, ...gradientStyle }} />
+                          {/* Icon slug + aliases row */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>
+                                Icon slug <span style={{ color: '#3f3f46' }}>(e.g. kick, youtube, instagram)</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="setting-input"
+                                value={link.icon ?? ''}
+                                placeholder="kick"
+                                onChange={(e) => {
+                                  const updated = [...linksData];
+                                  updated[idx] = { ...updated[idx], icon: e.target.value || null };
+                                  setLinksData(updated);
+                                }}
+                              />
                             </div>
-                          )}
+                            <div>
+                              <label style={{ fontSize: '0.7rem', color: '#71717a', display: 'block', marginBottom: 3 }}>
+                                Redirect aliases <span style={{ color: '#3f3f46' }}>(comma-separated, e.g. ig, insta)</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="setting-input"
+                                value={(link.aliases ?? []).join(', ')}
+                                placeholder="ig, insta"
+                                onChange={(e) => {
+                                  const aliases = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                                  const updated = [...linksData];
+                                  updated[idx] = { ...updated[idx], aliases };
+                                  setLinksData(updated);
+                                }}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
@@ -2826,8 +2862,8 @@ export default function AdminPage() {
                         featured: false,
                         category: 'other',
                         bg: 'from-zinc-600 to-zinc-800',
+                        aliases: [],
                       }]);
-                      setLinksAdvancedOpen((prev) => new Set(prev));
                     }}
                     style={{ alignSelf: 'flex-start' }}
                   >

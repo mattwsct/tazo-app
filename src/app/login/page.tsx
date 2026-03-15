@@ -8,8 +8,8 @@ import '@/styles/marketing.css';
 
 function KickIcon({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 420 480" fill="currentColor" aria-hidden="true">
-      <path d="M0 0H120V480H0Z M300 0H420V60H300Z M240 60H360V120H240Z M180 120H300V180H180Z M120 180H300V240H120Z M120 240H300V300H120Z M180 300H300V360H180Z M240 360H360V420H240Z M300 420H420V480H300Z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z" />
     </svg>
   );
 }

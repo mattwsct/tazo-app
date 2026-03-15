@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { LINKS, CATEGORY_ORDER, CATEGORY_NAMES, type LinkItem } from '@/data/links';
+import { LINKS, CATEGORY_ORDER, CATEGORY_NAMES, getBrandBg, type LinkItem } from '@/data/links';
 
 const SOCIAL_IDS = new Set(['twitter', 'x', 'instagram', 'youtube', 'tiktok']);
 
@@ -12,7 +12,7 @@ function LinkButton({ link }: { link: LinkItem }) {
       target="_blank"
       rel={SOCIAL_IDS.has(link.id) ? 'me noopener noreferrer' : 'noopener noreferrer'}
       aria-label={`Visit ${link.title}`}
-      className={`link-button flex items-center gap-2 justify-center py-3 px-4 sm:px-5 rounded-xl font-semibold w-full sm:w-auto bg-gradient-to-r ${link.bg} transition hover:scale-[1.03] hover:ring-2 hover:ring-white/10`}
+      className={`link-button flex items-center gap-2 justify-center py-3 px-4 sm:px-5 rounded-xl font-semibold w-full sm:w-auto bg-gradient-to-r ${getBrandBg(link.icon)} transition hover:scale-[1.03] hover:ring-2 hover:ring-white/10`}
     >
       {link.icon && (
         <img
