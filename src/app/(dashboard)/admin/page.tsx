@@ -1388,7 +1388,7 @@ export default function AdminPage() {
           {/* Overlay & goals — what shows on stream + goal tracking */}
           <CollapsibleSection id="overlay" title="🖥️ Stream goals">
             <div className="setting-group">
-              <div className="button-row" style={{ marginBottom: 16 }}>
+              <div className="button-row" style={{ marginBottom: 8 }}>
                 <span className="group-label" style={{ marginRight: 8 }}>Test alert:</span>
                 {(['sub', 'resub', 'giftSub', 'kicks'] as const).map((type) => (
                   <button
@@ -1402,10 +1402,14 @@ export default function AdminPage() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ type }),
                         });
-                        if (res.ok) setToast({ type: 'saved', message: `Test ${type} alert sent` });
-                        else setToast({ type: 'error', message: 'Test failed' });
-                      } catch {
-                        setToast({ type: 'error', message: 'Test failed' });
+                        if (res.ok) {
+                          setToast({ type: 'saved', message: `Test ${type} alert sent — check your overlay` });
+                        } else {
+                          const d = await res.json().catch(() => ({})) as { error?: string };
+                          setToast({ type: 'error', message: d.error ?? `Test failed (${res.status})` });
+                        }
+                      } catch (e) {
+                        setToast({ type: 'error', message: e instanceof Error ? e.message : 'Test failed' });
                       }
                     }}
                   >
@@ -1415,7 +1419,19 @@ export default function AdminPage() {
                     {type === 'kicks' && '💚 Kicks'}
                   </button>
                 ))}
+                <a
+                  href="/overlay"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-secondary btn-small"
+                  style={{ marginLeft: 8 }}
+                >
+                  👁 Preview overlay
+                </a>
               </div>
+              <p className="input-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+                Alerts appear on the overlay page — open it in a browser or OBS to verify.
+              </p>
             </div>
 
             <div className="setting-group" style={{ paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
