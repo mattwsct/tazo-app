@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/types';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { kv } from '@/lib/kv';
 import { supabase } from '@/lib/supabase';
 import { getRpSettings, PASSKEY_CHALLENGE_KEY } from '@/lib/passkey';

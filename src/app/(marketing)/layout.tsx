@@ -59,6 +59,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <footer className="mt-16 py-8 text-center text-sm text-zinc-500 relative z-10" role="contentinfo">
         <div className="max-w-screen-md mx-auto px-4">
           © {new Date().getFullYear()} Tazo
+          <span className="mx-2 opacity-30">·</span>
+          <a href="/login" className="hover:text-zinc-300 transition-colors">Admin</a>
         </div>
       </footer>
       <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
