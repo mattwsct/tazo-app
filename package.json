@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "@fontsource/montserrat": "^5.2.8",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.0",
     "@supabase/supabase-js": "^2.99.1",
     "@tailwindcss/postcss": "^4.2.1",
     "@upstash/ratelimit": "^2.0.8",

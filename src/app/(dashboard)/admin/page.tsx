@@ -17,6 +17,7 @@ import { getLocationForStreamTitle, getStreamTitleLocationPart, parseStreamTitle
 import { formatLocation, type LocationData } from '@/utils/location-utils';
 import '@/styles/admin.css';
 import CollapsibleSection, { collapseAllSections } from '@/components/CollapsibleSection';
+import { startRegistration } from '@simplewebauthn/browser';
 
 function parseDurationToMs(input: string): number | undefined {
   const m = input.trim().match(/^([\d.]+)(s|sec|secs|m|min|mins|h|hr|hrs)$/i);
@@ -159,6 +160,12 @@ export default function AdminPage() {
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, ApiKeyStatus>>({});
   const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
   const [apiKeysSaving, setApiKeysSaving] = useState<Record<string, boolean>>({});
+  // Passkeys
+  type PasskeyCredential = { credential_id: string; name: string | null; device_type: string; backed_up: boolean; created_at: string; last_used_at: string | null };
+  const [passkeys, setPasskeys] = useState<PasskeyCredential[]>([]);
+  const [passkeyName, setPasskeyName] = useState('');
+  const [passkeyRegistering, setPasskeyRegistering] = useState(false);
+  const [passkeyDeleting, setPasskeyDeleting] = useState<string | null>(null);
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
   
@@ -474,6 +481,19 @@ export default function AdminPage() {
       .then((d: Record<string, ApiKeyStatus>) => { setApiKeyStatus(d); })
       .catch(() => {});
   }, [isAuthenticated]);
+
+  // Load registered passkeys
+  const loadPasskeys = useCallback(() => {
+    authenticatedFetch('/api/passkey/credentials')
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((d: { credentials: PasskeyCredential[] }) => { setPasskeys(d.credentials ?? []); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    loadPasskeys();
+  }, [isAuthenticated, loadPasskeys]);
 
   useEffect(() => {
     const loc = getLocationForStreamTitle(kickStreamTitleRawLocation, settings.locationDisplay, settings.customLocation ?? '');
@@ -934,6 +954,59 @@ export default function AdminPage() {
     window.open('/overlay', '_blank');
   };
 
+
+  const handleRegisterPasskey = async () => {
+    setPasskeyRegistering(true);
+    setToast({ type: 'saving', message: 'Starting passkey registration…' });
+    try {
+      const optRes = await authenticatedFetch('/api/passkey/register/options', { method: 'POST' });
+      if (!optRes.ok) throw new Error('Failed to get registration options');
+      const options = await optRes.json();
+
+      const regResponse = await startRegistration({ optionsJSON: options });
+
+      const verifyRes = await authenticatedFetch('/api/passkey/register/verify', {
+        method: 'POST',
+        body: JSON.stringify({ response: regResponse, name: passkeyName.trim() || null }),
+      });
+
+      if (verifyRes.ok) {
+        setPasskeyName('');
+        loadPasskeys();
+        setToast({ type: 'saved', message: 'Passkey registered successfully' });
+      } else {
+        const d = await verifyRes.json() as { error?: string };
+        setToast({ type: 'error', message: d.error ?? 'Registration failed' });
+      }
+    } catch (e) {
+      if (e instanceof Error && e.name !== 'NotAllowedError') {
+        setToast({ type: 'error', message: 'Passkey registration failed' });
+      } else {
+        setToast(null);
+      }
+    } finally {
+      setPasskeyRegistering(false);
+      setTimeout(() => setToast(null), 4000);
+    }
+  };
+
+  const handleDeletePasskey = async (credentialId: string) => {
+    if (!confirm('Remove this passkey? You won\'t be able to use it to sign in.')) return;
+    setPasskeyDeleting(credentialId);
+    try {
+      const r = await authenticatedFetch(`/api/passkey/credentials?id=${encodeURIComponent(credentialId)}`, { method: 'DELETE' });
+      if (r.ok) {
+        loadPasskeys();
+        setToast({ type: 'saved', message: 'Passkey removed' });
+      } else {
+        setToast({ type: 'error', message: 'Failed to remove passkey' });
+      }
+    } catch { setToast({ type: 'error', message: 'Failed to remove passkey' }); }
+    finally {
+      setPasskeyDeleting(null);
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
 
   // Show loading screen while checking authentication or loading settings
   if (!isAuthenticated || isLoading) return (
@@ -2898,6 +2971,83 @@ export default function AdminPage() {
                 Keys marked <code>(env)</code> come from Vercel environment variables and cannot be removed here — update them in your Vercel project settings.
                 Keys marked <code>(db)</code> are stored in the database and override env vars.
               </p>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="passkeys" title="🔑 Passkeys">
+            <div className="setting-group">
+              <p className="input-hint" style={{ marginBottom: 16 }}>
+                Register Touch ID / Face ID / hardware keys to sign in without a password.
+                Once you have at least one passkey registered, the login page will offer it automatically.
+              </p>
+
+              {/* Register new passkey */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24 }}>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Passkey name (optional, e.g. MacBook Touch ID)"
+                  value={passkeyName}
+                  onChange={(e) => setPasskeyName(e.target.value)}
+                  style={{ flex: 1 }}
+                  disabled={passkeyRegistering}
+                />
+                <button
+                  type="button"
+                  className="btn btn-primary btn-small"
+                  disabled={passkeyRegistering}
+                  onClick={handleRegisterPasskey}
+                >
+                  {passkeyRegistering ? 'Waiting…' : '+ Register passkey'}
+                </button>
+              </div>
+
+              {/* List of registered passkeys */}
+              {passkeys.length === 0 ? (
+                <p className="input-hint">No passkeys registered yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {passkeys.map((pk) => (
+                    <div
+                      key={pk.credential_id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: '#fff' }}>
+                          {pk.name ?? 'Unnamed passkey'}
+                          {pk.backed_up && (
+                            <span style={{ marginLeft: 8, fontSize: 11, color: '#10b981', fontWeight: 500 }}>iCloud synced</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#71717a', marginTop: 2 }}>
+                          {pk.device_type === 'multiDevice' ? 'Multi-device' : 'Single-device'}
+                          {' · Added '}
+                          {new Date(pk.created_at).toLocaleDateString()}
+                          {pk.last_used_at && (
+                            <> · Last used {new Date(pk.last_used_at).toLocaleDateString()}</>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-small"
+                        disabled={passkeyDeleting === pk.credential_id}
+                        onClick={() => handleDeletePasskey(pk.credential_id)}
+                      >
+                        {passkeyDeleting === pk.credential_id ? 'Removing…' : 'Remove'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </CollapsibleSection>
 

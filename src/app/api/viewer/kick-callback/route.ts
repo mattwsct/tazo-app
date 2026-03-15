@@ -12,11 +12,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // CSRF: verify state matches cookie
   const storedState = request.cookies.get('viewer_kick_state')?.value;
   if (!state || !storedState || state !== storedState) {
-    return NextResponse.redirect(new URL('/dashboard?error=invalid_state', request.url));
+    return NextResponse.redirect(new URL('/me?error=invalid_state', request.url));
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL('/dashboard?error=no_code', request.url));
+    return NextResponse.redirect(new URL('/me?error=no_code', request.url));
   }
 
   const codeVerifier = request.cookies.get('viewer_kick_verifier')?.value ?? '';
@@ -41,14 +41,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (!tokenRes.ok) {
       const err = await tokenRes.text();
       console.error('[viewer/kick-callback] token exchange failed:', err);
-      return NextResponse.redirect(new URL('/dashboard?error=token_exchange_failed', request.url));
+      return NextResponse.redirect(new URL('/me?error=token_exchange_failed', request.url));
     }
 
     const tokenData = await tokenRes.json() as { access_token?: string };
     const accessToken = tokenData.access_token;
 
     if (!accessToken) {
-      return NextResponse.redirect(new URL('/dashboard?error=no_access_token', request.url));
+      return NextResponse.redirect(new URL('/me?error=no_access_token', request.url));
     }
 
     // Fetch user info — try v1 API with multiple response shapes
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!kickId) {
-      return NextResponse.redirect(new URL('/dashboard?error=failed_to_fetch_user', request.url));
+      return NextResponse.redirect(new URL('/me?error=failed_to_fetch_user', request.url));
     }
 
     // Merge with existing session if Discord is already connected, preserve viewerUuid
@@ -152,7 +152,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       exp,
     });
 
-    const response = NextResponse.redirect(new URL('/dashboard', request.url));
+    const response = NextResponse.redirect(new URL('/me', request.url));
     response.cookies.set(VIEWER_COOKIE_NAME, tokenPayload, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -188,6 +188,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return response;
   } catch (error) {
     console.error('[viewer/kick-callback] unexpected error:', error);
-    return NextResponse.redirect(new URL('/dashboard?error=unexpected', request.url));
+    return NextResponse.redirect(new URL('/me?error=unexpected', request.url));
   }
 }

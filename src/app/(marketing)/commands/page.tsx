@@ -221,7 +221,7 @@ export default function CommandsPage() {
           Commands may change — check chat for the latest. Some commands require the stream to be live.
         </p>
         <div className="flex items-center justify-center gap-4 flex-wrap text-sm">
-          <Link href="/dashboard" className="text-emerald-500 hover:text-emerald-400 transition-colors font-medium">
+          <Link href="/me" className="text-emerald-500 hover:text-emerald-400 transition-colors font-medium">
             Check your balance →
           </Link>
           <Link href="/leaderboard" className="text-emerald-500 hover:text-emerald-400 transition-colors font-medium">
