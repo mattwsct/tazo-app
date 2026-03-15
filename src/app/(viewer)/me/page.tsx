@@ -21,8 +21,9 @@ type MeResponse = ViewerData | AuthenticatedViewerData;
 
 function KickIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 500 500" fill="currentColor" aria-hidden="true">
-      <path d="M257.853 0H0V500H166.667V333.333L333.333 500H500L333.333 250L500 0H333.333L166.667 166.667V0H257.853Z" />
+    <svg width={size} height={size} viewBox="0 0 420 480" fill="currentColor" aria-hidden="true">
+      {/* Pixel-art K: left spine + 3 stepped arm blocks up + 3 stepped arm blocks down */}
+      <path d="M0 0H120V480H0Z M300 0H420V60H300Z M240 60H360V120H240Z M180 120H300V180H180Z M120 180H300V240H120Z M120 240H300V300H120Z M180 300H300V360H180Z M240 360H360V420H240Z M300 420H420V480H300Z" />
     </svg>
   );
 }
