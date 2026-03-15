@@ -1,10 +1,11 @@
 'use client';
 
-import { LINKS, CATEGORY_ORDER, CATEGORY_NAMES } from '@/data/links';
+import { useEffect, useState } from 'react';
+import { LINKS, CATEGORY_ORDER, CATEGORY_NAMES, type LinkItem } from '@/data/links';
 
 const SOCIAL_IDS = new Set(['twitter', 'x', 'instagram', 'youtube', 'tiktok']);
 
-function LinkButton({ link }: { link: (typeof LINKS)[0] }) {
+function LinkButton({ link }: { link: LinkItem }) {
   return (
     <a
       href={link.url}
@@ -30,9 +31,20 @@ function LinkButton({ link }: { link: (typeof LINKS)[0] }) {
 }
 
 export default function LinkGrid() {
-  const homepageLinks = LINKS.filter((l) => l.showOnHomepage);
+  const [links, setLinks] = useState<LinkItem[]>(LINKS);
 
-  const byCategory = homepageLinks.reduce<Record<string, (typeof LINKS)>>((acc, link) => {
+  useEffect(() => {
+    fetch('/api/links')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { links?: LinkItem[] } | null) => {
+        if (Array.isArray(d?.links) && d.links.length > 0) setLinks(d.links);
+      })
+      .catch(() => {});
+  }, []);
+
+  const homepageLinks = links.filter((l) => l.showOnHomepage);
+
+  const byCategory = homepageLinks.reduce<Record<string, LinkItem[]>>((acc, link) => {
     const cat = link.category ?? 'other';
     (acc[cat] ??= []).push(link);
     return acc;
