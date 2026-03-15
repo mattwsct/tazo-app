@@ -14,6 +14,8 @@ export const KICK_TOKENS_KEY = 'kick_tokens';
 export const KICK_OAUTH_BASE = 'https://id.kick.com';
 export const KICK_STREAM_TITLE_SETTINGS_KEY = 'kick_stream_title_settings';
 export const KICK_BROADCASTER_SLUG_KEY = 'kick_broadcaster_slug';
+const KICK_CHANNEL_PROFILE_KEY = 'kick_channel_profile';
+const KICK_CHANNEL_PROFILE_TTL_SEC = 3600; // 1 hour
 
 export const KICK_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq/+l1WnlRrGSolDMA+A8
@@ -409,4 +411,63 @@ export async function getKickChannelStats(): Promise<KickChannelStats> {
   }
 }
 
+export interface KickChannelProfile {
+  profilePic: string | null;
+  instagram: string | null;
+  twitter: string | null;
+  youtube: string | null;
+  discord: string | null;
+  tiktok: string | null;
+  facebook: string | null;
+}
+
+function strOrNull(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim() : null;
+}
+
+/**
+ * Fetch and cache a channel's profile image and social links from the public v2 API.
+ * TTL: 1 hour. Falls back to cached data on error.
+ */
+export async function getChannelProfile(slug = 'tazo'): Promise<KickChannelProfile> {
+  const empty: KickChannelProfile = { profilePic: null, instagram: null, twitter: null, youtube: null, discord: null, tiktok: null, facebook: null };
+  const cacheKey = `${KICK_CHANNEL_PROFILE_KEY}:${slug}`;
+
+  try {
+    const cached = await kv.get<KickChannelProfile & { at: number }>(cacheKey);
+    if (cached?.at && Date.now() - cached.at < KICK_CHANNEL_PROFILE_TTL_SEC * 1000) {
+      const { at: _at, ...profile } = cached;
+      return profile;
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const res = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`, {
+      headers: { Accept: 'application/json', 'User-Agent': 'TazoApp/1.0 (stream-integration)' },
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return empty;
+
+    const data = (await res.json()) as Record<string, unknown>;
+    const user = (data.user ?? {}) as Record<string, unknown>;
+
+    // Kick v2 API: profile pic is under user.profilepic (sometimes profile_pic)
+    const profilePic = strOrNull(user.profilepic) ?? strOrNull(user.profile_pic) ?? strOrNull(user.profile_image);
+
+    const profile: KickChannelProfile = {
+      profilePic,
+      instagram: strOrNull(user.instagram),
+      twitter:   strOrNull(user.twitter),
+      youtube:   strOrNull(user.youtube),
+      discord:   strOrNull(user.discord),
+      tiktok:    strOrNull(user.tiktok),
+      facebook:  strOrNull(user.facebook),
+    };
+
+    await kv.set(cacheKey, { ...profile, at: Date.now() }, { ex: KICK_CHANNEL_PROFILE_TTL_SEC });
+    return profile;
+  } catch {
+    return empty;
+  }
+}
 
