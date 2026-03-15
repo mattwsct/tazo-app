@@ -191,12 +191,33 @@ export default function ChallengesBox({
     if (prev === null || prev === wallet.updatedAt) return;
     const change = wallet.lastChangeUsd;
     if (change === undefined || change === 0) return;
-    const label = change > 0 ? `+$${change.toFixed(2)}` : `-$${Math.abs(change).toFixed(2)}`;
+    const sign = change > 0 ? '+' : '-';
+    const exactLocal = wallet.lastChangeLocalAmount;
+    const localRate = wallet.localRate;
+    const localCurrency = wallet.localCurrency;
+    const sym = localCurrency ? (CURRENCY_SYMBOLS[localCurrency] ?? '') : '';
+    const absStr = localRate && localCurrency
+      ? exactLocal != null
+        ? `${sym}${Math.abs(exactLocal) % 1 === 0 ? Math.abs(exactLocal).toLocaleString() : Math.abs(exactLocal).toFixed(2)} ${localCurrency}`
+        : `${sym}${Math.round(Math.abs(change) * localRate).toLocaleString()} ${localCurrency}`
+      : `$${Math.abs(change).toFixed(2)}`;
+    const source = wallet.lastChangeSource;
+    const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
     setWalletAnim(label);
     if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
     walletAnimTimerRef.current = setTimeout(() => setWalletAnim(null), WALLET_ANIM_DURATION_MS);
   }, [wallet]);
 
+  const CURRENCY_SYMBOLS: Record<string, string> = {
+    USD: '$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', SGD: 'S$', HKD: 'HK$',
+    EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', KRW: '₩', INR: '₹',
+    BRL: 'R$', MXN: '$', CHF: 'Fr', SEK: 'kr', NOK: 'kr', DKK: 'kr',
+    THB: '฿', PHP: '₱', IDR: 'Rp', MYR: 'RM', VND: '₫', TWD: 'NT$',
+    ZAR: 'R', TRY: '₺', PLN: 'zł', CZK: 'Kč', HUF: 'Ft', RON: 'lei',
+    ILS: '₪', AED: 'د.إ', SAR: '﷼', RUB: '₽', UAH: '₴', NGN: '₦',
+    KES: 'KSh', GHS: 'GH₵', ARS: '$', CLP: '$', COP: '$', EGP: 'E£', PKR: '₨',
+  };
+  const localCurrencySymbol = wallet?.localCurrency ? (CURRENCY_SYMBOLS[wallet.localCurrency] ?? '') : '';
   const localAmount =
     wallet?.localCurrency && wallet?.localRate
       ? Math.round(wallet.balance * wallet.localRate)
@@ -286,15 +307,13 @@ export default function ChallengesBox({
           <div className="challenges-header-right">
             {walletAnim ? (
               <span className="challenges-wallet-anim">{walletAnim}</span>
-            ) : (
+            ) : localAmount !== null ? (
               <>
-                <span className="challenges-header-value">${wallet!.balance.toFixed(2)} USD</span>
-                {localAmount !== null && (
-                  <span className="challenges-header-local">
-                    ≈ {localAmount.toLocaleString()} {wallet!.localCurrency}
-                  </span>
-                )}
+                <span className="challenges-header-value">{localCurrencySymbol}{localAmount.toLocaleString()} {wallet!.localCurrency}</span>
+                <span className="challenges-header-local">≈ ${wallet!.balance.toFixed(2)} USD</span>
               </>
+            ) : (
+              <span className="challenges-header-value">${wallet!.balance.toFixed(2)} USD</span>
             )}
           </div>
         </div>

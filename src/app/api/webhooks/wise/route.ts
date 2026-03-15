@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
   const amountUsd = amount / localRate;
   const channelName = (data?.channel_name as string | undefined) ?? 'WISE';
 
-  const { state, deducted } = await deductFromWallet(amountUsd, { currency: localCurrency, rate: localRate }, channelName.toUpperCase());
+  const { state, deducted } = await deductFromWallet(amountUsd, { currency: localCurrency, rate: localRate, localAmount: amount }, channelName.toUpperCase());
   void broadcastChallenges().catch(() => {});
 
   console.log('[Wise Webhook] DEDUCTED', JSON.stringify({

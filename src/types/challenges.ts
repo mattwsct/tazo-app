@@ -25,6 +25,9 @@ export interface WalletState {
   updatedAt: number;
   /** Last change amount in USD (positive = added, negative = deducted). Used for overlay animation. */
   lastChangeUsd?: number;
+  /** Exact original local-currency amount for the last change (e.g. -2.50 for a $2.50 AUD card spend).
+   *  Stored when the original local amount is known (Wise webhook) to avoid USD round-trip imprecision. */
+  lastChangeLocalAmount?: number;
   /** Source label for overlay animation, e.g. "SUB", "KICKS", "CHALLENGE". */
   lastChangeSource?: string;
   /** ISO 4217 local currency code (e.g. "JPY") when available from location. */

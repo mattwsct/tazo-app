@@ -80,7 +80,7 @@ export async function getWallet(): Promise<WalletState> {
 
 export async function setWalletBalance(
   balance: number,
-  opts?: { lastChangeUsd?: number; lastChangeSource?: string; localCurrency?: string; localRate?: number }
+  opts?: { lastChangeUsd?: number; lastChangeLocalAmount?: number; lastChangeSource?: string; localCurrency?: string; localRate?: number }
 ): Promise<WalletState> {
   const newBal = Math.round(Math.max(0, balance) * 100) / 100;
   const now = Date.now();
@@ -101,6 +101,7 @@ export async function setWalletBalance(
           balance: newBal,
           updatedAt: now,
           ...(opts?.lastChangeUsd !== undefined ? { lastChangeUsd: opts.lastChangeUsd } : {}),
+          ...(opts?.lastChangeLocalAmount !== undefined ? { lastChangeLocalAmount: opts.lastChangeLocalAmount } : {}),
           ...(opts?.lastChangeSource ? { lastChangeSource: opts.lastChangeSource } : {}),
           ...(opts?.localCurrency ? { localCurrency: opts.localCurrency } : {}),
           ...(opts?.localRate != null ? { localRate: opts.localRate } : {}),
@@ -114,6 +115,7 @@ export async function setWalletBalance(
     balance: newBal,
     updatedAt: now,
     ...(opts?.lastChangeUsd !== undefined ? { lastChangeUsd: opts.lastChangeUsd } : {}),
+    ...(opts?.lastChangeLocalAmount !== undefined ? { lastChangeLocalAmount: opts.lastChangeLocalAmount } : {}),
     ...(opts?.lastChangeSource ? { lastChangeSource: opts.lastChangeSource } : {}),
     localCurrency: opts?.localCurrency ?? current.localCurrency,
     localRate: opts?.localRate ?? current.localRate,
@@ -155,7 +157,7 @@ export async function addToWallet(
 
 export async function deductFromWallet(
   amountUsd: number,
-  localContext?: { currency: string; rate: number },
+  localContext?: { currency: string; rate: number; localAmount?: number },
   source = 'SPENT'
 ): Promise<{ state: WalletState; deducted: number }> {
   try {
@@ -178,6 +180,7 @@ export async function deductFromWallet(
             lastChangeUsd: -deducted,
             lastChangeSource: source,
             ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
+            ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
           },
           deducted,
         };
@@ -191,6 +194,7 @@ export async function deductFromWallet(
     lastChangeUsd: -deducted,
     lastChangeSource: source,
     ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
+    ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
   });
   return { state, deducted };
 }

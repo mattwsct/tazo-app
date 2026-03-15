@@ -12,7 +12,7 @@ function fmtUsd(v: number): string {
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: '$', AUD: '$', CAD: '$', NZD: '$', SGD: '$', HKD: '$',
+  USD: '$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', SGD: 'S$', HKD: 'HK$',
   EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', KRW: '₩', INR: '₹',
   BRL: 'R$', MXN: '$', CHF: 'Fr', SEK: 'kr', NOK: 'kr', DKK: 'kr',
   THB: '฿', PHP: '₱', IDR: 'Rp', MYR: 'RM', VND: '₫', TWD: 'NT$',
@@ -186,8 +186,13 @@ export default function StreamPanel({
     const sign = change > 0 ? '+' : '-';
     const localRate = wallet.localRate;
     const localCurrency = wallet.localCurrency;
+    const sym = localCurrency ? (CURRENCY_SYMBOLS[localCurrency] ?? '') : '';
+    // Use exact stored local amount (e.g. Wise card spend) to avoid USD round-trip imprecision
+    const exactLocal = wallet.lastChangeLocalAmount;
     const absStr = localRate && localCurrency
-      ? `${Math.round(Math.abs(change) * localRate).toLocaleString()} ${localCurrency}`
+      ? exactLocal != null
+        ? `${sym}${Math.abs(exactLocal) % 1 === 0 ? Math.abs(exactLocal).toLocaleString() : Math.abs(exactLocal).toFixed(2)} ${localCurrency}`
+        : `${sym}${Math.round(Math.abs(change) * localRate).toLocaleString()} ${localCurrency}`
       : fmtUsd(Math.abs(change));
     const source = wallet.lastChangeSource;
     const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
@@ -367,9 +372,7 @@ export default function StreamPanel({
           const isTimedOut = c.status === 'timedOut' || (c.expiresAt != null && c.expiresAt <= now);
           const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
           const isUrgent = expiryMs !== null && expiryMs < 60_000;
-          const bountyDisplay = wallet?.localRate && wallet?.localCurrency
-            ? fmtLocal(c.bounty, wallet.localCurrency, wallet.localRate)
-            : `${fmtUsd(c.bounty)} USD`;
+          const bountyDisplay = `${fmtUsd(c.bounty)} USD`;
           return (
             <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}${isTimedOut ? ' sp-challenge-item--timeout' : ''}`}>
               <span className="sp-challenge-num">{i + 1}.</span>
@@ -412,16 +415,13 @@ export default function StreamPanel({
               <div className="sp-right-stack">
                 {walletAnim ? (
                   <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
-                ) : (
+                ) : localAmount !== null ? (
                   <>
-                    {localAmount !== null ? (
-                      <span className="sp-wallet-value">
-                        ≈ {fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}
-                      </span>
-                    ) : (
-                      <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
-                    )}
+                    <span className="sp-wallet-value">{fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}</span>
+                    <span className="sp-wallet-usd">{fmtUsd(wallet!.balance)} USD</span>
                   </>
+                ) : (
+                  <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
                 )}
               </div>
             </div>
