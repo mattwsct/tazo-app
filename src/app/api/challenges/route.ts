@@ -7,6 +7,7 @@ import {
   removeChallenge,
   clearResolvedChallenges,
   setChallengesState,
+  makeSocialChallenge,
 } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
@@ -26,7 +27,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const body = await request.json() as { bounty?: unknown; description?: unknown; expiresAt?: unknown; durationMs?: unknown };
+    const body = await request.json() as { bounty?: unknown; description?: unknown; expiresAt?: unknown; durationMs?: unknown; action?: string };
+
+    // Quick-add: random social task ($15)
+    if (body.action === 'random_social') {
+      const { description, bounty } = makeSocialChallenge();
+      const item = await addChallenge(bounty, description);
+      if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
+      void broadcastChallenges().catch(() => {});
+      return NextResponse.json(item);
+    }
+
     const bounty = typeof body.bounty === 'number' ? body.bounty : parseFloat(String(body.bounty ?? ''));
     const description = typeof body.description === 'string' ? body.description.trim() : '';
     if (!Number.isFinite(bounty) || bounty < 0) {

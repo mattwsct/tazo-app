@@ -115,33 +115,46 @@ export async function POST(request: NextRequest) {
     results.challenges = `error: ${e}`;
   }
 
-  // 6. Migrate overlay_leaderboard → point_ledger (snapshot as single "admin" entries)
+  // 6. Migrate credits_balance hash → viewer_balances (Supabase primary)
+  // KV stores credits as a hash: { [normalizedUsername]: balanceString }
   try {
-    const leaderboard = await kv.get<Record<string, number>>('overlay_leaderboard');
-    if (leaderboard && typeof leaderboard === 'object') {
-      const entries = Object.entries(leaderboard);
+    const raw = await kv.hgetall('credits_balance') as Record<string, string | number> | null;
+    if (raw && typeof raw === 'object') {
+      const entries = Object.entries(raw).filter(([, v]) => {
+        const n = typeof v === 'string' ? parseInt(v, 10) : Math.floor(Number(v));
+        return Number.isFinite(n) && n > 0;
+      });
       if (entries.length > 0) {
-        const rows = entries.map(([username, balance]) => ({
-          creator_id: creatorId,
-          platform_id: username,
-          username,
-          delta: Number(balance),
-          reason: 'migration_snapshot',
-          meta: { source: 'upstash_migration' },
-        }));
-
-        const { error } = await supabase
-          .from('point_ledger')
-          .insert(rows);
-        results.leaderboard = error ? `error: ${error.message}` : `migrated ${rows.length} entries`;
+        // Upsert in batches of 100 to stay within Supabase row limits
+        const BATCH = 100;
+        let migrated = 0;
+        let errors = 0;
+        for (let i = 0; i < entries.length; i += BATCH) {
+          const batch = entries.slice(i, i + BATCH).map(([username, v]) => ({
+            creator_id: creatorId,
+            platform: 'kick',
+            platform_id: username,          // already normalized (lowercase) in KV
+            username: username,             // display name unknown; use normalized as fallback
+            balance: typeof v === 'string' ? parseInt(v, 10) : Math.floor(Number(v)),
+            updated_at: new Date().toISOString(),
+          }));
+          const { error } = await supabase
+            .from('viewer_balances')
+            .upsert(batch, { onConflict: 'creator_id,platform,platform_id', ignoreDuplicates: false });
+          if (error) errors += batch.length;
+          else migrated += batch.length;
+        }
+        results.credits = errors > 0
+          ? `migrated ${migrated}, errors on ${errors}`
+          : `migrated ${migrated} viewer balances`;
       } else {
-        results.leaderboard = 'skipped (empty leaderboard)';
+        results.credits = 'skipped (no non-zero balances in KV)';
       }
     } else {
-      results.leaderboard = 'skipped (no data in KV)';
+      results.credits = 'skipped (credits_balance key not found in KV)';
     }
   } catch (e) {
-    results.leaderboard = `error: ${e}`;
+    results.credits = `error: ${e}`;
   }
 
   // 7. Migrate Kick OAuth token → linked_identities

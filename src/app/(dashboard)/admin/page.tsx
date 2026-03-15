@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authenticatedFetch } from '@/lib/client-auth';
-import type { LinkItem } from '@/data/links';
+import { LINKS, type LinkItem } from '@/data/links';
 import { OverlaySettings, DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import {
   DEFAULT_KICK_MESSAGES,
@@ -150,10 +150,15 @@ export default function AdminPage() {
   const [editingChallenge, setEditingChallenge] = useState<{ id: number; description: string; bounty: string; durationMs?: number } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(15);
   const [walletAdjustInput, setWalletAdjustInput] = useState<string>('');
-  // Links section state
-  const [linksData, setLinksData] = useState<LinkItem[]>([]);
+  // Links section state — initialize with LINKS so section is never empty
+  const [linksData, setLinksData] = useState<LinkItem[]>(LINKS);
   const [linksLoading, setLinksLoading] = useState(false);
   const [linksSaving, setLinksSaving] = useState(false);
+  // Integrations / API keys
+  type ApiKeyStatus = { configured: boolean; masked: string | null; source: 'db' | 'env' | null };
+  const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, ApiKeyStatus>>({});
+  const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({});
+  const [apiKeysSaving, setApiKeysSaving] = useState<Record<string, boolean>>({});
   // Single scrollable page — Location/Stream title shared, Overlay and Kick sections follow
 
   
@@ -454,11 +459,20 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     setLinksLoading(true);
-    fetch('/api/admin/links', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((d: { links?: LinkItem[] }) => { if (d.links) setLinksData(d.links); })
-      .catch(() => {})
+    authenticatedFetch('/api/admin/links')
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((d: { links?: LinkItem[] }) => { if (Array.isArray(d.links) && d.links.length > 0) setLinksData(d.links); })
+      .catch((e) => { console.warn('[admin/links] fetch failed:', e); })
       .finally(() => setLinksLoading(false));
+  }, [isAuthenticated]);
+
+  // Load API key status on mount
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    authenticatedFetch('/api/admin/api-keys')
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((d: Record<string, ApiKeyStatus>) => { setApiKeyStatus(d); })
+      .catch(() => {});
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -1734,6 +1748,30 @@ export default function AdminPage() {
                   >
                     Add challenge
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    title="Pick a random social task challenge ($15 bounty)"
+                    onClick={async () => {
+                      try {
+                        const res = await authenticatedFetch('/api/challenges', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'random_social' }),
+                        });
+                        if (res.ok) {
+                          await loadChallengesAndWallet();
+                          setToast({ type: 'saved', message: 'Random social task added ($15)' });
+                        } else {
+                          const d = await res.json().catch(() => ({})) as { error?: string };
+                          setToast({ type: 'error', message: d.error ?? 'Failed to add social task' });
+                        }
+                      } catch { /* ignore */ }
+                      setTimeout(() => setToast(null), 2500);
+                    }}
+                  >
+                    🌍 Random social task
+                  </button>
                 </div>
 
                 {/* Challenge list */}
@@ -2312,11 +2350,11 @@ export default function AdminPage() {
                   </div>
               <div className="setting-separator" style={{ margin: '1.5rem 0' }} />
               <h4 className="subsection-label" style={{ marginBottom: 8 }}>Trivia</h4>
-              <p className="setting-hint" style={{ marginBottom: 12 }}>
+              <p className="input-hint" style={{ marginBottom: 12 }}>
                 First-to-answer trivia. When active, uses the same overlay slot as the poll (poll takes priority). Mods can use <strong>!trivia</strong> in chat to start a random question from the list below, or start a custom one here.
               </p>
               <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span className="setting-hint" style={{ margin: 0 }}>
+                <span className="input-hint" style={{ margin: 0 }}>
                   {activeTriviaState === undefined
                     ? 'Current: …'
                     : activeTriviaState && !activeTriviaState.winnerDisplayUntil
@@ -2398,7 +2436,7 @@ export default function AdminPage() {
               </div>
               <div className="form-stack" style={{ maxWidth: 520, marginTop: 24 }}>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Random quiz questions (for !trivia)</label>
-                <p className="setting-hint" style={{ marginBottom: 6 }}>
+                <p className="input-hint" style={{ marginBottom: 6 }}>
                   One question and answer per line. Format: <code>Question? Answer</code> or <code>Question ? Answer</code>. Use commas for multiple accepted answers (e.g. Favourite food? chicken Parmigiana, chicken parmi, chicken parma). To use the same questions in local and production, set the same <code>KV_REST_API_URL</code> and <code>KV_REST_API_TOKEN</code> in both (e.g. copy production&apos;s Upstash credentials into local .env).
                 </p>
                 <textarea
@@ -2469,7 +2507,7 @@ export default function AdminPage() {
                 </label>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <p className="setting-hint" style={{ marginTop: 0, marginBottom: 10 }}>Create Kick channel rewards with these exact titles to grant Credits on redemption.</p>
+                <p className="input-hint" style={{ marginTop: 0, marginBottom: 10 }}>Create Kick channel rewards with these exact titles to grant Credits on redemption.</p>
                 <label className="setting-label" style={{ display: 'block', marginBottom: 4 }}>Reward title — 50 Credits</label>
                 <input
                   type="text"
@@ -2499,18 +2537,18 @@ export default function AdminPage() {
                   rows={3}
                   style={{ maxWidth: 360, resize: 'vertical' }}
                 />
-                <p className="setting-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won&apos;t earn Credits from sub/gift/kicks and won&apos;t appear on !leaderboard.</p>
+                <p className="input-hint" style={{ marginTop: 4 }}>Comma or newline-separated usernames. They won&apos;t earn Credits from sub/gift/kicks and won&apos;t appear on !leaderboard.</p>
               </div>
             </div>
           </CollapsibleSection>
 
           <CollapsibleSection id="links" title="🔗 Links">
             <div className="setting-group">
-              <p className="setting-hint" style={{ marginBottom: 16 }}>
+              <p className="input-hint" style={{ marginBottom: 16 }}>
                 Manage links shown on the homepage. Toggle visibility, edit titles, URLs, button labels, and button colors. Click Save when done.
               </p>
               {linksLoading ? (
-                <p className="setting-hint">Loading links…</p>
+                <p className="input-hint">Loading links…</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {linksData.map((link, idx) => {
@@ -2665,6 +2703,201 @@ export default function AdminPage() {
             </div>
           </CollapsibleSection>
 
+          <CollapsibleSection id="discord-roles" title="💜 Discord role sync">
+            <div className="setting-group">
+              <p className="input-hint" style={{ marginBottom: 12 }}>
+                When a viewer connects both Kick and Discord, new subs/resubs automatically assign them the subscriber role in your Discord server.
+                Click below to remove the role from any subscribers whose subscription has lapsed.
+              </p>
+              <p className="input-hint" style={{ marginBottom: 16 }}>
+                Requires: <code>DISCORD_BOT_TOKEN</code>, <code>DISCORD_GUILD_ID</code>, <code>DISCORD_SUBSCRIBER_ROLE_ID</code> in Vercel env vars.
+                Bot must be in your server with &quot;Manage Roles&quot; permission.
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                onClick={async () => {
+                  try {
+                    const r = await authenticatedFetch('/api/admin/discord-role-sync', { method: 'POST' });
+                    const d = await r.json() as { removed?: number; lapsed?: number; message?: string; error?: string };
+                    if (r.ok) {
+                      setToast({ type: 'saved', message: d.message ?? `Removed role from ${d.removed ?? 0} lapsed subscriber(s)` });
+                    } else {
+                      setToast({ type: 'error', message: d.error ?? 'Sync failed' });
+                    }
+                  } catch { setToast({ type: 'error', message: 'Sync failed' }); }
+                  setTimeout(() => setToast(null), 4000);
+                }}
+              >
+                💜 Remove lapsed subscriber roles
+              </button>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection id="integrations" title="🔌 Integrations">
+            <div className="setting-group">
+              <p className="input-hint" style={{ marginBottom: 16 }}>
+                API keys are stored securely in the database and override any Vercel environment variables.
+                Keys set here take effect immediately — no redeployment needed.
+              </p>
+
+              {/* Helper: key row */}
+              {(
+                [
+                  {
+                    field: 'rtirl_pull_key',
+                    label: 'RTIRL pull key',
+                    placeholder: 'Paste your RTIRL pull key…',
+                    help: (
+                      <>
+                        Required for real-time location tracking on the overlay.{' '}
+                        Get it from{' '}
+                        <a href="https://rtirl.com/api" target="_blank" rel="noreferrer" style={{ color: '#10b981', textDecoration: 'underline' }}>
+                          rtirl.com/api
+                        </a>{' '}
+                        → &quot;Pull keys&quot;. This is a read-only key — safe to keep here.
+                      </>
+                    ),
+                  },
+                  {
+                    field: 'pulsoid_token',
+                    label: 'Pulsoid access token',
+                    placeholder: 'Paste your Pulsoid access token…',
+                    help: (
+                      <>
+                        Required for heart-rate display. Get it from{' '}
+                        <a href="https://pulsoid.net/ui/keys" target="_blank" rel="noreferrer" style={{ color: '#10b981', textDecoration: 'underline' }}>
+                          pulsoid.net/ui/keys
+                        </a>{' '}
+                        → create a token with &quot;Heart rate read&quot; scope.
+                      </>
+                    ),
+                  },
+                  {
+                    field: 'locationiq_key',
+                    label: 'LocationIQ key',
+                    placeholder: 'Paste your LocationIQ API key…',
+                    help: (
+                      <>
+                        Used for reverse geocoding (converting GPS coords to place names). Free tier at{' '}
+                        <a href="https://locationiq.com" target="_blank" rel="noreferrer" style={{ color: '#10b981', textDecoration: 'underline' }}>
+                          locationiq.com
+                        </a>{' '}
+                        — 5,000 requests/day free. Optional if you don&apos;t show location names.
+                      </>
+                    ),
+                  },
+                  {
+                    field: 'openweather_key',
+                    label: 'OpenWeatherMap key',
+                    placeholder: 'Paste your OpenWeatherMap API key…',
+                    help: (
+                      <>
+                        Used for weather display and chat commands. Free tier at{' '}
+                        <a href="https://openweathermap.org/api" target="_blank" rel="noreferrer" style={{ color: '#10b981', textDecoration: 'underline' }}>
+                          openweathermap.org/api
+                        </a>{' '}
+                        — 60 calls/min free. Optional; weather features are disabled without it.
+                      </>
+                    ),
+                  },
+                ] as { field: string; label: string; placeholder: string; help: React.ReactNode }[]
+              ).map(({ field, label, placeholder, help }) => {
+                const status = apiKeyStatus[field];
+                return (
+                  <div key={field} style={{ marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <span className="setting-label" style={{ marginBottom: 0 }}>{label}</span>
+                      {status?.configured ? (
+                        <span style={{ fontSize: 11, background: 'rgba(16,185,129,0.15)', color: '#10b981', padding: '1px 8px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.3)' }}>
+                          ✓ configured {status.source === 'env' ? '(env)' : '(db)'}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, background: 'rgba(239,68,68,0.12)', color: '#f87171', padding: '1px 8px', borderRadius: 99, border: '1px solid rgba(239,68,68,0.25)' }}>
+                          not set
+                        </span>
+                      )}
+                    </div>
+                    {status?.masked && (
+                      <p className="input-hint" style={{ marginBottom: 6, fontFamily: 'monospace', letterSpacing: 1 }}>
+                        Current: {status.masked}
+                      </p>
+                    )}
+                    <p className="input-hint" style={{ marginBottom: 8 }}>{help}</p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="password"
+                        className="text-input"
+                        style={{ flex: 1, fontFamily: 'monospace' }}
+                        placeholder={placeholder}
+                        value={apiKeyInputs[field] ?? ''}
+                        onChange={(e) => setApiKeyInputs((prev) => ({ ...prev, [field]: e.target.value }))}
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        disabled={apiKeysSaving[field] || !apiKeyInputs[field]}
+                        onClick={async () => {
+                          setApiKeysSaving((prev) => ({ ...prev, [field]: true }));
+                          try {
+                            const r = await authenticatedFetch('/api/admin/api-keys', {
+                              method: 'POST',
+                              body: JSON.stringify({ [field]: apiKeyInputs[field] }),
+                            });
+                            if (r.ok) {
+                              setApiKeyInputs((prev) => ({ ...prev, [field]: '' }));
+                              // Refresh status
+                              const fresh = await authenticatedFetch('/api/admin/api-keys').then((res) => res.json() as Promise<Record<string, ApiKeyStatus>>);
+                              setApiKeyStatus(fresh);
+                              setToast({ type: 'saved', message: `${label} saved` });
+                            } else {
+                              const d = await r.json() as { error?: string };
+                              setToast({ type: 'error', message: d.error ?? 'Save failed' });
+                            }
+                          } catch { setToast({ type: 'error', message: 'Save failed' }); }
+                          finally { setApiKeysSaving((prev) => ({ ...prev, [field]: false })); }
+                          setTimeout(() => setToast(null), 3000);
+                        }}
+                      >
+                        {apiKeysSaving[field] ? 'Saving…' : 'Save'}
+                      </button>
+                      {status?.configured && status.source === 'db' && (
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-small"
+                          disabled={apiKeysSaving[field]}
+                          onClick={async () => {
+                            if (!confirm(`Remove the saved ${label}?`)) return;
+                            setApiKeysSaving((prev) => ({ ...prev, [field]: true }));
+                            try {
+                              await authenticatedFetch('/api/admin/api-keys', {
+                                method: 'POST',
+                                body: JSON.stringify({ [field]: '' }),
+                              });
+                              const fresh = await authenticatedFetch('/api/admin/api-keys').then((res) => res.json() as Promise<Record<string, ApiKeyStatus>>);
+                              setApiKeyStatus(fresh);
+                              setToast({ type: 'saved', message: `${label} removed` });
+                            } catch { setToast({ type: 'error', message: 'Remove failed' }); }
+                            finally { setApiKeysSaving((prev) => ({ ...prev, [field]: false })); }
+                            setTimeout(() => setToast(null), 3000);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <p className="input-hint" style={{ marginTop: 4 }}>
+                Keys marked <code>(env)</code> come from Vercel environment variables and cannot be removed here — update them in your Vercel project settings.
+                Keys marked <code>(db)</code> are stored in the database and override env vars.
+              </p>
+            </div>
+          </CollapsibleSection>
+
           <CollapsibleSection id="danger-zone" title="⚠️ Danger zone">
             <p className="input-hint" style={{ marginBottom: '1rem' }}>
               Manual resets if auto-reset on stream start fails or data needs clearing mid-stream.
@@ -2701,6 +2934,35 @@ export default function AdminPage() {
                 }}
               >
                 🔄 Reset full stream session
+              </button>
+            </div>
+
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <p className="input-hint" style={{ marginBottom: 12 }}>
+                <strong style={{ color: '#fbbf24' }}>One-time migration</strong> — copies credits and settings from Redis (KV) into Supabase.
+                Safe to run multiple times (upserts). Run this once after deploying migration 005.
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                onClick={async () => {
+                  if (!confirm('Migrate KV → Supabase? This copies credits, settings, and challenges. Safe to re-run.')) return;
+                  setToast({ type: 'saved', message: 'Migrating… this may take a moment' });
+                  try {
+                    const r = await authenticatedFetch('/api/admin/migrate', { method: 'POST' });
+                    const d = await r.json() as { message?: string; results?: Record<string, string>; error?: string };
+                    if (r.ok) {
+                      const summary = Object.entries(d.results ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n');
+                      alert(`Migration complete:\n\n${summary}`);
+                      setToast({ type: 'saved', message: 'Migration complete — see alert for details' });
+                    } else {
+                      setToast({ type: 'error', message: d.error ?? 'Migration failed' });
+                    }
+                  } catch { setToast({ type: 'error', message: 'Migration failed' }); }
+                  setTimeout(() => setToast(null), 5000);
+                }}
+              >
+                📦 Migrate KV → Supabase
               </button>
             </div>
           </CollapsibleSection>

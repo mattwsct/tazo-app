@@ -25,6 +25,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
+      url: `${base}/leaderboard`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly' as const,
+      priority: 0.8,
+    },
+    {
       url: `${base}/dashboard`,
       lastModified: new Date(),
       changeFrequency: 'monthly' as const,

@@ -8,8 +8,11 @@
 
 import { randomInt } from 'node:crypto';
 import { kv } from '@/lib/kv';
-import { getLeaderboardExclusions, setLeaderboardDisplayName } from '@/utils/leaderboard-storage';
+import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getCreatorId, ensureCreatorSettings } from '@/lib/creator-id';
 
+// KV key kept for fallback during migration period
 const CREDITS_BALANCE_KEY = 'credits_balance';
 const DEAL_COOLDOWN_KEY = 'blackjack_deal_last_at';
 const ACTIVE_GAME_KEY_PREFIX = 'blackjack_game:';
@@ -130,24 +133,39 @@ function gameKey(user: string): string {
   return `${ACTIVE_GAME_KEY_PREFIX}${user}`;
 }
 
-/** Get credits balance. New users have 0 (no auto-create). */
+/** Get credits balance. Supabase primary, KV fallback. */
 export async function getCredits(username: string): Promise<number> {
   const user = normalizeUser(username);
   try {
-    const bal = await kv.hget<number | string>(CREDITS_BALANCE_KEY, user);
-    if (bal != null) {
-      return typeof bal === 'string' ? parseInt(bal, 10) : Math.floor(bal);
+    if (isSupabaseConfigured()) {
+      const creatorId = await getCreatorId();
+      if (creatorId) {
+        const { data } = await supabase.from('viewer_balances')
+          .select('balance').eq('creator_id', creatorId).eq('platform', 'kick').eq('platform_id', user).single();
+        if (data) return Number(data.balance);
+      }
     }
-    return 0;
+    // KV fallback
+    const bal = await kv.hget<number | string>(CREDITS_BALANCE_KEY, user);
+    return bal != null ? (typeof bal === 'string' ? parseInt(bal, 10) : Math.floor(bal)) : 0;
   } catch {
     return 0;
   }
 }
 
-/** Get credits only if the user already exists (no create). Use for !credits <other>. */
+/** Get credits only if the user already has a row. Returns null if not found. */
 export async function getCreditsIfExists(username: string): Promise<number | null> {
   const user = normalizeUser(username);
   try {
+    if (isSupabaseConfigured()) {
+      const creatorId = await getCreatorId();
+      if (creatorId) {
+        const { data } = await supabase.from('viewer_balances')
+          .select('balance').eq('creator_id', creatorId).eq('platform', 'kick').eq('platform_id', user).single();
+        return data ? Number(data.balance) : null;
+      }
+    }
+    // KV fallback
     const bal = await kv.hget<number | string>(CREDITS_BALANCE_KEY, user);
     if (bal == null) return null;
     return typeof bal === 'string' ? parseInt(bal, 10) : Math.floor(bal);
@@ -156,10 +174,27 @@ export async function getCreditsIfExists(username: string): Promise<number | nul
   }
 }
 
-/** Top N users by credits (for !leaderboard and overlay). Excludes leaderboard-excluded users. */
+/** Top N viewers by credits. Supabase primary, KV fallback. */
 export async function getCreditsLeaderboard(topN: number): Promise<{ username: string; credits: number }[]> {
-  const n = Math.max(1, Math.min(20, Math.floor(topN)));
+  const n = Math.max(1, Math.min(100, Math.floor(topN)));
   try {
+    if (isSupabaseConfigured()) {
+      const creatorId = await getCreatorId();
+      if (creatorId) {
+        const excluded = await getLeaderboardExclusions();
+        // Fetch extra rows to account for exclusions
+        const { data } = await supabase.from('viewer_balances')
+          .select('platform_id, username, balance')
+          .eq('creator_id', creatorId).eq('platform', 'kick').gt('balance', 0)
+          .order('balance', { ascending: false })
+          .limit(n + Math.max(excluded.size, 20));
+        if (data) {
+          return data.filter((e) => !excluded.has(e.platform_id)).slice(0, n)
+            .map((e) => ({ username: e.username, credits: Number(e.balance) }));
+        }
+      }
+    }
+    // KV fallback
     const raw = (await kv.hgetall(CREDITS_BALANCE_KEY)) as Record<string, string> | null;
     if (!raw || typeof raw !== 'object') return [];
     const excluded = await getLeaderboardExclusions();
@@ -176,41 +211,38 @@ export async function getCreditsLeaderboard(topN: number): Promise<{ username: s
   }
 }
 
-export async function deductCredits(user: string, amount: number): Promise<{ ok: boolean; balance: number }> {
-  const bal = await getCredits(user);
-  if (bal < amount) return { ok: false, balance: bal };
-  const newBal = bal - amount;
-  await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
-  // Fire-and-forget sync to Supabase point_ledger
-  void (async () => {
-    try {
-      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
-      if (!isSupabaseConfigured()) return;
-      const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
-      if (!creator) return;
-      const { data: viewer } = await supabase.from('viewer_profiles')
-        .upsert(
-          { creator_id: creator.id, platform: 'kick', platform_id: user.toLowerCase(), username: user },
-          { onConflict: 'creator_id,platform,platform_id', ignoreDuplicates: false }
-        )
-        .select('id')
-        .single();
-      await supabase.from('point_ledger').insert({
-        creator_id: creator.id,
-        viewer_id: viewer?.id ?? null,
-        platform_id: user.toLowerCase(),
-        username: user,
-        delta: -amount,
-        reason: 'spend',
-      });
-    } catch (e) {
-      console.error('[gambling-storage] supabase sync error:', e);
+/** Atomically deduct credits. Returns ok=false if insufficient balance. */
+export async function deductCredits(user: string, amount: number, reason = 'spend'): Promise<{ ok: boolean; balance: number }> {
+  try {
+    if (isSupabaseConfigured()) {
+      const creatorId = await getCreatorId();
+      if (creatorId) {
+        const { data } = await supabase.rpc('deduct_viewer_balance', {
+          p_creator_id: creatorId, p_platform: 'kick', p_platform_id: user, p_amount: amount,
+        });
+        const row = Array.isArray(data) ? data[0] : data;
+        if (row) {
+          if (row.ok) {
+            void Promise.resolve(supabase.from('point_ledger').insert({
+              creator_id: creatorId, platform_id: user, username: user, delta: -amount, reason,
+            })).catch(() => {});
+          }
+          return { ok: Boolean(row.ok), balance: Number(row.new_balance) };
+        }
+      }
     }
-  })();
-  return { ok: true, balance: newBal };
+    // KV fallback
+    const bal = await getCredits(user);
+    if (bal < amount) return { ok: false, balance: bal };
+    const newBal = bal - amount;
+    await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
+    return { ok: true, balance: newBal };
+  } catch {
+    return { ok: false, balance: 0 };
+  }
 }
 
-/** Add credits to a user. Used for BJ wins, sub/gift/kicks, and !addcredits. Excludes bots and leaderboard-excluded users when called from events. */
+/** Add credits to a user. Supabase primary, KV fallback. Excludes bots and excluded users. */
 export async function addCredits(username: string, amount: number, options?: { skipExclusions?: boolean }): Promise<number> {
   const user = normalizeUser(username);
   if (isBotUsername(user)) return 0;
@@ -219,37 +251,29 @@ export async function addCredits(username: string, amount: number, options?: { s
     const excluded = await getLeaderboardExclusions();
     if (excluded.has(user)) return 0;
   }
-  const bal = await getCredits(user);
-  const newBal = bal + amount;
-  await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
-  if (username?.trim()) await setLeaderboardDisplayName(user, username.trim());
-  // Fire-and-forget sync to Supabase point_ledger
-  void (async () => {
-    try {
-      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
-      if (!isSupabaseConfigured()) return;
-      const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
-      if (!creator) return;
-      const { data: viewer } = await supabase.from('viewer_profiles')
-        .upsert(
-          { creator_id: creator.id, platform: 'kick', platform_id: user.toLowerCase(), username: username.trim() || user },
-          { onConflict: 'creator_id,platform,platform_id', ignoreDuplicates: false }
-        )
-        .select('id')
-        .single();
-      await supabase.from('point_ledger').insert({
-        creator_id: creator.id,
-        viewer_id: viewer?.id ?? null,
-        platform_id: user.toLowerCase(),
-        username: username.trim() || user,
-        delta: amount,
-        reason: 'earn',
-      });
-    } catch (e) {
-      console.error('[gambling-storage] supabase sync error:', e);
+  const displayName = username.trim() || user;
+  try {
+    if (isSupabaseConfigured()) {
+      const creatorId = await getCreatorId();
+      if (creatorId) {
+        const { data: newBalance } = await supabase.rpc('increment_viewer_balance', {
+          p_creator_id: creatorId, p_platform: 'kick', p_platform_id: user,
+          p_username: displayName, p_delta: amount,
+        });
+        void Promise.resolve(supabase.from('point_ledger').insert({
+          creator_id: creatorId, platform_id: user, username: displayName, delta: amount, reason: 'earn',
+        })).catch(() => {});
+        return typeof newBalance === 'number' ? newBalance : Number(newBalance ?? 0);
+      }
     }
-  })();
-  return newBal;
+    // KV fallback
+    const bal = await getCredits(user);
+    const newBal = bal + amount;
+    await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
+    return newBal;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -288,35 +312,9 @@ async function placeBet(user: string, requestedBet: number): Promise<{ ok: false
   const bal = await getCredits(user);
   if (bal < MIN_BET) return { ok: false, balance: bal };
   const bet = Math.min(Math.floor(Math.max(MIN_BET, requestedBet)), bal);
-  const newBal = bal - bet;
-  await kv.hset(CREDITS_BALANCE_KEY, { [user]: String(newBal) });
-  // Fire-and-forget sync to Supabase point_ledger
-  void (async () => {
-    try {
-      const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
-      if (!isSupabaseConfigured()) return;
-      const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
-      if (!creator) return;
-      const { data: viewer } = await supabase.from('viewer_profiles')
-        .upsert(
-          { creator_id: creator.id, platform: 'kick', platform_id: user.toLowerCase(), username: user },
-          { onConflict: 'creator_id,platform,platform_id', ignoreDuplicates: false }
-        )
-        .select('id')
-        .single();
-      await supabase.from('point_ledger').insert({
-        creator_id: creator.id,
-        viewer_id: viewer?.id ?? null,
-        platform_id: user.toLowerCase(),
-        username: user,
-        delta: -bet,
-        reason: 'blackjack_bet',
-      });
-    } catch (e) {
-      console.error('[gambling-storage] supabase sync error:', e);
-    }
-  })();
-  return { ok: true, bet, balance: newBal };
+  const { ok, balance } = await deductCredits(user, bet, 'blackjack_bet');
+  if (!ok) return { ok: false, balance };
+  return { ok: true, bet, balance };
 }
 
 /** Clear only blackjack state on stream start (active hands + deal cooldown). Does not clear credits balances. */

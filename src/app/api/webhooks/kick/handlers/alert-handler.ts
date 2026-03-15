@@ -7,8 +7,51 @@ import { updateKickTitleGoals } from '@/lib/stream-title-updater';
 import { sendKickChatMessage, getValidAccessToken } from '@/lib/kick-api';
 import { addToWallet } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
+import { assignSubscriberRole, isDiscordRoleSyncConfigured } from '@/lib/discord-roles';
 
 const getUsername = (obj: unknown) => ((obj as { username?: string })?.username ?? '').trim();
+const getKickId = (obj: unknown) => String((obj as { user_id?: unknown; id?: unknown })?.user_id ?? (obj as { user_id?: unknown; id?: unknown })?.id ?? '');
+
+/**
+ * Fire-and-forget: mark subscriber in Supabase, assign Discord role if linked.
+ * Sub expiry is set to 35 days (30-day sub + 5-day grace period).
+ */
+async function syncSubscriberRole(kickId: string): Promise<void> {
+  if (!kickId) return;
+  try {
+    const { supabase, isSupabaseConfigured } = await import('@/lib/supabase');
+    if (!isSupabaseConfigured()) return;
+    const expiresAt = new Date(Date.now() + 35 * 24 * 60 * 60 * 1000).toISOString();
+    // Update the Kick viewer_profile row to mark as subscriber with expiry
+    const { data: creator } = await supabase.from('creators').select('id').eq('slug', 'tazo').single();
+    if (!creator) return;
+    await supabase.from('viewer_profiles')
+      .update({ is_subscriber: true, subscription_expires_at: expiresAt })
+      .eq('creator_id', creator.id)
+      .eq('platform', 'kick')
+      .eq('platform_id', kickId);
+    if (!isDiscordRoleSyncConfigured()) return;
+    // Find linked Discord account via viewer_uuid
+    const { data: kickProfile } = await supabase.from('viewer_profiles')
+      .select('viewer_uuid')
+      .eq('creator_id', creator.id)
+      .eq('platform', 'kick')
+      .eq('platform_id', kickId)
+      .single();
+    if (!kickProfile?.viewer_uuid) return;
+    const { data: discordProfile } = await supabase.from('viewer_profiles')
+      .select('platform_id')
+      .eq('creator_id', creator.id)
+      .eq('platform', 'discord')
+      .eq('viewer_uuid', kickProfile.viewer_uuid)
+      .single();
+    if (discordProfile?.platform_id) {
+      await assignSubscriberRole(discordProfile.platform_id);
+    }
+  } catch (e) {
+    console.error('[discord-roles] syncSubscriberRole error:', e);
+  }
+}
 
 // Settings are fetched once per event and passed in to avoid a duplicate KV read.
 export const handleSubGoalMilestone = async (count: number, settings: Record<string, unknown> | null) => {
@@ -76,6 +119,7 @@ export async function handleAlertEvents(
     const subscriber = payload.subscriber;
     if (subscriber) {
       const username = getUsername(subscriber);
+      const kickId = getKickId(subscriber);
       if (username) void addCredits(username, 100);
       // Fetch settings concurrently with the increment — settings don't change during INCRBY.
       const [, , settings] = await Promise.all([
@@ -87,6 +131,7 @@ export async function handleAlertEvents(
         await addToWallet(5, { source: 'SUB' });
         await broadcastChallenges();
       })().catch(() => {});
+      void syncSubscriberRole(kickId).catch(() => {});
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(1, settings);
     }
@@ -95,6 +140,7 @@ export async function handleAlertEvents(
     const duration = (payload.duration as number) ?? 0;
     if (subscriber) {
       const username = getUsername(subscriber);
+      const kickId = getKickId(subscriber);
       if (username) void addCredits(username, 100);
       const [, , settings] = await Promise.all([
         addStreamGoalSubs(1),
@@ -105,6 +151,7 @@ export async function handleAlertEvents(
         await addToWallet(5, { source: 'RESUB' });
         await broadcastChallenges();
       })().catch(() => {});
+      void syncSubscriberRole(kickId).catch(() => {});
       didAlertOrLeaderboard = true;
       await handleSubGoalMilestone(1, settings);
     }

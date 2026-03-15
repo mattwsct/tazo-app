@@ -220,12 +220,14 @@ export default function CommandsPage() {
         <p className="text-zinc-600 text-sm">
           Commands may change — check chat for the latest. Some commands require the stream to be live.
         </p>
-        <p className="text-zinc-500 text-sm">
-          Check your balance at{' '}
+        <div className="flex items-center justify-center gap-4 flex-wrap text-sm">
           <Link href="/dashboard" className="text-emerald-500 hover:text-emerald-400 transition-colors font-medium">
-            tazo.wtf/dashboard
+            Check your balance →
           </Link>
-        </p>
+          <Link href="/leaderboard" className="text-emerald-500 hover:text-emerald-400 transition-colors font-medium">
+            View leaderboard →
+          </Link>
+        </div>
       </div>
     </div>
   );
