@@ -368,7 +368,7 @@ export default function StreamPanel({
           const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
           const isUrgent = expiryMs !== null && expiryMs < 60_000;
           const bountyDisplay = wallet?.localRate && wallet?.localCurrency
-            ? `${fmtLocal(c.bounty, wallet.localCurrency, wallet.localRate)} (${fmtUsdInline(c.bounty)})`
+            ? fmtLocal(c.bounty, wallet.localCurrency, wallet.localRate)
             : `${fmtUsd(c.bounty)} USD`;
           return (
             <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}${isTimedOut ? ' sp-challenge-item--timeout' : ''}`}>
@@ -417,7 +417,6 @@ export default function StreamPanel({
                     {localAmount !== null ? (
                       <span className="sp-wallet-value">
                         ≈ {fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}
-                        <span className="sp-subtext" style={{ marginLeft: '0.4em' }}>({fmtUsdInline(wallet!.balance)})</span>
                       </span>
                     ) : (
                       <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
