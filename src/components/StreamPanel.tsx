@@ -10,6 +10,27 @@ const TIMER_COMPLETE_DISPLAY_MS = 10000;
 function fmtUsd(v: number): string {
   return v % 1 === 0 ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
 }
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$', AUD: '$', CAD: '$', NZD: '$', SGD: '$', HKD: '$',
+  EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', KRW: '₩', INR: '₹',
+  BRL: 'R$', MXN: '$', CHF: 'Fr', SEK: 'kr', NOK: 'kr', DKK: 'kr',
+  THB: '฿', PHP: '₱', IDR: 'Rp', MYR: 'RM', VND: '₫', TWD: 'NT$',
+  ZAR: 'R', TRY: '₺', PLN: 'zł', CZK: 'Kč', HUF: 'Ft', RON: 'lei',
+  ILS: '₪', AED: 'د.إ', SAR: '﷼', RUB: '₽', UAH: '₴', NGN: '₦',
+  KES: 'KSh', GHS: 'GH₵', ARS: '$', CLP: '$', COP: '$', EGP: 'E£',
+  PKR: '₨',
+};
+
+function fmtLocal(amountUsd: number, currency: string, rate: number): string {
+  const sym = CURRENCY_SYMBOLS[currency] ?? '';
+  const local = Math.round(amountUsd * rate);
+  return `${sym}${local.toLocaleString()} ${currency}`;
+}
+
+function fmtUsdInline(v: number): string {
+  return `~$${Math.round(v).toLocaleString()} USD`;
+}
 const ALERT_DISPLAY_MS = 10000;
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
@@ -188,9 +209,10 @@ export default function StreamPanel({
   // ── Challenges ─────────────────────────────────────────────────────────────
   const challenges = settings.challengesState?.challenges ?? [];
   const challengesVisible = settings.challengesVisible !== false;
-  const activeChallenges = challengesVisible ? challenges.filter((c) =>
-    c.status === 'active' || c.status === 'timedOut'
-  ) : [];
+  const activeChallenges = challengesVisible ? challenges
+    .filter((c) => c.status === 'active' || c.status === 'timedOut')
+    .sort((a, b) => b.bounty - a.bounty)
+  : [];
 
   // ── Poll ───────────────────────────────────────────────────────────────────
   const poll = settings.pollState ?? null;
@@ -346,8 +368,8 @@ export default function StreamPanel({
           const expiryMs = !isTimedOut && c.expiresAt ? Math.max(0, c.expiresAt - now) : null;
           const isUrgent = expiryMs !== null && expiryMs < 60_000;
           const bountyDisplay = wallet?.localRate && wallet?.localCurrency
-            ? `${Math.round(c.bounty * wallet.localRate).toLocaleString()} ${wallet.localCurrency}`
-            : fmtUsd(c.bounty);
+            ? `${fmtLocal(c.bounty, wallet.localCurrency, wallet.localRate)} (${fmtUsdInline(c.bounty)})`
+            : `${fmtUsd(c.bounty)} USD`;
           return (
             <div key={c.id} className={`sp-challenge-item${isUrgent ? ' sp-challenge-item--urgent' : ''}${isTimedOut ? ' sp-challenge-item--timeout' : ''}`}>
               <span className="sp-challenge-num">{i + 1}.</span>
@@ -393,10 +415,10 @@ export default function StreamPanel({
                 ) : (
                   <>
                     {localAmount !== null ? (
-                      <>
-                        <span className="sp-wallet-value">≈ {localAmount.toLocaleString()} {wallet!.localCurrency}</span>
-                        <span className="sp-subtext">{fmtUsd(wallet!.balance)} USD</span>
-                      </>
+                      <span className="sp-wallet-value">
+                        ≈ {fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}
+                        <span className="sp-subtext" style={{ marginLeft: '0.4em' }}>({fmtUsdInline(wallet!.balance)})</span>
+                      </span>
                     ) : (
                       <span className="sp-wallet-value">{fmtUsd(wallet!.balance)} USD</span>
                     )}
