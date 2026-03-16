@@ -19,8 +19,11 @@ export async function GET(request: NextRequest) {
   void (async () => {
     const persistent = await getPersistentLocation();
     const gpsCountry = persistent?.location?.countryCode?.toUpperCase() ?? undefined;
-    const localCtx = await getLocalCurrencyContext(gpsCountry ?? ipCountry);
-    // Update whenever currency is missing OR the detected currency has changed (e.g. travelling)
+    // Only fall back to IP if we have no GPS country AND no currency already set.
+    // This prevents a Singapore/HK eSIM IP from overriding a GPS-derived currency.
+    const countryToUse = gpsCountry ?? (state.localCurrency ? undefined : ipCountry);
+    const localCtx = await getLocalCurrencyContext(countryToUse);
+    // Update whenever currency is missing OR GPS-derived currency has changed (e.g. travelling)
     if (localCtx && (localCtx.currency !== state.localCurrency || !state.localRate)) {
       await setWalletBalance(state.balance, { localCurrency: localCtx.currency, localRate: localCtx.rate });
       void broadcastChallenges().catch(() => {});
