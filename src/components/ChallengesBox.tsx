@@ -13,18 +13,30 @@ const CB_CURRENCY_SYMBOLS: Record<string, string> = {
 };
 const CB_AMBIGUOUS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR']);
 
-const CB_NO_DECIMAL = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF']);
+const CB_NO_DECIMAL = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF', 'THB']);
 
 function cbFmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
   const local = amountUsd * rate;
-  const str = CB_NO_DECIMAL.has(currency) ? Math.round(local).toLocaleString() : local.toFixed(2);
+  let str: string;
+  if (CB_NO_DECIMAL.has(currency)) {
+    str = Math.round(local).toLocaleString();
+  } else {
+    const dec = Math.round(local * 100) / 100;
+    str = dec % 1 === 0 ? dec.toLocaleString() : dec.toFixed(2);
+  }
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 
 function cbFmtLocalExact(amount: number, currency: string): string {
   const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
-  const str = CB_NO_DECIMAL.has(currency) ? Math.round(amount).toLocaleString() : amount.toFixed(2);
+  let str: string;
+  if (CB_NO_DECIMAL.has(currency)) {
+    str = Math.round(amount).toLocaleString();
+  } else {
+    const dec = Math.round(amount * 100) / 100;
+    str = dec % 1 === 0 ? dec.toLocaleString() : dec.toFixed(2);
+  }
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 

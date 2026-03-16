@@ -27,24 +27,32 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 const AMBIGUOUS_SYMBOLS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR', 'GHS']);
 
 // Currencies with no meaningful decimal subdivision
-const NO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF']);
+const NO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF', 'THB']);
 
 /** Format an estimated local-currency amount converted from USD. Shows cents where applicable. */
 function fmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
   const local = amountUsd * rate;
-  const str = NO_DECIMAL_CURRENCIES.has(currency)
-    ? Math.round(local).toLocaleString()
-    : local.toFixed(2);
+  let str: string;
+  if (NO_DECIMAL_CURRENCIES.has(currency)) {
+    str = Math.round(local).toLocaleString();
+  } else {
+    const dec = Math.round(local * 100) / 100;
+    str = dec % 1 === 0 ? dec.toLocaleString() : dec.toFixed(2);
+  }
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 
 /** Format an exact local-currency amount (e.g. Wise card transaction). Shows cents where applicable. */
 function fmtLocalExact(amount: number, currency: string): string {
   const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
-  const str = NO_DECIMAL_CURRENCIES.has(currency)
-    ? Math.round(amount).toLocaleString()
-    : amount.toFixed(2);
+  let str: string;
+  if (NO_DECIMAL_CURRENCIES.has(currency)) {
+    str = Math.round(amount).toLocaleString();
+  } else {
+    const dec = Math.round(amount * 100) / 100;
+    str = dec % 1 === 0 ? dec.toLocaleString() : dec.toFixed(2);
+  }
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 const ALERT_DISPLAY_MS = 10000;

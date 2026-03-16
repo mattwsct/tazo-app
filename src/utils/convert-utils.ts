@@ -209,10 +209,16 @@ async function fetchRate(from: string, to: string): Promise<number | null> {
 
 function formatCurrency(amount: number, code: string): string {
   const sym = CURRENCY_SYMBOLS[code] ?? '';
-  const isZeroDecimal = ['JPY', 'KRW', 'VND', 'IDR', 'CLP', 'HUF', 'ISK'].includes(code);
-  const formatted = isZeroDecimal
-    ? Math.round(amount).toLocaleString()
-    : amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const isZeroDecimal = ['JPY', 'KRW', 'VND', 'IDR', 'CLP', 'HUF', 'ISK', 'THB'].includes(code);
+  let formatted: string;
+  if (isZeroDecimal) {
+    formatted = Math.round(amount).toLocaleString();
+  } else {
+    const dec = Math.round(amount * 100) / 100;
+    formatted = dec % 1 === 0
+      ? dec.toLocaleString()
+      : dec.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
   if (sym && sym.length <= 2) return `${sym}${formatted} ${code}`;
   return `${formatted} ${code}`;
 }
