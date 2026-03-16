@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getWallet, deductFromWallet } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
+import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 
 export const dynamic = 'force-dynamic';
 
@@ -152,6 +153,21 @@ export async function POST(request: NextRequest) {
 
   const { state, deducted } = await deductFromWallet(amountUsd, { currency, rate: localRate ?? 1, localAmount: amount }, channelName.toUpperCase());
   void broadcastChallenges().catch(() => {});
+
+  // Post chat message for the card spend
+  void (async () => {
+    try {
+      const token = await getValidAccessToken();
+      if (!token) return;
+      const localStr = amount > 0 ? `${amount.toLocaleString()} ${currency}` : '';
+      const usdStr = `$${deducted.toFixed(2)} USD`;
+      const balStr = `$${state.balance.toFixed(2)} USD`;
+      const msg = localStr
+        ? `💳 Wise card: -${localStr} (-${usdStr}) — Wallet: ${balStr}`
+        : `💳 Wise card: -${usdStr} — Wallet: ${balStr}`;
+      await sendKickChatMessage(token, msg);
+    } catch { /* non-critical */ }
+  })();
 
   console.log('[Wise Webhook] DEDUCTED', JSON.stringify({
     localAmount: amount,
