@@ -426,7 +426,7 @@ function randomPick<T>(arr: T[]): T {
 }
 
 /** Generate a random steps or distance challenge for the stream. */
-function makeMovementChallenge(): { description: string; bounty: number; opts: { stepsTarget?: number; distanceTarget?: number } } {
+export function makeMovementChallenge(): { description: string; bounty: number; opts: { stepsTarget?: number; distanceTarget?: number } } {
   if (Math.random() < 0.5) {
     const steps = randomInt(8, 12) * 1_000;
     return { description: `${steps.toLocaleString()} steps`, bounty: 20, opts: { stepsTarget: steps } };
@@ -437,7 +437,7 @@ function makeMovementChallenge(): { description: string; bounty: number; opts: {
 }
 
 /** Generate a random fitness challenge for the stream. */
-function makeFitnessChallenge(): { description: string; bounty: number } {
+export function makeFitnessChallenge(): { description: string; bounty: number } {
   const options = [
     () => `${randomInt(10, 30)} pushups`,
     () => `${randomInt(20, 50)} squats`,

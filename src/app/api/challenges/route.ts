@@ -8,6 +8,8 @@ import {
   clearResolvedChallenges,
   setChallengesState,
   makeSocialChallenge,
+  makeMovementChallenge,
+  makeFitnessChallenge,
 } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
@@ -29,9 +31,23 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as { bounty?: unknown; description?: unknown; expiresAt?: unknown; durationMs?: unknown; action?: string };
 
-    // Quick-add: random social task ($15)
+    // Quick-add: random challenge by type
     if (body.action === 'random_social') {
       const { description, bounty } = makeSocialChallenge();
+      const item = await addChallenge(bounty, description);
+      if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
+      void broadcastChallenges().catch(() => {});
+      return NextResponse.json(item);
+    }
+    if (body.action === 'random_movement') {
+      const { description, bounty, opts } = makeMovementChallenge();
+      const item = await addChallenge(bounty, description, undefined, opts);
+      if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
+      void broadcastChallenges().catch(() => {});
+      return NextResponse.json(item);
+    }
+    if (body.action === 'random_fitness') {
+      const { description, bounty } = makeFitnessChallenge();
       const item = await addChallenge(bounty, description);
       if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
       void broadcastChallenges().catch(() => {});

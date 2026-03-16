@@ -1849,30 +1849,36 @@ export default function AdminPage() {
                   >
                     Add challenge
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-small"
-                    title="Pick a random social task challenge ($15 bounty)"
-                    onClick={async () => {
-                      try {
-                        const res = await authenticatedFetch('/api/challenges', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ action: 'random_social' }),
-                        });
-                        if (res.ok) {
-                          await loadChallengesAndWallet();
-                          setToast({ type: 'saved', message: 'Random social task added ($15)' });
-                        } else {
-                          const d = await res.json().catch(() => ({})) as { error?: string };
-                          setToast({ type: 'error', message: d.error ?? 'Failed to add social task' });
-                        }
-                      } catch { /* ignore */ }
-                      setTimeout(() => setToast(null), 2500);
-                    }}
-                  >
-                    🌍 Random social task
-                  </button>
+                  {([
+                    { action: 'random_movement', label: '🚶 Movement', toast: 'Random movement challenge added ($20)' },
+                    { action: 'random_fitness',  label: '💪 Fitness',  toast: 'Random fitness challenge added ($10)' },
+                    { action: 'random_social',   label: '🌍 Social',   toast: 'Random social task added ($15)' },
+                  ] as const).map(({ action, label, toast }) => (
+                    <button
+                      key={action}
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={async () => {
+                        try {
+                          const res = await authenticatedFetch('/api/challenges', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action }),
+                          });
+                          if (res.ok) {
+                            await loadChallengesAndWallet();
+                            setToast({ type: 'saved', message: toast });
+                          } else {
+                            const d = await res.json().catch(() => ({})) as { error?: string };
+                            setToast({ type: 'error', message: d.error ?? 'Failed to add challenge' });
+                          }
+                        } catch { /* ignore */ }
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Challenge list */}
