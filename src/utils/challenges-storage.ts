@@ -91,8 +91,9 @@ export async function setWalletBalance(
         await supabase.from('creator_settings').update({
           wallet_balance: newBal,
           wallet_updated_at: new Date(now).toISOString(),
-          ...(opts?.lastChangeUsd !== undefined ? { wallet_last_change_usd: opts.lastChangeUsd } : {}),
-          ...(opts?.lastChangeSource ? { wallet_last_change_source: opts.lastChangeSource } : {}),
+          // Always write change fields — null clears stale values so old alerts never replay
+          wallet_last_change_usd: opts?.lastChangeUsd ?? null,
+          wallet_last_change_source: opts?.lastChangeSource ?? null,
           ...(opts?.localCurrency ? { wallet_local_currency: opts.localCurrency } : {}),
           ...(opts?.localRate != null ? { wallet_local_rate: opts.localRate } : {}),
         }).eq('creator_id', creatorId);
