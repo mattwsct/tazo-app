@@ -441,7 +441,7 @@ export default function StreamPanel({
                 ) : localAmount !== null ? (
                   <span className="sp-wallet-value">
                     {fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}
-                    <span className="sp-wallet-usd"> ({fmtUsd(wallet!.balance)})</span>
+                    <span className="sp-wallet-usd">({fmtUsd(wallet!.balance)})</span>
                   </span>
                 ) : (
                   <span className="sp-wallet-value">{fmtUsd(wallet!.balance)}</span>

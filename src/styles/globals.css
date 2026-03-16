@@ -1327,12 +1327,15 @@ html, body {
   color: #68d391;
   letter-spacing: 0.02em;
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
 }
 
 .sp-wallet-usd {
-  font-weight: 600;
-  font-size: 0.55em;
-  color: rgba(255, 255, 255, 0.45);
+  font-weight: 700;
+  font-size: 0.75em;
+  color: rgba(255, 255, 255, 0.88);
   letter-spacing: 0.01em;
 }
 
