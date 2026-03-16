@@ -162,8 +162,8 @@ export function formatLocation(
   const countryInfo = getCountry(location);
 
   if (!primary) {
-    const requestedCategory = displayMode === 'city' ? 'city' :
-                              displayMode === 'state' ? 'state' : 'country';
+    const requestedCategory = displayMode === 'suburb' ? 'suburb' :
+                              displayMode === 'city' ? 'city' : 'country';
     const nextBroadestCategory = getNextBroadestCategory(location, requestedCategory, '');
     if (nextBroadestCategory) {
       return {

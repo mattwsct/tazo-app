@@ -65,6 +65,7 @@ import WeatherRotatingSlot from '@/components/WeatherRotatingSlot';
 const {
   WALKING_PACE_THRESHOLD,
   MINIMAP_SPEED_MIN_READINGS,
+  MINIMAP_SPEED_MIN_DURATION_MS,
   GPS_STALE_TIMEOUT,
   ALTITUDE_CHANGE_THRESHOLD_M,
   ALTITUDE_DISPLAY_DURATION_MS,
@@ -553,9 +554,11 @@ function OverlayPage() {
               // Track speed readings with timestamps for minimap visibility
               if (settingsRef.current.minimapSpeedBased) {
                 if (roundedSpeed >= WALKING_PACE_THRESHOLD) {
-                  // Keep only the last N readings above threshold; drop all readings if speed drops
                   speedReadingsRef.current.push({ speed: roundedSpeed, ts: now });
-                  if (speedReadingsRef.current.length > MINIMAP_SPEED_MIN_READINGS) {
+                  // Keep a 2× window so the sustain check always has enough history;
+                  // trim anything older than that to keep memory bounded
+                  const cutoff = now - MINIMAP_SPEED_MIN_DURATION_MS * 2;
+                  while (speedReadingsRef.current.length > 1 && speedReadingsRef.current[0].ts < cutoff) {
                     speedReadingsRef.current.shift();
                   }
                 } else {

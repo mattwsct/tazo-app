@@ -108,11 +108,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'not_debit' });
   }
 
-  const amount = data?.amount as number | undefined;
+  const rawAmount = data?.amount as number | undefined;
   const currency = (data?.currency as string | undefined)?.toUpperCase();
 
-  if (typeof amount !== 'number' || amount <= 0 || !currency) {
-    console.warn('[Wise Webhook] Missing or invalid amount/currency', JSON.stringify({ amount, currency }));
+  // Wise may send negative amounts for debits (balance decreases) — normalise to positive
+  const amount = typeof rawAmount === 'number' ? Math.abs(rawAmount) : undefined;
+
+  if (typeof amount !== 'number' || amount === 0 || !currency) {
+    console.warn('[Wise Webhook] Missing or invalid amount/currency', JSON.stringify({ rawAmount, currency }));
     return NextResponse.json({ error: 'Missing amount or currency' }, { status: 400 });
   }
 
@@ -120,21 +123,34 @@ export async function POST(request: NextRequest) {
   const localCurrency = wallet.localCurrency?.toUpperCase();
   const localRate = wallet.localRate;
 
-  if (!localCurrency || !localRate) {
-    console.log('[Wise Webhook] No local currency context in wallet — skipping deduction');
-    return NextResponse.json({ ok: true, skipped: 'no_local_currency' });
+  // Convert transaction amount to USD.
+  // The Wise account currency (e.g. AUD) often differs from the local spend currency (e.g. THB),
+  // so we fetch a live rate for whatever currency Wise reports rather than requiring an exact match.
+  let amountUsd: number;
+  if (currency === 'USD') {
+    amountUsd = amount;
+  } else if (localCurrency && localRate && currency === localCurrency) {
+    amountUsd = amount / localRate;
+  } else {
+    // Fetch live rate for this currency → USD
+    try {
+      const rateRes = await fetch('https://open.er-api.com/v6/latest/USD', { next: { revalidate: 3600 } });
+      if (!rateRes.ok) throw new Error(`Rate fetch failed: ${rateRes.status}`);
+      const rateData = await rateRes.json() as { rates?: Record<string, number> };
+      const rate = rateData.rates?.[currency];
+      if (!rate) {
+        console.warn('[Wise Webhook] No exchange rate for currency — skipping', JSON.stringify({ currency }));
+        return NextResponse.json({ ok: true, skipped: 'no_rate' });
+      }
+      amountUsd = amount / rate;
+    } catch (err) {
+      console.error('[Wise Webhook] Failed to fetch exchange rate:', err);
+      return NextResponse.json({ ok: true, skipped: 'rate_fetch_error' });
+    }
   }
-
-  if (currency !== localCurrency) {
-    console.log('[Wise Webhook] Currency mismatch — skipping', JSON.stringify({ eventCurrency: currency, walletCurrency: localCurrency }));
-    return NextResponse.json({ ok: true, skipped: 'currency_mismatch' });
-  }
-
-  // Convert local currency spend to USD using stored rate
-  const amountUsd = amount / localRate;
   const channelName = (data?.channel_name as string | undefined) ?? 'WISE';
 
-  const { state, deducted } = await deductFromWallet(amountUsd, { currency: localCurrency, rate: localRate, localAmount: amount }, channelName.toUpperCase());
+  const { state, deducted } = await deductFromWallet(amountUsd, { currency, rate: localRate ?? 1, localAmount: amount }, channelName.toUpperCase());
   void broadcastChallenges().catch(() => {});
 
   console.log('[Wise Webhook] DEDUCTED', JSON.stringify({
