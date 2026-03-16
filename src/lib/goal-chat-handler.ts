@@ -221,7 +221,7 @@ export async function handleGoalCommand(
     if (unit === 's') minutes = num / 60;
     else if (unit === 'h') minutes = num * 60;
     else minutes = num;
-    const clampedMinutes = Math.min(Math.max(minutes, 1 / 60), 6 * 60); // min 1 sec, max 6 hours
+    const clampedMinutes = Math.min(Math.max(minutes, 1 / 60), 12 * 60); // min 1 sec, max 12 hours
     const label = parts.slice(1).join(' ').trim() || undefined;
     const now = Date.now();
     const endsAt = now + clampedMinutes * 60_000;

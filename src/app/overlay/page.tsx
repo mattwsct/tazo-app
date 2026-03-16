@@ -240,11 +240,13 @@ function OverlayPage() {
             winnerDisplayUntil: Date.now() + winnerDisplaySeconds * 1000,
           },
         }));
-        // After winner display, clear the slot and fetch server state (next poll or null)
+        // After winner display, clear the slot. Delay refreshSettings by 3s so the
+        // server's winnerDisplayUntil (set slightly later due to network round-trip) has
+        // definitely expired — prevents a brief re-appearance of the winner screen.
         setTimeout(() => {
           lastPollIdRef.current = null;
           setSettings((prev) => ({ ...prev, pollState: null }));
-          refreshSettings();
+          setTimeout(() => refreshSettings(), 3000);
         }, winnerDisplaySeconds * 1000);
       } else {
         // No votes: clear immediately. Delay refresh so poll-end-trigger finishes first,

@@ -35,8 +35,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Clamp to a sane maximum (e.g. 6 hours) to avoid absurd durations.
-    const clampedMinutes = Math.min(minutes, 6 * 60);
+    // Clamp to a sane maximum to avoid absurd durations.
+    const clampedMinutes = Math.min(minutes, 12 * 60);
     const now = Date.now();
     const endsAt = now + clampedMinutes * 60_000;
     const title = typeof body.title === 'string' ? body.title.trim() || undefined : undefined;
