@@ -1322,15 +1322,16 @@ html, body {
 }
 
 .sp-wallet-value {
-  font-size: 1.1em;
-  font-weight: 800;
+  font-size: 1.5em;
+  font-weight: 900;
   color: #68d391;
   letter-spacing: 0.02em;
   position: relative;
 }
 
-.sp-wallet-local {
-  font-weight: 500;
+.sp-wallet-usd {
+  font-weight: 600;
+  font-size: 0.55em;
   color: rgba(255, 255, 255, 0.45);
   letter-spacing: 0.01em;
 }
