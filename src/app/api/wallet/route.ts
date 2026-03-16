@@ -3,19 +3,23 @@ import { verifyRequestAuth } from '@/lib/api-auth';
 import { getWallet, setWalletBalance, addToWallet } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getLocalCurrencyContext } from '@/utils/local-currency';
+import { getPersistentLocation } from '@/utils/location-cache';
 
 export const dynamic = 'force-dynamic';
 
 /** GET /api/wallet — public read.
- *  Uses Vercel's x-vercel-ip-country header (always available, no RTIRL needed)
- *  to detect the streamer's current country and keep local currency up to date
- *  when travelling. Runs as a background task so response is instant. */
+ *  Prefers GPS-geocoded country (RTIRL) over IP geolocation — IP can misreport
+ *  country due to regional internet routing (e.g. Thai traffic routed via HK).
+ *  Falls back to Vercel's x-vercel-ip-country when no GPS location is available.
+ *  Runs as a background task so response is instant. */
 export async function GET(request: NextRequest) {
   const state = await getWallet();
-  // Vercel sets this header on every request — reliable even without RTIRL
+  // IP country is a fallback only — GPS geocoded location is more accurate for a travelling streamer
   const ipCountry = request.headers.get('x-vercel-ip-country')?.toUpperCase() ?? undefined;
   void (async () => {
-    const localCtx = await getLocalCurrencyContext(ipCountry);
+    const persistent = await getPersistentLocation();
+    const gpsCountry = persistent?.location?.countryCode?.toUpperCase() ?? undefined;
+    const localCtx = await getLocalCurrencyContext(gpsCountry ?? ipCountry);
     // Update whenever currency is missing OR the detected currency has changed (e.g. travelling)
     if (localCtx && (localCtx.currency !== state.localCurrency || !state.localRate)) {
       await setWalletBalance(state.balance, { localCurrency: localCtx.currency, localRate: localCtx.rate });
