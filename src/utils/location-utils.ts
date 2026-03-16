@@ -108,7 +108,7 @@ export function getBestCityName(location: LocationData): string {
  */
 export function formatLocation(
   location: LocationData | null,
-  displayMode: 'city' | 'state' | 'country' | 'custom' | 'hidden' = 'city'
+  displayMode: 'suburb' | 'city' | 'state' | 'country' | 'custom' | 'hidden' = 'city'
 ): LocationDisplay {
   if (!location || displayMode === 'hidden') return { primary: '', secondary: undefined };
 
@@ -196,11 +196,11 @@ export function formatLocation(
 }
 
 /**
- * Returns deduplicated location names at city/state/country granularity for rotation display.
+ * Returns deduplicated location names at suburb/city/state/country granularity for rotation display.
  */
 export function getLocationLevels(
   location: LocationData | null,
-  displayMode: 'city' | 'state' | 'country' = 'city'
+  displayMode: 'suburb' | 'city' | 'state' | 'country' = 'city'
 ): string[] {
   if (!location) return [];
 
@@ -212,18 +212,20 @@ export function getLocationLevels(
     return null;
   };
 
-  const cityFieldsList: (keyof LocationData)[] = ['suburb', 'neighbourhood', 'city', 'municipality', 'town', 'county', 'village', 'hamlet'];
+  const suburbFieldsList: (keyof LocationData)[] = ['suburb', 'neighbourhood', 'quarter', 'ward', 'borough', 'district'];
+  const cityFieldsList: (keyof LocationData)[] = ['city', 'municipality', 'town', 'village', 'hamlet', 'county'];
   const stateFieldsList: (keyof LocationData)[] = ['state', 'province', 'region'];
 
-  const city = displayMode === 'city' ? tryFields(cityFieldsList) : null;
+  const suburb = displayMode === 'suburb' ? tryFields(suburbFieldsList) : null;
+  const city = (displayMode === 'suburb' || displayMode === 'city') ? tryFields(cityFieldsList) : null;
   const state = displayMode === 'state' ? tryFields(stateFieldsList)
-    : (displayMode === 'city' && !city) ? tryFields(stateFieldsList)
+    : ((displayMode === 'suburb' || displayMode === 'city') && !city) ? tryFields(stateFieldsList)
     : null;
   const countryInfo = getCountry(location);
   const country = countryInfo ? formatCountryName(countryInfo.country, location.countryCode || '') : null;
 
   const levels: string[] = [];
-  for (const name of [city, state, country]) {
+  for (const name of [suburb, city, state, country]) {
     if (!name) continue;
     const isDuplicate = levels.some(existing => hasOverlappingNames(existing, name));
     if (!isDuplicate) levels.push(name);

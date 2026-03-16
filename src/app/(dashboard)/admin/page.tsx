@@ -1318,13 +1318,14 @@ export default function AdminPage() {
               <div className="admin-select-wrap">
                 <label>Location — overlay, chat (!location), stream title, minimap</label>
                 <div className="option-buttons" role="group" aria-label="Location display">
-                  {(['city', 'state', 'country', 'custom', 'hidden'] as const).map((mode) => (
+                  {(['suburb', 'city', 'state', 'country', 'custom', 'hidden'] as const).map((mode) => (
                     <button
                       key={mode}
                       type="button"
                       className={`option-btn ${settings.locationDisplay === mode ? 'active' : ''}`}
                       onClick={() => handleSettingsChange({ locationDisplay: mode })}
                     >
+                      {mode === 'suburb' && '🏘️ Suburb'}
                       {mode === 'city' && '🏙️ City'}
                       {mode === 'state' && '🗺️ State'}
                       {mode === 'country' && '🌍 Country'}

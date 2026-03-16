@@ -1,7 +1,7 @@
 // Centralized settings types and constants
 
 /** Single location precision used by overlay, chat, stream title, minimap. Custom = manual overlay text only; hidden = no overlay location. */
-export type LocationDisplayMode = 'city' | 'state' | 'country' | 'custom' | 'hidden';
+export type LocationDisplayMode = 'suburb' | 'city' | 'state' | 'country' | 'custom' | 'hidden';
 /** Map zoom: match = follow location precision; ocean/continental = special wide views. */
 export type MapZoomLevel = 'match' | 'ocean' | 'continental';
 export type DisplayMode = 'always' | 'auto' | 'hidden';

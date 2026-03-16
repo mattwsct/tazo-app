@@ -3,7 +3,7 @@
  * One setting (locationDisplay) drives overlay, chat, stream title, and minimap.
  * - hidden: no location in stream title, minimap hidden
  * - custom: custom text on overlay AND stream title
- * - city/state/country: GPS-based precision
+ * - suburb/city/state/country: GPS-based precision
  */
 
 import type { LocationData } from './location-utils';
@@ -29,7 +29,7 @@ export function getStreamTitleLocationPart(
  * Get effective location string for stream title.
  * - hidden: '' (never show location)
  * - custom: customLocation text
- * - city/state/country: GPS-formatted
+ * - suburb/city/state/country: GPS-formatted
  */
 export function getLocationForStreamTitle(
   rawLocation: LocationData | null | undefined,
@@ -38,7 +38,7 @@ export function getLocationForStreamTitle(
 ): string {
   if (locationDisplay === 'hidden') return '';
   if (locationDisplay === 'custom') return (customLocation ?? '').trim();
-  return formatLocationForStreamTitle(rawLocation, locationDisplay);
+  return formatLocationForStreamTitle(rawLocation, locationDisplay as 'suburb' | 'city' | 'state' | 'country');
 }
 
 /** Extract custom title from full Kick stream title (removes location part — flag prefix). */
@@ -88,22 +88,23 @@ export function buildStreamTitle(
 
 export function formatLocationForStreamTitle(
   rawLocation: LocationData | null | undefined,
-  display: 'city' | 'state' | 'country'
+  display: 'suburb' | 'city' | 'state' | 'country'
 ): string {
   if (!rawLocation) return '';
 
   const countryCode = (rawLocation.countryCode || '').toUpperCase();
   const country = rawLocation.country || getCountryNameFromCode(countryCode);
 
-  // Use the same cleaning pipeline as the overlay:
-  // getBestCityName handles field priority, stripAdminSuffix, and generic suburb filtering
-  const city = getBestCityName(rawLocation) || undefined;
+  const clean = (v: string | undefined) =>
+    v ? (stripAdminSuffix(stripTrailingNumbers(v)).trim() || undefined) : undefined;
 
-  // For state: strip trailing numbers and admin suffixes (e.g. "Queensland City" → "Queensland")
+  // Suburb: most specific area (suburb/neighbourhood), falling back to city
+  const suburb = clean(rawLocation.suburb || rawLocation.neighbourhood || rawLocation.quarter || rawLocation.ward || rawLocation.borough || rawLocation.district) || getBestCityName(rawLocation) || undefined;
+  // City: getBestCityName already returns suburb-first, so for city mode use city fields directly
+  const cityRaw = rawLocation.city || rawLocation.municipality || rawLocation.town || rawLocation.village || rawLocation.hamlet;
+  const city = clean(cityRaw) || getBestCityName(rawLocation) || undefined;
   const rawState = rawLocation.state || rawLocation.province || rawLocation.region;
-  const state = rawState
-    ? (stripAdminSuffix(stripTrailingNumbers(rawState)).trim() || undefined)
-    : undefined;
+  const state = clean(rawState);
 
   const flag = getCountryFlagEmoji(countryCode);
   const countryName = formatCountryName(country, countryCode);
@@ -118,6 +119,19 @@ export function formatLocationForStreamTitle(
         return flag ? `${flag} ${countryName}` : countryName;
       }
       return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
+    }
+    case 'suburb': {
+      if (suburb) {
+        if (hasOverlappingNames(suburb, countryName)) {
+          return flag ? `${flag} ${suburb}` : suburb;
+        }
+        const locationPart = `${suburb}, ${countryName}`;
+        return flag ? `${flag} ${locationPart}` : locationPart;
+      }
+      if (state && !hasOverlappingNames(state, countryName)) {
+        return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
+      }
+      return flag ? `${flag} ${countryName}` : countryName;
     }
     case 'city': {
       if (city) {
