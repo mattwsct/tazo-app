@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const rtirlRaw = { reportedAt: now, updatedAt: now, timestamp: now };
     await updatePersistentLocation({
       location: locationToStore,
-      rtirl: { lat, lon, raw: rtirlRaw, updatedAt: now },
+      rtirl: { lat, lon, speedKmh: null, altitudeM: null, raw: rtirlRaw, updatedAt: now },
       updatedAt: now,
     });
     return NextResponse.json({ ok: true, location: locationToStore });
