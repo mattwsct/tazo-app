@@ -10,6 +10,7 @@
  * - `/api/stats/update` can trigger this immediately (primary).
  */
 
+import { kv } from '@/lib/kv';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { getAltitudeStats, getHeartrateStats, getSpeedStats, isStreamLive } from '@/utils/stats-storage';
 import { loadKickAlertSettings } from '@/lib/kick-alert-settings';
@@ -84,6 +85,12 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
     if (bpm < minBpm) {
       if (state !== 'below') {
         state = 'below';
+        // Release claims so the next real crossing can fire immediately.
+
+        await Promise.all([
+          kv.del('hr_broadcast_claim:high'),
+          kv.del('hr_broadcast_claim:very_high'),
+        ]);
         await setBroadcastState({ heartrate: { state, lastSentAt: broadcastState.heartrate?.lastSentAt } });
       }
     } else if (!hasData) {
@@ -93,29 +100,39 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
     } else if (bpm >= veryHighBpm) {
       const cooldownOk = now - lastHrSentAt >= VERY_HIGH_COOLDOWN_MS;
       if (state !== 'very_high' && cooldownOk) {
-        const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
-        try {
-          await sendKickChatMessage(token, msg);
-          sent++;
-          state = 'very_high';
-          await setBroadcastState({ heartrate: { state, lastSentAt: now } });
-          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, source }));
-        } catch (err) {
-          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', source, error: err instanceof Error ? err.message : String(err) }));
+        // Atomic claim — prevents duplicate sends when multiple overlay tabs post simultaneously.
+
+        const claimed = await kv.set('hr_broadcast_claim:very_high', 1, { nx: true, ex: Math.ceil(VERY_HIGH_COOLDOWN_MS / 1000) });
+        if (claimed !== null) {
+          const msg = `⚠️ Very high heart rate: ${bpm} BPM`;
+          try {
+            await sendKickChatMessage(token, msg);
+            sent++;
+            state = 'very_high';
+            await setBroadcastState({ heartrate: { state, lastSentAt: now } });
+            console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'heartrate_very_high', bpm, source }));
+          } catch (err) {
+            console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'heartrate_very_high', source, error: err instanceof Error ? err.message : String(err) }));
+          }
         }
       }
     } else {
       const cooldownOk = now - lastHrSentAt >= HIGH_COOLDOWN_MS;
       if (state === 'below' && cooldownOk) {
-        const msg = `❤️ High heart rate: ${bpm} BPM`;
-        try {
-          await sendKickChatMessage(token, msg);
-          sent++;
-          state = 'high';
-          await setBroadcastState({ heartrate: { state, lastSentAt: now } });
-          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, source }));
-        } catch (err) {
-          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', source, error: err instanceof Error ? err.message : String(err) }));
+        // Atomic claim — prevents duplicate sends when multiple overlay tabs post simultaneously.
+
+        const claimed = await kv.set('hr_broadcast_claim:high', 1, { nx: true, ex: Math.ceil(HIGH_COOLDOWN_MS / 1000) });
+        if (claimed !== null) {
+          const msg = `❤️ High heart rate: ${bpm} BPM`;
+          try {
+            await sendKickChatMessage(token, msg);
+            sent++;
+            state = 'high';
+            await setBroadcastState({ heartrate: { state, lastSentAt: now } });
+            console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'heartrate_high', bpm, source }));
+          } catch (err) {
+            console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'heartrate_high', source, error: err instanceof Error ? err.message : String(err) }));
+          }
         }
       } else if (state === 'very_high' && bpm < veryHighBpm) {
         // Drop from very_high to high without sending another message; cooldown still enforced.
@@ -154,14 +171,17 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
       // We intentionally do NOT send periodic "Speed: X km/h" updates to avoid chat spam
       // when cruising at roughly the same speed.
       if (timeoutOk && isNewTop) {
-        const msg = `🚀 New top speed: ${Math.round(topKmh)} km/h!`;
-        try {
-          await sendKickChatMessage(token, msg);
-          sent++;
-          await setBroadcastState({ speed: { lastSentAt: now, lastAnnouncedTop: topKmh } });
-          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'speed_top', topKmh, source }));
-        } catch (err) {
-          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'speed_top', source, error: err instanceof Error ? err.message : String(err) }));
+        const claimed = await kv.set(`speed_broadcast_claim:${Math.round(topKmh)}`, 1, { nx: true, ex: Math.ceil(timeoutMs / 1000) });
+        if (claimed !== null) {
+          const msg = `🚀 New top speed: ${Math.round(topKmh)} km/h!`;
+          try {
+            await sendKickChatMessage(token, msg);
+            sent++;
+            await setBroadcastState({ speed: { lastSentAt: now, lastAnnouncedTop: topKmh } });
+            console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'speed_top', topKmh, source }));
+          } catch (err) {
+            console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'speed_top', source, error: err instanceof Error ? err.message : String(err) }));
+          }
         }
       }
     }
@@ -191,14 +211,17 @@ export async function checkStatsBroadcastsAndSendChat(args?: {
     if (hasData) {
       const isNewTop = topM > lastAnnouncedTop && topM >= minM;
       if (timeoutOk && isNewTop) {
-        const msg = `⛰️ New top altitude: ${Math.round(topM)} m!`;
-        try {
-          await sendKickChatMessage(token, msg);
-          sent++;
-          await setBroadcastState({ altitude: { lastSentAt: now, lastAnnouncedTop: topM } });
-          console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'altitude_top', topM, source }));
-        } catch (err) {
-          console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'altitude_top', source, error: err instanceof Error ? err.message : String(err) }));
+        const claimed = await kv.set(`altitude_broadcast_claim:${Math.round(topM)}`, 1, { nx: true, ex: Math.ceil(timeoutMs / 1000) });
+        if (claimed !== null) {
+          const msg = `⛰️ New top altitude: ${Math.round(topM)} m!`;
+          try {
+            await sendKickChatMessage(token, msg);
+            sent++;
+            await setBroadcastState({ altitude: { lastSentAt: now, lastAnnouncedTop: topM } });
+            console.log('[Stats Broadcast] CHAT_SENT', JSON.stringify({ type: 'altitude_top', topM, source }));
+          } catch (err) {
+            console.error('[Stats Broadcast] CHAT_FAIL', JSON.stringify({ type: 'altitude_top', source, error: err instanceof Error ? err.message : String(err) }));
+          }
         }
       }
     }

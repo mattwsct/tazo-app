@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { OverlaySettings } from '@/types/settings';
 
-const POLL_INTERVAL_MS = 60000; // 60s — Health Auto Export on iOS updates infrequently (15–30+ min); polling more often doesn't improve freshness
+const POLL_INTERVAL_MS = 30000; // 30s — HAE syncs every 15 min; 30s polling means overlay updates within 30s of a sync
 
 interface StepCounterProps {
   settings?: Pick<OverlaySettings, 'showSteps'>;

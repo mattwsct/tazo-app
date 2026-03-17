@@ -5,7 +5,7 @@ import type { OverlaySettings } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
-const POLL_INTERVAL_MS = 60000;
+const POLL_INTERVAL_MS = 30000;
 
 type SlotType = 'date' | 'steps' | 'distance';
 

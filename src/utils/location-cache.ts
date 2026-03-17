@@ -309,9 +309,9 @@ export async function geocodeFromPersistentAndUpdateCache(): Promise<boolean> {
     if (lat == null || lon == null || typeof lat !== 'number' || typeof lon !== 'number') return false;
 
     const now = Date.now();
-    const lastAt = await kv.get<number>(LAST_OVERLAY_GEOCODE_AT_KEY);
-    if (typeof lastAt === 'number' && now - lastAt < OVERLAY_GEOCODE_THROTTLE_MS) return false;
-    await kv.set(LAST_OVERLAY_GEOCODE_AT_KEY, now);
+    // Atomic claim — prevents duplicate geocode calls when multiple overlay tabs POST simultaneously.
+    const claimed = await kv.set(LAST_OVERLAY_GEOCODE_AT_KEY, now, { nx: true, ex: Math.ceil(OVERLAY_GEOCODE_THROTTLE_MS / 1000) });
+    if (claimed === null) return false; // Another tab already claimed this window
 
     const locationiqKey = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY;
     const openweatherKey = process.env.NEXT_PUBLIC_OPENWEATHERMAP_KEY;
