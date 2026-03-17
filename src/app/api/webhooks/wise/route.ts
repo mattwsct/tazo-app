@@ -124,16 +124,13 @@ export async function POST(request: NextRequest) {
   const localCurrency = wallet.localCurrency?.toUpperCase();
   const localRate = wallet.localRate;
 
-  // Convert transaction amount to USD.
-  // The Wise account currency (e.g. AUD) often differs from the local spend currency (e.g. THB),
-  // so we fetch a live rate for whatever currency Wise reports rather than requiring an exact match.
+  // Step 1: Convert Wise account currency (e.g. AUD) → USD.
+  // The Wise balance currency is never the local spend currency when travelling,
+  // so we always fetch a live rate — even if it happens to match localCurrency.
   let amountUsd: number;
   if (currency === 'USD') {
     amountUsd = amount;
-  } else if (localCurrency && localRate && currency === localCurrency) {
-    amountUsd = amount / localRate;
   } else {
-    // Fetch live rate for this currency → USD
     try {
       const rateRes = await fetch('https://open.er-api.com/v6/latest/USD', { next: { revalidate: 3600 } });
       if (!rateRes.ok) throw new Error(`Rate fetch failed: ${rateRes.status}`);
@@ -149,31 +146,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: 'rate_fetch_error' });
     }
   }
+
+  // Step 2: Express the spend in the overlay's local currency (e.g. THB).
+  // This is what shows on the overlay and in chat — not the Wise account currency.
+  const localAmount = localCurrency && localRate ? amountUsd * localRate : undefined;
+  const localContext = localCurrency && localRate
+    ? { currency: localCurrency, rate: localRate, localAmount }
+    : undefined;
+
   const channelName = (data?.channel_name as string | undefined) ?? 'WISE';
 
-  const { state, deducted } = await deductFromWallet(amountUsd, { currency, rate: localRate ?? 1, localAmount: amount }, channelName.toUpperCase());
+  const { state, deducted } = await deductFromWallet(amountUsd, localContext, channelName.toUpperCase());
   void broadcastChallenges().catch(() => {});
 
-  // Post chat message for the card spend
+  // Post chat message: show local currency amount + USD equivalent
   void (async () => {
     try {
       const token = await getValidAccessToken();
       if (!token) return;
-      const localStr = amount > 0 ? `${amount.toLocaleString()} ${currency}` : '';
       const usdStr = `$${deducted.toFixed(2)} USD`;
       const balStr = `$${state.balance.toFixed(2)} USD`;
-      const msg = localStr
-        ? `💳 Wise card: -${localStr} (-${usdStr}) — Wallet: ${balStr}`
-        : `💳 Wise card: -${usdStr} — Wallet: ${balStr}`;
+      const msg = localAmount && localCurrency
+        ? `💳 CARD -${Math.round(localAmount).toLocaleString()} ${localCurrency} (-${usdStr}) — Wallet: ${balStr}`
+        : `💳 CARD -${usdStr} — Wallet: ${balStr}`;
       await sendKickChatMessage(token, msg);
     } catch { /* non-critical */ }
   })();
 
   console.log('[Wise Webhook] DEDUCTED', JSON.stringify({
-    localAmount: amount,
-    currency,
-    channelName,
+    wiseAmount: amount,
+    wiseCurrency: currency,
     amountUsd: amountUsd.toFixed(2),
+    localAmount: localAmount?.toFixed(2),
+    localCurrency,
+    channelName,
     deducted: deducted.toFixed(2),
     newBalance: state.balance,
   }));
