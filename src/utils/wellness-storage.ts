@@ -165,12 +165,20 @@ export async function updateWellnessData(updates: Partial<WellnessData>, options
       if (newVal === undefined) continue;
       // Enforce monotonic increase for steps/distance on automatic imports.
       // Silently drop the update if the incoming value is lower than stored — HAE misconfiguration guard.
+      // Exception: allow lower values on a new UTC calendar day (midnight reset may not have fired yet).
       if (!fromManualEntry && MONOTONIC_METRICS.has(key)) {
         const existingVal = existing?.[key as keyof WellnessData];
         if (typeof existingVal === 'number' && typeof newVal === 'number' && newVal < existingVal) {
-          console.warn(`[Wellness] Ignored lower ${key} value: incoming=${newVal} existing=${existingVal} (HAE "Since last sync" misconfiguration?)`);
-          delete (updates as Record<string, unknown>)[key];
-          continue;
+          const lastUpdated = existing?.metricUpdatedAt?.[key] ?? existing?.updatedAt ?? 0;
+          const todayUtcMidnight = new Date();
+          todayUtcMidnight.setUTCHours(0, 0, 0, 0);
+          const isNewUtcDay = lastUpdated < todayUtcMidnight.getTime();
+          if (!isNewUtcDay) {
+            console.warn(`[Wellness] Ignored lower ${key} value: incoming=${newVal} existing=${existingVal} (HAE "Since last sync" misconfiguration?)`);
+            delete (updates as Record<string, unknown>)[key];
+            continue;
+          }
+          console.log(`[Wellness] New UTC day — allowing lower ${key}: incoming=${newVal} previous=${existingVal}`);
         }
       }
       if (fromManualEntry) {

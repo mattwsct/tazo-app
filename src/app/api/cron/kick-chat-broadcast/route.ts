@@ -113,14 +113,12 @@ export async function GET(request: NextRequest) {
   } catch { /* non-critical */ }
 
   // Midnight reset — runs every minute but only resets once per calendar day in the streamer's timezone.
-  // Prefer admin-configured streamerTimezone; fall back to geocoded timezone from GPS location.
+  // Prefer admin-configured streamerTimezone; fall back to geocoded timezone from GPS location, then UTC.
   const configuredTz = overlaySettings?.streamerTimezone;
   const geoTz = sharedLocationData?.timezone ?? (await getPersistentLocation())?.location?.timezone;
-  const resetTimezone = (configuredTz && configuredTz !== 'UTC') ? configuredTz : (geoTz || configuredTz);
-  if (resetTimezone) {
-    const didReset = await resetWellnessDailyMetricsAtMidnight(resetTimezone);
-    if (didReset) console.log('[Cron HR] WELLNESS_MIDNIGHT_RESET', JSON.stringify({ timezone: resetTimezone }));
-  }
+  const resetTimezone = (configuredTz && configuredTz !== 'UTC') ? configuredTz : (geoTz || configuredTz || 'UTC');
+  const didReset = await resetWellnessDailyMetricsAtMidnight(resetTimezone);
+  if (didReset) console.log('[Cron HR] WELLNESS_MIDNIGHT_RESET', JSON.stringify({ timezone: resetTimezone }));
 
   // Unified location: silently update stream title only — no chat announcements for auto-updates.
   // Update title whenever location/title changed (no interval gating) so title stays in sync with overlay.
