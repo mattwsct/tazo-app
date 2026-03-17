@@ -1319,28 +1319,31 @@ html, body {
 
 .sp-wallet-row {
   background: rgba(104, 211, 145, 0.04);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  min-height: 58px;
 }
 
 .sp-wallet-value {
-  font-size: 1.15em;
+  font-size: var(--font-size-lg);
   font-weight: 900;
   color: #68d391;
   letter-spacing: 0.02em;
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.25em;
+  gap: 0.3em;
 }
 
 .sp-wallet-usd {
   font-weight: 700;
-  font-size: 0.75em;
-  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.6em;
+  color: rgba(255, 255, 255, 0.72);
   letter-spacing: 0.01em;
 }
 
 .sp-wallet-anim {
-  font-size: 1.15em;
+  font-size: var(--font-size-lg);
   font-weight: 900;
   color: #68d391;
   position: relative;
