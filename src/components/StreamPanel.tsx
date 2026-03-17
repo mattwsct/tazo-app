@@ -43,18 +43,7 @@ function fmtLocal(amountUsd: number, currency: string, rate: number): string {
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 
-/** Format an exact local-currency amount (e.g. Wise card transaction). Shows cents where applicable. */
-function fmtLocalExact(amount: number, currency: string): string {
-  const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
-  let str: string;
-  if (NO_DECIMAL_CURRENCIES.has(currency)) {
-    str = Math.round(amount).toLocaleString();
-  } else {
-    const dec = Math.round(amount * 100) / 100;
-    str = dec % 1 === 0 ? dec.toLocaleString() : dec.toFixed(2);
-  }
-  return sym ? `${sym}${str}` : `${str} ${currency}`;
-}
+
 const ALERT_DISPLAY_MS = 10000;
 
 type OverlayAlert = { id: string; type: string; username: string; extra?: string; at: number };
@@ -208,15 +197,7 @@ export default function StreamPanel({
     const change = wallet.lastChangeUsd;
     if (change === undefined || change === 0) return;
     const sign = change > 0 ? '+' : '-';
-    const localRate = wallet.localRate;
-    const localCurrency = wallet.localCurrency;
-    // Use exact stored local amount (e.g. Wise card spend) to avoid USD round-trip imprecision
-    const exactLocal = wallet.lastChangeLocalAmount;
-    const absStr = localRate && localCurrency
-      ? exactLocal != null
-        ? fmtLocalExact(Math.abs(exactLocal), localCurrency)
-        : fmtLocal(Math.abs(change), localCurrency, localRate)
-      : fmtUsd(Math.abs(change));
+    const absStr = fmtUsd(Math.abs(change));
     const source = wallet.lastChangeSource;
     const label = source ? `${source} ${sign}${absStr}` : `${sign}${absStr}`;
     const anim = { label, negative: change < 0 };
@@ -229,10 +210,10 @@ export default function StreamPanel({
     }
   }, [wallet]);
 
-  const localAmount =
-    wallet?.localCurrency && wallet?.localRate
-      ? Math.round(wallet.balance * wallet.localRate)
-      : null;
+  const isNonUsdLocal = !!(wallet?.localCurrency && wallet.localCurrency !== 'USD' && wallet?.localRate);
+  const localAmount = isNonUsdLocal
+    ? Math.round(wallet!.balance * wallet!.localRate!)
+    : null;
 
   // ── Challenges ─────────────────────────────────────────────────────────────
   const challenges = settings.challengesState?.challenges ?? [];
