@@ -5,7 +5,7 @@ import { mergeSettingsWithDefaults } from '@/utils/overlay-utils';
 import { createSettingsHash } from '@/utils/overlay-helpers';
 import { NO_CACHE_FETCH_OPTIONS } from '@/utils/overlay-constants';
 import { OverlayLogger } from '@/lib/logger';
-import type { OverlaySettings } from '@/types/settings';
+import type { OverlaySettings, OverlayState } from '@/types/settings';
 import type { PollState } from '@/types/poll';
 import { DEFAULT_OVERLAY_SETTINGS } from '@/types/settings';
 import { TIMERS } from '@/utils/overlay-constants';
@@ -25,12 +25,12 @@ function resolvePollState(incoming: PollState | null, prev: PollState | null): P
  * Returns [settings, setSettings, settingsLoadedRef, refreshSettings] - refreshSettings triggers a one-time fetch.
  */
 export function useOverlaySettings(): [
-  OverlaySettings,
-  React.Dispatch<React.SetStateAction<OverlaySettings>>,
+  OverlayState,
+  React.Dispatch<React.SetStateAction<OverlayState>>,
   React.MutableRefObject<boolean>,
   () => Promise<void>
 ] {
-  const [settings, setSettings] = useState<OverlaySettings>(DEFAULT_OVERLAY_SETTINGS);
+  const [settings, setSettings] = useState<OverlayState>(DEFAULT_OVERLAY_SETTINGS);
   const lastSettingsHash = useRef<string>('');
   const settingsLoadedRef = useRef(false);
   const lastSseUpdateRef = useRef<number>(0);
@@ -83,17 +83,18 @@ export function useOverlaySettings(): [
             const { type: _t, timestamp: _ts, ...settingsData } = data;
             const merged = mergeSettingsWithDefaults(settingsData);
             OverlayLogger.settings('Settings updated via SSE', { locationDisplay: merged.locationDisplay, showWeather: merged.showWeather, showMinimap: merged.showMinimap });
+            const mergedState = merged as OverlayState;
             setSettings((prev) => ({
-              ...merged,
-              pollState: resolvePollState(merged.pollState ?? null, prev.pollState ?? null),
-              triviaState: merged.triviaState ?? prev.triviaState ?? null,
-              gamblingLeaderboardTop: Array.isArray(merged.gamblingLeaderboardTop) && merged.gamblingLeaderboardTop.length > 0 ? merged.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
-              earnedLeaderboardWeekly: merged.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
-              earnedLeaderboardMonthly: merged.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
-              earnedLeaderboardLifetime: merged.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
-              overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
-              streamGoals: merged.streamGoals ?? prev.streamGoals,
-              walletState: merged.walletState ?? prev.walletState,
+              ...mergedState,
+              pollState: resolvePollState(mergedState.pollState ?? null, prev.pollState ?? null),
+              triviaState: mergedState.triviaState ?? prev.triviaState ?? null,
+              gamblingLeaderboardTop: Array.isArray(mergedState.gamblingLeaderboardTop) && mergedState.gamblingLeaderboardTop.length > 0 ? mergedState.gamblingLeaderboardTop : (prev.gamblingLeaderboardTop ?? []),
+              earnedLeaderboardWeekly: mergedState.earnedLeaderboardWeekly ?? prev.earnedLeaderboardWeekly,
+              earnedLeaderboardMonthly: mergedState.earnedLeaderboardMonthly ?? prev.earnedLeaderboardMonthly,
+              earnedLeaderboardLifetime: mergedState.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
+              overlayAlerts: mergedState.overlayAlerts ?? prev.overlayAlerts,
+              streamGoals: mergedState.streamGoals ?? prev.streamGoals,
+              walletState: mergedState.walletState ?? prev.walletState,
             }));
             lastSettingsHash.current = createSettingsHash(merged);
             settingsLoadedRef.current = true;
@@ -155,9 +156,10 @@ export function useOverlaySettings(): [
         overlayAlerts: data.overlayAlerts as OverlaySettings['overlayAlerts'] | undefined,
         streamGoals: data.streamGoals as OverlaySettings['streamGoals'] | undefined,
       };
+      const mergedState = merged as OverlayState;
       setSettings((prev) => {
-        const base: OverlaySettings = replace ? merged : { ...prev, ...merged };
-        const pollState = resolvePollState(merged.pollState ?? null, prev.pollState ?? null);
+        const base: OverlayState = replace ? mergedState : { ...prev, ...mergedState };
+        const pollState = resolvePollState(mergedState.pollState ?? null, prev.pollState ?? null);
         return {
           ...base,
           pollState,
@@ -167,6 +169,7 @@ export function useOverlaySettings(): [
           earnedLeaderboardLifetime: patch.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
           overlayAlerts: patch.overlayAlerts ?? prev.overlayAlerts,
           streamGoals: patch.streamGoals ?? prev.streamGoals,
+          walletState: (data.walletState as OverlayState['walletState']) ?? prev.walletState,
         };
       });
     };

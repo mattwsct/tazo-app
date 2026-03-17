@@ -19,6 +19,7 @@ import { KICK_API_BASE, KICK_STREAM_TITLE_SETTINGS_KEY, getValidAccessToken, sen
 import { TRIVIA_STATE_KEY, type TriviaState } from '@/types/trivia';
 import { setTriviaState } from '@/lib/trivia-store';
 import { maybeBroadcastWeather, maybeBroadcastWellness, maybeBroadcastStats } from '@/lib/chat-broadcast-service';
+import { resetWellnessDailyMetricsAtMidnight } from '@/utils/wellness-storage';
 import { getLocalCurrencyContext } from '@/utils/local-currency';
 import { getWallet, setWalletBalance } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
@@ -110,6 +111,16 @@ export async function GET(request: NextRequest) {
   try {
     sharedLocationData = await getLocationData(false);
   } catch { /* non-critical */ }
+
+  // Midnight reset — runs every minute but only resets once per calendar day in the streamer's timezone.
+  // Prefer admin-configured streamerTimezone; fall back to geocoded timezone from GPS location.
+  const configuredTz = overlaySettings?.streamerTimezone;
+  const geoTz = sharedLocationData?.timezone ?? (await getPersistentLocation())?.location?.timezone;
+  const resetTimezone = (configuredTz && configuredTz !== 'UTC') ? configuredTz : (geoTz || configuredTz);
+  if (resetTimezone) {
+    const didReset = await resetWellnessDailyMetricsAtMidnight(resetTimezone);
+    if (didReset) console.log('[Cron HR] WELLNESS_MIDNIGHT_RESET', JSON.stringify({ timezone: resetTimezone }));
+  }
 
   // Unified location: silently update stream title only — no chat announcements for auto-updates.
   // Update title whenever location/title changed (no interval gating) so title stays in sync with overlay.
