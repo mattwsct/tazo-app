@@ -7,7 +7,8 @@
  */
 
 import type { LocationData } from './location-utils';
-import { formatCountryName, getBestCityName, stripAdminSuffix, stripTrailingNumbers } from './location-utils';
+import { formatCountryName } from './location-utils';
+import { getLocationByPrecision } from './location/precision';
 import { getCountryFlagEmoji, getCountryNameFromCode } from './chat-utils';
 import { hasOverlappingNames } from './string-utils';
 import type { LocationDisplayMode } from '@/types/settings';
@@ -94,53 +95,43 @@ export function formatLocationForStreamTitle(
 
   const countryCode = (rawLocation.countryCode || '').toUpperCase();
   const country = rawLocation.country || getCountryNameFromCode(countryCode);
-
-  const clean = (v: string | undefined) =>
-    v ? (stripAdminSuffix(stripTrailingNumbers(v)).trim() || undefined) : undefined;
-
-  // Suburb: most specific area (suburb/neighbourhood), falling back to city
-  const suburb = clean(rawLocation.suburb || rawLocation.neighbourhood || rawLocation.quarter || rawLocation.ward || rawLocation.borough || rawLocation.district) || getBestCityName(rawLocation) || undefined;
-  // City: getBestCityName already returns suburb-first, so for city mode use city fields directly
-  const cityRaw = rawLocation.city || rawLocation.municipality || rawLocation.town || rawLocation.village || rawLocation.hamlet;
-  const city = clean(cityRaw) || getBestCityName(rawLocation) || undefined;
-  const rawState = rawLocation.state || rawLocation.province || rawLocation.region;
-  const state = clean(rawState);
-
   const flag = getCountryFlagEmoji(countryCode);
   const countryName = formatCountryName(country, countryCode);
 
   if (!flag && !countryName) return '';
 
+  // Use getLocationByPrecision for name resolution — same function the overlay uses.
+  // This applies identical rules: 16-char limit, Latin-script check, generic-name filter,
+  // admin-suffix/trailing-number stripping, and the same field fallback chains.
   switch (display) {
     case 'country':
       return flag ? `${flag} ${countryName}` : countryName;
     case 'state': {
+      const { name: state } = getLocationByPrecision(rawLocation, 'state');
       if (!state || hasOverlappingNames(state, countryName)) {
         return flag ? `${flag} ${countryName}` : countryName;
       }
       return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
     }
     case 'suburb': {
+      const { name: suburb } = getLocationByPrecision(rawLocation, 'suburb');
       if (suburb) {
-        if (hasOverlappingNames(suburb, countryName)) {
-          return flag ? `${flag} ${suburb}` : suburb;
-        }
-        const locationPart = `${suburb}, ${countryName}`;
-        return flag ? `${flag} ${locationPart}` : locationPart;
+        if (hasOverlappingNames(suburb, countryName)) return flag ? `${flag} ${suburb}` : suburb;
+        return flag ? `${flag} ${suburb}, ${countryName}` : `${suburb}, ${countryName}`;
       }
+      const { name: state } = getLocationByPrecision(rawLocation, 'state');
       if (state && !hasOverlappingNames(state, countryName)) {
         return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
       }
       return flag ? `${flag} ${countryName}` : countryName;
     }
     case 'city': {
+      const { name: city } = getLocationByPrecision(rawLocation, 'city');
       if (city) {
-        if (hasOverlappingNames(city, countryName)) {
-          return flag ? `${flag} ${city}` : city;
-        }
-        const locationPart = `${city}, ${countryName}`;
-        return flag ? `${flag} ${locationPart}` : locationPart;
+        if (hasOverlappingNames(city, countryName)) return flag ? `${flag} ${city}` : city;
+        return flag ? `${flag} ${city}, ${countryName}` : `${city}, ${countryName}`;
       }
+      const { name: state } = getLocationByPrecision(rawLocation, 'state');
       if (state && !hasOverlappingNames(state, countryName)) {
         return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
       }

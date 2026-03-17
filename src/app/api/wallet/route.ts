@@ -8,21 +8,17 @@ import { getPersistentLocation } from '@/utils/location-cache';
 export const dynamic = 'force-dynamic';
 
 /** GET /api/wallet — public read.
- *  Prefers GPS-geocoded country (RTIRL) over IP geolocation — IP can misreport
- *  country due to regional internet routing (e.g. Thai traffic routed via HK).
- *  Falls back to Vercel's x-vercel-ip-country when no GPS location is available.
+ *  Currency is derived solely from GPS-geocoded country (RTIRL).
+ *  IP geolocation is intentionally not used — eSIMs in Asia route through other
+ *  countries (e.g. SG/HK), which would set the wrong currency.
  *  Runs as a background task so response is instant. */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const state = await getWallet();
-  // IP country is a fallback only — GPS geocoded location is more accurate for a travelling streamer
-  const ipCountry = request.headers.get('x-vercel-ip-country')?.toUpperCase() ?? undefined;
   void (async () => {
     const persistent = await getPersistentLocation();
-    const gpsCountry = persistent?.location?.countryCode?.toUpperCase() ?? undefined;
-    // Only fall back to IP if we have no GPS country AND no currency already set.
-    // This prevents a Singapore/HK eSIM IP from overriding a GPS-derived currency.
-    const countryToUse = gpsCountry ?? (state.localCurrency ? undefined : ipCountry);
-    const localCtx = await getLocalCurrencyContext(countryToUse);
+    const gpsCountry = persistent?.location?.countryCode?.toUpperCase();
+    if (!gpsCountry) return;
+    const localCtx = await getLocalCurrencyContext(gpsCountry);
     // Update whenever currency is missing OR GPS-derived currency has changed (e.g. travelling)
     if (localCtx && (localCtx.currency !== state.localCurrency || !state.localRate)) {
       await setWalletBalance(state.balance, { localCurrency: localCtx.currency, localRate: localCtx.rate });
