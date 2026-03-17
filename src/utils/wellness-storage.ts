@@ -149,10 +149,6 @@ function isMetricValueChanged(key: WellnessMetricKey, existingVal: unknown, newV
   return true;
 }
 
-// Steps and distance should only ever increase within a day (HAE sends cumulative "Today" totals).
-// If an import sends a lower value it's either stale data or a misconfigured "Since last sync" sync —
-// ignore it to prevent milestone logic from resetting and re-firing.
-const MONOTONIC_METRICS: ReadonlySet<WellnessMetricKey> = new Set(['steps', 'distanceKm']);
 
 export async function updateWellnessData(updates: Partial<WellnessData>, options?: UpdateWellnessOptions): Promise<void> {
   try {
@@ -163,24 +159,6 @@ export async function updateWellnessData(updates: Partial<WellnessData>, options
     for (const key of WELLNESS_DATA_KEYS) {
       const newVal = updates[key as keyof WellnessData];
       if (newVal === undefined) continue;
-      // Enforce monotonic increase for steps/distance on automatic imports.
-      // Silently drop the update if the incoming value is lower than stored — HAE misconfiguration guard.
-      // Exception: allow lower values on a new UTC calendar day (midnight reset may not have fired yet).
-      if (!fromManualEntry && MONOTONIC_METRICS.has(key)) {
-        const existingVal = existing?.[key as keyof WellnessData];
-        if (typeof existingVal === 'number' && typeof newVal === 'number' && newVal < existingVal) {
-          const lastUpdated = existing?.metricUpdatedAt?.[key] ?? existing?.updatedAt ?? 0;
-          const todayUtcMidnight = new Date();
-          todayUtcMidnight.setUTCHours(0, 0, 0, 0);
-          const isNewUtcDay = lastUpdated < todayUtcMidnight.getTime();
-          if (!isNewUtcDay) {
-            console.warn(`[Wellness] Ignored lower ${key} value: incoming=${newVal} existing=${existingVal} (HAE "Since last sync" misconfiguration?)`);
-            delete (updates as Record<string, unknown>)[key];
-            continue;
-          }
-          console.log(`[Wellness] New UTC day — allowing lower ${key}: incoming=${newVal} previous=${existingVal}`);
-        }
-      }
       if (fromManualEntry) {
         metricUpdatedAt[key] = 0;
       } else {
