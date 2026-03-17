@@ -17,7 +17,7 @@ const CATEGORY_COMMANDS: Record<string, string> = {
   sleep: 'Just Sleeping',
   chat: 'Just Chatting',
   software: 'Software Development',
-  gym: 'Fitness & Health',
+  gym: 'Fitness and Health',
 };
 
 const CATEGORY_ID_CACHE_KEY = 'kick_category_id_cache';
