@@ -1,5 +1,5 @@
 /**
- * !irl, !sleep, !chat, !software chat commands: change Kick stream category.
+ * !irl, !sleep, !chat, !software, !gym chat commands: change Kick stream category.
  * Broadcaster and mods only.
  */
 
@@ -17,6 +17,7 @@ const CATEGORY_COMMANDS: Record<string, string> = {
   sleep: 'Just Sleeping',
   chat: 'Just Chatting',
   software: 'Software Development',
+  gym: 'Fitness & Health',
 };
 
 const CATEGORY_ID_CACHE_KEY = 'kick_category_id_cache';
