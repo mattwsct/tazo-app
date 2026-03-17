@@ -1,15 +1,33 @@
 import { getPersistentLocation } from './location-cache';
 
+/**
+ * Canonical country code → currency code mapping.
+ * This is the single source of truth — both local-currency.ts and convert-utils.ts use this.
+ * Union of all entries from both files; entries unique to convert-utils (QA, KW, PE, IS, BG,
+ * SK, SI, EE, LV, LT, MT, CY, HR, LU) are included here.
+ */
 export const COUNTRY_CURRENCY: Record<string, string> = {
-  AU: 'AUD', AT: 'EUR', BE: 'EUR', BR: 'BRL', CA: 'CAD', CN: 'CNY',
-  CZ: 'CZK', DK: 'DKK', FI: 'EUR', FR: 'EUR', DE: 'EUR', GR: 'EUR',
-  HK: 'HKD', HU: 'HUF', IN: 'INR', ID: 'IDR', IE: 'EUR', IL: 'ILS',
-  IT: 'EUR', JP: 'JPY', KR: 'KRW', MX: 'MXN', NL: 'EUR', NZ: 'NZD',
-  NO: 'NOK', PL: 'PLN', PT: 'EUR', RO: 'RON', RU: 'RUB', SA: 'SAR',
-  SG: 'SGD', ZA: 'ZAR', ES: 'EUR', SE: 'SEK', CH: 'CHF', TH: 'THB',
-  TR: 'TRY', UA: 'UAH', GB: 'GBP', US: 'USD', AE: 'AED', AR: 'ARS',
-  CL: 'CLP', CO: 'COP', EG: 'EGP', MY: 'MYR', PH: 'PHP', PK: 'PKR',
-  TW: 'TWD', VN: 'VND', NG: 'NGN', KE: 'KES', GH: 'GHS',
+  // Americas
+  US: 'USD', CA: 'CAD', BR: 'BRL', MX: 'MXN', AR: 'ARS', CL: 'CLP', CO: 'COP', PE: 'PEN',
+  // Europe — non-euro
+  GB: 'GBP', SE: 'SEK', NO: 'NOK', DK: 'DKK', IS: 'ISK',
+  PL: 'PLN', CZ: 'CZK', HU: 'HUF', RO: 'RON', BG: 'BGN',
+  CH: 'CHF', RU: 'RUB', UA: 'UAH',
+  // Europe — Eurozone
+  DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', PT: 'EUR', NL: 'EUR',
+  BE: 'EUR', AT: 'EUR', IE: 'EUR', FI: 'EUR', GR: 'EUR', LU: 'EUR',
+  SK: 'EUR', SI: 'EUR', EE: 'EUR', LV: 'EUR', LT: 'EUR', MT: 'EUR',
+  CY: 'EUR', HR: 'EUR',
+  // Asia-Pacific
+  AU: 'AUD', NZ: 'NZD',
+  JP: 'JPY', CN: 'CNY', KR: 'KRW', TW: 'TWD', HK: 'HKD', SG: 'SGD',
+  TH: 'THB', VN: 'VND', MY: 'MYR', PH: 'PHP', ID: 'IDR', IN: 'INR',
+  // Middle East
+  AE: 'AED', SA: 'SAR', QA: 'QAR', KW: 'KWD', IL: 'ILS', TR: 'TRY',
+  // Africa
+  ZA: 'ZAR', EG: 'EGP', NG: 'NGN', KE: 'KES', GH: 'GHS',
+  // South/Southeast Asia extras
+  PK: 'PKR',
 };
 
 /**

@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
+import { TIMERS } from '@/utils/overlay-constants';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
-
-const CYCLE_DURATION_MS = 10_000;
 
 type SlotType = 'altitude' | 'speed';
 
@@ -27,7 +26,7 @@ export default function TopRightRotatingSlot({
     return s;
   }, [showAltitude, altitudeDisplay, showSpeed, speedDisplay]);
 
-  const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
+  const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, TIMERS.SLOT_CYCLE_DURATION_MS);
 
   if (slides.length === 0) return null;
 

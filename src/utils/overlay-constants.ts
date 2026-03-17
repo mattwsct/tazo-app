@@ -51,6 +51,11 @@ export const TIMERS = {
   // Altitude auto-display: show when altitude changes notably from baseline
   ALTITUDE_CHANGE_THRESHOLD_M: 50,   // meters - notable change from baseline to trigger display
   ALTITUDE_DISPLAY_DURATION_MS: 60 * 1000, // 1 minute - how long to show after notable change
+
+  // Rotating slot cycle duration — shared by TopLeftRotatingWellness, TopRightRotatingSlot,
+  // and RotatingLocationText. All three align to wall-clock via useCrossfadeRotation so they
+  // stay in phase regardless of mount order.
+  SLOT_CYCLE_DURATION_MS: 10_000, // 10 seconds per slide
 } as const;
 
 // Animation configurations for integer counting - different speeds for different metrics

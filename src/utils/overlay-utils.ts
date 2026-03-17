@@ -25,6 +25,16 @@ function migrateMapZoomLevel(level: string | undefined): OverlaySettings['mapZoo
 
 export function mergeSettingsWithDefaults(settingsData: Partial<OverlaySettings>): OverlaySettings {
   const data = settingsData ?? {};
+  // Strip legacy/removed fields so they don't land in the spread onto DEFAULT_OVERLAY_SETTINGS.
+  // These keys must be excluded explicitly because they no longer exist in OverlaySettings and
+  // TypeScript would silently pass them through — spreading unknown keys can shadow valid defaults.
+  //
+  //   leaderboardDisplay  — replaced by the boolean showLeaderboard (handled below with migration)
+  //   broadenLocationWhenStale — removed feature; superseded by GPS_FRESHNESS_TIMEOUT logic
+  //   locationStaleMaxFallback — removed setting; no longer configurable
+  //   showDistance        — removed from OverlaySettings (wellness distance is always shown if data is fresh)
+  //   showDistanceMiles   — removed from OverlaySettings (unit toggle removed)
+  //
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- exclude legacy keys from spread
   const { leaderboardDisplay: _ld, broadenLocationWhenStale: _b, locationStaleMaxFallback: _m, showDistance: _sd, showDistanceMiles: _sdm, ...rest } = data as Record<string, unknown>;
   const legacy = data as { leaderboardDisplay?: string; showLeaderboard?: boolean };

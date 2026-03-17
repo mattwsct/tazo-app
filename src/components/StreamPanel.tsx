@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
 import type { OverlayTimerState } from '@/types/timer';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
+import { NO_DECIMAL_CURRENCIES } from '@/utils/convert-utils';
 
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
 
@@ -26,8 +27,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 // Currencies with ambiguous symbols — show ISO code as the identifier instead
 const AMBIGUOUS_SYMBOLS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR', 'GHS']);
 
-// Currencies with no meaningful decimal subdivision
-const NO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF', 'THB']);
+// NO_DECIMAL_CURRENCIES is imported from convert-utils (canonical definition)
 
 /** Format an estimated local-currency amount converted from USD. Shows cents where applicable. */
 function fmtLocal(amountUsd: number, currency: string, rate: number): string {

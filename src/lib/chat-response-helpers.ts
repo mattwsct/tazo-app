@@ -140,41 +140,98 @@ export async function getForecastResponse(): Promise<string> {
   return out.length > 0 ? `🌤️ ${out.join(' | ')}` : '🌤️ No forecast data available';
 }
 
+/**
+ * Shared helper: resolves a persistent location and formats it as a display string.
+ *
+ * Pattern used by both chat-response-helpers (getMapResponse) and location-routes
+ * (handleLocationRoutes). Returns an object so callers can branch on the result type.
+ *
+ * @returns
+ *   - `{ type: 'hidden' }` — location is hidden or unavailable
+ *   - `{ type: 'country', name: string }` — custom display mode, country-level only
+ *   - `{ type: 'formatted', text: string }` — formatted primary/secondary string
+ *   - `{ type: 'coords', lat: number, lon: number }` — coordinate fallback
+ */
+export async function resolveLocationForChat(
+  displayMode: OverlaySettings['locationDisplay'],
+  persistentLocation: Awaited<ReturnType<typeof getPersistentLocation>>,
+  lat: number | null,
+  lon: number | null,
+): Promise<
+  | { type: 'hidden' }
+  | { type: 'country'; name: string }
+  | { type: 'formatted'; text: string }
+  | { type: 'coords'; lat: number; lon: number }
+> {
+  if (displayMode === 'hidden') return { type: 'hidden' };
+
+  if (persistentLocation?.location) {
+    const rawLocation = persistentLocation.location;
+
+    if (displayMode === 'custom') {
+      if (rawLocation.countryCode) {
+        const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+        if (countryName) return { type: 'country', name: countryName };
+      }
+      return { type: 'hidden' };
+    }
+
+    const formatted = formatLocation(rawLocation, displayMode);
+    const parts: string[] = [];
+    if (formatted.primary && formatted.primary.trim()) parts.push(formatted.primary.trim());
+    if (formatted.secondary && formatted.secondary.trim()) parts.push(formatted.secondary.trim());
+
+    if (parts.length > 0) {
+      return { type: 'formatted', text: parts.join(', ') };
+    }
+
+    // Fallback: try raw location fields
+    const fallbackParts: string[] = [];
+    if (rawLocation.city) fallbackParts.push(rawLocation.city);
+    else if (rawLocation.town) fallbackParts.push(rawLocation.town);
+    else if (rawLocation.municipality) fallbackParts.push(rawLocation.municipality);
+    else if (rawLocation.suburb) fallbackParts.push(rawLocation.suburb);
+    else if (rawLocation.state) fallbackParts.push(rawLocation.state);
+    else if (rawLocation.province) fallbackParts.push(rawLocation.province);
+
+    if (rawLocation.countryCode && fallbackParts.length > 0) {
+      const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
+      if (countryName) fallbackParts.push(countryName);
+    }
+
+    if (fallbackParts.length > 0) {
+      return { type: 'formatted', text: fallbackParts.join(', ') };
+    }
+  }
+
+  if (lat != null && lon != null) {
+    return { type: 'coords', lat, lon };
+  }
+
+  return { type: 'hidden' };
+}
+
 export async function getMapResponse(): Promise<string> {
   const settings = (await kv.get<OverlaySettings>('overlay_settings')) || DEFAULT_OVERLAY_SETTINGS;
   const displayMode = settings.locationDisplay;
-  if (displayMode === 'hidden') return '🗺️ Map is hidden';
 
   const persistentLocation = await getPersistentLocation();
   const lat = persistentLocation?.rtirl?.lat ?? null;
   const lon = persistentLocation?.rtirl?.lon ?? null;
 
-  if (persistentLocation?.location) {
-    const rawLocation = persistentLocation.location;
-    if (displayMode === 'custom') {
-      if (rawLocation.countryCode) {
-        const countryName = rawLocation.country || getCountryNameFromCode(rawLocation.countryCode);
-        if (countryName) {
-          return `🗺️ https://www.google.com/maps?q=${encodeURIComponent(countryName)}`;
-        }
-      }
+  const resolved = await resolveLocationForChat(displayMode, persistentLocation, lat, lon);
+  switch (resolved.type) {
+    case 'hidden':
       return '🗺️ Map is hidden';
-    }
-    const formatted = formatLocation(rawLocation, displayMode);
-    const parts: string[] = [];
-    if (formatted.primary) parts.push(formatted.primary);
-    if (formatted.secondary) parts.push(formatted.secondary);
-    if (parts.length > 0) {
-      const mapLocation = parts.join(', ');
-      return `🗺️ https://www.google.com/maps?q=${encodeURIComponent(mapLocation)}`;
+    case 'country':
+      return `🗺️ https://www.google.com/maps?q=${encodeURIComponent(resolved.name)}`;
+    case 'formatted':
+      return `🗺️ https://www.google.com/maps?q=${encodeURIComponent(resolved.text)}`;
+    case 'coords': {
+      const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${roundCoordinate(resolved.lat)},${roundCoordinate(resolved.lon)}`)}`;
+      return `🗺️ ${mapUrl}`;
     }
   }
-
-  if (lat != null && lon != null) {
-    const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${roundCoordinate(lat)},${roundCoordinate(lon)}`)}`;
-    return `🗺️ ${mapUrl}`;
-  }
-  return '🗺️ Map is hidden';
 }
 
 export async function getFollowersResponse(): Promise<string> {

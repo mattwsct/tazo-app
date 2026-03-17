@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
+import { NO_DECIMAL_CURRENCIES } from '@/utils/convert-utils';
 
 const CB_CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',   AUD: 'A$',  CAD: 'C$',  NZD: 'NZ$', SGD: 'S$',  HKD: 'HK$',
@@ -13,13 +14,13 @@ const CB_CURRENCY_SYMBOLS: Record<string, string> = {
 };
 const CB_AMBIGUOUS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR']);
 
-const CB_NO_DECIMAL = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF', 'THB']);
+// NO_DECIMAL_CURRENCIES is imported from convert-utils (canonical definition)
 
 function cbFmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
   const local = amountUsd * rate;
   let str: string;
-  if (CB_NO_DECIMAL.has(currency)) {
+  if (NO_DECIMAL_CURRENCIES.has(currency)) {
     str = Math.round(local).toLocaleString();
   } else {
     const dec = Math.round(local * 100) / 100;
@@ -31,7 +32,7 @@ function cbFmtLocal(amountUsd: number, currency: string, rate: number): string {
 function cbFmtLocalExact(amount: number, currency: string): string {
   const sym = CB_AMBIGUOUS.has(currency) ? null : (CB_CURRENCY_SYMBOLS[currency] ?? null);
   let str: string;
-  if (CB_NO_DECIMAL.has(currency)) {
+  if (NO_DECIMAL_CURRENCIES.has(currency)) {
     str = Math.round(amount).toLocaleString();
   } else {
     const dec = Math.round(amount * 100) / 100;

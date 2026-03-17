@@ -1,15 +1,14 @@
 'use client';
 
+import { TIMERS } from '@/utils/overlay-constants';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
-
-const CYCLE_DURATION_MS = 10_000;
 
 interface RotatingLocationTextProps {
   levels: string[];
 }
 
 export default function RotatingLocationText({ levels }: RotatingLocationTextProps) {
-  const { activeIndex, outgoingIndex } = useCrossfadeRotation(levels, CYCLE_DURATION_MS);
+  const { activeIndex, outgoingIndex } = useCrossfadeRotation(levels, TIMERS.SLOT_CYCLE_DURATION_MS);
 
   if (levels.length === 0) return null;
 

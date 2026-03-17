@@ -1,28 +1,12 @@
 import { kv } from '@/lib/kv';
 import { getLocationData } from '@/utils/location-cache';
 import { KM_TO_MI, M_TO_FT, CM_TO_IN, KG_TO_LBS, L_TO_GAL, ML_TO_FLOZ } from '@/utils/unit-conversions';
+import { COUNTRY_CURRENCY } from '@/utils/local-currency';
 
 const CURRENCY_CACHE_KEY = 'convert_currency_cache';
 const CURRENCY_CACHE_TTL_SEC = 3600; // 1 hour
 
-// --- Country code → currency code mapping ---
-
-const COUNTRY_TO_CURRENCY: Record<string, string> = {
-  US: 'USD', GB: 'GBP', CA: 'CAD', AU: 'AUD', NZ: 'NZD',
-  JP: 'JPY', CN: 'CNY', KR: 'KRW', TW: 'TWD', HK: 'HKD', SG: 'SGD',
-  TH: 'THB', VN: 'VND', MY: 'MYR', PH: 'PHP', ID: 'IDR', IN: 'INR',
-  AE: 'AED', SA: 'SAR', QA: 'QAR', KW: 'KWD', IL: 'ILS', TR: 'TRY',
-  ZA: 'ZAR', EG: 'EGP', NG: 'NGN', KE: 'KES',
-  BR: 'BRL', MX: 'MXN', AR: 'ARS', CL: 'CLP', CO: 'COP', PE: 'PEN',
-  SE: 'SEK', NO: 'NOK', DK: 'DKK', IS: 'ISK',
-  PL: 'PLN', CZ: 'CZK', HU: 'HUF', RO: 'RON', BG: 'BGN',
-  CH: 'CHF', RU: 'RUB', UA: 'UAH',
-  // Eurozone
-  DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', PT: 'EUR', NL: 'EUR',
-  BE: 'EUR', AT: 'EUR', IE: 'EUR', FI: 'EUR', GR: 'EUR', LU: 'EUR',
-  SK: 'EUR', SI: 'EUR', EE: 'EUR', LV: 'EUR', LT: 'EUR', MT: 'EUR',
-  CY: 'EUR', HR: 'EUR',
-};
+// Country code → currency code mapping is now in local-currency.ts (COUNTRY_CURRENCY).
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$', EUR: '€', GBP: '£', JPY: '¥', CNY: '¥',
@@ -34,7 +18,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 
 // All valid 3-letter currency codes we support (for parsing detection)
 const KNOWN_CURRENCIES = new Set([
-  ...Object.values(COUNTRY_TO_CURRENCY),
+  ...Object.values(COUNTRY_CURRENCY),
   'USD', 'EUR', 'GBP', 'JPY', 'CNY', 'AUD', 'CAD', 'NZD', 'CHF',
 ]);
 
@@ -161,7 +145,7 @@ async function getLocalCurrency(): Promise<{ code: string; country?: string } | 
     const loc = await getLocationData();
     const cc = loc?.location?.countryCode?.toUpperCase();
     if (!cc) return null;
-    const currency = COUNTRY_TO_CURRENCY[cc];
+    const currency = COUNTRY_CURRENCY[cc];
     if (!currency) return null;
     return { code: currency, country: loc?.location?.country ?? undefined };
   } catch {
@@ -207,9 +191,18 @@ async function fetchRate(from: string, to: string): Promise<number | null> {
   }
 }
 
+/**
+ * Currencies with no meaningful decimal subdivision (whole-unit only).
+ * Used by formatCurrency (convert-utils), StreamPanel, and ChallengesBox.
+ * RWF and BIF are small-denomination currencies always quoted as integers.
+ */
+export const NO_DECIMAL_CURRENCIES = new Set([
+  'JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF', 'THB', 'ISK',
+]);
+
 function formatCurrency(amount: number, code: string): string {
   const sym = CURRENCY_SYMBOLS[code] ?? '';
-  const isZeroDecimal = ['JPY', 'KRW', 'VND', 'IDR', 'CLP', 'HUF', 'ISK', 'THB'].includes(code);
+  const isZeroDecimal = NO_DECIMAL_CURRENCIES.has(code);
   let formatted: string;
   if (isZeroDecimal) {
     formatted = Math.round(amount).toLocaleString();

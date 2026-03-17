@@ -6,7 +6,6 @@ import { TIMERS } from '@/utils/overlay-constants';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
 const POLL_INTERVAL_MS = 60000;
-const CYCLE_DURATION_MS = 10_000;
 
 type SlotType = 'date' | 'steps' | 'distance';
 
@@ -67,7 +66,7 @@ export default function TopLeftRotatingWellness({ date, timezoneValid, settings 
     return s;
   }, [timezoneValid, date, settings.showSteps, settings.showDistance, dataFresh, wellness]);
 
-  const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, CYCLE_DURATION_MS);
+  const { activeIndex, outgoingIndex } = useCrossfadeRotation(slides, TIMERS.SLOT_CYCLE_DURATION_MS);
 
   if (slides.length === 0) return null;
 
