@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
 import type { OverlayTimerState } from '@/types/timer';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
-import { NO_DECIMAL_CURRENCIES } from '@/utils/convert-utils';
+import { NO_DECIMAL_CURRENCIES } from '@/utils/currency-data';
 
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
 

@@ -1,36 +1,12 @@
 import { kv } from '@/lib/kv';
 import { getLocationData } from '@/utils/location-cache';
 import { KM_TO_MI, M_TO_FT, CM_TO_IN, KG_TO_LBS, L_TO_GAL, ML_TO_FLOZ } from '@/utils/unit-conversions';
+import { COUNTRY_CURRENCY, NO_DECIMAL_CURRENCIES } from '@/utils/currency-data';
+
+export { COUNTRY_CURRENCY, NO_DECIMAL_CURRENCIES };
 
 const CURRENCY_CACHE_KEY = 'convert_currency_cache';
 const CURRENCY_CACHE_TTL_SEC = 3600; // 1 hour
-
-// Canonical country code → currency code mapping.
-// local-currency.ts imports this — do NOT import local-currency.ts from here (it has
-// server-only deps that break client-side bundles importing convert-utils).
-export const COUNTRY_CURRENCY: Record<string, string> = {
-  // Americas
-  US: 'USD', CA: 'CAD', BR: 'BRL', MX: 'MXN', AR: 'ARS', CL: 'CLP', CO: 'COP', PE: 'PEN',
-  // Europe — non-euro
-  GB: 'GBP', SE: 'SEK', NO: 'NOK', DK: 'DKK', IS: 'ISK',
-  PL: 'PLN', CZ: 'CZK', HU: 'HUF', RO: 'RON', BG: 'BGN',
-  CH: 'CHF', RU: 'RUB', UA: 'UAH',
-  // Europe — Eurozone
-  DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', PT: 'EUR', NL: 'EUR',
-  BE: 'EUR', AT: 'EUR', IE: 'EUR', FI: 'EUR', GR: 'EUR', LU: 'EUR',
-  SK: 'EUR', SI: 'EUR', EE: 'EUR', LV: 'EUR', LT: 'EUR', MT: 'EUR',
-  CY: 'EUR', HR: 'EUR',
-  // Asia-Pacific
-  AU: 'AUD', NZ: 'NZD',
-  JP: 'JPY', CN: 'CNY', KR: 'KRW', TW: 'TWD', HK: 'HKD', SG: 'SGD',
-  TH: 'THB', VN: 'VND', MY: 'MYR', PH: 'PHP', ID: 'IDR', IN: 'INR',
-  // Middle East
-  AE: 'AED', SA: 'SAR', QA: 'QAR', KW: 'KWD', IL: 'ILS', TR: 'TRY',
-  // Africa
-  ZA: 'ZAR', EG: 'EGP', NG: 'NGN', KE: 'KES', GH: 'GHS',
-  // South/Southeast Asia extras
-  PK: 'PKR',
-};
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$', EUR: '€', GBP: '£', JPY: '¥', CNY: '¥',
@@ -214,15 +190,6 @@ async function fetchRate(from: string, to: string): Promise<number | null> {
     return null;
   }
 }
-
-/**
- * Currencies with no meaningful decimal subdivision (whole-unit only).
- * Used by formatCurrency (convert-utils), StreamPanel, and ChallengesBox.
- * RWF and BIF are small-denomination currencies always quoted as integers.
- */
-export const NO_DECIMAL_CURRENCIES = new Set([
-  'JPY', 'KRW', 'VND', 'IDR', 'HUF', 'CLP', 'COP', 'RWF', 'BIF', 'THB', 'ISK',
-]);
 
 function formatCurrency(amount: number, code: string): string {
   const sym = CURRENCY_SYMBOLS[code] ?? '';

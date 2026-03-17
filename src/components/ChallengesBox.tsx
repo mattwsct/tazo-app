@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
-import { NO_DECIMAL_CURRENCIES } from '@/utils/convert-utils';
+import { NO_DECIMAL_CURRENCIES } from '@/utils/currency-data';
 
 const CB_CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',   AUD: 'A$',  CAD: 'C$',  NZD: 'NZ$', SGD: 'S$',  HKD: 'HK$',

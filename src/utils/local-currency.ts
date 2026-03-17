@@ -1,5 +1,5 @@
 import { getPersistentLocation } from './location-cache';
-import { COUNTRY_CURRENCY } from './convert-utils';
+import { COUNTRY_CURRENCY } from './currency-data';
 
 export { COUNTRY_CURRENCY };
 
