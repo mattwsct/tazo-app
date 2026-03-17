@@ -1152,23 +1152,42 @@ function OverlayPage() {
             {/* Location: two-line display — line 1: city/state/custom, line 2: country + flag */}
             {locationDisplay && (locationDisplay.primary || locationDisplay.secondary || locationDisplay.countryCode) && (
               <div className="location location-line">
-                {/* Line 1: city / state name, or custom text */}
-                {(settings.locationDisplay === 'custom' ? settings.customLocation?.trim() : locationDisplay.primary) && (
-                  <span className="location-main">
-                    {settings.locationDisplay === 'custom' ? settings.customLocation!.trim() : locationDisplay.primary}
-                  </span>
-                )}
-                {/* Line 2: country name + flag */}
-                {(locationDisplay.secondary || locationDisplay.countryCode) && (
-                  <div className="location-secondary-line">
-                    {locationDisplay.secondary && (
-                      <span className="location-country-text">{locationDisplay.secondary}</span>
-                    )}
-                    {locationDisplay.countryCode && (
-                      <LocationFlag countryCode={locationDisplay.countryCode} />
-                    )}
-                  </div>
-                )}
+                {(() => {
+                  const primaryText = settings.locationDisplay === 'custom' ? settings.customLocation?.trim() : locationDisplay.primary;
+                  const countryOnly = !primaryText && (locationDisplay.secondary || locationDisplay.countryCode);
+                  if (countryOnly) {
+                    // Country-only mode: render country name + flag at primary size
+                    return (
+                      <div className="location-secondary-line location-secondary-line--primary">
+                        {locationDisplay.secondary && (
+                          <span className="location-main">{locationDisplay.secondary}</span>
+                        )}
+                        {locationDisplay.countryCode && (
+                          <LocationFlag countryCode={locationDisplay.countryCode} />
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <>
+                      {/* Line 1: city / state name, or custom text */}
+                      {primaryText && (
+                        <span className="location-main">{primaryText}</span>
+                      )}
+                      {/* Line 2: country name + flag */}
+                      {(locationDisplay.secondary || locationDisplay.countryCode) && (
+                        <div className="location-secondary-line">
+                          {locationDisplay.secondary && (
+                            <span className="location-country-text">{locationDisplay.secondary}</span>
+                          )}
+                          {locationDisplay.countryCode && (
+                            <LocationFlag countryCode={locationDisplay.countryCode} />
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 

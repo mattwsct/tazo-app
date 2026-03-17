@@ -12,7 +12,7 @@ import type { LocationData } from '@/utils/location-utils';
 /** Map legacy locationDisplay (neighbourhood) → city */
 function migrateLocationDisplay(mode: string | undefined): OverlaySettings['locationDisplay'] {
   if (mode === 'neighbourhood') return 'city';
-  if (mode === 'city' || mode === 'state' || mode === 'country' || mode === 'custom' || mode === 'hidden') return mode;
+  if (mode === 'suburb' || mode === 'city' || mode === 'state' || mode === 'country' || mode === 'custom' || mode === 'hidden') return mode;
   return DEFAULT_OVERLAY_SETTINGS.locationDisplay;
 }
 

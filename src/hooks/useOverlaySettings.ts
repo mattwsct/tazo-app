@@ -93,6 +93,7 @@ export function useOverlaySettings(): [
               earnedLeaderboardLifetime: merged.earnedLeaderboardLifetime ?? prev.earnedLeaderboardLifetime,
               overlayAlerts: merged.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: merged.streamGoals ?? prev.streamGoals,
+              walletState: merged.walletState ?? prev.walletState,
             }));
             lastSettingsHash.current = createSettingsHash(merged);
             settingsLoadedRef.current = true;
