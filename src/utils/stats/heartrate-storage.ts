@@ -1,6 +1,6 @@
 import { kv } from '@/lib/kv';
 import { isStreamLive, getStreamStartedAt, getStreamEndedAt } from './stream-state';
-import { STALE_THRESHOLD_MS, MAX_ENTRIES, filterSessionEntries, cleanOldEntries, formatAge } from './sampling-utils';
+import { STALE_THRESHOLD_MS, MAX_ENTRIES, filterSessionEntries, formatAge } from './sampling-utils';
 
 export interface HeartrateEntry {
   bpm: number;
@@ -9,46 +9,40 @@ export interface HeartrateEntry {
 
 const HEARTRATE_KEY = 'heartrate_history';
 
+function isWrongTypeError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('WRONGTYPE');
+}
+
 /**
- * Stores a heartrate reading with smart sampling
+ * Stores a heartrate reading using Redis list operations (O(1) vs O(N) read-modify-write).
+ * Every in-range sample is recorded while the stream is live; list is capped at MAX_ENTRIES.
  */
 export async function storeHeartrate(bpm: number, timestamp?: number): Promise<void> {
   try {
     if (!(await isStreamLive())) return;
     const ts = timestamp || Date.now();
-    const history = await kv.get<HeartrateEntry[]>(HEARTRATE_KEY) || [];
-
-    if (history.length > 0) {
-      const lastEntry = history[history.length - 1];
-      const timeSinceLast = ts - lastEntry.timestamp;
-      const bpmChange = Math.abs(bpm - lastEntry.bpm);
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          '[Store Heartrate] Received:',
-          bpm,
-          'BPM, timeSinceLast:',
-          Math.round(timeSinceLast / 1000),
-          's, bpmChange:',
-          bpmChange,
-        );
-      }
-      // Previously we skipped storing when updates were too frequent with tiny changes.
-      // Now we always record every in-range sample while the stream is live so stats/graphs
-      // can use the full fidelity of the incoming data. Overall history size is still
-      // bounded by MAX_ENTRIES + cleanOldEntries().
-    } else if (process.env.NODE_ENV === 'development') {
-      console.log('[Store Heartrate] Storing first entry');
-    }
-
     const entry: HeartrateEntry = { bpm, timestamp: ts };
-    history.push(entry);
-
-    const cleaned = cleanOldEntries(history).slice(-MAX_ENTRIES);
-    await kv.set(HEARTRATE_KEY, cleaned);
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Store Heartrate] Stored successfully. Total entries:', cleaned.length);
+      console.log('[Store Heartrate] Received:', bpm, 'BPM');
+    }
+
+    try {
+      const pipeline = kv.pipeline();
+      pipeline.rpush(HEARTRATE_KEY, entry);
+      pipeline.ltrim(HEARTRATE_KEY, -MAX_ENTRIES, -1);
+      await pipeline.exec();
+    } catch (e) {
+      if (isWrongTypeError(e)) {
+        // Old JSON-blob format — clear once and switch to list format.
+        await kv.del(HEARTRATE_KEY);
+        const pipeline = kv.pipeline();
+        pipeline.rpush(HEARTRATE_KEY, entry);
+        pipeline.ltrim(HEARTRATE_KEY, -MAX_ENTRIES, -1);
+        await pipeline.exec();
+      } else {
+        throw e;
+      }
     }
   } catch (error) {
     console.error('Failed to store heartrate:', error);
@@ -67,16 +61,16 @@ export async function getHeartrateStats(): Promise<{
 }> {
   try {
     const [history, streamStartedAt, streamEndedAt] = await Promise.all([
-      kv.get<HeartrateEntry[]>(HEARTRATE_KEY),
+      kv.lrange<HeartrateEntry>(HEARTRATE_KEY, 0, -1).catch(async (e) => {
+        // Fallback to old JSON-blob format during migration window.
+        if (isWrongTypeError(e)) return await kv.get<HeartrateEntry[]>(HEARTRATE_KEY) ?? [];
+        throw e;
+      }),
       getStreamStartedAt(),
       getStreamEndedAt(),
     ]);
     const entries = history || [];
     const sessionEntries = filterSessionEntries(entries, streamStartedAt, streamEndedAt);
-
-    if (process.env.NODE_ENV === 'development' && sessionEntries.length > 0) {
-      console.log('[Heartrate Stats] Session entries:', sessionEntries.length, 'since stream start');
-    }
 
     if (sessionEntries.length === 0) {
       return { current: null, min: null, max: null, avg: null, hasData: false };

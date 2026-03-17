@@ -54,13 +54,29 @@ export async function getStreamEndedAt(): Promise<number | null> {
   }
 }
 
+// In-memory cache for the live flag — it changes rarely (only on webhooks/cron).
+// 30s TTL strikes a balance: stale overlay data for at most 30s if a webhook is missed.
+const LIVE_CACHE_TTL = 30_000;
+
+declare global {
+  var __streamLiveCache: { value: boolean; expiresAt: number } | undefined;
+}
+
 export async function setStreamLive(live: boolean): Promise<void> {
   await kv.set(STREAM_IS_LIVE_KEY, live);
+  // Keep cache consistent immediately so subsequent calls don't re-fetch.
+  globalThis.__streamLiveCache = { value: live, expiresAt: Date.now() + LIVE_CACHE_TTL };
 }
 
 export async function isStreamLive(): Promise<boolean> {
+  const now = Date.now();
+  const cached = globalThis.__streamLiveCache;
+  if (cached && now < cached.expiresAt) return cached.value;
+
   const val = await kv.get<boolean>(STREAM_IS_LIVE_KEY);
-  return val === true;
+  const isLive = val === true;
+  globalThis.__streamLiveCache = { value: isLive, expiresAt: now + LIVE_CACHE_TTL };
+  return isLive;
 }
 
 /** Called when stream ends. Sets stream_ended_at so uptime and session stats stop updating. */

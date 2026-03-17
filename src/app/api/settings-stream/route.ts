@@ -131,26 +131,31 @@ export async function GET(request: NextRequest): Promise<Response> {
           };
 
           if (settingsChanged) lastModified = maxTs;
+          if (goalsChanged) lastGoalsModified = goalsTs;
+          if (challengesChanged) lastChallengesModified = challengesTs;
 
-          if (goalsChanged) {
-            lastGoalsModified = goalsTs;
-            const [streamGoals, overlayAlerts] = await Promise.all([
-              getStreamGoals(),
-              getRecentAlerts(),
-            ]);
+          // Run all conditional fetches in parallel.
+          const [goalsResult, timerResult, challengesResult] = await Promise.all([
+            goalsChanged
+              ? Promise.all([getStreamGoals(), getRecentAlerts()])
+              : null,
+            // Timer state: always include when settings change (timers write overlay_settings_modified).
+            settingsChanged ? getOverlayTimers() : null,
+            // Challenges + wallet: only when their dedicated key changed.
+            challengesChanged ? Promise.all([getChallenges(), getWallet()]) : null,
+          ]);
+
+          if (goalsResult) {
+            const [streamGoals, overlayAlerts] = goalsResult;
             sendData.streamGoals = streamGoals;
             sendData.overlayAlerts = overlayAlerts;
           }
-
-          if (challengesChanged) lastChallengesModified = challengesTs;
-          const [timerState, challengesState, walletState] = await Promise.all([
-            getOverlayTimers(),
-            getChallenges(),
-            getWallet(),
-          ]);
-          sendData.timerState = timerState;
-          sendData.challengesState = challengesState;
-          sendData.walletState = walletState;
+          if (timerResult) sendData.timerState = timerResult;
+          if (challengesResult) {
+            const [challengesState, walletState] = challengesResult;
+            sendData.challengesState = challengesState;
+            sendData.walletState = walletState;
+          }
 
           sendSSE(JSON.stringify(sendData));
         } catch (error) {
@@ -166,11 +171,11 @@ export async function GET(request: NextRequest): Promise<Response> {
         checkForUpdates();
       }, 100);
       
-      // Poll every 1s. On Vercel, each request runs in its own serverless instance so
+      // Poll every 2s. On Vercel, each request runs in its own serverless instance so
       // broadcastSettings() from a webhook handler can't reach this connection's in-memory
-      // controller. This 1s poll is the reliable path — it costs 1 KV command per tick
+      // controller. This poll is the reliable path — it costs 1 KV command per tick
       // (just timestamp keys) and only fetches full data when something changed.
-      const checkInterval = setInterval(checkForUpdates, 1000);
+      const checkInterval = setInterval(checkForUpdates, 2000);
       
       // Heartbeat every 8s — must arrive before the 15s polling-fallback threshold
       const heartbeatInterval = setInterval(() => {

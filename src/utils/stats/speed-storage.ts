@@ -5,7 +5,6 @@ import {
   STALE_THRESHOLD_MS,
   MAX_ENTRIES,
   filterSessionEntries,
-  cleanOldEntries,
   formatAge,
 } from './sampling-utils';
 
@@ -16,30 +15,50 @@ export interface SpeedEntry {
 
 const SPEED_KEY = 'speed_history';
 
+function isWrongTypeError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('WRONGTYPE');
+}
+
 /**
- * Stores a speed reading with smart sampling
+ * Stores a speed reading using Redis list operations (O(1) vs O(N) read-modify-write).
+ * Deduplication: skip if within sample interval and change is < 5 km/h.
  */
 export async function storeSpeed(speed: number, timestamp?: number): Promise<void> {
   try {
     if (!(await isStreamLive())) return;
     const ts = timestamp || Date.now();
-    const history = await kv.get<SpeedEntry[]>(SPEED_KEY) || [];
 
-    if (history.length > 0) {
-      const lastEntry = history[history.length - 1];
+    // Fetch only the last entry to check sample interval — O(1), not O(N).
+    const lastRaw = await kv.lrange<SpeedEntry>(SPEED_KEY, -1, -1).catch(async (e) => {
+      if (isWrongTypeError(e)) return [];
+      throw e;
+    });
+    const lastEntry = lastRaw[0] ?? null;
+
+    if (lastEntry) {
       const timeSinceLast = ts - lastEntry.timestamp;
       const speedChange = Math.abs(speed - lastEntry.speed);
-
-      if (timeSinceLast < SPEED_SAMPLE_INTERVAL && speedChange < 5) {
-        return;
-      }
+      if (timeSinceLast < SPEED_SAMPLE_INTERVAL && speedChange < 5) return;
     }
 
     const entry: SpeedEntry = { speed, timestamp: ts };
-    history.push(entry);
 
-    const cleaned = cleanOldEntries(history).slice(-MAX_ENTRIES);
-    await kv.set(SPEED_KEY, cleaned);
+    try {
+      const pipeline = kv.pipeline();
+      pipeline.rpush(SPEED_KEY, entry);
+      pipeline.ltrim(SPEED_KEY, -MAX_ENTRIES, -1);
+      await pipeline.exec();
+    } catch (e) {
+      if (isWrongTypeError(e)) {
+        await kv.del(SPEED_KEY);
+        const pipeline = kv.pipeline();
+        pipeline.rpush(SPEED_KEY, entry);
+        pipeline.ltrim(SPEED_KEY, -MAX_ENTRIES, -1);
+        await pipeline.exec();
+      } else {
+        throw e;
+      }
+    }
   } catch (error) {
     console.warn('Failed to store speed:', error);
   }
@@ -55,7 +74,10 @@ export async function getSpeedStats(): Promise<{
 }> {
   try {
     const [history, streamStartedAt, streamEndedAt] = await Promise.all([
-      kv.get<SpeedEntry[]>(SPEED_KEY),
+      kv.lrange<SpeedEntry>(SPEED_KEY, 0, -1).catch(async (e) => {
+        if (isWrongTypeError(e)) return await kv.get<SpeedEntry[]>(SPEED_KEY) ?? [];
+        throw e;
+      }),
       getStreamStartedAt(),
       getStreamEndedAt(),
     ]);

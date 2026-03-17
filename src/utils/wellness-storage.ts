@@ -29,9 +29,26 @@ export interface WellnessData {
   metricUpdatedAt?: Partial<Record<WellnessMetricKey, number>>;
 }
 
+// In-memory cache — wellness data only changes when Health Auto Export posts (every 30–60s).
+// 10s TTL means the overlay's frequent polling is served from memory, not KV.
+const WELLNESS_CACHE_TTL = 10_000;
+
+declare global {
+  var __wellnessCache: { value: WellnessData | null; expiresAt: number } | undefined;
+}
+
+function setWellnessCache(value: WellnessData | null): void {
+  globalThis.__wellnessCache = { value, expiresAt: Date.now() + WELLNESS_CACHE_TTL };
+}
+
 export async function getWellnessData(): Promise<WellnessData | null> {
+  const now = Date.now();
+  const cached = globalThis.__wellnessCache;
+  if (cached && now < cached.expiresAt) return cached.value;
+
   try {
     const data = await kv.get<WellnessData>(WELLNESS_KEY);
+    setWellnessCache(data);
     return data;
   } catch {
     return null;
@@ -95,6 +112,7 @@ export async function resetWellnessDailyMetricsAtMidnight(timezone: string): Pro
       metricUpdatedAt,
     };
     await kv.set(WELLNESS_KEY, merged);
+    setWellnessCache(merged);
     await kv.set(WELLNESS_LAST_MIDNIGHT_RESET_DATE_KEY, dateStr);
     if (process.env.NODE_ENV === 'development') {
       console.log('[Wellness] Midnight reset in', timezone, 'date', dateStr);
@@ -156,6 +174,7 @@ export async function updateWellnessData(updates: Partial<WellnessData>, options
       metricUpdatedAt,
     };
     await kv.set(WELLNESS_KEY, merged);
+    setWellnessCache(merged);
   } catch (error) {
     console.error('Failed to update wellness data:', error);
     throw error;

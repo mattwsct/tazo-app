@@ -2,10 +2,18 @@
 
 import { logEnvironmentValidation } from './env-validator';
 
+// Use globalThis to persist the guard across module reloads in dev (same pattern as settings-broadcast.ts)
+declare global {
+  var __tazoStartupValidated: boolean | undefined;
+}
+
 /**
- * Performs startup validation and logging
+ * Performs startup validation and logging — runs once per process.
  */
 export function performStartupValidation(): void {
+  if (globalThis.__tazoStartupValidated) return;
+  globalThis.__tazoStartupValidated = true;
+
   console.log('🚀 Starting Tazo Streaming Overlay...');
   
   // Validate environment variables

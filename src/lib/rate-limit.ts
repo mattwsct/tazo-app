@@ -35,11 +35,14 @@ function getClientIdentifier(request: NextRequest | Request, endpoint: string): 
 /**
  * Check rate limit for public API endpoints. Uses KV for global limits across serverless instances.
  * 60 requests per minute per endpoint per IP.
+ * Skipped in development — local requests have no x-forwarded-for so all resolve to "unknown",
+ * making the limit meaningless and adding a needless KV round trip.
  */
 export async function checkApiRateLimit(
   request: NextRequest | Request,
   endpoint: string
 ): Promise<{ success: boolean }> {
+  if (process.env.NODE_ENV === 'development') return { success: true };
   const client = getRatelimitClient();
   if (!client) return { success: true };
   const identifier = getClientIdentifier(request, endpoint);

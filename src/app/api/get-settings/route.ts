@@ -16,20 +16,22 @@ export const dynamic = 'force-dynamic';
 async function handleGET() {
   try {
     logKVUsage('read');
-    const [settings, rawPollState, rawTriviaState] = await kv.mget<
-      [Record<string, unknown> | null, PollState | null, TriviaState | null]
-    >('overlay_settings', POLL_STATE_KEY, TRIVIA_STATE_KEY);
-    const pollState: PollState | null = rawPollState ?? null;
-    const triviaState: TriviaState | null = rawTriviaState ?? null;
-    const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState, triviaState });
-
-    const [overlayAlerts, streamGoals, timerState, challengesState, walletState] = await Promise.all([
-      merged.showOverlayAlerts !== false ? getRecentAlerts() : [],
+    // Run KV fetch and all storage reads in parallel — the latter don't depend on settings.
+    // getRecentAlerts is almost always needed (showOverlayAlerts defaults to true) so fetch it eagerly.
+    const [kvResult, overlayAlerts, streamGoals, timerState, challengesState, walletState] = await Promise.all([
+      kv.mget<[Record<string, unknown> | null, PollState | null, TriviaState | null]>(
+        'overlay_settings', POLL_STATE_KEY, TRIVIA_STATE_KEY
+      ),
+      getRecentAlerts(),
       getStreamGoals(),
       getOverlayTimers(),
       getChallenges(),
       getWallet(),
     ]);
+    const [settings, rawPollState, rawTriviaState] = kvResult;
+    const pollState: PollState | null = rawPollState ?? null;
+    const triviaState: TriviaState | null = rawTriviaState ?? null;
+    const merged = mergeSettingsWithDefaults({ ...(settings || {}), pollState, triviaState });
 
     const combinedSettings = {
       ...merged,

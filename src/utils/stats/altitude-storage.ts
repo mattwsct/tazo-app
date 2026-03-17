@@ -5,7 +5,6 @@ import {
   STALE_THRESHOLD_MS,
   MAX_ENTRIES,
   filterSessionEntries,
-  cleanOldEntries,
   formatAge,
 } from './sampling-utils';
 
@@ -16,30 +15,50 @@ export interface AltitudeEntry {
 
 const ALTITUDE_KEY = 'altitude_history';
 
+function isWrongTypeError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('WRONGTYPE');
+}
+
 /**
- * Stores an altitude reading with smart sampling
+ * Stores an altitude reading using Redis list operations (O(1) vs O(N) read-modify-write).
+ * Deduplication: skip if within sample interval and change is < 20m.
  */
 export async function storeAltitude(altitude: number, timestamp?: number): Promise<void> {
   try {
     if (!(await isStreamLive())) return;
     const ts = timestamp || Date.now();
-    const history = await kv.get<AltitudeEntry[]>(ALTITUDE_KEY) || [];
 
-    if (history.length > 0) {
-      const lastEntry = history[history.length - 1];
+    // Fetch only the last entry to check sample interval — O(1), not O(N).
+    const lastRaw = await kv.lrange<AltitudeEntry>(ALTITUDE_KEY, -1, -1).catch(async (e) => {
+      if (isWrongTypeError(e)) return [];
+      throw e;
+    });
+    const lastEntry = lastRaw[0] ?? null;
+
+    if (lastEntry) {
       const timeSinceLast = ts - lastEntry.timestamp;
       const altitudeChange = Math.abs(altitude - lastEntry.altitude);
-
-      if (timeSinceLast < ALTITUDE_SAMPLE_INTERVAL && altitudeChange < 20) {
-        return;
-      }
+      if (timeSinceLast < ALTITUDE_SAMPLE_INTERVAL && altitudeChange < 20) return;
     }
 
     const entry: AltitudeEntry = { altitude, timestamp: ts };
-    history.push(entry);
 
-    const cleaned = cleanOldEntries(history).slice(-MAX_ENTRIES);
-    await kv.set(ALTITUDE_KEY, cleaned);
+    try {
+      const pipeline = kv.pipeline();
+      pipeline.rpush(ALTITUDE_KEY, entry);
+      pipeline.ltrim(ALTITUDE_KEY, -MAX_ENTRIES, -1);
+      await pipeline.exec();
+    } catch (e) {
+      if (isWrongTypeError(e)) {
+        await kv.del(ALTITUDE_KEY);
+        const pipeline = kv.pipeline();
+        pipeline.rpush(ALTITUDE_KEY, entry);
+        pipeline.ltrim(ALTITUDE_KEY, -MAX_ENTRIES, -1);
+        await pipeline.exec();
+      } else {
+        throw e;
+      }
+    }
   } catch (error) {
     console.warn('Failed to store altitude:', error);
   }
@@ -56,7 +75,10 @@ export async function getAltitudeStats(): Promise<{
 }> {
   try {
     const [history, streamStartedAt, streamEndedAt] = await Promise.all([
-      kv.get<AltitudeEntry[]>(ALTITUDE_KEY),
+      kv.lrange<AltitudeEntry>(ALTITUDE_KEY, 0, -1).catch(async (e) => {
+        if (isWrongTypeError(e)) return await kv.get<AltitudeEntry[]>(ALTITUDE_KEY) ?? [];
+        throw e;
+      }),
       getStreamStartedAt(),
       getStreamEndedAt(),
     ]);
