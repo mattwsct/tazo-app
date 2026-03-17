@@ -1,34 +1,7 @@
 import { getPersistentLocation } from './location-cache';
+import { COUNTRY_CURRENCY } from './convert-utils';
 
-/**
- * Canonical country code → currency code mapping.
- * This is the single source of truth — both local-currency.ts and convert-utils.ts use this.
- * Union of all entries from both files; entries unique to convert-utils (QA, KW, PE, IS, BG,
- * SK, SI, EE, LV, LT, MT, CY, HR, LU) are included here.
- */
-export const COUNTRY_CURRENCY: Record<string, string> = {
-  // Americas
-  US: 'USD', CA: 'CAD', BR: 'BRL', MX: 'MXN', AR: 'ARS', CL: 'CLP', CO: 'COP', PE: 'PEN',
-  // Europe — non-euro
-  GB: 'GBP', SE: 'SEK', NO: 'NOK', DK: 'DKK', IS: 'ISK',
-  PL: 'PLN', CZ: 'CZK', HU: 'HUF', RO: 'RON', BG: 'BGN',
-  CH: 'CHF', RU: 'RUB', UA: 'UAH',
-  // Europe — Eurozone
-  DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', PT: 'EUR', NL: 'EUR',
-  BE: 'EUR', AT: 'EUR', IE: 'EUR', FI: 'EUR', GR: 'EUR', LU: 'EUR',
-  SK: 'EUR', SI: 'EUR', EE: 'EUR', LV: 'EUR', LT: 'EUR', MT: 'EUR',
-  CY: 'EUR', HR: 'EUR',
-  // Asia-Pacific
-  AU: 'AUD', NZ: 'NZD',
-  JP: 'JPY', CN: 'CNY', KR: 'KRW', TW: 'TWD', HK: 'HKD', SG: 'SGD',
-  TH: 'THB', VN: 'VND', MY: 'MYR', PH: 'PHP', ID: 'IDR', IN: 'INR',
-  // Middle East
-  AE: 'AED', SA: 'SAR', QA: 'QAR', KW: 'KWD', IL: 'ILS', TR: 'TRY',
-  // Africa
-  ZA: 'ZAR', EG: 'EGP', NG: 'NGN', KE: 'KES', GH: 'GHS',
-  // South/Southeast Asia extras
-  PK: 'PKR',
-};
+export { COUNTRY_CURRENCY };
 
 /**
  * Returns { currency, rate } for the given country (or the streamer's RTIRL location as fallback),
