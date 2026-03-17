@@ -178,7 +178,7 @@ export async function deductFromWallet(
           state: {
             balance: Number(newBal ?? 0),
             updatedAt: Date.now(),
-            lastChangeUsd: -deducted,
+            lastChangeUsd: -amountUsd,
             lastChangeSource: source,
             ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
             ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
@@ -192,7 +192,7 @@ export async function deductFromWallet(
   const current = await getWallet();
   const deducted = Math.min(amountUsd, current.balance);
   const state = await setWalletBalance(current.balance - deducted, {
-    lastChangeUsd: -deducted,
+    lastChangeUsd: -amountUsd,
     lastChangeSource: source,
     ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
     ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
