@@ -1,5 +1,10 @@
 import { NextRequest } from 'next/server';
 import { kv } from '@/lib/kv';
+
+// Allow long-lived SSE connections (Vercel Pro max: 300s).
+// Without this, Vercel kills the function at the default 60s, forcing clients
+// to reconnect every minute and triggering the polling fallback.
+export const maxDuration = 300;
 import { addConnection, removeConnection, getConnectionInfo, connections } from '@/lib/settings-broadcast';
 import { POLL_STATE_KEY, POLL_MODIFIED_KEY } from '@/types/poll';
 import { TRIVIA_STATE_KEY, TRIVIA_MODIFIED_KEY } from '@/types/trivia';

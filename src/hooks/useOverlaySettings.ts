@@ -72,9 +72,10 @@ export function useOverlaySettings(): [
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          // Only count actual settings updates as "fresh" — not heartbeats.
-          // Heartbeats keep the connection alive but don't mean settings are up to date.
-          if (data.type === 'settings_update') {
+          // Count both settings updates and heartbeats as proof the SSE connection is alive.
+          // Heartbeats arrive every 8s — if we ignore them, the 15s polling-fallback fires
+          // constantly in steady state (nothing changed in KV) even though SSE is healthy.
+          if (data.type === 'settings_update' || data.type === 'heartbeat' || data.type === 'connected') {
             lastSseUpdateRef.current = Date.now();
           }
           if (data.type === 'settings_update') {
