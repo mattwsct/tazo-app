@@ -149,6 +149,11 @@ function isMetricValueChanged(key: WellnessMetricKey, existingVal: unknown, newV
   return true;
 }
 
+// Steps and distance should only ever increase within a day (HAE sends cumulative "Today" totals).
+// If an import sends a lower value it's either stale data or a misconfigured "Since last sync" sync —
+// ignore it to prevent milestone logic from resetting and re-firing.
+const MONOTONIC_METRICS: ReadonlySet<WellnessMetricKey> = new Set(['steps', 'distanceKm']);
+
 export async function updateWellnessData(updates: Partial<WellnessData>, options?: UpdateWellnessOptions): Promise<void> {
   try {
     const existing = await kv.get<WellnessData>(WELLNESS_KEY);
@@ -158,6 +163,16 @@ export async function updateWellnessData(updates: Partial<WellnessData>, options
     for (const key of WELLNESS_DATA_KEYS) {
       const newVal = updates[key as keyof WellnessData];
       if (newVal === undefined) continue;
+      // Enforce monotonic increase for steps/distance on automatic imports.
+      // Silently drop the update if the incoming value is lower than stored — HAE misconfiguration guard.
+      if (!fromManualEntry && MONOTONIC_METRICS.has(key)) {
+        const existingVal = existing?.[key as keyof WellnessData];
+        if (typeof existingVal === 'number' && typeof newVal === 'number' && newVal < existingVal) {
+          console.warn(`[Wellness] Ignored lower ${key} value: incoming=${newVal} existing=${existingVal} (HAE "Since last sync" misconfiguration?)`);
+          delete (updates as Record<string, unknown>)[key];
+          continue;
+        }
+      }
       if (fromManualEntry) {
         metricUpdatedAt[key] = 0;
       } else {
