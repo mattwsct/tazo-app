@@ -14,7 +14,7 @@ function sanitizeRtirl(obj: unknown): RTIRLData | null {
   if (lat === null || lon === null) return null;
   const updatedAt = typeof o.updatedAt === 'number' ? o.updatedAt : Date.now();
   const raw = o.raw ?? o;
-  return { lat, lon, updatedAt, raw };
+  return { lat, lon, speedKmh: null, altitudeM: null, updatedAt, raw };
 }
 
 /**
