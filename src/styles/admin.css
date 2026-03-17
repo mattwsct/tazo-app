@@ -1625,40 +1625,6 @@ body {
   margin-left: 4px;
 }
 
-/* ClampedNumberInput — validate on blur, presets for quick selection */
-.clamped-number-input-wrap {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.clamped-number-input-wrap input {
-  min-width: 64px;
-  width: 72px;
-}
-
-.clamped-number-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.clamped-number-preset-btn {
-  padding: 4px 8px;
-  font-size: 0.8rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  color: #e2e8f0;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.clamped-number-preset-btn:hover {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.4);
-}
 
 /* Big dropdown selects — mobile-friendly, large tap targets */
 .admin-select-wrap {
