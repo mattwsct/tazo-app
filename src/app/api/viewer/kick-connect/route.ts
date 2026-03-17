@@ -10,7 +10,7 @@ export async function GET(): Promise<NextResponse> {
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
   const clientId = process.env.KICK_CLIENT_ID ?? '';
-  const appUrl = (process.env.APP_URL ?? process.env.KICK_APP_URL ?? 'https://tazo.wtf').replace(/\/+$/, '');
+  const appUrl = (process.env.APP_URL ?? 'https://tazo.wtf').replace(/\/+$/, '');
   const redirectUri = `${appUrl}/api/viewer/kick-callback`;
 
   const params = new URLSearchParams({

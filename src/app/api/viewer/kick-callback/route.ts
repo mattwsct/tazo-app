@@ -20,7 +20,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const codeVerifier = request.cookies.get('viewer_kick_verifier')?.value ?? '';
-  const appUrl = (process.env.APP_URL ?? process.env.KICK_APP_URL ?? 'https://tazo.wtf').replace(/\/+$/, '');
+  const appUrl = (process.env.APP_URL ?? 'https://tazo.wtf').replace(/\/+$/, '');
   const redirectUri = `${appUrl}/api/viewer/kick-callback`;
 
   try {

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   const baseUrl =
-    process.env.KICK_APP_URL ??
+    process.env.APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
     request.nextUrl.origin;
   const redirectUri = `${baseUrl.replace(/\/$/, '')}/api/kick-oauth/callback`;
