@@ -1572,6 +1572,26 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* On stream start/reset */}
+              <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.1)', marginTop: 16 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6, fontSize: '0.9em', opacity: 0.8 }}>On stream start / reset</div>
+                <div style={{ fontSize: '0.78em', opacity: 0.55, marginBottom: 10 }}>What appears on the overlay when the stream goes live or session is reset.</div>
+                <div className="checkbox-group" style={{ flexDirection: 'column', gap: 6 }}>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={settings.startShowSubGoal ?? false} onChange={(e) => handleSettingsChange({ startShowSubGoal: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show sub goal bar on start</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={settings.startShowKicksGoal ?? false} onChange={(e) => handleSettingsChange({ startShowKicksGoal: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show kicks goal bar on start</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={settings.startShowWallet ?? true} onChange={(e) => handleSettingsChange({ startShowWallet: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show wallet on start (uncheck to start hidden — use !wallet show to reveal later)</span>
+                  </label>
+                </div>
+              </div>
+
               {/* Timer */}
               <div style={{ marginTop: 20 }}>
                 <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Timer</div>

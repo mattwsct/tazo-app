@@ -45,12 +45,15 @@ export async function resetStreamGoalsOnStreamStart(): Promise<{ subTarget: numb
       kv.set(STREAM_GOALS_SUBS_KEY, 0),
       kv.set(STREAM_GOALS_KICKS_KEY, 0),
     ]);
+    // Apply the stream-start show preference configured in admin.
+    const startShowSubGoal = !!(settings.startShowSubGoal);
+    const startShowKicksGoal = !!(settings.startShowKicksGoal);
     await kv.set('overlay_settings', {
       ...settings,
-      showSubGoal: false,
+      showSubGoal: startShowSubGoal,
       subGoalTarget: subIncrement,
       subGoalSubtext: null,
-      showKicksGoal: false,
+      showKicksGoal: startShowKicksGoal,
       kicksGoalTarget: kicksIncrement,
       kicksGoalSubtext: null,
     });

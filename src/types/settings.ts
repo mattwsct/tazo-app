@@ -136,6 +136,12 @@ export interface OverlaySettings {
   challengesVisible?: boolean;
   /** Starting wallet balance when stream resets (USD). Default: 15. */
   walletStartingBalance?: number;
+  /** Show sub goal bar when stream starts/resets. Default: false. */
+  startShowSubGoal?: boolean;
+  /** Show kicks goal bar when stream starts/resets. Default: false. */
+  startShowKicksGoal?: boolean;
+  /** Show wallet on overlay when stream starts/resets. Default: true. */
+  startShowWallet?: boolean;
 }
 
 // Default settings (single source of truth)
@@ -189,6 +195,9 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showKicksGoal: false,
   walletEnabled: true,
   walletStartingBalance: 15,
+  startShowSubGoal: false,
+  startShowKicksGoal: false,
+  startShowWallet: true,
   kicksGoalTarget: 5000,
   kicksGoalIncrement: 5000,
   streamerTimezone: 'UTC',
@@ -256,6 +265,9 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   walletVisible: 'boolean',
   challengesVisible: 'boolean',
   walletStartingBalance: 'number',
+  startShowSubGoal: 'boolean',
+  startShowKicksGoal: 'boolean',
+  startShowWallet: 'boolean',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
   showMonthlyEarnedLb: 'boolean',

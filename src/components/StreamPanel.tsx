@@ -236,7 +236,7 @@ export default function StreamPanel({
 
   // ── Challenges ─────────────────────────────────────────────────────────────
   const challenges = settings.challengesState?.challenges ?? [];
-  const challengesVisible = settings.challengesVisible !== false;
+  const challengesVisible = settings.challengesVisible !== false && settings.walletEnabled !== false;
   const activeChallenges = challengesVisible ? challenges
     .filter((c) => c.status === 'active' || c.status === 'timedOut')
     .sort((a, b) => b.bounty - a.bounty)

@@ -72,8 +72,13 @@ export async function handleChallengesCommand(
 
   if (!isChallenge && !isChallenges && !isWallet && !isSpent && !isChatChallenge && !isCCToggle) return { handled: false };
 
+  // Check wallet enabled — gates challenges and buychallenge; wallet commands (!wallet on/off/hide/show) remain usable
+  const overlaySettings = await kv.get<Record<string, unknown>>('overlay_settings');
+  const walletEnabled = (overlaySettings?.walletEnabled as boolean) ?? true;
+
   // !wallet (no args) — public, anyone can check balance
   if (lower === '!wallet') {
+    if (!walletEnabled) return { handled: true, reply: '⚠️ Wallet is currently disabled.' };
     const wallet = await getWallet();
     return { handled: true, reply: `💰 Wallet: ${formatUsd(wallet.balance)} — Each sub adds $5, 100 KICKs adds $1` };
   }
@@ -82,6 +87,7 @@ export async function handleChallengesCommand(
 
   // !buychallenge <description> / !bc <description> — viewer spends 1000 Credits for a $10 / 15-min challenge
   if (isChatChallenge) {
+    if (!walletEnabled) return { handled: true, reply: '⚠️ Wallet is disabled — challenges are not available.' };
     const cmdLen = lower.startsWith('!buychallenge') ? '!buychallenge'.length : '!bc'.length;
     const description = trimmed.slice(cmdLen).trim();
     if (!description) {
@@ -205,6 +211,7 @@ export async function handleChallengesCommand(
   }
 
   // ── !challenge ... ────────────────────────────────────────────────────────────
+  if (!walletEnabled) return { handled: true }; // silently ignore challenge commands when wallet is off
   const args = trimmed.slice('!challenge'.length).trim();
   const argsLower = args.toLowerCase();
 
