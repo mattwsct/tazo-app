@@ -4,6 +4,7 @@
   "installCommand": "npm ci",
   "framework": "nextjs",
   "crons": [
+    {"path": "/api/cron/stream-live-check", "schedule": "* * * * *"},
     {"path": "/api/cron/kick-chat-broadcast", "schedule": "* * * * *"},
     {"path": "/api/cron/poll-cleanup", "schedule": "* * * * *"},
     {"path": "/api/cron/poll-stats", "schedule": "* * * * *"}
