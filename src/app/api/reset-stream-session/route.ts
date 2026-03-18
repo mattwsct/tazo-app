@@ -35,10 +35,10 @@ export async function POST(request: NextRequest) {
     // Apply start-of-stream visibility preferences
     await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: startShowWallet, showSpentOverlay: startShowSpent });
 
-    const [, { subTarget }] = await Promise.all([
+    const [{ subTarget }] = await Promise.all([
+      resetStreamGoalsOnStreamStart(),
       setStreamLive(true),
       onStreamStarted(),
-      resetStreamGoalsOnStreamStart(),
       resetWallet(startingBalance),
       resetChallenges(),
       // Clear active timer
