@@ -17,6 +17,7 @@ import crypto from 'crypto';
 import { getWallet, deductFromWallet } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { kv } from '@/lib/kv';
 
 export const dynamic = 'force-dynamic';
 
@@ -155,6 +156,27 @@ export async function POST(request: NextRequest) {
     : undefined;
 
   const channelName = (data?.channel_name as string | undefined) ?? 'WISE';
+
+  // Check if wallet is enabled — if off, log the transaction in chat but skip balance changes
+  const overlaySettings = await kv.get<Record<string, unknown>>('overlay_settings');
+  const walletEnabled = (overlaySettings?.walletEnabled as boolean) ?? true;
+
+  if (!walletEnabled) {
+    // Wallet is off: post chat message only, do not touch balance
+    void (async () => {
+      try {
+        const token = await getValidAccessToken();
+        if (!token) return;
+        const usdStr = `$${amountUsd.toFixed(2)} USD`;
+        const msg = localAmount && localCurrency
+          ? `💳 CARD -${Math.round(localAmount).toLocaleString()} ${localCurrency} (-${usdStr}) — Wallet paused`
+          : `💳 CARD -${usdStr} — Wallet paused`;
+        await sendKickChatMessage(token, msg);
+      } catch { /* non-critical */ }
+    })();
+    console.log('[Wise Webhook] Wallet disabled — transaction logged to chat only', JSON.stringify({ amountUsd: amountUsd.toFixed(2) }));
+    return NextResponse.json({ ok: true, skipped: 'wallet_disabled' });
+  }
 
   const { state, deducted } = await deductFromWallet(amountUsd, localContext, channelName.toUpperCase());
   void broadcastChallenges().catch(() => {});
