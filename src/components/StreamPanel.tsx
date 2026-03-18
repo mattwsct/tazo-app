@@ -5,6 +5,7 @@ import type { OverlayState } from '@/types/settings';
 import type { OverlayTimerState } from '@/types/timer';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
 import { NO_DECIMAL_CURRENCIES } from '@/utils/currency-data';
+import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
 
@@ -149,7 +150,6 @@ export default function StreamPanel({
       if (subsAlertClearRef.current) clearTimeout(subsAlertClearRef.current);
       if (kicksAlertClearRef.current) clearTimeout(kicksAlertClearRef.current);
       if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
-      if (walletRotateRef.current) clearTimeout(walletRotateRef.current);
       walletAnimQueueRef.current = [];
     };
   }, []);
@@ -177,8 +177,6 @@ export default function StreamPanel({
   const lastWalletUpdatedAtRef = useRef<number | null>(null);
   const walletAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const walletAnimQueueRef = useRef<Array<{ label: string; negative: boolean }>>([]);
-  const [showSpent, setShowSpent] = useState(false);
-  const walletRotateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceWalletAnimRef = useRef<() => void>(() => {});
   advanceWalletAnimRef.current = () => {
     const next = walletAnimQueueRef.current.shift();
@@ -213,20 +211,18 @@ export default function StreamPanel({
     }
   }, [wallet]);
 
-  // Rotate wallet display between balance and spent total (6s balance / 3s spent)
+  // Rotate wallet display between balance and spent total — wall-clock-synced 10s cycle (same as weather/steps/date)
   const walletSpent = wallet?.totalSpent ?? 0;
-  useEffect(() => {
-    if (walletRotateRef.current) { clearTimeout(walletRotateRef.current); walletRotateRef.current = null; }
-    if (!showWallet || walletSpent <= 0 || walletAnim) { setShowSpent(false); return; }
-    let isSpent = false;
-    const tick = () => {
-      isSpent = !isSpent;
-      setShowSpent(isSpent);
-      walletRotateRef.current = setTimeout(tick, isSpent ? 3000 : 6000);
-    };
-    walletRotateRef.current = setTimeout(tick, 6000);
-    return () => { if (walletRotateRef.current) { clearTimeout(walletRotateRef.current); walletRotateRef.current = null; } };
-  }, [showWallet, walletSpent, walletAnim]); // eslint-disable-line react-hooks/exhaustive-deps
+  type WalletSlide = 'balance' | 'spent';
+  const hasWalletSpent = walletSpent > 0;
+  const isWalletAnimating = !!walletAnim;
+  const walletSlides = useMemo<WalletSlide[]>(
+    () => (hasWalletSpent && !isWalletAnimating ? ['balance', 'spent'] : ['balance']),
+    [hasWalletSpent, isWalletAnimating]
+  );
+  const { activeIndex: walletActiveIdx, outgoingIndex: walletOutIdx, slides: stableWalletSlides } = useCrossfadeRotation(walletSlides, 10_000);
+  const walletActiveSlide = stableWalletSlides[walletActiveIdx] ?? 'balance';
+  const walletOutSlide = walletOutIdx !== null ? (stableWalletSlides[walletOutIdx] ?? null) : null;
 
   const isNonUsdLocal = !!(wallet?.localCurrency && wallet.localCurrency !== 'USD' && wallet?.localRate);
   const localAmount = isNonUsdLocal
@@ -263,6 +259,17 @@ export default function StreamPanel({
   if (!hasMainContent && !hasPollOrTrivia) return null;
 
   // ── Render helpers ─────────────────────────────────────────────────────────
+  const renderWalletValue = (slide: WalletSlide) => {
+    if (slide === 'spent') {
+      return isNonUsdLocal
+        ? <span className="sp-wallet-value sp-wallet-value--spent">{fmtLocal(walletSpent, wallet!.localCurrency!, wallet!.localRate!)}<span className="sp-wallet-usd">({fmtUsd(walletSpent)})</span></span>
+        : <span className="sp-wallet-value sp-wallet-value--spent">{fmtUsd(walletSpent)}</span>;
+    }
+    return localAmount !== null
+      ? <span className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>{fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}<span className="sp-wallet-usd">({fmtUsd(wallet!.balance)})</span></span>
+      : <span className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>{fmtUsd(wallet!.balance)}</span>;
+  };
+
   const renderGoalRow = (type: 'subs' | 'kicks') => {
     const isSubs = type === 'subs';
     const alert = isSubs ? subsAlert : kicksAlert;
@@ -433,23 +440,21 @@ export default function StreamPanel({
           {/* Wallet */}
           {showWallet && (
             <div className="sp-row sp-wallet-row">
-              <span className="sp-label">{showSpent ? 'SPENT' : 'WALLET'}</span>
+              <span className="sp-label">{walletAnim ? 'WALLET' : walletActiveSlide === 'spent' ? 'SPENT' : 'WALLET'}</span>
               <div className="sp-right-stack">
                 {walletAnim ? (
                   <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
-                ) : showSpent ? (
-                  <span key="spent" className="sp-wallet-value sp-wallet-value--spent">
-                    {isNonUsdLocal
-                      ? <>{fmtLocal(walletSpent, wallet!.localCurrency!, wallet!.localRate!)}<span className="sp-wallet-usd">({fmtUsd(walletSpent)})</span></>
-                      : fmtUsd(walletSpent)}
-                  </span>
-                ) : localAmount !== null ? (
-                  <span key="balance" className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>
-                    {fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}
-                    <span className="sp-wallet-usd">({fmtUsd(wallet!.balance)})</span>
-                  </span>
                 ) : (
-                  <span key="balance" className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>{fmtUsd(wallet!.balance)}</span>
+                  <div className="sp-wallet-cycling-slots">
+                    {walletOutSlide !== null && (
+                      <div className="cycling-slide-out" key={`wout-${walletOutIdx}`}>
+                        {renderWalletValue(walletOutSlide)}
+                      </div>
+                    )}
+                    <div className="cycling-slide-in" key={`win-${walletActiveIdx}`}>
+                      {renderWalletValue(walletActiveSlide)}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

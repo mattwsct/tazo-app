@@ -1341,7 +1341,22 @@ html, body {
 }
 
 .sp-wallet-value--empty { color: #f87171; }
-.sp-wallet-value--spent { color: #fbbf24; animation: sp-wallet-pop 0.25s ease-out both; }
+.sp-wallet-value--spent { color: #fbbf24; }
+
+.sp-wallet-cycling-slots {
+  display: grid;
+  grid-template: 1fr / 1fr;
+}
+.sp-wallet-cycling-slots > * {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+}
+/* When only one slide (initial load, no transition), fade in immediately */
+.sp-wallet-cycling-slots > .cycling-slide-in:only-child {
+  animation: cycling-fade-in 0.3s ease-out forwards;
+  opacity: 0;
+}
 
 .sp-wallet-usd {
   font-weight: 700;
