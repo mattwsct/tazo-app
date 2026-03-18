@@ -456,6 +456,11 @@ function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/** Round a random value in [min, max] to the nearest 5. */
+function r5(min: number, max: number): number {
+  return Math.round(randomInt(min, max) / 5) * 5;
+}
+
 function randomPick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -464,8 +469,8 @@ type ChallengeTier = 'easy' | 'medium' | 'hard';
 
 function randomTier(): ChallengeTier {
   const r = Math.random();
-  if (r < 0.4) return 'easy';
-  if (r < 0.75) return 'medium';
+  if (r < 0.25) return 'easy';
+  if (r < 0.70) return 'medium';
   return 'hard';
 }
 
@@ -482,14 +487,14 @@ export async function makeMovementChallenge(currentSteps?: number): Promise<Move
   const useDistance = Math.random() < 0.5;
 
   if (useDistance) {
-    const km = tier === 'easy' ? 1 : tier === 'medium' ? 2.5 : 5;
+    const km = tier === 'easy' ? 1 : tier === 'medium' ? 3 : 5;
     const bounty = tier === 'easy' ? 5 : tier === 'medium' ? 10 : 20;
     const expiresAt = tier === 'hard' ? Date.now() + 3 * 60 * 60 * 1000 : undefined;
     return { description: `${km} km${tier === 'hard' ? ' ⏱' : ''}`, bounty, expiresAt, opts: { distanceTarget: km } };
   } else {
     const increment = tier === 'easy' ? 1_000 : tier === 'medium' ? 2_500 : 5_000;
     const base = currentSteps ?? 0;
-    const target = base + increment;
+    const target = Math.round((base + increment) / 100) * 100;
     const bounty = tier === 'easy' ? 5 : tier === 'medium' ? 10 : 20;
     const expiresAt = tier === 'hard' ? Date.now() + 3 * 60 * 60 * 1000 : undefined;
     return { description: `${target.toLocaleString()} steps${tier === 'hard' ? ' ⏱' : ''}`, bounty, expiresAt, opts: { stepsTarget: target } };
@@ -499,19 +504,19 @@ export async function makeMovementChallenge(currentSteps?: number): Promise<Move
 type FitnessChallenge = { description: string; bounty: number; expiresAt?: number };
 
 const FITNESS_EASY = [
-  () => `${randomInt(8, 12)} pushups`,
-  () => `${randomInt(15, 25)} squats`,
-  () => `${randomInt(20, 30)}s plank`,
-  () => `${randomInt(10, 15)} sit-ups`,
-  () => `${randomInt(5, 10)} burpees`,
+  () => `${r5(8, 12)} pushups`,
+  () => `${r5(15, 25)} squats`,
+  () => `${r5(20, 30)}s plank`,
+  () => `${r5(10, 15)} sit-ups`,
+  () => `${r5(5, 10)} burpees`,
 ];
 
 const FITNESS_MEDIUM = [
-  () => `${randomInt(20, 30)} pushups`,
-  () => `${randomInt(40, 60)} squats`,
-  () => `${randomInt(60, 90)}s plank`,
-  () => `${randomInt(25, 40)} sit-ups`,
-  () => `${randomInt(15, 20)} burpees`,
+  () => `${r5(20, 30)} pushups`,
+  () => `${r5(40, 60)} squats`,
+  () => `${r5(60, 90)}s plank`,
+  () => `${r5(25, 40)} sit-ups`,
+  () => `${r5(15, 20)} burpees`,
 ];
 
 /**
