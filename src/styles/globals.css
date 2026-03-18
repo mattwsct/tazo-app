@@ -1351,12 +1351,14 @@ html, body {
   grid-area: 1 / 1;
   display: flex;
   align-items: center;
+  /* Right-align content within the grid cell so narrower slides don't
+     appear shifted left when the grid is sized to a wider sibling. */
+  justify-content: flex-end;
 }
-/* When only one slide (initial load, no transition), fade in immediately */
-.sp-wallet-cycling-slots > .cycling-slide-in:only-child {
-  animation: cycling-fade-in 0.3s ease-out forwards;
-  opacity: 0;
-}
+/* Intentionally no :only-child override here — applying a new animation when
+   the outgoing div is removed (making the incoming :only-child) would re-trigger
+   cycling-fade-in from opacity:0, causing a visible flicker. The standard
+   cycling-slide-in animation (0.25s delay) handles the initial render fine. */
 
 .sp-wallet-usd {
   font-weight: 700;

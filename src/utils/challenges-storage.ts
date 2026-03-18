@@ -69,7 +69,7 @@ export async function getWallet(): Promise<WalletState> {
             ...(data.wallet_last_change_source ? { lastChangeSource: data.wallet_last_change_source as string } : {}),
             ...(data.wallet_local_currency ? { localCurrency: data.wallet_local_currency as string } : {}),
             ...(data.wallet_local_rate != null ? { localRate: Number(data.wallet_local_rate) } : {}),
-            ...(totalSpent != null && totalSpent > 0 ? { totalSpent } : {}),
+            ...(totalSpent != null ? { totalSpent } : {}),
           };
         }
       }
@@ -81,9 +81,9 @@ export async function getWallet(): Promise<WalletState> {
     kv.get<number>(WALLET_SPENT_KEY),
   ]);
   if (!raw || typeof raw.balance !== 'number') {
-    return { balance: DEFAULT_WALLET_BALANCE, updatedAt: Date.now(), ...(totalSpent != null && totalSpent > 0 ? { totalSpent } : {}) };
+    return { balance: DEFAULT_WALLET_BALANCE, updatedAt: Date.now(), ...(totalSpent != null ? { totalSpent } : {}) };
   }
-  return { ...raw, ...(totalSpent != null && totalSpent > 0 ? { totalSpent } : {}) };
+  return { ...raw, ...(totalSpent != null ? { totalSpent } : {}) };
 }
 
 export async function setWalletBalance(
