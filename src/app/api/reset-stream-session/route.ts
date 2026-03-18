@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { onStreamStarted } from '@/utils/stats-storage';
+import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: startShowWallet, showSpentOverlay: startShowSpent });
 
     const [, { subTarget }] = await Promise.all([
+      setStreamLive(true),
       onStreamStarted(),
       resetStreamGoalsOnStreamStart(),
       resetWallet(startingBalance),
