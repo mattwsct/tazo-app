@@ -6,6 +6,7 @@ import { getCreatorId } from '@/lib/creator-id';
 
 export const CHALLENGES_KEY = 'stream_challenges';
 export const WALLET_KEY = 'stream_wallet';
+export const WALLET_SPENT_KEY = 'stream_wallet_spent';
 export const CHALLENGES_MODIFIED_KEY = 'stream_challenges_modified';
 
 const DEFAULT_WALLET_BALANCE = 15;
@@ -54,9 +55,12 @@ export async function getWallet(): Promise<WalletState> {
     if (isSupabaseConfigured()) {
       const creatorId = await getCreatorId();
       if (creatorId) {
-        const { data } = await supabase.from('creator_settings')
-          .select('wallet_balance,wallet_updated_at,wallet_last_change_usd,wallet_last_change_source,wallet_local_currency,wallet_local_rate')
-          .eq('creator_id', creatorId).single();
+        const [{ data }, totalSpent] = await Promise.all([
+          supabase.from('creator_settings')
+            .select('wallet_balance,wallet_updated_at,wallet_last_change_usd,wallet_last_change_source,wallet_local_currency,wallet_local_rate')
+            .eq('creator_id', creatorId).single(),
+          kv.get<number>(WALLET_SPENT_KEY),
+        ]);
         if (data) {
           return {
             balance: Number(data.wallet_balance ?? DEFAULT_WALLET_BALANCE),
@@ -65,17 +69,21 @@ export async function getWallet(): Promise<WalletState> {
             ...(data.wallet_last_change_source ? { lastChangeSource: data.wallet_last_change_source as string } : {}),
             ...(data.wallet_local_currency ? { localCurrency: data.wallet_local_currency as string } : {}),
             ...(data.wallet_local_rate != null ? { localRate: Number(data.wallet_local_rate) } : {}),
+            ...(totalSpent != null && totalSpent > 0 ? { totalSpent } : {}),
           };
         }
       }
     }
   } catch { /* fall through */ }
   // KV fallback
-  const raw = await kv.get<WalletState>(WALLET_KEY);
+  const [raw, totalSpent] = await Promise.all([
+    kv.get<WalletState>(WALLET_KEY),
+    kv.get<number>(WALLET_SPENT_KEY),
+  ]);
   if (!raw || typeof raw.balance !== 'number') {
-    return { balance: DEFAULT_WALLET_BALANCE, updatedAt: Date.now() };
+    return { balance: DEFAULT_WALLET_BALANCE, updatedAt: Date.now(), ...(totalSpent != null && totalSpent > 0 ? { totalSpent } : {}) };
   }
-  return raw;
+  return { ...raw, ...(totalSpent != null && totalSpent > 0 ? { totalSpent } : {}) };
 }
 
 export async function setWalletBalance(
@@ -204,7 +212,11 @@ export async function deductFromWallet(
           p_source: source,
           ...(localContext ? { p_currency: localContext.currency, p_rate: localContext.rate } : {}),
         });
-        void kv.set(CHALLENGES_MODIFIED_KEY, Date.now());
+        const newTotalSpent = Math.round(((current.totalSpent ?? 0) + deducted) * 100) / 100;
+        void Promise.all([
+          kv.set(CHALLENGES_MODIFIED_KEY, Date.now()),
+          deducted > 0 ? kv.set(WALLET_SPENT_KEY, newTotalSpent) : Promise.resolve(),
+        ]);
         const newBalance = Number(newBal ?? 0);
         void maybeTriggerBrokeChallenge(current.balance, newBalance);
         return {
@@ -215,6 +227,7 @@ export async function deductFromWallet(
             lastChangeSource: source,
             ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
             ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
+            ...(deducted > 0 ? { totalSpent: newTotalSpent } : {}),
           },
           deducted,
         };
@@ -224,17 +237,24 @@ export async function deductFromWallet(
   // KV fallback
   const current = await getWallet();
   const deducted = Math.min(amountUsd, current.balance);
+  const newTotalSpent = Math.round(((current.totalSpent ?? 0) + deducted) * 100) / 100;
   const state = await setWalletBalance(current.balance - deducted, {
     lastChangeUsd: -amountUsd,
     lastChangeSource: source,
     ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
     ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
   });
+  if (deducted > 0) void kv.set(WALLET_SPENT_KEY, newTotalSpent);
   void maybeTriggerBrokeChallenge(current.balance, state.balance);
-  return { state, deducted };
+  return { state: { ...state, ...(deducted > 0 ? { totalSpent: newTotalSpent } : {}) }, deducted };
+}
+
+export async function setTotalSpent(amount: number): Promise<void> {
+  await kv.set(WALLET_SPENT_KEY, Math.max(0, Math.round(amount * 100) / 100));
 }
 
 export async function resetWallet(startingBalance?: number): Promise<WalletState> {
+  void kv.set(WALLET_SPENT_KEY, 0);
   return setWalletBalance(startingBalance ?? DEFAULT_WALLET_BALANCE);
 }
 

@@ -34,4 +34,6 @@ export interface WalletState {
   localCurrency?: string;
   /** Exchange rate: 1 USD = localRate × localCurrency. Fetched when location is known. */
   localRate?: number;
+  /** Total USD deducted from wallet since last reset. Used for overlay "spent" display. */
+  totalSpent?: number;
 }

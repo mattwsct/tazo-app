@@ -150,6 +150,7 @@ export default function AdminPage() {
   const [challengeDurationInput, setChallengeDurationInput] = useState<string>(''); // e.g. "10m", "30s", "1h"
   const [editingChallenge, setEditingChallenge] = useState<{ id: number; description: string; bounty: string; durationMs?: number } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(15);
+  const [walletTotalSpent, setWalletTotalSpent] = useState<number>(0);
   const [walletAdjustInput, setWalletAdjustInput] = useState<string>('');
   // Links section state — initialize with LINKS so section is never empty
   const [linksData, setLinksData] = useState<LinkItem[]>(LINKS);
@@ -454,8 +455,10 @@ export default function AdminPage() {
         setChallengesList(d.challenges ?? []);
       }
       if (wRes.ok) {
-        const d = await wRes.json() as { balance?: number };
+        const d = await wRes.json() as { balance?: number; totalSpent?: number };
         if (typeof d.balance === 'number') setWalletBalance(d.balance);
+        if (typeof d.totalSpent === 'number') setWalletTotalSpent(d.totalSpent);
+        else setWalletTotalSpent(0);
       }
     } catch { /* ignore */ }
   }, []);
@@ -1703,11 +1706,36 @@ export default function AdminPage() {
                     onChange={(e) => handleSettingsChange({ walletStartingBalance: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
-                <p className="input-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+                <p className="input-hint" style={{ marginTop: 0, marginBottom: 4 }}>
                   Current balance: <strong>${walletBalance.toFixed(2)} USD</strong>
+                  {walletTotalSpent > 0 && <> — Spent this stream: <strong>${walletTotalSpent.toFixed(2)} USD</strong></>}
                   {' — '}Subs/gift subs add $5, kicks add $1 per 100.
                   Use !spent &lt;amount&gt; in chat (auto-converts local currency to USD).
                 </p>
+                {walletTotalSpent > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-small"
+                      onClick={async () => {
+                        try {
+                          const res = await authenticatedFetch('/api/wallet', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'set_spent', amount: 0 }),
+                          });
+                          if (res.ok) {
+                            setWalletTotalSpent(0);
+                            setToast({ type: 'saved', message: 'Spent total reset to $0' });
+                          }
+                        } catch { /* ignore */ }
+                        setTimeout(() => setToast(null), 2000);
+                      }}
+                    >
+                      Reset spent total
+                    </button>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div className="admin-select-wrap" style={{ marginBottom: 0 }}>
                     <label>Adjust (USD)</label>
@@ -1775,7 +1803,7 @@ export default function AdminPage() {
               <div style={{ marginTop: 24 }}>
                 <div style={{ fontWeight: 600, marginBottom: 8, fontSize: '0.9em', opacity: 0.8 }}>Challenges</div>
                 <p className="input-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                  Chat: !challenge 50 [10m] Do 20 pushups &nbsp;|&nbsp; done/fail/remove &lt;id&gt; &nbsp;|&nbsp; clear
+                  Chat: !ch 50 [10m] desc &nbsp;|&nbsp; steps/fitness/social &nbsp;|&nbsp; done/fail/remove &lt;n&gt; &nbsp;|&nbsp; done all / fail all / remove all &nbsp;|&nbsp; clear
                 </p>
 
                 {/* Add new challenge */}

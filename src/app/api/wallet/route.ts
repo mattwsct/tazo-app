@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRequestAuth } from '@/lib/api-auth';
-import { getWallet, setWalletBalance, addToWallet } from '@/utils/challenges-storage';
+import { getWallet, setWalletBalance, addToWallet, setTotalSpent } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getLocalCurrencyContext } from '@/utils/local-currency';
 import { getPersistentLocation } from '@/utils/location-cache';
@@ -39,6 +39,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as { action?: string; amount?: unknown };
     const action = body.action ?? 'set';
     const amount = typeof body.amount === 'number' ? body.amount : parseFloat(String(body.amount ?? ''));
+
+    if (action === 'set_spent') {
+      const spent = Number.isFinite(amount) ? amount : 0;
+      await setTotalSpent(spent);
+      void broadcastChallenges().catch(() => {});
+      const state = await getWallet();
+      return NextResponse.json(state);
+    }
+
     if (!Number.isFinite(amount)) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
     }

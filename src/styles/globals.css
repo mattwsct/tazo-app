@@ -1341,6 +1341,7 @@ html, body {
 }
 
 .sp-wallet-value--empty { color: #f87171; }
+.sp-wallet-value--spent { color: #fbbf24; animation: sp-wallet-pop 0.25s ease-out both; }
 
 .sp-wallet-usd {
   font-weight: 700;

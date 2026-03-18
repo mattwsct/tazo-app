@@ -8,6 +8,9 @@
  * !challenge / !ch done <id>              — mark challenge #id as completed
  * !challenge / !ch fail <id>              — mark challenge #id as failed
  * !challenge / !ch remove <id>            — remove challenge #id (refunds credits if viewer-purchased)
+ * !challenge / !ch done all               — complete all active challenges (award all bounties)
+ * !challenge / !ch fail all               — fail all active challenges (deduct all bounties)
+ * !challenge / !ch remove all             — remove all active challenges (no bounty effect)
  * !challenge / !ch clear                  — remove all completed/failed challenges
  * !challenge / !ch list                   — list active challenges
  * !challenges hide / !challenges show — hide/show challenges section on overlay
@@ -21,6 +24,8 @@
  * !wallet hide / !wallet show       — hide/show wallet row on overlay (accumulation continues)
  *
  * !spent <amount>                   — deduct amount (in local currency, auto-converted to USD) from wallet (mods only)
+ * !spent reset                      — reset the spent total counter to $0 (mods only)
+ * !spent set <amount>               — manually set the spent total to a specific USD amount (mods only)
  */
 
 import { kv } from '@/lib/kv';
@@ -35,6 +40,7 @@ import {
   getWallet,
   addToWallet,
   deductFromWallet,
+  setTotalSpent,
   makeMovementChallenge,
   makeFitnessChallenge,
   makeSocialChallenge,
@@ -184,9 +190,25 @@ export async function handleChallengesCommand(
     return { handled: true, reply: `💰 Added ${formatUsd(amount)} to wallet → Balance: ${formatUsd(state.balance)}` };
   }
 
-  // ── !spent <amount> ── deduct local currency, convert to USD ─────────────────
+  // ── !spent reset / !spent set <amount> ── adjust the spent total ─────────────
   if (isSpent) {
     const arg = trimmed.slice(lower.startsWith('!spend ') || lower === '!spend' ? '!spend'.length : '!spent'.length).trim();
+    const argLower = arg.toLowerCase();
+
+    if (argLower === 'reset') {
+      await setTotalSpent(0);
+      void broadcastChallenges().catch(() => {});
+      return { handled: true, reply: '✅ Spent total reset to $0' };
+    }
+
+    if (argLower.startsWith('set ')) {
+      const val = parseFloat(argLower.slice(4).trim());
+      if (!Number.isFinite(val) || val < 0) return { handled: true, reply: 'Usage: !spent set <amount>  e.g. !spent set 42.50' };
+      await setTotalSpent(val);
+      void broadcastChallenges().catch(() => {});
+      return { handled: true, reply: `✅ Spent total set to ${formatUsd(val)}` };
+    }
+
     const amount = parseFloat(arg);
     if (!Number.isFinite(amount) || amount <= 0) {
       return { handled: true, reply: 'Usage: !spent <amount>  (uses your local currency)' };
@@ -251,6 +273,22 @@ export async function handleChallengesCommand(
     const removed = await clearResolvedChallenges();
     void broadcastChallenges().catch(() => {});
     return { handled: true, reply: `✅ Cleared ${removed} resolved challenge${removed !== 1 ? 's' : ''}` };
+  }
+
+  // !challenge done all / fail all / remove all
+  if (argsLower === 'done all' || argsLower === 'fail all' || argsLower === 'remove all') {
+    const action = argsLower.split(' ')[0] as 'done' | 'fail' | 'remove';
+    const { challenges } = await getChallenges();
+    const active = challenges.filter((c) => c.status === 'active');
+    if (active.length === 0) return { handled: true, reply: 'No active challenges.' };
+    await Promise.all(active.map((c) =>
+      action === 'remove' ? removeChallenge(c.id) : updateChallengeStatus(c.id, action === 'done' ? 'completed' : 'failed')
+    ));
+    void broadcastChallenges().catch(() => {});
+    const verb = action === 'done' ? 'completed' : action === 'fail' ? 'failed' : 'removed';
+    const wallet = action !== 'remove' ? await getWallet() : null;
+    const balNote = wallet ? ` → Wallet: ${formatUsd(wallet.balance)}` : '';
+    return { handled: true, reply: `${action === 'done' ? '✅' : action === 'fail' ? '❌' : '🗑️'} ${active.length} challenge${active.length !== 1 ? 's' : ''} ${verb}${balNote}` };
   }
 
   // Helper: get visible challenges (active + timedOut in grace period), looked up by 1-based position
