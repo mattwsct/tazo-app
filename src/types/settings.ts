@@ -142,6 +142,8 @@ export interface OverlaySettings {
   startShowKicksGoal?: boolean;
   /** Show wallet on overlay when stream starts/resets. Default: true. */
   startShowWallet?: boolean;
+  /** Show spent row on overlay when stream starts/resets. Default: true. */
+  startShowSpent?: boolean;
 }
 
 // Default settings (single source of truth)
@@ -198,6 +200,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   startShowSubGoal: false,
   startShowKicksGoal: false,
   startShowWallet: true,
+  startShowSpent: true,
   showSpentOverlay: true,
   kicksGoalTarget: 5000,
   kicksGoalIncrement: 5000,
@@ -269,6 +272,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   startShowSubGoal: 'boolean',
   startShowKicksGoal: 'boolean',
   startShowWallet: 'boolean',
+  startShowSpent: 'boolean',
   streamerTimezone: 'string',
   showWeeklyEarnedLb: 'boolean',
   showMonthlyEarnedLb: 'boolean',

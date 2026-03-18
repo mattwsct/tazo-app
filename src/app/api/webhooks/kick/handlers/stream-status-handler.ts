@@ -40,9 +40,10 @@ export async function handleStreamStatus(payload: Record<string, unknown>, event
         const settings = await kv.get<Record<string, unknown>>('overlay_settings');
         const startingBalance = (settings?.walletStartingBalance as number) ?? 15;
         const startShowWallet = (settings?.startShowWallet as boolean) ?? true;
+        const startShowSpent = (settings?.startShowSpent as boolean) ?? true;
 
-        // Reset wallet visibility per admin preference; always keep walletEnabled: true
-        await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: true, walletVisible: startShowWallet });
+        // Apply start-of-stream visibility preferences
+        await kv.set('overlay_settings', { ...(settings ?? {}), walletEnabled: startShowWallet, showSpentOverlay: startShowSpent });
 
         const [{ subTarget: initialSubTarget }] = await Promise.all([
           resetStreamGoalsOnStreamStart(),

@@ -1606,6 +1606,10 @@ export default function AdminPage() {
                     <input type="checkbox" checked={settings.startShowWallet ?? true} onChange={(e) => handleSettingsChange({ startShowWallet: e.target.checked })} className="checkbox-input" />
                     <span className="checkbox-text">Show wallet on start</span>
                   </label>
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={settings.startShowSpent ?? true} onChange={(e) => handleSettingsChange({ startShowSpent: e.target.checked })} className="checkbox-input" />
+                    <span className="checkbox-text">Show spent row on start</span>
+                  </label>
                 </div>
               </div>
 
