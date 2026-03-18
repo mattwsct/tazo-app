@@ -4,8 +4,6 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
 import type { OverlayTimerState } from '@/types/timer';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
-import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
-
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
 
 function fmtUsd(v: number): string {
@@ -144,6 +142,8 @@ export default function StreamPanel({
       if (kicksAlertClearRef.current) clearTimeout(kicksAlertClearRef.current);
       if (walletAnimTimerRef.current) clearTimeout(walletAnimTimerRef.current);
       walletAnimQueueRef.current = [];
+      if (spentAnimTimerRef.current) clearTimeout(spentAnimTimerRef.current);
+      spentAnimQueueRef.current = [];
     };
   }, []);
 
@@ -164,7 +164,7 @@ export default function StreamPanel({
 
   // ── Wallet ─────────────────────────────────────────────────────────────────
   const wallet = settings.walletState;
-  const showWallet = !!(settings.walletEnabled && (settings.walletVisible !== false) && wallet);
+  const showWallet = !!(settings.walletEnabled && wallet);
 
   const [walletAnim, setWalletAnim] = useState<{ label: string; negative: boolean } | null>(null);
   const lastWalletUpdatedAtRef = useRef<number | null>(null);
@@ -204,23 +204,50 @@ export default function StreamPanel({
     }
   }, [wallet]);
 
-  // Rotate wallet display between balance and spent total — wall-clock-synced 10s cycle (same as weather/steps/date)
   const walletSpent = wallet?.totalSpent ?? 0;
-  type WalletSlide = 'balance' | 'spent';
-  const hasWalletSpent = walletSpent > 0;
-  const isWalletAnimating = !!walletAnim;
-  const walletSlides = useMemo<WalletSlide[]>(
-    () => (hasWalletSpent && !isWalletAnimating ? ['balance', 'spent'] : ['balance']),
-    [hasWalletSpent, isWalletAnimating]
-  );
-  const { activeIndex: walletActiveIdx, outgoingIndex: walletOutIdx, slides: stableWalletSlides } = useCrossfadeRotation(walletSlides, 10_000);
-  const walletActiveSlide = stableWalletSlides[walletActiveIdx] ?? 'balance';
-  const walletOutSlide = walletOutIdx !== null ? (stableWalletSlides[walletOutIdx] ?? null) : null;
 
   const isNonUsdLocal = !!(wallet?.localCurrency && wallet.localCurrency !== 'USD' && wallet?.localRate);
   const localAmount = isNonUsdLocal
     ? Math.round(wallet!.balance * wallet!.localRate!)
     : null;
+
+  // ── Spent animation (card transaction delta on SPENT row) ───────────────────
+  const [spentAnim, setSpentAnim] = useState<{ label: string } | null>(null);
+  const lastWalletSpentRef = useRef<number | null>(null);
+  const spentAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spentAnimQueueRef = useRef<Array<{ label: string }>>([]);
+  const advanceSpentAnimRef = useRef<() => void>(() => {});
+  advanceSpentAnimRef.current = () => {
+    const next = spentAnimQueueRef.current.shift();
+    if (next) {
+      setSpentAnim(next);
+      // eslint-disable-next-line react-hooks/immutability
+      spentAnimTimerRef.current = setTimeout(advanceSpentAnimRef.current, ALERT_DISPLAY_MS);
+    } else {
+      setSpentAnim(null);
+      spentAnimTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!wallet) return;
+    const prevSpent = lastWalletSpentRef.current;
+    lastWalletSpentRef.current = walletSpent;
+    if (prevSpent === null || walletSpent <= prevSpent) return;
+    const delta = walletSpent - prevSpent;
+    const source = wallet.lastChangeSource ?? 'CARD';
+    const deltaLabel = (wallet.localCurrency && wallet.localCurrency !== 'USD' && wallet.localRate)
+      ? fmtLocal(delta, wallet.localCurrency, wallet.localRate)
+      : fmtUsd(delta);
+    const anim = { label: `${source} +${deltaLabel}` };
+    if (spentAnimTimerRef.current !== null) {
+      spentAnimQueueRef.current.push(anim);
+    } else {
+      setSpentAnim(anim);
+      // eslint-disable-next-line react-hooks/immutability
+      spentAnimTimerRef.current = setTimeout(advanceSpentAnimRef.current, ALERT_DISPLAY_MS);
+    }
+  }, [wallet, walletSpent]);
 
   // ── Challenges ─────────────────────────────────────────────────────────────
   const challenges = settings.challengesState?.challenges ?? [];
@@ -248,21 +275,11 @@ export default function StreamPanel({
   const hasPollOrTrivia = isPollActive || isTriviaActive;
 
   // ── Visibility ─────────────────────────────────────────────────────────────
-  const hasMainContent = hasGoalSection || showWallet || timerStates.length > 0 || activeChallenges.length > 0;
+  const showSpent = settings.showSpentOverlay !== false && walletSpent > 0;
+  const hasMainContent = hasGoalSection || showWallet || showSpent || timerStates.length > 0 || activeChallenges.length > 0;
   if (!hasMainContent && !hasPollOrTrivia) return null;
 
   // ── Render helpers ─────────────────────────────────────────────────────────
-  const renderWalletValue = (slide: WalletSlide) => {
-    if (slide === 'spent') {
-      return isNonUsdLocal
-        ? <span className="sp-wallet-value sp-wallet-value--spent">{fmtLocal(walletSpent, wallet!.localCurrency!, wallet!.localRate!)}<span className="sp-wallet-usd">({fmtUsd(walletSpent)})</span></span>
-        : <span className="sp-wallet-value sp-wallet-value--spent">{fmtUsd(walletSpent)}</span>;
-    }
-    return localAmount !== null
-      ? <span className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>{fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}<span className="sp-wallet-usd">({fmtUsd(wallet!.balance)})</span></span>
-      : <span className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>{fmtUsd(wallet!.balance)}</span>;
-  };
-
   const renderGoalRow = (type: 'subs' | 'kicks') => {
     const isSubs = type === 'subs';
     const alert = isSubs ? subsAlert : kicksAlert;
@@ -433,21 +450,36 @@ export default function StreamPanel({
           {/* Wallet */}
           {showWallet && (
             <div className="sp-row sp-wallet-row">
-              <span className="sp-label">{walletAnim ? 'WALLET' : walletActiveSlide === 'spent' ? 'SPENT' : 'WALLET'}</span>
+              <span className="sp-label">WALLET</span>
               <div className="sp-right-stack">
                 {walletAnim ? (
                   <span className={`sp-wallet-anim${walletAnim.negative ? ' sp-wallet-anim--negative' : ''}`}>{walletAnim.label}</span>
+                ) : localAmount !== null ? (
+                  <span className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>
+                    {fmtLocal(wallet!.balance, wallet!.localCurrency!, wallet!.localRate!)}
+                    <span className="sp-wallet-usd">({fmtUsd(wallet!.balance)})</span>
+                  </span>
                 ) : (
-                  <div className="sp-wallet-cycling-slots">
-                    {walletOutSlide !== null && (
-                      <div className="cycling-slide-out" key={`wout-${walletOutIdx}`}>
-                        {renderWalletValue(walletOutSlide)}
-                      </div>
-                    )}
-                    <div className="cycling-slide-in" key={`win-${walletActiveIdx}`}>
-                      {renderWalletValue(walletActiveSlide)}
-                    </div>
-                  </div>
+                  <span className={`sp-wallet-value${wallet!.balance === 0 ? ' sp-wallet-value--empty' : ''}`}>{fmtUsd(wallet!.balance)}</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Spent total — independent always-visible row, shown when enabled and spent > 0 */}
+          {showSpent && (
+            <div className="sp-row sp-wallet-row sp-spent-row">
+              <span className="sp-label">SPENT</span>
+              <div className="sp-right-stack">
+                {spentAnim ? (
+                  <span className="sp-wallet-anim">{spentAnim.label}</span>
+                ) : isNonUsdLocal ? (
+                  <span className="sp-wallet-value sp-wallet-value--spent">
+                    {fmtLocal(walletSpent, wallet!.localCurrency!, wallet!.localRate!)}
+                    <span className="sp-wallet-usd">({fmtUsd(walletSpent)})</span>
+                  </span>
+                ) : (
+                  <span className="sp-wallet-value sp-wallet-value--spent">{fmtUsd(walletSpent)}</span>
                 )}
               </div>
             </div>

@@ -130,8 +130,8 @@ export interface OverlaySettings {
   };
   /** Wallet: show balance on overlay and auto-increment on subs/kicks. */
   walletEnabled?: boolean;
-  /** Hide wallet row from overlay without disabling accumulation. Default: true (visible). */
-  walletVisible?: boolean;
+  /** Show a separate SPENT row on overlay when totalSpent > 0. Default: true. */
+  showSpentOverlay?: boolean;
   /** Hide challenges section from overlay without stopping challenge commands. Default: true (visible). */
   challengesVisible?: boolean;
   /** Starting wallet balance when stream resets (USD). Default: 15. */
@@ -198,6 +198,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   startShowSubGoal: false,
   startShowKicksGoal: false,
   startShowWallet: true,
+  showSpentOverlay: true,
   kicksGoalTarget: 5000,
   kicksGoalIncrement: 5000,
   streamerTimezone: 'UTC',
@@ -262,7 +263,7 @@ export const SETTINGS_CONFIG: Record<Exclude<keyof OverlaySettings, 'pollState' 
   kicksGoalIncrement: 'number',
   kicksGoalSubtext: 'string',
   walletEnabled: 'boolean',
-  walletVisible: 'boolean',
+  showSpentOverlay: 'boolean',
   challengesVisible: 'boolean',
   walletStartingBalance: 'number',
   startShowSubGoal: 'boolean',

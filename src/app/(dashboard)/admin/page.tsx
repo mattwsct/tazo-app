@@ -1604,7 +1604,7 @@ export default function AdminPage() {
                   </label>
                   <label className="checkbox-label">
                     <input type="checkbox" checked={settings.startShowWallet ?? true} onChange={(e) => handleSettingsChange({ startShowWallet: e.target.checked })} className="checkbox-input" />
-                    <span className="checkbox-text">Show wallet on start (uncheck to start hidden — use !wallet show to reveal later)</span>
+                    <span className="checkbox-text">Show wallet on start</span>
                   </label>
                 </div>
               </div>
@@ -1707,6 +1707,15 @@ export default function AdminPage() {
                       className="checkbox-input"
                     />
                     <span className="checkbox-text">Show wallet on overlay &amp; auto-increment on subs/kicks</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={settings.showSpentOverlay !== false}
+                      onChange={(e) => handleSettingsChange({ showSpentOverlay: e.target.checked })}
+                      className="checkbox-input"
+                    />
+                    <span className="checkbox-text">Show spent on overlay (separate SPENT row when totalSpent &gt; 0)</span>
                   </label>
                 </div>
                 <div className="admin-select-wrap" style={{ marginBottom: 8 }}>

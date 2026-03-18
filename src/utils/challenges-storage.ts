@@ -164,37 +164,6 @@ export async function addToWallet(
   });
 }
 
-/**
- * When the wallet hits exactly $0, auto-add a medium or hard challenge to give the streamer
- * a way to earn money back. Only fires if balance was previously above $0 and there's room.
- */
-async function maybeTriggerBrokeChallenge(prevBalance: number, newBalance: number): Promise<void> {
-  if (prevBalance <= 0 || newBalance > 0) return;
-  try {
-    const state = await getChallengesState();
-    const activeCount = state.challenges.filter((c) => c.status === 'active').length;
-    if (activeCount >= MAX_ACTIVE_CHALLENGES) return;
-    // Pick fitness or social (50/50), always medium or hard (50/50)
-    const useFitness = Math.random() < 0.5;
-    // Override randomTier to only return medium or hard
-    const tier = Math.random() < 0.5 ? 'medium' : 'hard';
-    let c: { description: string; bounty: number; expiresAt?: number };
-    if (useFitness) {
-      const opts = tier === 'medium' ? FITNESS_MEDIUM : FITNESS_MEDIUM;
-      const desc = randomPick(opts)();
-      const expiresAt = tier === 'hard' ? Date.now() + 20 * 60 * 1000 : undefined;
-      c = { description: `${desc}${tier === 'hard' ? ' ⏱' : ''}`, bounty: tier === 'medium' ? 12 : 20, expiresAt };
-    } else {
-      const desc = randomPick(SOCIAL_MEDIUM);
-      const expiresAt = tier === 'hard' ? Date.now() + 45 * 60 * 1000 : undefined;
-      c = { description: `${desc}${tier === 'hard' ? ' ⏱' : ''}`, bounty: tier === 'medium' ? 15 : 25, expiresAt };
-    }
-    await addChallenge(c.bounty, c.description, c.expiresAt);
-    const { broadcastChallenges } = await import('@/lib/challenges-broadcast');
-    void broadcastChallenges().catch(() => {});
-  } catch { /* non-critical */ }
-}
-
 export async function deductFromWallet(
   amountUsd: number,
   localContext?: { currency: string; rate: number; localAmount?: number },
@@ -212,13 +181,12 @@ export async function deductFromWallet(
           p_source: source,
           ...(localContext ? { p_currency: localContext.currency, p_rate: localContext.rate } : {}),
         });
-        const newTotalSpent = Math.round(((current.totalSpent ?? 0) + deducted) * 100) / 100;
+        const newTotalSpent = Math.round(((current.totalSpent ?? 0) + amountUsd) * 100) / 100;
         void Promise.all([
           kv.set(CHALLENGES_MODIFIED_KEY, Date.now()),
-          deducted > 0 ? kv.set(WALLET_SPENT_KEY, newTotalSpent) : Promise.resolve(),
+          kv.set(WALLET_SPENT_KEY, newTotalSpent),
         ]);
         const newBalance = Number(newBal ?? 0);
-        void maybeTriggerBrokeChallenge(current.balance, newBalance);
         return {
           state: {
             balance: newBalance,
@@ -227,7 +195,7 @@ export async function deductFromWallet(
             lastChangeSource: source,
             ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
             ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
-            ...(deducted > 0 ? { totalSpent: newTotalSpent } : {}),
+            totalSpent: newTotalSpent,
           },
           deducted,
         };
@@ -237,16 +205,15 @@ export async function deductFromWallet(
   // KV fallback
   const current = await getWallet();
   const deducted = Math.min(amountUsd, current.balance);
-  const newTotalSpent = Math.round(((current.totalSpent ?? 0) + deducted) * 100) / 100;
+  const newTotalSpent = Math.round(((current.totalSpent ?? 0) + amountUsd) * 100) / 100;
   const state = await setWalletBalance(current.balance - deducted, {
     lastChangeUsd: -amountUsd,
     lastChangeSource: source,
     ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
     ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
   });
-  if (deducted > 0) void kv.set(WALLET_SPENT_KEY, newTotalSpent);
-  void maybeTriggerBrokeChallenge(current.balance, state.balance);
-  return { state: { ...state, ...(deducted > 0 ? { totalSpent: newTotalSpent } : {}) }, deducted };
+  void kv.set(WALLET_SPENT_KEY, newTotalSpent);
+  return { state: { ...state, totalSpent: newTotalSpent }, deducted };
 }
 
 export async function setTotalSpent(amount: number): Promise<void> {

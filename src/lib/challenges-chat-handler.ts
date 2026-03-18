@@ -22,7 +22,6 @@
  * !wallet <amount>                  — add USD amount to wallet (mods only)
  * !wallet set <amount>              — set wallet to exact USD balance (mods only)
  * !wallet on / !wallet off          — enable/disable wallet (pauses accumulation when off)
- * !wallet hide / !wallet show       — hide/show wallet row on overlay (accumulation continues)
  *
  * !spent <amount>                   — deduct amount (in local currency, auto-converted to USD) from wallet (mods only)
  * !spent reset                      — reset the spent total counter to $0 (mods only)
@@ -160,15 +159,6 @@ export async function handleChallengesCommand(
     await kv.set(OVERLAY_SETTINGS_KEY, { ...stored, walletEnabled: enabled });
     notifyOverlay();
     return { handled: true, reply: enabled ? '💰 Wallet enabled — subs and KICKs will now update the balance' : '💰 Wallet disabled — balance paused (use !wallet on to resume)' };
-  }
-
-  // ── !wallet hide / !wallet show ───────────────────────────────────────────────
-  if (isWallet && (lower === '!wallet hide' || lower === '!wallet show')) {
-    const visible = lower === '!wallet show';
-    const stored = (await kv.get<Record<string, unknown>>(OVERLAY_SETTINGS_KEY)) ?? {};
-    await kv.set(OVERLAY_SETTINGS_KEY, { ...stored, walletVisible: visible });
-    notifyOverlay();
-    return { handled: true, reply: visible ? '💰 Wallet shown on overlay' : '💰 Wallet hidden from overlay (still accumulating)' };
   }
 
   // ── !challenges hide / !challenges show ───────────────────────────────────────

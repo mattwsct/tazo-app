@@ -95,6 +95,8 @@ export function useOverlaySettings(): [
               overlayAlerts: mergedState.overlayAlerts ?? prev.overlayAlerts,
               streamGoals: mergedState.streamGoals ?? prev.streamGoals,
               walletState: mergedState.walletState ?? prev.walletState,
+              challengesState: (mergedState as OverlayState).challengesState ?? prev.challengesState,
+              timerState: (mergedState as OverlayState).timerState ?? prev.timerState,
             }));
             lastSettingsHash.current = createSettingsHash(merged);
             settingsLoadedRef.current = true;
@@ -170,6 +172,8 @@ export function useOverlaySettings(): [
           overlayAlerts: patch.overlayAlerts ?? prev.overlayAlerts,
           streamGoals: patch.streamGoals ?? prev.streamGoals,
           walletState: (data.walletState as OverlayState['walletState']) ?? prev.walletState,
+          challengesState: (data.challengesState as OverlayState['challengesState']) ?? prev.challengesState,
+          timerState: (data.timerState as OverlayState['timerState']) ?? prev.timerState,
         };
       });
     };
