@@ -237,7 +237,7 @@ export async function handleChallengesCommand(
     void broadcastChallenges().catch(() => {});
     return {
       handled: true,
-      reply: `💸 Spent ${symbol}${amount} ${currency} = ${formatUsd(deducted)} → Wallet: ${formatUsd(state.balance)}`,
+      reply: `💸 Spent ${symbol}${amount} ${currency} = ${formatUsd(deducted)}${walletEnabled ? ` → Wallet: ${formatUsd(state.balance)}` : ''}`,
     };
   }
 
