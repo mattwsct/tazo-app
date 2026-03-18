@@ -156,6 +156,37 @@ export async function addToWallet(
   });
 }
 
+/**
+ * When the wallet hits exactly $0, auto-add a medium or hard challenge to give the streamer
+ * a way to earn money back. Only fires if balance was previously above $0 and there's room.
+ */
+async function maybeTriggerBrokeChallenge(prevBalance: number, newBalance: number): Promise<void> {
+  if (prevBalance <= 0 || newBalance > 0) return;
+  try {
+    const state = await getChallengesState();
+    const activeCount = state.challenges.filter((c) => c.status === 'active').length;
+    if (activeCount >= MAX_ACTIVE_CHALLENGES) return;
+    // Pick fitness or social (50/50), always medium or hard (50/50)
+    const useFitness = Math.random() < 0.5;
+    // Override randomTier to only return medium or hard
+    const tier = Math.random() < 0.5 ? 'medium' : 'hard';
+    let c: { description: string; bounty: number; expiresAt?: number };
+    if (useFitness) {
+      const opts = tier === 'medium' ? FITNESS_MEDIUM : FITNESS_MEDIUM;
+      const desc = randomPick(opts)();
+      const expiresAt = tier === 'hard' ? Date.now() + 20 * 60 * 1000 : undefined;
+      c = { description: `${desc}${tier === 'hard' ? ' ⏱' : ''}`, bounty: tier === 'medium' ? 12 : 20, expiresAt };
+    } else {
+      const desc = randomPick(SOCIAL_MEDIUM);
+      const expiresAt = tier === 'hard' ? Date.now() + 45 * 60 * 1000 : undefined;
+      c = { description: `${desc}${tier === 'hard' ? ' ⏱' : ''}`, bounty: tier === 'medium' ? 15 : 25, expiresAt };
+    }
+    await addChallenge(c.bounty, c.description, c.expiresAt);
+    const { broadcastChallenges } = await import('@/lib/challenges-broadcast');
+    void broadcastChallenges().catch(() => {});
+  } catch { /* non-critical */ }
+}
+
 export async function deductFromWallet(
   amountUsd: number,
   localContext?: { currency: string; rate: number; localAmount?: number },
@@ -174,9 +205,11 @@ export async function deductFromWallet(
           ...(localContext ? { p_currency: localContext.currency, p_rate: localContext.rate } : {}),
         });
         void kv.set(CHALLENGES_MODIFIED_KEY, Date.now());
+        const newBalance = Number(newBal ?? 0);
+        void maybeTriggerBrokeChallenge(current.balance, newBalance);
         return {
           state: {
-            balance: Number(newBal ?? 0),
+            balance: newBalance,
             updatedAt: Date.now(),
             lastChangeUsd: -amountUsd,
             lastChangeSource: source,
@@ -197,6 +230,7 @@ export async function deductFromWallet(
     ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
     ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
   });
+  void maybeTriggerBrokeChallenge(current.balance, state.balance);
   return { state, deducted };
 }
 
@@ -426,65 +460,138 @@ function randomPick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-/** Generate a random steps or distance challenge for the stream. */
-export function makeMovementChallenge(): { description: string; bounty: number; opts: { stepsTarget?: number; distanceTarget?: number } } {
-  if (Math.random() < 0.5) {
-    const steps = randomInt(8, 12) * 1_000;
-    return { description: `${steps.toLocaleString()} steps`, bounty: 20, opts: { stepsTarget: steps } };
+type ChallengeTier = 'easy' | 'medium' | 'hard';
+
+function randomTier(): ChallengeTier {
+  const r = Math.random();
+  if (r < 0.4) return 'easy';
+  if (r < 0.75) return 'medium';
+  return 'hard';
+}
+
+type MovementChallenge = { description: string; bounty: number; expiresAt?: number; opts: { stepsTarget?: number; distanceTarget?: number } };
+
+/**
+ * Generate a step/distance challenge scaled to the streamer's current progress.
+ * Easy: +1 000 steps / +1 km  → $5, no expiry
+ * Medium: +2 500 steps / +2.5 km → $10, no expiry
+ * Hard: +5 000 steps / +5 km → $20, 3 hr expiry (fail = -$20)
+ */
+export async function makeMovementChallenge(currentSteps?: number): Promise<MovementChallenge> {
+  const tier = randomTier();
+  const useDistance = Math.random() < 0.5;
+
+  if (useDistance) {
+    const km = tier === 'easy' ? 1 : tier === 'medium' ? 2.5 : 5;
+    const bounty = tier === 'easy' ? 5 : tier === 'medium' ? 10 : 20;
+    const expiresAt = tier === 'hard' ? Date.now() + 3 * 60 * 60 * 1000 : undefined;
+    return { description: `${km} km${tier === 'hard' ? ' ⏱' : ''}`, bounty, expiresAt, opts: { distanceTarget: km } };
   } else {
-    const km = randomInt(6, 10);
-    return { description: `${km} km`, bounty: 20, opts: { distanceTarget: km } };
+    const increment = tier === 'easy' ? 1_000 : tier === 'medium' ? 2_500 : 5_000;
+    const base = currentSteps ?? 0;
+    const target = base + increment;
+    const bounty = tier === 'easy' ? 5 : tier === 'medium' ? 10 : 20;
+    const expiresAt = tier === 'hard' ? Date.now() + 3 * 60 * 60 * 1000 : undefined;
+    return { description: `${target.toLocaleString()} steps${tier === 'hard' ? ' ⏱' : ''}`, bounty, expiresAt, opts: { stepsTarget: target } };
   }
 }
 
-/** Generate a random fitness challenge for the stream. */
-export function makeFitnessChallenge(): { description: string; bounty: number } {
-  const options = [
-    () => `${randomInt(10, 30)} pushups`,
-    () => `${randomInt(20, 50)} squats`,
-    () => `${randomInt(30, 120)}s plank`,
-    () => `${randomInt(15, 40)} sit-ups`,
-    () => `${randomInt(10, 25)} burpees`,
-  ];
-  return { description: randomPick(options)(), bounty: 10 };
+type FitnessChallenge = { description: string; bounty: number; expiresAt?: number };
+
+const FITNESS_EASY = [
+  () => `${randomInt(8, 12)} pushups`,
+  () => `${randomInt(15, 25)} squats`,
+  () => `${randomInt(20, 30)}s plank`,
+  () => `${randomInt(10, 15)} sit-ups`,
+  () => `${randomInt(5, 10)} burpees`,
+];
+
+const FITNESS_MEDIUM = [
+  () => `${randomInt(20, 30)} pushups`,
+  () => `${randomInt(40, 60)} squats`,
+  () => `${randomInt(60, 90)}s plank`,
+  () => `${randomInt(25, 40)} sit-ups`,
+  () => `${randomInt(15, 20)} burpees`,
+];
+
+/**
+ * Generate a fitness challenge.
+ * Easy: low reps → $5, no expiry
+ * Medium: higher reps → $12, no expiry
+ * Hard: medium reps with 20 min time limit → $20 (fail = -$20)
+ */
+export function makeFitnessChallenge(): FitnessChallenge {
+  const tier = randomTier();
+  if (tier === 'easy') {
+    return { description: randomPick(FITNESS_EASY)(), bounty: 5 };
+  } else if (tier === 'medium') {
+    return { description: randomPick(FITNESS_MEDIUM)(), bounty: 12 };
+  } else {
+    const expiresAt = Date.now() + 20 * 60 * 1000;
+    return { description: `${randomPick(FITNESS_MEDIUM)()} ⏱`, bounty: 20, expiresAt };
+  }
 }
 
-const SOCIAL_TASKS = [
-  'Learn something new from a stranger',
-  'Find a local\'s favourite hidden spot',
-  'Try a street food you\'ve never had',
+const SOCIAL_EASY = [
   'Learn a new local word or phrase',
   'Take a photo with a local',
-  'Explore an unusual nearby shop',
-  'Get a restaurant rec from a local and go',
   'Greet 5 strangers',
+  'Chat with someone at a café or stall',
+  'Try a street food you\'ve never had',
+  'Explore an unusual nearby shop',
+  'Order blind from the menu',
   'Ask a local to name a nearby landmark',
+];
+
+const SOCIAL_MEDIUM = [
+  'Learn something new from a stranger',
+  'Find a local\'s favourite hidden spot',
+  'Get a restaurant rec from a local and go',
   'Follow directions from a stranger',
   'Learn a local\'s daily routine',
   'Find and tip a street performer',
   'Learn a shop\'s history from its owner',
-  'Order blind from the menu',
   'Ask what tourists always get wrong here',
-  'Chat with someone at a café or stall',
   'Ask a local about their weekends',
   'Ask 3 locals their favourite dish',
   'Ask a long-time local what\'s changed here',
   'Get the best nearby view tip from a local',
 ];
 
-/** Generate a random social task challenge for the stream. */
-export function makeSocialChallenge(): { description: string; bounty: number } {
-  return { description: randomPick(SOCIAL_TASKS), bounty: 15 };
+type SocialChallenge = { description: string; bounty: number; expiresAt?: number };
+
+/**
+ * Generate a social challenge.
+ * Easy: simple interaction → $8, no expiry
+ * Medium: involved interaction → $15, no expiry
+ * Hard: medium task with 45 min time limit → $25 (fail = -$25)
+ */
+export function makeSocialChallenge(): SocialChallenge {
+  const tier = randomTier();
+  if (tier === 'easy') {
+    return { description: randomPick(SOCIAL_EASY), bounty: 8 };
+  } else if (tier === 'medium') {
+    return { description: randomPick(SOCIAL_MEDIUM), bounty: 15 };
+  } else {
+    const expiresAt = Date.now() + 45 * 60 * 1000;
+    return { description: `${randomPick(SOCIAL_MEDIUM)} ⏱`, bounty: 25, expiresAt };
+  }
 }
 
 /** Add randomised default challenges on stream start/reset. */
 export async function addDefaultChallenges(): Promise<void> {
-  const movement = makeMovementChallenge();
-  const fitness = makeFitnessChallenge();
-  const social = makeSocialChallenge();
-  await addChallenge(movement.bounty, movement.description, undefined, movement.opts);
-  await addChallenge(fitness.bounty, fitness.description);
-  await addChallenge(social.bounty, social.description);
+  const { getWellnessData } = await import('@/utils/wellness-storage');
+  const wellness = await getWellnessData();
+  const currentSteps = wellness?.steps ?? 0;
+
+  const [movement, fitness, social] = await Promise.all([
+    makeMovementChallenge(currentSteps),
+    Promise.resolve(makeFitnessChallenge()),
+    Promise.resolve(makeSocialChallenge()),
+  ]);
+  await addChallenge(movement.bounty, movement.description, movement.expiresAt, movement.opts);
+  await addChallenge(fitness.bounty, fitness.description, fitness.expiresAt);
+  await addChallenge(social.bounty, social.description, social.expiresAt);
 }
 
 /**

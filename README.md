@@ -703,7 +703,6 @@ The app includes a Kick.com bot that auto-responds to follows, subs, resubs, gif
    ```
    KICK_CLIENT_ID=your_client_id
    KICK_CLIENT_SECRET=your_client_secret
-   KICK_APP_URL=https://app.tazo.wtf   # Optional
    ```
 
 2. **Kick Dev Dashboard** ([dev.kick.com](https://dev.kick.com)):
@@ -738,9 +737,17 @@ Edit templates in the admin panel **Message templates** section. Use the toggles
 
 ### Chat commands
 
-**General** (anyone): `!ping` → Pong (webhook connectivity check). `!uptime` → stream duration. `!location` → current location. `!weather` → current weather. `!time` → local time. `!map` → Google Maps link. `!forecast` → 5-day forecast. `!steps`, `!distance`, `!wellness` → wellness summary (from Health Auto Export). `!credits` / `!credits username` → Credits balance. `!lb` / `!leaderboard` → top Credits leaderboard.
+All commands are handled natively by the bot (no external tool required). Full list at `/commands`.
 
-**Stream stats**: `!speed` — current and max speed (km/h). `!altitude` / `!elevation` — current, lowest, highest elevation (m). `!heartrate` / `!hr` — highest and lowest BPM this stream and current if live. Stats use data from stream start; `stream_started_at` is set when Kick fires `is_live: true`.
+**General** (anyone): `!ping` → Pong. `!uptime` (`!up`) → stream duration. `!location` → current city/area. `!time` → local time at current location. `!weather` → weather, temp, wind, humidity. `!sun` → sunrise/sunset with countdown. `!moon` → moon phase. `!temp <val> [c/f]` (`!temperature`) → C/F converter. `!map` → Google Maps link. `!steps`, `!distance` (`!dist`), `!wellness` → wellness from Health Auto Export. `!speed`, `!altitude` (`!elevation`), `!heartrate` (`!hr`) → live stats. `!credits` / `!credits username` → Credits balance. `!lb` / `!leaderboard` → top Credits.
+
+**Social links** (anyone): `!instagram` (`!ig`), `!tiktok`, `!youtube` (`!yt`), `!twitter` (`!x`), `!discord`, `!kick`, `!rumble`, `!twitch`, `!parti`, `!dlive`, `!onlyfans` (`!of`) → respective profile links. `!shoutout <user>` (`!so <user>`) → Kick profile link for any username.
+
+**Travel & culture** (anyone): `!food [CC]`, `!phrase [CC]`, `!emergency [CC]`, `!flirt [CC]`, `!insults [CC]`, `!currency [CC]`, `!fact [CC]` (`!facts`) — auto-uses current country; add a 2-letter country code to target any country (e.g. `!food JP`). `!countries` → list all available countries.
+
+**Games** (anyone): `!coin` (`!flip`) → Heads/Tails. `!dice [sides] [count]` (`!roll`) → roll dice (default 1d6). `!8ball <question>` (`!magic8ball`) → magic 8-ball. `!random [min max]` → random number (default 1–100).
+
+**Size ranking** (anyone): `!inch <length> [girth]`, `!cm <length> [girth]` → size submission with ranking.
 
 **Broadcaster/mods only**: `!title [text]` — set stream title (appends location if "Include location in title" is on). `!subscount <N>` — set sub count manually. `!kickscount <N>` — set Kicks count manually.
 
@@ -750,7 +757,7 @@ Edit templates in the admin panel **Message templates** section. Use the toggles
 
 **Wallet** (mods only, unless noted): `!wallet` (anyone) — show current balance. `!wallet <amount>` — add USD to wallet. `!wallet hide` / `!wallet show` — hide/show wallet row on overlay. `!spent <amount>` / `!spend <amount>` — deduct in local currency (auto-converted to USD using GPS-detected country rate). Currency updates automatically as you cross borders during stream.
 
-**Challenges** (mods only): `!challenge <bounty> <description>` — add a challenge (e.g. `!challenge 50 Do 20 pushups`). `!complete <description>` — mark challenge complete (removes it and awards Credits to the challenger if applicable). `!remove <description>` — remove without awarding. `!challenges hide` / `!challenges show` — hide/show challenges section on overlay.
+**Challenges** (mods only): `!challenge` (`!ch`) — view active challenges. `!challenge steps` / `!ch steps` — add a random step-count challenge (easy/medium/hard tiers based on current steps). `!challenge fitness` / `!ch fitness` — random fitness challenge (push-ups, squats, etc.). `!challenge social` / `!ch social` — random social media challenge. `!challenge <bounty> <description>` — add a custom challenge. `!complete <description>` — mark complete and award Credits. `!remove <description>` — remove without awarding. `!challenges hide` / `!challenges show` — hide/show on overlay. Hard challenges have time limits — wallet is deducted if failed/expired. When wallet hits $0, a medium or hard challenge triggers automatically.
 
 ### Top overlay rotating displays
 
@@ -792,10 +799,13 @@ The **Wallet** tracks real money spent during the stream (e.g. food, drinks, tra
 
 **Challenges** are viewer-facing bounties shown on the stream overlay (e.g. "Do 20 pushups — 50 Credits").
 
-- **`!challenge <bounty> <description>`** (mods) — add a challenge.
+- **`!challenge`** / **`!ch`** (anyone) — view active challenges.
+- **`!ch steps`** / **`!ch fitness`** / **`!ch social`** (mods) — add a random tiered challenge (easy/medium/hard). Step challenges scale from current step count. Hard challenges have time limits and deduct the bounty from wallet on failure/timeout.
+- **`!challenge <bounty> <description>`** (mods) — add a custom challenge.
 - **`!complete <description>`** (mods) — mark complete and award Credits.
 - **`!remove <description>`** (mods) — remove without awarding.
 - **`!challenges hide`** / **`!challenges show`** (mods) — hide/show the challenges section.
+- **Auto-trigger**: When wallet hits $0, a medium or hard challenge is automatically added.
 
 ### Future ideas
 
@@ -876,23 +886,30 @@ The **Wallet** tracks real money spent during the stream (e.g. food, drinks, tra
 
 ## 💬 Chat Commands API
 
-The overlay app also provides chat command APIs for Fossabot integration. All commands are available at `/api/chat/*` endpoints.
+All commands are handled natively by the bot — no external tool (Fossabot etc.) required. The bot processes commands in Kick chat via the webhook handler.
 
-### Available Commands
+For legacy Fossabot integration, HTTP endpoints are still available at `/api/chat/*`. See [FOSSABOT_COMMANDS.md](./FOSSABOT_COMMANDS.md) for the full list of endpoint URLs.
 
-- **Social Media**: `/api/chat/instagram`, `/api/chat/twitter`, `/api/chat/kick`, etc.
-- **Stream**: `/api/chat/uptime`
-- **Location**: `/api/chat/weather`, `/api/chat/location`, `/api/chat/time`, `/api/chat/map`
-- **Weather**: `/api/chat/forecast`, `/api/chat/sun`, `/api/chat/uv`, `/api/chat/aqi`
-- **Wellness** (Health Auto Export): `/api/chat/steps`, `/api/chat/distance`, `/api/chat/wellness`
-- **Heart rate**: `/api/chat/heartrate` — from Pulsoid only (overlay); no wellness/Health Export data.
-- **Travel**: `/api/chat/food`, `/api/chat/phrase`, `/api/chat/emergency`, `/api/chat/flirt`, `/api/chat/insults` (optionally specify country code: `?q=JP`, `?q=AU`, etc.)
-- **Size Ranking**: `/api/chat/inch`, `/api/chat/cm`
-- **Utility**: `/api/chat/status`
+### Native bot command reference
 
-See [FOSSABOT_COMMANDS.md](./FOSSABOT_COMMANDS.md) for complete Fossabot command URLs and usage examples.
-
-**Note:** Chat commands use the same shared utilities as the overlay, ensuring consistent location/weather data across both systems.
+| Category | Commands |
+|----------|----------|
+| Info | `!ping`, `!uptime` (`!up`), `!downtime` (`!down`), `!followers` |
+| Wellness | `!steps`, `!distance` (`!dist`), `!wellness`, `!heartrate` (`!hr`) |
+| Stats | `!speed`, `!altitude` (`!elevation`) |
+| Location | `!location`, `!time`, `!map` |
+| Weather | `!weather`, `!sun`, `!moon`, `!temp <val> [c/f]` |
+| Social | `!instagram` (`!ig`), `!tiktok`, `!youtube` (`!yt`), `!twitter` (`!x`), `!discord`, `!kick`, `!rumble`, `!twitch`, `!parti`, `!dlive`, `!onlyfans` (`!of`), `!shoutout <user>` (`!so`) |
+| Travel | `!food [CC]`, `!phrase [CC]`, `!emergency [CC]`, `!flirt [CC]`, `!insults [CC]`, `!currency [CC]`, `!fact [CC]`, `!countries` |
+| Games | `!coin` (`!flip`), `!dice [n]` (`!roll`), `!8ball`, `!random [min max]` |
+| Size | `!inch <len> [girth]`, `!cm <len> [girth]` |
+| Credits | `!credits`, `!leaderboard` (`!lb`, `!top`), `!give <user> <n>` |
+| Blackjack | `!deal <bet>` (`!bj`), `!hit`, `!stand`, `!double`, `!split` |
+| Wallet | `!wallet`, `!wallet <amount>`, `!wallet hide/show`, `!spent <amount>` |
+| Challenges | `!challenge` (`!ch`), `!ch steps/fitness/social`, `!ch <bounty> <desc>`, `!complete`, `!remove`, `!challenges hide/show` |
+| Trivia | `!trivia` (`!quiz`), `!endtrivia` |
+| Goals | `!goal` |
+| Mod/Broadcaster | `!title`, `!subscount <N>`, `!kickscount <N>`, `!addcredits`, `!poll`, `!endpoll` |
 
 ## 📄 License
 

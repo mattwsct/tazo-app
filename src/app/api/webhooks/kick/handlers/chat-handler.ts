@@ -8,6 +8,7 @@ import { handleGoalCommand } from '@/lib/goal-chat-handler';
 import { handleChallengesCommand } from '@/lib/challenges-chat-handler';
 import { handleAddCreditsCommand } from '@/lib/addcredits-chat-handler';
 import { handleCategoryCommand } from '@/lib/category-chat-handler';
+import { handleExtendedChatCommand } from '@/lib/extended-chat-handler';
 import { getLeaderboardExclusions } from '@/utils/leaderboard-storage';
 import { KICK_BROADCASTER_SLUG_KEY } from '@/lib/kick-api';
 import { KICK_LAST_CHAT_MESSAGE_AT_KEY } from '@/types/poll';
@@ -80,6 +81,12 @@ export async function handleChatMessage(payload: Record<string, unknown>): Promi
   const challengesResult = await handleChallengesCommand(content, sender, payload);
   if (challengesResult.handled) {
     if (challengesResult.reply) await sendReply(challengesResult.reply);
+    return true;
+  }
+
+  const extendedResult = await handleExtendedChatCommand(content);
+  if (extendedResult.handled) {
+    if (extendedResult.reply) await sendReply(extendedResult.reply);
     return true;
   }
 

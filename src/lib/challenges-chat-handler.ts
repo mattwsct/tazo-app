@@ -1,12 +1,15 @@
 /**
  * Challenges & Wallet chat commands — mods and broadcaster only (except !wallet / !buychallenge / !bc).
  *
- * !challenge <bounty> <description>  — add a challenge (e.g. !challenge 50 Do 20 pushups)
- * !challenge done <id>              — mark challenge #id as completed
- * !challenge fail <id>              — mark challenge #id as failed
- * !challenge remove <id>            — remove challenge #id (refunds credits if viewer-purchased)
- * !challenge clear                  — remove all completed/failed challenges
- * !challenge list                   — list active challenges
+ * !challenge / !ch steps                  — add a random tiered step challenge (based on current steps)
+ * !challenge / !ch fitness                — add a random tiered fitness challenge
+ * !challenge / !ch social                 — add a random tiered social challenge
+ * !challenge / !ch <bounty> <description> — add a manual challenge (e.g. !ch 50 Do 20 pushups)
+ * !challenge / !ch done <id>              — mark challenge #id as completed
+ * !challenge / !ch fail <id>              — mark challenge #id as failed
+ * !challenge / !ch remove <id>            — remove challenge #id (refunds credits if viewer-purchased)
+ * !challenge / !ch clear                  — remove all completed/failed challenges
+ * !challenge / !ch list                   — list active challenges
  * !challenges hide / !challenges show — hide/show challenges section on overlay
  * !bcon / !bcoff                    — enable/disable viewer !buychallenge command
  *
@@ -32,6 +35,9 @@ import {
   getWallet,
   addToWallet,
   deductFromWallet,
+  makeMovementChallenge,
+  makeFitnessChallenge,
+  makeSocialChallenge,
 } from '@/utils/challenges-storage';
 import { deductCredits, addCredits } from '@/utils/gambling-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
@@ -63,7 +69,7 @@ export async function handleChallengesCommand(
   const trimmed = content.trim();
   const lower = trimmed.toLowerCase();
 
-  const isChallenge = lower === '!challenge' || lower.startsWith('!challenge ');
+  const isChallenge = lower === '!challenge' || lower.startsWith('!challenge ') || lower === '!ch' || lower.startsWith('!ch ');
   const isChallenges = lower === '!challenges hide' || lower === '!challenges show';
   const isWallet = lower === '!wallet' || lower.startsWith('!wallet ');
   const isSpent = lower === '!spent' || lower.startsWith('!spent ') || lower === '!spend' || lower.startsWith('!spend ');
@@ -210,9 +216,10 @@ export async function handleChallengesCommand(
     };
   }
 
-  // ── !challenge ... ────────────────────────────────────────────────────────────
+  // ── !challenge / !ch ... ──────────────────────────────────────────────────────
   if (!walletEnabled) return { handled: true }; // silently ignore challenge commands when wallet is off
-  const args = trimmed.slice('!challenge'.length).trim();
+  const cmdLen = lower.startsWith('!challenge') ? '!challenge'.length : '!ch'.length;
+  const args = trimmed.slice(cmdLen).trim();
   const argsLower = args.toLowerCase();
 
   if (!args || args === 'help') {
@@ -298,6 +305,31 @@ export async function handleChallengesCommand(
     void broadcastChallenges().catch(() => {});
     const refundNote = removed.buyerUsername ? ` (1,000 Credits refunded to @${removed.buyerUsername})` : '';
     return { handled: true, reply: `🗑️ Challenge ${pos} removed${refundNote}` };
+  }
+
+  // !challenge steps / !challenge fitness / !challenge social — random tiered challenge
+  if (argsLower === 'steps' || argsLower === 'fitness' || argsLower === 'social') {
+    const state = await getChallenges();
+    const activeCount = state.challenges.filter((c) => c.status === 'active').length;
+    if (activeCount >= 5) return { handled: true, reply: '⚠️ Max 5 active challenges reached. Complete or fail some first.' };
+    let item;
+    if (argsLower === 'steps') {
+      const { getWellnessData } = await import('@/utils/wellness-storage');
+      const wellness = await getWellnessData();
+      const c = await makeMovementChallenge(wellness?.steps ?? 0);
+      item = await addChallenge(c.bounty, c.description, c.expiresAt, c.opts);
+    } else if (argsLower === 'fitness') {
+      const c = makeFitnessChallenge();
+      item = await addChallenge(c.bounty, c.description, c.expiresAt);
+    } else {
+      const c = makeSocialChallenge();
+      item = await addChallenge(c.bounty, c.description, c.expiresAt);
+    }
+    if (!item) return { handled: true, reply: '⚠️ Max 5 active challenges reached.' };
+    void broadcastChallenges().catch(() => {});
+    const timerNote = item.expiresAt ? ' ⏱ timed' : '';
+    const bountyStr = item.bounty % 1 === 0 ? item.bounty.toFixed(0) : item.bounty.toFixed(2);
+    return { handled: true, reply: `📋 Challenge added: $${bountyStr}${timerNote} — ${item.description}` };
   }
 
   // !challenge <bounty> [<duration>] <description>

@@ -33,22 +33,24 @@ export async function POST(request: NextRequest) {
 
     // Quick-add: random challenge by type
     if (body.action === 'random_social') {
-      const { description, bounty } = makeSocialChallenge();
-      const item = await addChallenge(bounty, description);
+      const { description, bounty, expiresAt } = makeSocialChallenge();
+      const item = await addChallenge(bounty, description, expiresAt);
       if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
       void broadcastChallenges().catch(() => {});
       return NextResponse.json(item);
     }
     if (body.action === 'random_movement') {
-      const { description, bounty, opts } = makeMovementChallenge();
-      const item = await addChallenge(bounty, description, undefined, opts);
+      const { getWellnessData } = await import('@/utils/wellness-storage');
+      const wellness = await getWellnessData();
+      const { description, bounty, expiresAt, opts } = await makeMovementChallenge(wellness?.steps ?? 0);
+      const item = await addChallenge(bounty, description, expiresAt, opts);
       if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
       void broadcastChallenges().catch(() => {});
       return NextResponse.json(item);
     }
     if (body.action === 'random_fitness') {
-      const { description, bounty } = makeFitnessChallenge();
-      const item = await addChallenge(bounty, description);
+      const { description, bounty, expiresAt } = makeFitnessChallenge();
+      const item = await addChallenge(bounty, description, expiresAt);
       if (!item) return NextResponse.json({ error: 'Max 5 active challenges reached' }, { status: 409 });
       void broadcastChallenges().catch(() => {});
       return NextResponse.json(item);

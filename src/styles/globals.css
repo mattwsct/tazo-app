@@ -1340,6 +1340,8 @@ html, body {
   gap: 0.3em;
 }
 
+.sp-wallet-value--empty { color: #f87171; }
+
 .sp-wallet-usd {
   font-weight: 700;
   color: rgba(255, 255, 255, 0.72);
