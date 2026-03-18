@@ -106,7 +106,6 @@ export async function handleGoalCommand(
       kv.del(OVERLAY_TIMER_ANNOUNCED_KEY),
     ]);
 
-    await addDefaultChallenges();
     void broadcastChallenges().catch(() => {});
     void updateKickTitleGoals(0, subTarget).catch(() => {});
 

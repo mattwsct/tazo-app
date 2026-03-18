@@ -3,7 +3,7 @@ import { onStreamStarted } from '@/utils/stats-storage';
 import { verifyRequestAuth } from '@/lib/api-auth';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals } from '@/lib/stream-title-updater';
-import { resetWallet, resetChallenges, addDefaultChallenges } from '@/utils/challenges-storage';
+import { resetWallet, resetChallenges } from '@/utils/challenges-storage';
 import { setOverlayTimer } from '@/utils/overlay-timer-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { POLL_STATE_KEY, POLL_QUEUE_KEY, LAST_POLL_ENDED_AT_KEY } from '@/types/poll';
@@ -51,9 +51,6 @@ export async function POST(request: NextRequest) {
       // Clear timer announcement dedup so first timer of new stream announces correctly
       kv.del(OVERLAY_TIMER_ANNOUNCED_KEY),
     ]);
-
-    // Add default per-stream challenges
-    await addDefaultChallenges();
 
     // Push fresh state to all overlay clients immediately
     void broadcastChallenges().catch(() => {});
