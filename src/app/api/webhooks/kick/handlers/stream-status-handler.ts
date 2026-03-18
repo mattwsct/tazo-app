@@ -39,7 +39,7 @@ export async function handleStreamStatus(payload: Record<string, unknown>, event
       try {
         const settings = await kv.get<Record<string, unknown>>('overlay_settings');
         const startingBalance = (settings?.walletStartingBalance as number) ?? 15;
-        const startShowWallet = (settings?.startShowWallet as boolean) ?? true;
+        const startShowWallet = (settings?.startShowWallet as boolean) ?? false;
         const startShowSpent = (settings?.startShowSpent as boolean) ?? true;
 
         // Apply start-of-stream visibility preferences

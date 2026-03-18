@@ -199,7 +199,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   walletStartingBalance: 15,
   startShowSubGoal: false,
   startShowKicksGoal: false,
-  startShowWallet: true,
+  startShowWallet: false,
   startShowSpent: true,
   showSpentOverlay: true,
   kicksGoalTarget: 5000,

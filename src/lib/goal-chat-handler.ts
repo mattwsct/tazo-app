@@ -89,8 +89,10 @@ export async function handleGoalCommand(
 
     const storedSettings = await kv.get<Record<string, unknown>>('overlay_settings');
     const startingBalance = (storedSettings?.walletStartingBalance as number) ?? 15;
+    const startShowWallet = (storedSettings?.startShowWallet as boolean) ?? false;
+    const startShowSpent = (storedSettings?.startShowSpent as boolean) ?? true;
 
-    await kv.set(OVERLAY_SETTINGS_KEY, { ...(storedSettings ?? {}), walletEnabled: true, walletVisible: true });
+    await kv.set(OVERLAY_SETTINGS_KEY, { ...(storedSettings ?? {}), walletEnabled: startShowWallet, showSpentOverlay: startShowSpent });
 
     const [, { subTarget }] = await Promise.all([
       onStreamStarted(),
