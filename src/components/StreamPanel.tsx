@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
 import type { OverlayTimerState } from '@/types/timer';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
-import { NO_DECIMAL_CURRENCIES } from '@/utils/currency-data';
 import { useCrossfadeRotation } from '@/hooks/useCrossfadeRotation';
 
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
@@ -30,18 +29,12 @@ const AMBIGUOUS_SYMBOLS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'CO
 
 // NO_DECIMAL_CURRENCIES is imported from convert-utils (canonical definition)
 
-/** Format an estimated local-currency amount converted from USD. Shows cents where applicable. */
+/** Format an estimated local-currency amount converted from USD.
+ *  Always rounds to the nearest whole number and prefixes with ~ to signal it's an approximation. */
 function fmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
-  const local = amountUsd * rate;
-  let str: string;
-  if (NO_DECIMAL_CURRENCIES.has(currency)) {
-    str = Math.round(local).toLocaleString();
-  } else {
-    const dec = Math.round(local * 100) / 100;
-    str = dec % 1 === 0 ? dec.toLocaleString() : dec.toFixed(2);
-  }
-  return sym ? `${sym}${str}` : `${str} ${currency}`;
+  const str = (Math.round((amountUsd * rate) / 5) * 5).toLocaleString();
+  return sym ? `~${sym}${str}` : `~${str} ${currency}`;
 }
 
 
