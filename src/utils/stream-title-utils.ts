@@ -108,10 +108,15 @@ export function formatLocationForStreamTitle(
       return flag ? `${flag} ${countryName}` : countryName;
     case 'state': {
       const { name: state } = getLocationByPrecision(rawLocation, 'state');
-      if (!state || hasOverlappingNames(state, countryName)) {
-        return flag ? `${flag} ${countryName}` : countryName;
+      if (state && !hasOverlappingNames(state, countryName)) {
+        return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
       }
-      return flag ? `${flag} ${state}, ${countryName}` : `${state}, ${countryName}`;
+      // Fall back to city (same as overlay) before going to country-only
+      const { name: city } = getLocationByPrecision(rawLocation, 'city');
+      if (city && !hasOverlappingNames(city, countryName)) {
+        return flag ? `${flag} ${city}, ${countryName}` : `${city}, ${countryName}`;
+      }
+      return flag ? `${flag} ${countryName}` : countryName;
     }
     case 'suburb': {
       const { name: suburb } = getLocationByPrecision(rawLocation, 'suburb');

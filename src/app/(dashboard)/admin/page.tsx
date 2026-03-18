@@ -510,6 +510,20 @@ export default function AdminPage() {
     setKickStreamTitleLocation(loc);
   }, [settings.locationDisplay, settings.customLocation, kickStreamTitleRawLocation]);
 
+  // Auto-push stream title to Kick when location display mode or custom location changes.
+  // Skip on initial mount — only fires when the user actually changes the mode.
+  const locationAutoUpdateMountedRef = useRef(false);
+  useEffect(() => {
+    if (!locationAutoUpdateMountedRef.current) {
+      locationAutoUpdateMountedRef.current = true;
+      return;
+    }
+    if (!kickStatus?.connected || !kickStreamTitleIncludeLocation) return;
+    const timer = setTimeout(() => void updateKickStreamTitle(), 800);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.locationDisplay, settings.customLocation]);
+
   const fetchKickStreamTitle = useCallback(async () => {
     setKickStreamTitleLoading(true);
     try {
