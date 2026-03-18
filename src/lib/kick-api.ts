@@ -341,6 +341,28 @@ export interface KickChannelStats {
 }
 
 /** Fetch follower and subscriber counts for the broadcaster's channel. Uses kick.com public API; cached 5 min. */
+/**
+ * Checks the Kick API directly for whether the channel is currently live.
+ * No caching — used to verify stream state before acting on ambiguous webhooks.
+ * Returns null if the API call fails or returns no data.
+ */
+export async function checkKickIsLive(): Promise<boolean | null> {
+  try {
+    const accessToken = await getValidAccessToken();
+    if (!accessToken) return null;
+    const res = await fetch(`${KICK_API_BASE}/public/v1/channels`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const ch = (data.data ?? [])[0];
+    return typeof ch?.is_live === 'boolean' ? ch.is_live : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getKickChannelStats(): Promise<KickChannelStats> {
   let slug = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
   if (!slug?.trim()) {

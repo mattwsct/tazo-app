@@ -1,4 +1,5 @@
 import { markStreamLiveFromWebhook, isStreamLive } from '@/utils/stats-storage';
+import { checkKickIsLive } from '@/lib/kick-api';
 import { clearBlackjackStateOnStreamStart, isGamblingEnabled } from '@/utils/gambling-storage';
 import { resetStreamGoalsOnStreamStart } from '@/utils/stream-goals-storage';
 import { updateKickTitleGoals, resetStreamTitleToLocationOnly } from '@/lib/stream-title-updater';
@@ -70,6 +71,15 @@ export async function handleStreamStatus(payload: Record<string, unknown>, event
 
   if (payload.is_live === false) {
     const now = Date.now();
+
+    // Guard against stale "ended" events (e.g. Kick auto-rotating the stream at 48h).
+    // Verify the stream is actually offline before tearing down state.
+    const apiIsLive = await checkKickIsLive();
+    if (apiIsLive === true) {
+      console.warn('[stream-status] Ignoring is_live=false webhook — Kick API reports stream is still live (likely 48h auto-rotation).');
+      return;
+    }
+
     void markStreamLiveFromWebhook(false, now);
     void resetStreamTitleToLocationOnly();
     void setChannelCategoryToIRL();
