@@ -250,7 +250,10 @@ export async function deductFromWallet(
 }
 
 export async function setTotalSpent(amount: number): Promise<void> {
-  await kv.set(WALLET_SPENT_KEY, Math.max(0, Math.round(amount * 100) / 100));
+  await Promise.all([
+    kv.set(WALLET_SPENT_KEY, Math.max(0, Math.round(amount * 100) / 100)),
+    kv.set(CHALLENGES_MODIFIED_KEY, Date.now()),
+  ]);
 }
 
 export async function resetWallet(startingBalance?: number): Promise<WalletState> {

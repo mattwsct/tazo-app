@@ -20,6 +20,7 @@
  *
  * !wallet                           — show current wallet balance (public)
  * !wallet <amount>                  — add USD amount to wallet (mods only)
+ * !wallet set <amount>              — set wallet to exact USD balance (mods only)
  * !wallet on / !wallet off          — enable/disable wallet (pauses accumulation when off)
  * !wallet hide / !wallet show       — hide/show wallet row on overlay (accumulation continues)
  *
@@ -39,6 +40,7 @@ import {
   clearResolvedChallenges,
   getWallet,
   addToWallet,
+  setWalletBalance,
   deductFromWallet,
   setTotalSpent,
   makeMovementChallenge,
@@ -176,6 +178,17 @@ export async function handleChallengesCommand(
     await kv.set(OVERLAY_SETTINGS_KEY, { ...stored, challengesVisible: visible });
     notifyOverlay();
     return { handled: true, reply: visible ? '📋 Challenges shown on overlay' : '📋 Challenges hidden from overlay' };
+  }
+
+  // ── !wallet set <amount> ── set wallet to exact balance ──────────────────────
+  if (isWallet && lower.startsWith('!wallet set ')) {
+    const val = parseFloat(trimmed.slice('!wallet set '.length).trim());
+    if (!Number.isFinite(val) || val < 0) {
+      return { handled: true, reply: 'Usage: !wallet set <amount>  e.g. !wallet set 20' };
+    }
+    const state = await setWalletBalance(val);
+    void broadcastChallenges().catch(() => {});
+    return { handled: true, reply: `💰 Wallet set to ${formatUsd(state.balance)}` };
   }
 
   // ── !wallet <amount> ── add to wallet ────────────────────────────────────────
