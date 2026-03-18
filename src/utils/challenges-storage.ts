@@ -224,7 +224,7 @@ export async function setTotalSpent(amount: number): Promise<void> {
 }
 
 export async function resetWallet(startingBalance?: number): Promise<WalletState> {
-  void kv.set(WALLET_SPENT_KEY, 0);
+  await kv.set(WALLET_SPENT_KEY, 0);
   return setWalletBalance(startingBalance ?? DEFAULT_WALLET_BALANCE);
 }
 
