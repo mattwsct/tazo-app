@@ -237,7 +237,7 @@ export default function StreamPanel({
     const deltaLabel = (wallet.localCurrency && wallet.localCurrency !== 'USD' && wallet.localRate)
       ? fmtLocal(delta, wallet.localCurrency, wallet.localRate)
       : fmtUsd(delta);
-    const anim = { label: `${source} +${deltaLabel}` };
+    const anim = { label: `${source} ${deltaLabel}` };
     if (spentAnimTimerRef.current !== null) {
       spentAnimQueueRef.current.push(anim);
     } else {
@@ -470,7 +470,7 @@ export default function StreamPanel({
               <span className="sp-label">SPENT</span>
               <div className="sp-right-stack">
                 {spentAnim ? (
-                  <span className="sp-wallet-anim">{spentAnim.label}</span>
+                  <span className="sp-wallet-anim sp-wallet-anim--negative">{spentAnim.label}</span>
                 ) : isNonUsdLocal ? (
                   <span className="sp-wallet-value sp-wallet-value--spent">
                     {fmtLocal(walletSpent, wallet!.localCurrency!, wallet!.localRate!)}
