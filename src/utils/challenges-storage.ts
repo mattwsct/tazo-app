@@ -181,11 +181,7 @@ export async function deductFromWallet(
           p_source: source,
           ...(localContext ? { p_currency: localContext.currency, p_rate: localContext.rate } : {}),
         });
-        const newTotalSpent = Math.round(((current.totalSpent ?? 0) + amountUsd) * 100) / 100;
-        void Promise.all([
-          kv.set(CHALLENGES_MODIFIED_KEY, Date.now()),
-          kv.set(WALLET_SPENT_KEY, newTotalSpent),
-        ]);
+        void kv.set(CHALLENGES_MODIFIED_KEY, Date.now());
         const newBalance = Number(newBal ?? 0);
         return {
           state: {
@@ -195,7 +191,6 @@ export async function deductFromWallet(
             lastChangeSource: source,
             ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
             ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
-            totalSpent: newTotalSpent,
           },
           deducted,
         };
@@ -205,15 +200,13 @@ export async function deductFromWallet(
   // KV fallback
   const current = await getWallet();
   const deducted = Math.min(amountUsd, current.balance);
-  const newTotalSpent = Math.round(((current.totalSpent ?? 0) + amountUsd) * 100) / 100;
   const state = await setWalletBalance(current.balance - deducted, {
     lastChangeUsd: -amountUsd,
     lastChangeSource: source,
     ...(localContext ? { localCurrency: localContext.currency, localRate: localContext.rate } : {}),
     ...(localContext?.localAmount != null ? { lastChangeLocalAmount: -localContext.localAmount } : {}),
   });
-  void kv.set(WALLET_SPENT_KEY, newTotalSpent);
-  return { state: { ...state, totalSpent: newTotalSpent }, deducted };
+  return { state, deducted };
 }
 
 export async function setTotalSpent(amount: number): Promise<void> {

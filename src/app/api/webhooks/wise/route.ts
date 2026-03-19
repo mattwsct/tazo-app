@@ -14,10 +14,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { kv } from '@/lib/kv';
 import { getWallet, deductFromWallet, setTotalSpent } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
-import { kv } from '@/lib/kv';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,32 +157,19 @@ export async function POST(request: NextRequest) {
 
   const channelName = (data?.channel_name as string | undefined) ?? 'WISE';
 
-  // Check if wallet is enabled — if off, log the transaction in chat but skip balance changes
   const overlaySettings = await kv.get<Record<string, unknown>>('overlay_settings');
   const walletEnabled = (overlaySettings?.walletEnabled as boolean) ?? true;
 
-  if (!walletEnabled) {
-    // Wallet balance is off, but still track totalSpent and update the overlay's SPENT row.
-    const current = await getWallet();
-    const newTotalSpent = Math.round(((current.totalSpent ?? 0) + amountUsd) * 100) / 100;
-    await setTotalSpent(newTotalSpent);
-    void broadcastChallenges().catch(() => {});
-    void (async () => {
-      try {
-        const token = await getValidAccessToken();
-        if (!token) return;
-        const usdStr = `$${amountUsd.toFixed(2)} USD`;
-        const msg = localAmount && localCurrency
-          ? `💳 CARD -${Math.round(localAmount).toLocaleString()} ${localCurrency} (-${usdStr}) — Wallet paused`
-          : `💳 CARD -${usdStr} — Wallet paused`;
-        await sendKickChatMessage(token, msg);
-      } catch { /* non-critical */ }
-    })();
-    console.log('[Wise Webhook] Wallet disabled — spend tracked, overlay updated', JSON.stringify({ amountUsd: amountUsd.toFixed(2), newTotalSpent }));
-    return NextResponse.json({ ok: true, totalSpent: newTotalSpent });
+  // Always update totalSpent — spent tracking is independent of wallet state.
+  const current = await getWallet();
+  const newTotalSpent = Math.round(((current.totalSpent ?? 0) + amountUsd) * 100) / 100;
+  await setTotalSpent(newTotalSpent);
+
+  // Also deduct from wallet balance when wallet is enabled.
+  if (walletEnabled) {
+    await deductFromWallet(amountUsd, localContext, channelName.toUpperCase());
   }
 
-  const { state, deducted } = await deductFromWallet(amountUsd, localContext, channelName.toUpperCase());
   void broadcastChallenges().catch(() => {});
 
   // Post chat message: show local currency amount + USD equivalent
@@ -190,25 +177,23 @@ export async function POST(request: NextRequest) {
     try {
       const token = await getValidAccessToken();
       if (!token) return;
-      const usdStr = `$${deducted.toFixed(2)} USD`;
-      const balStr = `$${state.balance.toFixed(2)} USD`;
+      const usdStr = `$${amountUsd.toFixed(2)} USD`;
       const msg = localAmount && localCurrency
-        ? `💳 CARD -${Math.round(localAmount).toLocaleString()} ${localCurrency} (-${usdStr}) — Wallet: ${balStr}`
-        : `💳 CARD -${usdStr} — Wallet: ${balStr}`;
+        ? `💳 CARD -${Math.round(localAmount).toLocaleString()} ${localCurrency} (-${usdStr})`
+        : `💳 CARD -${usdStr}`;
       await sendKickChatMessage(token, msg);
     } catch { /* non-critical */ }
   })();
 
-  console.log('[Wise Webhook] DEDUCTED', JSON.stringify({
+  console.log('[Wise Webhook] SPENT', JSON.stringify({
     wiseAmount: amount,
     wiseCurrency: currency,
     amountUsd: amountUsd.toFixed(2),
     localAmount: localAmount?.toFixed(2),
     localCurrency,
     channelName,
-    deducted: deducted.toFixed(2),
-    newBalance: state.balance,
+    newTotalSpent,
   }));
 
-  return NextResponse.json({ ok: true, deducted });
+  return NextResponse.json({ ok: true, totalSpent: newTotalSpent });
 }

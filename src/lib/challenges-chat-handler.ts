@@ -233,11 +233,18 @@ export async function handleChallengesCommand(
     if (!Number.isFinite(usd) || usd <= 0) {
       return { handled: true, reply: `⚠️ Could not convert ${currency} to USD. Try !wallet <usd_amount> instead.` };
     }
-    const { state, deducted } = await deductFromWallet(usd, localContext);
+    const currentWallet = await getWallet();
+    const newTotalSpent = Math.round(((currentWallet.totalSpent ?? 0) + usd) * 100) / 100;
+    await setTotalSpent(newTotalSpent);
+    let newBalance = currentWallet.balance;
+    if (walletEnabled) {
+      const { state } = await deductFromWallet(usd, localContext);
+      newBalance = state.balance;
+    }
     void broadcastChallenges().catch(() => {});
     return {
       handled: true,
-      reply: `💸 Spent ${symbol}${amount} ${currency} = ${formatUsd(deducted)}${walletEnabled ? ` → Wallet: ${formatUsd(state.balance)}` : ''}`,
+      reply: `💸 Spent ${symbol}${amount} ${currency} = ${formatUsd(usd)}${walletEnabled ? ` → Wallet: ${formatUsd(newBalance)}` : ''}`,
     };
   }
 

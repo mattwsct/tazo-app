@@ -27,12 +27,10 @@ const AMBIGUOUS_SYMBOLS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'CO
 
 // NO_DECIMAL_CURRENCIES is imported from convert-utils (canonical definition)
 
-/** Format an estimated local-currency amount converted from USD.
- *  Always rounds to the nearest whole number and prefixes with ~ to signal it's an approximation. */
 function fmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
   const str = (Math.round((amountUsd * rate) / 5) * 5).toLocaleString();
-  return sym ? `~${sym}${str}` : `~${str} ${currency}`;
+  return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 
 
