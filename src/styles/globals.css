@@ -1313,9 +1313,9 @@ html, body {
 }
 
 .sp-goal-alert-username {
-  font-size: 0.9em;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.82);
+  font-size: 1.35em;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.95);
   position: relative;
   text-transform: uppercase;
 }
