@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { getWallet, deductFromWallet } from '@/utils/challenges-storage';
+import { getWallet, deductFromWallet, setTotalSpent } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
 import { kv } from '@/lib/kv';
@@ -162,7 +162,11 @@ export async function POST(request: NextRequest) {
   const walletEnabled = (overlaySettings?.walletEnabled as boolean) ?? true;
 
   if (!walletEnabled) {
-    // Wallet is off: post chat message only, do not touch balance
+    // Wallet balance is off, but still track totalSpent and update the overlay's SPENT row.
+    const current = await getWallet();
+    const newTotalSpent = Math.round(((current.totalSpent ?? 0) + amountUsd) * 100) / 100;
+    await setTotalSpent(newTotalSpent);
+    void broadcastChallenges().catch(() => {});
     void (async () => {
       try {
         const token = await getValidAccessToken();
@@ -174,8 +178,8 @@ export async function POST(request: NextRequest) {
         await sendKickChatMessage(token, msg);
       } catch { /* non-critical */ }
     })();
-    console.log('[Wise Webhook] Wallet disabled — transaction logged to chat only', JSON.stringify({ amountUsd: amountUsd.toFixed(2) }));
-    return NextResponse.json({ ok: true, skipped: 'wallet_disabled' });
+    console.log('[Wise Webhook] Wallet disabled — spend tracked, overlay updated', JSON.stringify({ amountUsd: amountUsd.toFixed(2), newTotalSpent }));
+    return NextResponse.json({ ok: true, totalSpent: newTotalSpent });
   }
 
   const { state, deducted } = await deductFromWallet(amountUsd, localContext, channelName.toUpperCase());
