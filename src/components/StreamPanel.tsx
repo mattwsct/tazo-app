@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import type { OverlayState } from '@/types/settings';
 import type { OverlayTimerState } from '@/types/timer';
 import { filterTextForDisplay } from '@/lib/poll-content-filter';
+import { NO_DECIMAL_CURRENCIES } from '@/utils/currency-data';
 const TIMER_COMPLETE_DISPLAY_MS = 10000;
 
 function fmtUsd(v: number): string {
@@ -25,11 +26,18 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 // Currencies with ambiguous symbols — show ISO code as the identifier instead
 const AMBIGUOUS_SYMBOLS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR', 'GHS']);
 
-// NO_DECIMAL_CURRENCIES is imported from convert-utils (canonical definition)
-
 function fmtLocal(amountUsd: number, currency: string, rate: number): string {
   const sym = AMBIGUOUS_SYMBOLS.has(currency) ? null : (CURRENCY_SYMBOLS[currency] ?? null);
-  const str = (Math.round((amountUsd * rate) / 5) * 5).toLocaleString();
+  const local = amountUsd * rate;
+  let str: string;
+  if (NO_DECIMAL_CURRENCIES.has(currency)) {
+    str = Math.round(local).toLocaleString();
+  } else {
+    const rounded = Math.round(local * 100) / 100;
+    str = rounded % 1 === 0
+      ? Math.round(rounded).toLocaleString()
+      : rounded.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   return sym ? `${sym}${str}` : `${str} ${currency}`;
 }
 

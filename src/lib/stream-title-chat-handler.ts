@@ -80,13 +80,13 @@ export async function handleStreamTitleCommand(
     ? { current: streamGoals.kicks, target: overlaySettings.kicksGoalTarget ?? 5000 }
     : undefined;
 
-  // No text provided: set title to location only, or error if location is disabled
+  // No text provided: clear custom title, revert to location/goals only
   if (!customPart) {
     if (!includeLocationInTitle && !subInfo && !kicksInfo) {
-      return { handled: true, reply: 'Usage: !title Your title here (location in title is disabled)' };
+      return { handled: true, reply: 'Usage: !title Your title here (location in title is disabled and no goals active)' };
     }
     if (!locationPart && !subInfo && !kicksInfo) {
-      return { handled: true, reply: 'No location data available. Use !title Your title here' };
+      return { handled: true, reply: 'No location data or active goals — use !title Your title here' };
     }
   }
 
@@ -106,7 +106,7 @@ export async function handleStreamTitleCommand(
       return { handled: true, reply: `Failed to update title: ${err.slice(0, 80)}` };
     }
 
-    // Persist customTitle so admin UI and auto-push stay in sync
+    // Persist customTitle (empty string clears it) so admin UI and auto-push stay in sync
     const stored = await kv.get<Record<string, unknown>>(KICK_STREAM_TITLE_SETTINGS_KEY);
     const toSave = {
       customTitle: customPart,
@@ -120,6 +120,8 @@ export async function handleStreamTitleCommand(
 
   return {
     handled: true,
-    reply: `Stream title set to "${fullTitle}"`,
+    reply: customPart
+      ? `Stream title set to "${fullTitle}"`
+      : `✅ Custom title cleared — title set to "${fullTitle}"`,
   };
 }

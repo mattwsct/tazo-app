@@ -11,6 +11,7 @@
  * !subscount <count>           — manually override current subs count
  * !kickscount <count>          — manually override current kicks count
  * !timer <minutes> [label]     — start/restart a countdown timer on the overlay
+ * !timers                      — list currently active timers (public)
  * !cleartimer                  — clear the current countdown timer
  * !resetstream                 — broadcaster only: resets all per-stream state (same as Danger Zone button)
  */
@@ -24,7 +25,7 @@ import { bumpGoalTarget } from '@/utils/stream-goals-celebration';
 import { setOverlayTimer, addTimer, removeTimerByCreatedAt, getOverlayTimers } from '@/utils/overlay-timer-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { onStreamStarted, setStreamLive } from '@/utils/stats-storage';
-import { resetWallet, resetChallenges, addDefaultChallenges } from '@/utils/challenges-storage';
+import { resetWallet, resetChallenges } from '@/utils/challenges-storage';
 import { POLL_STATE_KEY, POLL_QUEUE_KEY, LAST_POLL_ENDED_AT_KEY } from '@/types/poll';
 import { TRIVIA_STATE_KEY } from '@/types/trivia';
 
@@ -76,7 +77,8 @@ export async function handleGoalCommand(
     lower === '!kickscount' || lower.startsWith('!kickscount ') ||
     lower.startsWith('!timer') ||
     lower === '!cleartimer' || lower.startsWith('!cleartimer ') ||
-    lower === '!resetstream';
+    lower === '!resetstream' ||
+    lower === '!timers';
 
   if (!isGoalCmd) return { handled: false };
 
@@ -113,6 +115,22 @@ export async function handleGoalCommand(
     void updateKickTitleGoals(0, subTarget).catch(() => {});
 
     return { handled: true, reply: '✅ Stream session reset.' };
+  }
+
+  // ── !timers — public, list active timers ────────────────────────────────────
+  if (lower === '!timers') {
+    const timers = await getOverlayTimers();
+    const active = timers.filter((t) => t.endsAt > Date.now());
+    if (active.length === 0) return { handled: true, reply: '⏱️ No timers running.' };
+    const now = Date.now();
+    const parts = active.map((t) => {
+      const secsLeft = Math.max(0, Math.round((t.endsAt - now) / 1000));
+      const m = Math.floor(secsLeft / 60);
+      const s = secsLeft % 60;
+      const timeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+      return t.title ? `"${t.title}" (${timeStr})` : timeStr;
+    });
+    return { handled: true, reply: `⏱️ Active timers: ${parts.join(' | ')}` };
   }
 
   if (!isModOrBroadcaster(senderPayload, sender, broadcasterSlug)) {

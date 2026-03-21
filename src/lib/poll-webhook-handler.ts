@@ -217,6 +217,37 @@ export async function handleChatPoll(
 
   const contentTrimmed = content.trim();
   const contentLower = contentTrimmed.toLowerCase();
+
+  // --- !poll status — show live vote counts (public) ---
+  if (contentLower === '!poll status' || contentLower === '!pollstatus') {
+    if (!initialState || initialState.status !== 'active') {
+      const token2 = await getValidAccessToken();
+      await replyChat(token2, 'No poll active.', (payload.id ?? payload.message_id) as string | undefined);
+      return { handled: true };
+    }
+    const now2 = Date.now();
+    const secsLeft = Math.max(0, Math.round((initialState.startedAt + initialState.durationSeconds * 1000 - now2) / 1000));
+    const timeStr = secsLeft >= 60 ? `${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s` : `${secsLeft}s`;
+    const votes = initialState.options.map((o) => `${o.label}: ${o.votes}`).join(' | ');
+    const token2 = await getValidAccessToken();
+    await replyChat(token2, `📊 ${initialState.question} — ${votes} (${timeStr} left)`, (payload.id ?? payload.message_id) as string | undefined);
+    return { handled: true };
+  }
+
+  // --- !poll queue — show queued polls (public) ---
+  if (contentLower === '!poll queue' || contentLower === '!pollqueue') {
+    const queue = await getPollQueue();
+    const token2 = await getValidAccessToken();
+    const messageId2 = (payload.id ?? payload.message_id) as string | undefined;
+    if (queue.length === 0) {
+      await replyChat(token2, 'No polls queued.', messageId2);
+    } else {
+      const items = queue.map((q, i) => `${i + 1}. ${q.question}`).join(' | ');
+      await replyChat(token2, `📋 Poll queue (${queue.length}): ${items}`, messageId2);
+    }
+    return { handled: true };
+  }
+
   const durationVariant = parsePollDurationVariant(contentTrimmed);
   const isPollCmd = contentLower.startsWith('!poll ') || (durationVariant !== null && durationVariant.rest.length > 0);
   const isBarePoll = contentLower === '!poll' || /^!poll\s*$/.test(contentLower) || (durationVariant !== null && durationVariant.rest.length === 0);

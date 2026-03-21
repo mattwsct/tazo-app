@@ -50,7 +50,28 @@ NEXT_PUBLIC_PULSOID_TOKEN=your_pulsoid_token  # Heart rate monitoring (optional)
 NEXT_PUBLIC_MAPTILER_KEY=your_maptiler_key    # Map tiles (optional - falls back to OpenFreeMap if not provided)
 # Get free MapTiler key from https://cloud.maptiler.com/account/keys/
 EXCHANGERATE_API_KEY=your_exchangerate_api_key  # Exchange rate API (optional - free tier: 1,500 requests/month at https://www.exchangerate-api.com/)
+
+# Optional - Wise card spending integration
+WISE_API_TOKEN=your_wise_api_token        # Wise settings → Developer → API tokens (Read Only)
+WISE_PROFILE_ID=your_profile_id           # From GET /v1/profiles
+WISE_BALANCE_ID=your_balance_id           # From GET /v1/borderless-accounts?profileId=...
+WISE_CARD_LAST_FOUR=1234                  # Last 4 digits of the card to track (e.g. Apple Pay card)
 ```
+
+**Wise card setup** (optional): Tracks real-time card spending during streams. When you tap to pay with Apple Pay or a Wise card, it automatically deducts from your stream wallet and posts to chat.
+
+1. Create a **Read Only** API token at wise.com/settings/api-tokens
+2. Get your profile ID: `curl -H "Authorization: Bearer TOKEN" "https://api.transferwise.com/v1/profiles"`
+3. Get your balance ID: `curl -H "Authorization: Bearer TOKEN" "https://api.transferwise.com/v1/borderless-accounts?profileId=PROFILE_ID"`
+4. Find your card's last 4 digits from the balance statement (GET `/v1/profiles/{profileId}/balance-statements/{balanceId}/statement.json`)
+5. Register the webhook (run once after deploying):
+   ```bash
+   curl -X POST "https://api.transferwise.com/v3/profiles/PROFILE_ID/subscriptions" \
+     -H "Authorization: Bearer WISE_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"tazo-wallet","trigger_on":"balances#update","delivery":{"version":"3.0.0","url":"https://your-domain/api/webhooks/wise"}}'
+   ```
+Only fires when stream is live and the transaction is from the configured card.
 
 ### 3. Run
 ```bash
@@ -749,13 +770,13 @@ All commands are handled natively by the bot (no external tool required). Full l
 
 **Size ranking** (anyone): `!inch <length> [girth]`, `!cm <length> [girth]` → size submission with ranking.
 
-**Broadcaster/mods only**: `!title [text]` — set stream title (appends location if "Include location in title" is on). `!subscount <N>` — set sub count manually. `!kickscount <N>` — set Kicks count manually.
+**Broadcaster/mods only**: `!title [text]` — set stream title (appends location if "Include location in title" is on). `!title` with no args clears the custom title and reverts to location/goals only. `!subscount <N>` — set sub count manually. `!kickscount <N>` — set Kicks count manually. `!timers` (anyone) — list active countdown timers and time remaining. `!poll status` (anyone) — show live vote counts and time remaining for the active poll. `!poll queue` (anyone) — show queued polls. `!credits remove <user> <amount>` (mods) — deduct Credits from a user. `!help` / `!commands` (anyone) — list viewer-available commands.
 
 **Credits & blackjack**: Credits are persistent; new users start with 0. Earn via: Sub +100, Gift sub +100 (to gifter), Kicks +1 per kick, channel point redemption (configurable in admin), trivia win (configurable per question), or `!addcredits user N` (broadcaster/mod). Spend on blackjack. `!deal <bet>` / `!bj <bet>` — start a hand. `!hit` `!stand` `!double` `!split`. Min bet 25. Blackjack pays 1.5×. **Channel reward**: Create a Kick reward with the exact title set in admin (e.g. "Buy Credits"); each redemption grants the configured Credits.
 
 **Trivia** (broadcaster/mods only): `!trivia` or `!quiz` — start a random question from admin Trivia list. First chatter to type the correct answer wins the Credits bounty. `!endtrivia` / `!endquiz` — cancel active trivia. Auto-expires after 5 minutes (reveals the answer in chat); sends a reminder every 2 minutes while unanswered. Winner is shown on overlay for 10 seconds. Configure questions and points in admin under **Trivia**.
 
-**Wallet** (mods only, unless noted): `!wallet` (anyone) — show current balance. `!wallet <amount>` — add USD to wallet. `!wallet hide` / `!wallet show` — hide/show wallet row on overlay. `!spent <amount>` / `!spend <amount>` — deduct in local currency (auto-converted to USD using GPS-detected country rate). Currency updates automatically as you cross borders during stream.
+**Wallet** (mods only, unless noted): `!wallet` (anyone) — show current balance. `!wallet <amount>` — add USD to wallet. `!wallet set <amount>` — set wallet to exact USD balance. `!wallet on` / `!wallet off` — enable/disable wallet. `!spent` (anyone) — show total spent this stream. `!spent <amount>` / `!spend <amount>` — deduct in local currency (auto-converted to USD using GPS-detected country rate). `!spent refund <amount>` — reverse a spend (adds back to wallet). `!spent set <amount>` — set spent total to exact USD amount. `!spent reset` — reset spent total to $0. Currency updates automatically as you cross borders during stream. If Wise card integration is configured, card transactions automatically deduct from the wallet and post to chat (`💳 CARD -฿253 (-$7.20 USD)`) when the stream is live.
 
 **Challenges** (mods only): `!challenge` (`!ch`) — view active challenges. `!challenge steps` / `!ch steps` — add a random step-count challenge (easy/medium/hard tiers based on current steps). `!challenge fitness` / `!ch fitness` — random fitness challenge (push-ups, squats, etc.). `!challenge social` / `!ch social` — random social media challenge. `!challenge <bounty> <description>` — add a custom challenge. `!complete <description>` — mark complete and award Credits. `!remove <description>` — remove without awarding. `!challenges hide` / `!challenges show` — hide/show on overlay. Hard challenges have time limits — wallet is deducted if failed/expired. When wallet hits $0, a medium or hard challenge triggers automatically.
 
@@ -793,9 +814,15 @@ The **Wallet** tracks real money spent during the stream (e.g. food, drinks, tra
 - **Earns automatically**: Each new sub adds $5 USD, every 100 Kicks adds $1.
 - **`!wallet`** (anyone) — show current balance.
 - **`!wallet <amount>`** (mods) — manually add USD (e.g. `!wallet 20`).
+- **`!wallet set <amount>`** (mods) — set wallet to exact USD balance.
+- **`!wallet on`** / **`!wallet off`** (mods) — enable/disable wallet (pauses accumulation when off).
+- **`!spent`** (anyone) — show total spent this stream.
 - **`!spent <amount>`** / **`!spend <amount>`** (mods) — deduct in **local currency** (auto-converts using GPS country). E.g. `!spent 1200` in Japan deducts ¥1200 converted to USD.
-- **`!wallet hide`** / **`!wallet show`** (mods) — hide/show wallet row on overlay.
+- **`!spent refund <amount>`** (mods) — reverse a spend: subtracts USD from spent total and adds back to wallet.
+- **`!spent set <amount>`** (mods) — set spent total to a specific USD amount.
+- **`!spent reset`** (mods) — reset spent total to $0.
 - Currency updates automatically every minute as you cross borders (uses GPS country code, not IP).
+- **Wise card integration**: If configured, real card transactions (Apple Pay etc.) auto-deduct from wallet and post `💳 CARD -฿253 (-$7.20 USD)` to chat. Only fires when streaming live and the transaction matches the configured card. See Wise card setup in environment variables section.
 
 **Challenges** are viewer-facing bounties shown on the stream overlay (e.g. "Do 20 pushups — 50 Credits").
 
@@ -894,22 +921,24 @@ For legacy Fossabot integration, HTTP endpoints are still available at `/api/cha
 
 | Category | Commands |
 |----------|----------|
-| Info | `!ping`, `!uptime` (`!up`), `!downtime` (`!down`), `!followers` |
+| Info | `!ping`, `!uptime` (`!up`), `!downtime` (`!down`), `!followers`, `!help` (`!commands`) |
 | Wellness | `!steps`, `!distance` (`!dist`), `!wellness`, `!heartrate` (`!hr`) |
-| Stats | `!speed`, `!altitude` (`!elevation`) |
+| Stats | `!speed`, `!altitude` (`!elevation`), `!uv`, `!aqi` |
 | Location | `!location`, `!time`, `!map` |
 | Weather | `!weather`, `!sun`, `!moon`, `!temp <val> [c/f]` |
 | Social | `!instagram` (`!ig`), `!tiktok`, `!youtube` (`!yt`), `!twitter` (`!x`), `!discord`, `!kick`, `!rumble`, `!twitch`, `!parti`, `!dlive`, `!onlyfans` (`!of`), `!shoutout <user>` (`!so`) |
 | Travel | `!food [CC]`, `!phrase [CC]`, `!emergency [CC]`, `!flirt [CC]`, `!insults [CC]`, `!currency [CC]`, `!fact [CC]`, `!countries` |
-| Games | `!coin` (`!flip`), `!dice [n]` (`!roll`), `!8ball`, `!random [min max]` |
+| Games | `!coin` (`!flip`), `!dice [n]` (`!roll`), `!8ball`, `!random [min max]`, `!convert`, `!math` |
 | Size | `!inch <len> [girth]`, `!cm <len> [girth]` |
-| Credits | `!credits`, `!leaderboard` (`!lb`, `!top`), `!give <user> <n>` |
+| Credits | `!credits [user]`, `!leaderboard` (`!lb`, `!top`), `!give <user> <n>` |
 | Blackjack | `!deal <bet>` (`!bj`), `!hit`, `!stand`, `!double`, `!split` |
-| Wallet | `!wallet`, `!wallet <amount>`, `!wallet hide/show`, `!spent <amount>` |
-| Challenges | `!challenge` (`!ch`), `!ch steps/fitness/social`, `!ch <bounty> <desc>`, `!complete`, `!remove`, `!challenges hide/show` |
+| Poll | `!poll <question>? opt1, opt2`, `!poll status`, `!poll queue`, `!rank`, `!endpoll` |
+| Wallet | `!wallet`, `!wallet <amount>`, `!wallet set <amount>`, `!wallet on/off`, `!spent`, `!spent <amount>`, `!spent refund <amount>`, `!spent set <amount>`, `!spent reset` |
+| Challenges | `!challenge` (`!ch`), `!ch steps/fitness/social`, `!ch <bounty> <desc>`, `!ch done/fail/remove <n>`, `!ch done/fail/remove all`, `!ch clear`, `!challenges hide/show`, `!buychallenge` (`!bc`), `!bcon`, `!bcoff` |
 | Trivia | `!trivia` (`!quiz`), `!endtrivia` |
-| Goals | `!goal` |
-| Mod/Broadcaster | `!title`, `!subscount <N>`, `!kickscount <N>`, `!addcredits`, `!poll`, `!endpoll` |
+| Timers | `!timer <duration> [label]`, `!timers`, `!cleartimer [label]` |
+| Goals | `!subsgoal <n> [label]`, `!kicksgoal <n> [label]`, `!clearsubsgoal`, `!clearkicksgoal`, `!cleargoals`, `!subscount <N>`, `!kickscount <N>` |
+| Mod/Broadcaster | `!title [text]`, `!addcredits <user> <n>`, `!credits remove <user> <n>`, `!irl`, `!sleep`, `!chat`, `!software`, `!gym`, `!resetstream` |
 
 ## 📄 License
 

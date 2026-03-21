@@ -246,7 +246,7 @@ export async function handleKickChatCommand(
   }
   if (cmd === 'leaderboard') {
     const settings = (await kv.get<{ leaderboardTopN?: number }>('overlay_settings')) ?? {};
-    const topN = Math.min(10, Math.max(1, Math.floor(settings.leaderboardTopN ?? 5)));
+    const topN = Math.min(25, Math.max(1, Math.floor(settings.leaderboardTopN ?? 5)));
     const list = await getCreditsLeaderboard(topN);
     if (list.length === 0) return 'Credits — No entries yet.';
     const parts = list.map((e, i) => `${i + 1}. ${e.username}: ${e.credits.toLocaleString()}`);
@@ -279,8 +279,7 @@ export async function handleKickChatCommand(
   if (cmd === 'stand') {
     const bjGame = await getActiveGame(user);
     if (bjGame) return blackjackStand(user);
-    const standBal = await getCredits(user);
-    return `🃏 No active hand. !deal <amount> or !bj <amount> to play. (${standBal} Credits)`;
+    return null; // no active game — silently ignore
   }
   if (cmd === 'wellness') return getWellnessSummaryResponse();
   if (cmd === 'uv') {

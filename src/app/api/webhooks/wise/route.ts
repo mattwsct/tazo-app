@@ -18,6 +18,8 @@ import { kv } from '@/lib/kv';
 import { getWallet, deductFromWallet, setTotalSpent } from '@/utils/challenges-storage';
 import { broadcastChallenges } from '@/lib/challenges-broadcast';
 import { getValidAccessToken, sendKickChatMessage } from '@/lib/kick-api';
+import { isStreamLive } from '@/utils/stats/stream-state';
+import { NO_DECIMAL_CURRENCIES } from '@/utils/currency-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,8 +77,7 @@ export async function POST(request: NextRequest) {
       const publicKey = await getWisePublicKey();
       const valid = verifySignature(rawBody, signature, publicKey);
       console.log('[Wise Webhook] Signature check:', valid ? 'PASS' : 'FAIL');
-      // TODO: re-enable rejection once we confirm signature verification works with real events
-      // if (!valid) return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      if (!valid) return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     } catch (err) {
       console.error('[Wise Webhook] Could not verify signature:', err);
     }
@@ -108,6 +109,46 @@ export async function POST(request: NextRequest) {
   if (transactionType !== 'debit') {
     console.log('[Wise Webhook] Skipping non-debit update', JSON.stringify({ transactionType }));
     return NextResponse.json({ ok: true, skipped: 'not_debit' });
+  }
+
+  // Only process transactions while streaming live
+  const live = await isStreamLive();
+  if (!live) {
+    console.log('[Wise Webhook] Skipping — stream is not live');
+    return NextResponse.json({ ok: true, skipped: 'not_live' });
+  }
+
+  // Only process transactions from the configured card (Apple Pay card)
+  const allowedCard = process.env.WISE_CARD_LAST_FOUR;
+  if (allowedCard) {
+    const profileId = process.env.WISE_PROFILE_ID;
+    const balanceId = process.env.WISE_BALANCE_ID;
+    const token = process.env.WISE_API_TOKEN;
+    if (profileId && balanceId && token) {
+      try {
+        const now = new Date();
+        const since = new Date(now.getTime() - 10 * 60 * 1000).toISOString(); // last 10 minutes
+        const stmtRes = await fetch(
+          `https://api.transferwise.com/v1/profiles/${profileId}/balance-statements/${balanceId}/statement.json?intervalStart=${since}&intervalEnd=${now.toISOString()}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (stmtRes.ok) {
+          const stmt = await stmtRes.json() as { transactions?: Array<{ details?: { type?: string; cardLastFourDigits?: string } }> };
+          const recentCardTx = stmt.transactions?.find(t => t.details?.type === 'CARD');
+          if (!recentCardTx) {
+            console.log('[Wise Webhook] Skipping — no recent card transaction found');
+            return NextResponse.json({ ok: true, skipped: 'no_card_tx' });
+          }
+          const last4 = recentCardTx.details?.cardLastFourDigits;
+          if (last4 !== allowedCard) {
+            console.log('[Wise Webhook] Skipping — card', last4, 'not allowed (want', allowedCard + ')');
+            return NextResponse.json({ ok: true, skipped: 'wrong_card' });
+          }
+        }
+      } catch (err) {
+        console.error('[Wise Webhook] Failed to verify card:', err);
+      }
+    }
   }
 
   const rawAmount = data?.amount as number | undefined;
@@ -177,10 +218,32 @@ export async function POST(request: NextRequest) {
     try {
       const token = await getValidAccessToken();
       if (!token) return;
-      const usdStr = `$${amountUsd.toFixed(2)} USD`;
-      const msg = localAmount && localCurrency
-        ? `💳 CARD -${Math.round(localAmount).toLocaleString()} ${localCurrency} (-${usdStr})`
-        : `💳 CARD -${usdStr}`;
+      const usdRounded = Math.round(amountUsd * 100) / 100;
+      const usdStr = usdRounded % 1 === 0 ? `$${usdRounded.toFixed(0)}` : `$${usdRounded.toFixed(2)}`;
+      let msg: string;
+      if (localAmount && localCurrency) {
+        const CHAT_CURRENCY_SYMBOLS: Record<string, string> = {
+          USD: '$', AUD: 'A$', CAD: 'C$', NZD: 'NZ$', SGD: 'S$', HKD: 'HK$',
+          EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', KRW: '₩', INR: '₹',
+          BRL: 'R$', CHF: 'Fr', THB: '฿', PHP: '₱', IDR: 'Rp', MYR: 'RM',
+          VND: '₫', TWD: 'NT$', ZAR: 'R', TRY: '₺', PLN: 'zł', ILS: '₪',
+          AED: 'د.إ', RUB: '₽', UAH: '₴', NGN: '₦', KES: 'KSh', EGP: 'E£',
+          PKR: '₨', GHS: 'GH₵',
+        };
+        const AMBIGUOUS = new Set(['SEK', 'NOK', 'DKK', 'MXN', 'ARS', 'CLP', 'COP', 'CZK', 'HUF', 'RON', 'SAR', 'GHS']);
+        const sym = AMBIGUOUS.has(localCurrency) ? null : (CHAT_CURRENCY_SYMBOLS[localCurrency] ?? null);
+        let localStr: string;
+        if (NO_DECIMAL_CURRENCIES.has(localCurrency)) {
+          localStr = Math.round(localAmount).toLocaleString();
+        } else {
+          const r = Math.round(localAmount * 100) / 100;
+          localStr = r % 1 === 0 ? Math.round(r).toLocaleString() : r.toFixed(2);
+        }
+        const localFormatted = sym ? `${sym}${localStr}` : `${localStr} ${localCurrency}`;
+        msg = `💳 CARD -${localFormatted} (-${usdStr} USD)`;
+      } else {
+        msg = `💳 CARD -${usdStr} USD`;
+      }
       await sendKickChatMessage(token, msg);
     } catch { /* non-critical */ }
   })();

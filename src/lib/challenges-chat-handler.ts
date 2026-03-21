@@ -23,9 +23,14 @@
  * !wallet set <amount>              — set wallet to exact USD balance (mods only)
  * !wallet on / !wallet off          — enable/disable wallet (pauses accumulation when off)
  *
+ * !spent                            — show current spent total (public)
  * !spent <amount>                   — deduct amount (in local currency, auto-converted to USD) from wallet (mods only)
+ * !spent refund <amount>            — reverse a spend: subtract from spent total, add back to wallet (mods only)
  * !spent reset                      — reset the spent total counter to $0 (mods only)
  * !spent set <amount>               — manually set the spent total to a specific USD amount (mods only)
+ *
+ * !credits remove <user> <amount>   — deduct Credits from a user (mods only)
+ * !help / !commands                 — list viewer-available commands (public)
  */
 
 import { kv } from '@/lib/kv';
@@ -82,8 +87,33 @@ export async function handleChallengesCommand(
   const isSpent = lower === '!spent' || lower.startsWith('!spent ') || lower === '!spend' || lower.startsWith('!spend ');
   const isChatChallenge = lower.startsWith('!buychallenge ') || lower === '!buychallenge' || lower.startsWith('!bc ') || lower === '!bc';
   const isCCToggle = lower === '!bcon' || lower === '!bcoff';
+  const isCreditsRemove = lower.startsWith('!credits remove ');
+  const isHelp = lower === '!help' || lower === '!commands';
 
-  if (!isChallenge && !isChallenges && !isWallet && !isSpent && !isChatChallenge && !isCCToggle) return { handled: false };
+  if (!isChallenge && !isChallenges && !isWallet && !isSpent && !isChatChallenge && !isCCToggle && !isCreditsRemove && !isHelp) return { handled: false };
+
+  // !help / !commands — public
+  if (isHelp) {
+    return {
+      handled: true,
+      reply: '📋 Commands — Stats: !heartrate !steps !distance !wellness !speed !altitude !uv !aqi | Info: !location !time !weather !uptime !followers !timers | Games: !bj !credits !leaderboard !give !8ball !dice !flip | Utils: !convert !math !poll !wallet !spent',
+    };
+  }
+
+  // !credits remove <user> <amount> — mods only
+  if (isCreditsRemove) {
+    const slugForCredits = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+    if (!isModOrBroadcaster(senderPayload, sender, slugForCredits)) return { handled: true };
+    const parts = trimmed.slice('!credits remove '.length).trim().split(/\s+/);
+    const target = parts[0];
+    const amount = parseInt(parts[1] ?? '', 10);
+    if (!target || !Number.isFinite(amount) || amount <= 0) {
+      return { handled: true, reply: 'Usage: !credits remove <user> <amount>  e.g. !credits remove Tazo 100' };
+    }
+    const result = await deductCredits(target, amount, 'mod remove');
+    if (!result.ok) return { handled: true, reply: `⚠️ Could not remove Credits from ${target}.` };
+    return { handled: true, reply: `✅ Removed ${amount} Credits from ${target}. They now have ${result.balance}.` };
+  }
 
   // Check wallet enabled — gates challenges and buychallenge; wallet commands (!wallet on/off/hide/show) remain usable
   const overlaySettings = await kv.get<Record<string, unknown>>('overlay_settings');
@@ -193,10 +223,17 @@ export async function handleChallengesCommand(
     return { handled: true, reply: `💰 Added ${formatUsd(amount)} to wallet → Balance: ${formatUsd(state.balance)}` };
   }
 
-  // ── !spent reset / !spent set <amount> ── adjust the spent total ─────────────
+  // ── !spent ... ── adjust the spent total ──────────────────────────────────────
   if (isSpent) {
     const arg = trimmed.slice(lower.startsWith('!spend ') || lower === '!spend' ? '!spend'.length : '!spent'.length).trim();
     const argLower = arg.toLowerCase();
+
+    // !spent (no args) — public, show current total
+    if (arg === '') {
+      const wallet = await getWallet();
+      const spent = wallet.totalSpent ?? 0;
+      return { handled: true, reply: `💳 Total spent this stream: ${formatUsd(spent)}` };
+    }
 
     if (argLower === 'reset') {
       await setTotalSpent(0);
@@ -210,6 +247,26 @@ export async function handleChallengesCommand(
       await setTotalSpent(val);
       void broadcastChallenges().catch(() => {});
       return { handled: true, reply: `✅ Spent total set to ${formatUsd(val)}` };
+    }
+
+    if (argLower.startsWith('refund ')) {
+      const slugForRefund = await kv.get<string>(KICK_BROADCASTER_SLUG_KEY);
+      if (!isModOrBroadcaster(senderPayload, sender, slugForRefund)) return { handled: true };
+      const val = parseFloat(arg.slice('refund '.length).trim());
+      if (!Number.isFinite(val) || val <= 0) return { handled: true, reply: 'Usage: !spent refund <amount>  e.g. !spent refund 5' };
+      const walletState = await getWallet();
+      const newTotalSpent = Math.max(0, Math.round(((walletState.totalSpent ?? 0) - val) * 100) / 100);
+      await setTotalSpent(newTotalSpent);
+      let newBalance = walletState.balance;
+      if (walletEnabled) {
+        const state = await addToWallet(val, { source: 'REFUND' });
+        newBalance = state.balance;
+      }
+      void broadcastChallenges().catch(() => {});
+      return {
+        handled: true,
+        reply: `↩️ Refunded ${formatUsd(val)} — Spent: ${formatUsd(newTotalSpent)}${walletEnabled ? ` → Wallet: ${formatUsd(newBalance)}` : ''}`,
+      };
     }
 
     const amount = parseFloat(arg);
